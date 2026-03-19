@@ -5,10 +5,14 @@
 --
 -- Provides:
 --   backup, restore = lib.createBackupSystem()
---   local cb = lib.standaloneUI(def, config, apply, restore)  -- returns callback
+--   local cb = lib.standaloneUI(def, config, apply, revert)  -- returns callback
 --   rom.gui.add_to_menu_bar(cb)  -- caller registers in own plugin context
 --   staging, snapshot, sync = lib.createSpecialState(config, schema)
 --   lib.isEnabled(modConfig) — true if module AND master toggle are both on
+--   lib.FieldTypes — central registry of field types (checkbox, dropdown, radio)
+--   lib.drawField(imgui, field, value, width) — render a field widget
+--   lib.encodeField(field, current, addBits)  — encode field into bit stream
+--   lib.decodeField(field, readBits)          — decode field from bit stream
 
 local mods = rom.mods
 envy = mods['SGG_Modding-ENVY'].auto()
@@ -16,6 +20,9 @@ envy = mods['SGG_Modding-ENVY'].auto()
 ---@diagnostic disable: lowercase-global
 rom = rom
 _PLUGIN = _PLUGIN
+
+-- Forward declaration — populated at bottom of file
+local FieldTypes = {}
 
 --- Check if a module should be active.
 --- Returns true only if the module's own Enabled flag is true AND
@@ -27,6 +34,16 @@ function public.isEnabled(modConfig)
     local core = mods['adamant-Modpack_Core']
     if core and not core.config.ModEnabled then return false end
     return modConfig.Enabled == true
+end
+
+--- Print a diagnostic warning when Core's DebugMode is enabled.
+--- Silent in production. Works with or without Core installed.
+--- @param msg string  The warning message
+function public.warn(msg)
+    local core = mods['adamant-Modpack_Core']
+    if core and core.config and core.config.DebugMode then
+        print("[adamant] " .. msg)
+    end
 end
 
 --- Create an isolated backup/restore pair.
@@ -71,13 +88,13 @@ end
 --- Skips rendering when adamant-Modpack_Core is installed.
 --- @param def table         public.definition (needs .name, .tooltip, .dataMutation)
 --- @param modConfig table   the mod's chalk config (needs .Enabled)
---- @param apply function    called on enable
---- @param restoreFn function called on disable
+--- @param apply function    called to apply game mutations
+--- @param revert function   called to revert game mutations
 --- @return function callback
-function public.standaloneUI(def, modConfig, apply, restoreFn)
+function public.standaloneUI(def, modConfig, apply, revert)
     local function onOptionChanged()
         if def.dataMutation then
-            restoreFn()
+            revert()
             apply()
             rom.game.SetupRunData()
         end
@@ -90,7 +107,7 @@ function public.standaloneUI(def, modConfig, apply, restoreFn)
             local val, chg = imgui.Checkbox(def.name, modConfig.Enabled)
             if chg then
                 modConfig.Enabled = val
-                if val then apply() else restoreFn() end
+                if val then apply() else revert() end
                 if def.dataMutation then rom.game.SetupRunData() end
             end
             if imgui.IsItemHovered() and (def.tooltip or "") ~= "" then
@@ -102,49 +119,11 @@ function public.standaloneUI(def, modConfig, apply, restoreFn)
                 imgui.Separator()
                 for _, opt in ipairs(def.options) do
                     imgui.PushID(opt.configKey)
-
-                    if opt.type == "checkbox" then
-                        local oVal, oChg = imgui.Checkbox(opt.label or opt.configKey, modConfig[opt.configKey] or false)
-                        if oChg then
-                            modConfig[opt.configKey] = oVal
-                            onOptionChanged()
-                        end
-
-                    elseif opt.type == "dropdown" then
-                        local current = modConfig[opt.configKey] or opt.default or ""
-                        local currentIdx = 1
-                        for i, v in ipairs(opt.values) do
-                            if v == current then currentIdx = i; break end
-                        end
-                        imgui.Text(opt.label or opt.configKey)
-                        imgui.SameLine()
-                        if imgui.BeginCombo("##opt", opt.values[currentIdx] or "") then
-                            for i, v in ipairs(opt.values) do
-                                if imgui.Selectable(v, i == currentIdx) then
-                                    if i ~= currentIdx then
-                                        modConfig[opt.configKey] = v
-                                        onOptionChanged()
-                                    end
-                                end
-                            end
-                            imgui.EndCombo()
-                        end
-
-                    elseif opt.type == "radio" then
-                        local current = modConfig[opt.configKey] or opt.default or ""
-                        imgui.Text(opt.label or opt.configKey)
-                        for _, v in ipairs(opt.values) do
-                            if imgui.RadioButton(v, current == v) then
-                                if v ~= current then
-                                    modConfig[opt.configKey] = v
-                                    onOptionChanged()
-                                end
-                            end
-                            imgui.SameLine()
-                        end
-                        imgui.NewLine()
+                    local newVal, chg = public.drawField(imgui, opt, modConfig[opt.configKey])
+                    if chg then
+                        modConfig[opt.configKey] = newVal
+                        onOptionChanged()
                     end
-
                     imgui.PopID()
                 end
             end
@@ -158,33 +137,101 @@ end
 -- HELPERS
 -- =============================================================================
 
---- Calculate the minimum number of bits needed to represent `n` values.
---- @param n number  The number of distinct values
---- @return number bits
-local function bitsRequired(n)
-    if n <= 1 then return 1 end
-    return math.ceil(math.log(n) / math.log(2))
-end
-public.bitsRequired = bitsRequired
-
---- Resolve the `bits` field on a schema entry.
---- If `bits` is provided, use it. Otherwise auto-calculate from the values/type.
---- @param field table  A schema field descriptor
---- @return number bits
-local function resolveBits(field)
-    if field.bits then return field.bits end
-    if field.type == "checkbox" then return 1 end
-    if (field.type == "dropdown" or field.type == "radio") then
-        if field.values then
-            return bitsRequired(#field.values)
+--- Read a value from a table using a configKey (string or table path).
+--- @param tbl table    The root table to read from
+--- @param key string|table  A string key or table path e.g. {"FirstHammers", "BaseStaffAspect"}
+--- @return any value, table|nil parentTbl, string|nil leafKey
+function public.readPath(tbl, key)
+    if type(key) == "table" then
+        for i = 1, #key - 1 do
+            tbl = tbl[key[i]]
+            if not tbl then return nil, nil, nil end
         end
-        -- No values list — can't auto-calculate, fall back to 1.
-        -- Core.warn will catch this at encode time when DebugMode is on.
-        return 1
+        return tbl[key[#key]], tbl, key[#key]
     end
-    return 1
+    return tbl[key], tbl, key
 end
-public.resolveBits = resolveBits
+
+--- Write a value to a table using a configKey (string or table path).
+--- Creates intermediate tables for nested paths.
+--- @param tbl table    The root table to write to
+--- @param key string|table  A string key or table path
+--- @param value any    The value to write
+function public.writePath(tbl, key, value)
+    if type(key) == "table" then
+        for i = 1, #key - 1 do
+            tbl[key[i]] = tbl[key[i]] or {}
+            tbl = tbl[key[i]]
+        end
+        tbl[key[#key]] = value
+        return
+    end
+    tbl[key] = value
+end
+
+-- =============================================================================
+-- FIELD TYPE DISPATCHERS
+-- =============================================================================
+
+--- Encode a single schema field into the bit stream.
+--- @param field table       Field descriptor
+--- @param current any       The current value to encode
+--- @param addBits function  function(value, numBits)
+function public.encodeField(field, current, addBits)
+    local ft = FieldTypes[field.type]
+    if ft then ft.encode(field, current, addBits)
+    else public.warn("encodeField: unknown type '" .. tostring(field.type) .. "'") end
+end
+
+--- Decode a single schema field from the bit stream.
+--- @param field table        Field descriptor
+--- @param readBits function  function(numBits) -> number
+--- @return any value
+function public.decodeField(field, readBits)
+    local ft = FieldTypes[field.type]
+    if ft then return ft.decode(field, readBits) end
+    public.warn("decodeField: unknown type '" .. tostring(field.type) .. "'")
+    return nil
+end
+
+--- Render a schema field widget. Returns (newValue, changed).
+--- @param imgui table       ImGui handle
+--- @param field table       Field descriptor
+--- @param value any         Current value
+--- @param width number|nil  Optional pixel width for input fields
+--- @return any newValue, boolean changed
+function public.drawField(imgui, field, value, width)
+    local ft = FieldTypes[field.type]
+    if ft then return ft.draw(imgui, field, value, width) end
+    public.warn("drawField: unknown type '" .. tostring(field.type) .. "'")
+    return value, false
+end
+
+--- Validate a schema at declaration time. Warns via lib.warn (debug-guarded).
+--- @param schema table   Ordered list of field descriptors
+--- @param label string   Name shown in warnings (e.g. module name)
+function public.validateSchema(schema, label)
+    if type(schema) ~= "table" then
+        public.warn(label .. ": schema is not a table")
+        return
+    end
+    for i, field in ipairs(schema) do
+        local prefix = label .. " field #" .. i
+        if not field.configKey then
+            public.warn(prefix .. ": missing configKey")
+        end
+        if not field.type then
+            public.warn(prefix .. ": missing type")
+        else
+            local ft = FieldTypes[field.type]
+            if not ft then
+                public.warn(prefix .. ": unknown type '" .. tostring(field.type) .. "'")
+            elseif ft.validate then
+                ft.validate(field, prefix)
+            end
+        end
+    end
+end
 
 -- =============================================================================
 -- SPECIAL MODULE STATE
@@ -216,79 +263,30 @@ public.resolveBits = resolveBits
 --- @return function snapshot   Re-read config into staging (after profile load)
 --- @return function sync       Flush staging to config (after UI edits)
 function public.createSpecialState(modConfig, schema)
+    public.validateSchema(schema, _PLUGIN.guid or "unknown module")
+
     local staging = {}
 
     -- -----------------------------------------------------------------
-    -- Helpers: nested configKey access
+    -- Copy helpers (using shared path accessors)
     -- -----------------------------------------------------------------
-
-    --- Read a value from config using a configKey (string or table path).
-    local function readConfig(key)
-        if type(key) == "table" then
-            local tbl = modConfig
-            for i = 1, #key - 1 do tbl = tbl[key[i]] end
-            return tbl[key[#key]]
-        end
-        return modConfig[key]
-    end
-
-    --- Write a value to config using a configKey (string or table path).
-    local function writeConfig(key, value)
-        if type(key) == "table" then
-            local tbl = modConfig
-            for i = 1, #key - 1 do tbl = tbl[key[i]] end
-            tbl[key[#key]] = value
-            return
-        end
-        modConfig[key] = value
-    end
-
-    --- Read from staging using a configKey. Nested keys use nested tables
-    --- so UI code can naturally access staging.FirstHammers[aspectKey].
-    local function readStaging(key)
-        if type(key) == "table" then
-            local tbl = staging
-            for i = 1, #key - 1 do
-                if not tbl[key[i]] then return nil end
-                tbl = tbl[key[i]]
-            end
-            return tbl[key[#key]]
-        end
-        return staging[key]
-    end
-
-    --- Write to staging using a configKey. Creates nested tables as needed.
-    local function writeStaging(key, value)
-        if type(key) == "table" then
-            local tbl = staging
-            for i = 1, #key - 1 do
-                tbl[key[i]] = tbl[key[i]] or {}
-                tbl = tbl[key[i]]
-            end
-            tbl[key[#key]] = value
-            return
-        end
-        staging[key] = value
-    end
-
-    -- -----------------------------------------------------------------
-    -- Copy helpers
-    -- -----------------------------------------------------------------
+    local readPath  = public.readPath
+    local writePath = public.writePath
 
     local function copyConfigToStaging()
         for _, field in ipairs(schema) do
-            local val = readConfig(field.configKey)
-            if field.type == "checkbox" then
-                writeStaging(field.configKey, val == true)
-            elseif field.type == "dropdown" or field.type == "radio" then
-                writeStaging(field.configKey, val)
+            local val = readPath(modConfig, field.configKey)
+            local ft = FieldTypes[field.type]
+            if ft then
+                writePath(staging, field.configKey, ft.toStaging(val))
             end
         end
     end
 
     local function copyStagingToConfig()
         for _, field in ipairs(schema) do
-            writeConfig(field.configKey, readStaging(field.configKey))
+            local val = readPath(staging, field.configKey)
+            writePath(modConfig, field.configKey, val)
         end
     end
 
@@ -311,3 +309,140 @@ function public.createSpecialState(modConfig, schema)
 
     return staging, snapshot, sync
 end
+
+-- =============================================================================
+-- FIELD TYPE REGISTRY
+-- =============================================================================
+-- Central definition of all schema field types. Each type declares its own:
+--   bits(field)                        — number of bits for hashing
+--   validate(field, prefix)            — declaration-time validation
+--   encode(field, current, addBits)    — write value into bit stream
+--   decode(field, readBits)            — read value from bit stream
+--   toStaging(val)                     — transform value for staging table
+--   draw(imgui, field, value, width)   — render widget, returns (newValue, changed)
+--
+-- To add a new type: add one entry here. All consumers dispatch automatically.
+
+local function bitsRequired(n)
+    if n <= 1 then return 1 end
+    return math.ceil(math.log(n) / math.log(2))
+end
+
+FieldTypes.checkbox = {
+    bits = function(field) return field.bits or 1 end,
+    validate = function(field, prefix) end,
+    encode = function(field, current, addBits)
+        addBits(current and 1 or 0, 1)
+    end,
+    decode = function(field, readBits)
+        return readBits(1) == 1
+    end,
+    toStaging = function(val) return val == true end,
+    draw = function(imgui, field, value)
+        if value == nil then value = field.default end
+        return imgui.Checkbox(field.label or field.configKey, value or false)
+    end,
+}
+
+FieldTypes.dropdown = {
+    bits = function(field) return field.bits or bitsRequired(#(field.values or {})) end,
+    validate = function(field, prefix)
+        if not field.values then
+            public.warn(prefix .. ": dropdown missing values list")
+        elseif type(field.values) ~= "table" or #field.values == 0 then
+            public.warn(prefix .. ": dropdown values must be a non-empty list")
+        end
+    end,
+    encode = function(field, current, addBits)
+        current = current or field.default or ""
+        local bits = field.bits or bitsRequired(#(field.values or {}))
+        local idx = 0
+        for i, v in ipairs(field.values or {}) do
+            if v == current then idx = i - 1; break end
+        end
+        addBits(idx, bits)
+    end,
+    decode = function(field, readBits)
+        local bits = field.bits or bitsRequired(#(field.values or {}))
+        local idx = readBits(bits)
+        if field.values and idx < #field.values then
+            return field.values[idx + 1]
+        end
+        return nil
+    end,
+    toStaging = function(val) return val end,
+    draw = function(imgui, field, value, width)
+        local current = value or field.default or ""
+        local currentIdx = 1
+        for i, v in ipairs(field.values) do
+            if v == current then currentIdx = i; break end
+        end
+        local preview = field.values[currentIdx] or ""
+        imgui.Text(field.label or field.configKey)
+        imgui.SameLine()
+        if width then imgui.PushItemWidth(width) end
+        local changed = false
+        local newVal = current
+        if imgui.BeginCombo("##field", preview) then
+            for i, v in ipairs(field.values) do
+                if imgui.Selectable(v, i == currentIdx) then
+                    if i ~= currentIdx then
+                        newVal = v
+                        changed = true
+                    end
+                end
+            end
+            imgui.EndCombo()
+        end
+        if width then imgui.PopItemWidth() end
+        return newVal, changed
+    end,
+}
+
+FieldTypes.radio = {
+    bits = function(field) return field.bits or bitsRequired(#(field.values or {})) end,
+    validate = function(field, prefix)
+        if not field.values then
+            public.warn(prefix .. ": radio missing values list")
+        elseif type(field.values) ~= "table" or #field.values == 0 then
+            public.warn(prefix .. ": radio values must be a non-empty list")
+        end
+    end,
+    encode = function(field, current, addBits)
+        current = current or field.default or ""
+        local bits = field.bits or bitsRequired(#(field.values or {}))
+        local idx = 0
+        for i, v in ipairs(field.values or {}) do
+            if v == current then idx = i - 1; break end
+        end
+        addBits(idx, bits)
+    end,
+    decode = function(field, readBits)
+        local bits = field.bits or bitsRequired(#(field.values or {}))
+        local idx = readBits(bits)
+        if field.values and idx < #field.values then
+            return field.values[idx + 1]
+        end
+        return nil
+    end,
+    toStaging = function(val) return val end,
+    draw = function(imgui, field, value)
+        local current = value or field.default or ""
+        imgui.Text(field.label or field.configKey)
+        local newVal = current
+        local changed = false
+        for _, v in ipairs(field.values) do
+            if imgui.RadioButton(v, current == v) then
+                if v ~= current then
+                    newVal = v
+                    changed = true
+                end
+            end
+            imgui.SameLine()
+        end
+        imgui.NewLine()
+        return newVal, changed
+    end,
+}
+
+public.FieldTypes = FieldTypes
