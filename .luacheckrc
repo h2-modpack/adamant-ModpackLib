@@ -1,17 +1,24 @@
 std = "lua52"
+max_line_length = 120
 
-read_globals = {
+-- Variables the scripts actively define or mutate
+globals = {
     "rom",
+    "config",
     "modutil",
     "public",
-    "config",
     "_PLUGIN",
-    "import_as_fallback",
     "game",
     "chalk",
-    "reload",
-
-    "SetupRunData"
+    "reload"
 }
 
-max_line_length = 120
+-- Variables provided by the environment strictly for reading
+read_globals = {
+    "imgui",
+    "import_as_fallback",
+    "import",
+    "ModifyTextBox",
+    "MockDiscovery"
+}
+
