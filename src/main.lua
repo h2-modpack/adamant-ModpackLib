@@ -15,7 +15,7 @@
 --   lib.decodeField(field, readBits)          — decode field from bit stream
 
 local mods = rom.mods
-local envy = mods['SGG_Modding-ENVY'].auto()
+mods['SGG_Modding-ENVY'].auto()
 
 ---@diagnostic disable: lowercase-global
 rom = rom
@@ -119,8 +119,8 @@ function public.standaloneUI(def, modConfig, apply, revert)
                 imgui.Separator()
                 for _, opt in ipairs(def.options) do
                     imgui.PushID(opt.configKey)
-                    local newVal, chg = public.drawField(imgui, opt, modConfig[opt.configKey])
-                    if chg then
+                    local newVal, newChg = public.drawField(imgui, opt, modConfig[opt.configKey])
+                    if newChg then
                         modConfig[opt.configKey] = newVal
                         onOptionChanged()
                     end
@@ -330,11 +330,11 @@ end
 
 FieldTypes.checkbox = {
     bits = function(field) return field.bits or 1 end,
-    validate = function(field, prefix) end,
-    encode = function(field, current, addBits)
+    validate = function(_, _) end,
+    encode = function(_, current, addBits)
         addBits(current and 1 or 0, 1)
     end,
-    decode = function(field, readBits)
+    decode = function(_, readBits)
         return readBits(1) == 1
     end,
     toStaging = function(val) return val == true end,

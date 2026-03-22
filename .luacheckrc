@@ -17,8 +17,10 @@ globals = {
 read_globals = {
     "imgui",
     "import_as_fallback",
-    "import",
-    "ModifyTextBox",
-    "MockDiscovery"
+    "import"
 }
 
+exclude_files = { 
+    "src/template.lua",
+    "src/special_template.lua",
+}
