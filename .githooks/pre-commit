@@ -1,0 +1,10 @@
+#!/bin/bash
+echo "Running Luacheck before commit..."
+luacheck src
+RESULT=$?
+if [ $RESULT -ne 0 ]; then
+    echo "??? Luacheck failed! Please fix errors before committing."
+    exit 1
+fi
+echo "??? Luacheck passed!"
+exit 0

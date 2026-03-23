@@ -1,26 +1,5 @@
-std = "lua52"
+﻿std = "lua52"
 max_line_length = 120
-
--- Variables the scripts actively define or mutate
-globals = {
-    "rom",
-    "config",
-    "modutil",
-    "public",
-    "_PLUGIN",
-    "game",
-    "chalk",
-    "reload"
-}
-
--- Variables provided by the environment strictly for reading
-read_globals = {
-    "imgui",
-    "import_as_fallback",
-    "import"
-}
-
-exclude_files = { 
-    "src/template.lua",
-    "src/special_template.lua",
-}
+globals = { "rom", "public", "config", "modutil", "game", "chalk", "reload", "_PLUGIN" }
+read_globals = { "imgui", "import_as_fallback", "import" }
+exclude_files = { "src/vendor/**/*.lua", "src/**/*template*.lua" }
