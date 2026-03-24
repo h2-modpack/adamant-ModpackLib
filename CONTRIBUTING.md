@@ -115,7 +115,7 @@ The canonical templates live in the [h2-modpack-template](https://github.com/h2-
 - `src/main.lua` -- boolean module starting point
 - `src/main_special.lua` -- special module starting point
 
-`src/template.lua` and `src/special_template.lua` in this repo are reference copies kept in sync for IDE navigation — prefer the template repo when starting a new module.
+Copy the relevant template as `src/main.lua` in a new mod repo and fill in the marked sections.
 
 ## Standalone mode
 
