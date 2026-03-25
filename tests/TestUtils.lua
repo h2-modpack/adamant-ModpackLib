@@ -39,12 +39,18 @@ rom.mods['SGG_Modding-ENVY'] = {
     end,
 }
 
+-- Minimal Chalk mock: auto() returns a plain table (the "config")
+rom.mods['SGG_Modding-Chalk'] = {
+    auto = function() return { DebugMode = false } end,
+}
+
 -- Warning capture: collect warnings for assertions
 Warnings = {}
 
 function CaptureWarnings()
     Warnings = {}
-    -- Enable debug mode so warn() actually fires
+    -- Enable lib's own debug mode so warn() actually fires
+    lib.config.DebugMode = true
     rom.mods['adamant-Modpack_Core'] = {
         config = { ModEnabled = true, DebugMode = true },
     }
@@ -56,6 +62,7 @@ function CaptureWarnings()
 end
 
 function RestoreWarnings()
+    lib.config.DebugMode = false
     print = _originalPrint or print
     Warnings = {}
 end
