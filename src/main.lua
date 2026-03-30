@@ -150,6 +150,30 @@ function public.standaloneUI(def, modConfig, apply, revert)
         end
     end
 
+    local function DrawOption(imgui, opt, index)
+        if not public.isFieldVisible(opt, modConfig) then
+            return
+        end
+
+        local pushId = opt._pushId or opt.configKey or (opt.type .. "_" .. tostring(index))
+        imgui.PushID(pushId)
+        if opt.indent then
+            imgui.Indent()
+        end
+
+        local currentValue = opt.configKey and modConfig[opt.configKey] or nil
+        local newVal, newChg = public.drawField(imgui, opt, currentValue)
+        if newChg and opt.configKey then
+            modConfig[opt.configKey] = newVal
+            onOptionChanged()
+        end
+
+        if opt.indent then
+            imgui.Unindent()
+        end
+        imgui.PopID()
+    end
+
     return function()
         if def.modpack and _coordinators[def.modpack] then return end
         if rom.ImGui.BeginMenu(def.name) then
@@ -176,14 +200,8 @@ function public.standaloneUI(def, modConfig, apply, revert)
             -- Inline options (when module is enabled)
             if modConfig.Enabled and def.options then
                 imgui.Separator()
-                for _, opt in ipairs(def.options) do
-                    imgui.PushID(opt.configKey)
-                    local newVal, newChg = public.drawField(imgui, opt, modConfig[opt.configKey])
-                    if newChg then
-                        modConfig[opt.configKey] = newVal
-                        onOptionChanged()
-                    end
-                    imgui.PopID()
+                for index, opt in ipairs(def.options) do
+                    DrawOption(imgui, opt, index)
                 end
             end
 
@@ -251,6 +269,18 @@ function public.drawField(imgui, field, value, width)
     return value, false
 end
 
+--- Return whether a field should be rendered given the current flat option values.
+--- When field.visibleIf is absent, fields are always visible.
+--- @param field table
+--- @param values table
+--- @return boolean
+function public.isFieldVisible(field, values)
+    if not field.visibleIf then
+        return true
+    end
+    return values and values[field.visibleIf] == true or false
+end
+
 --- Validate a schema at declaration time. Warns via lib.warn (debug-guarded).
 --- @param schema table   Ordered list of field descriptors
 --- @param label string   Name shown in warnings (e.g. module name)
@@ -261,7 +291,7 @@ function public.validateSchema(schema, label)
     end
     for i, field in ipairs(schema) do
         local prefix = label .. " field #" .. i
-        if not field.configKey then
+        if field.type ~= "separator" and not field.configKey then
             libWarn(prefix .. ": missing configKey")
         end
         if not field.type then
@@ -273,6 +303,12 @@ function public.validateSchema(schema, label)
             elseif ft.validate then
                 field._imguiId = "##" .. tostring(field.configKey)
                 ft.validate(field, prefix)
+            end
+            if field.visibleIf ~= nil and type(field.visibleIf) ~= "string" then
+                libWarn(prefix .. ": visibleIf must be a flat string configKey")
+            end
+            if field.indent ~= nil and type(field.indent) ~= "boolean" then
+                libWarn(prefix .. ": indent must be boolean")
             end
         end
     end
@@ -322,7 +358,7 @@ function public.createSpecialState(modConfig, schema)
             local val = readPath(modConfig, field.configKey)
             local ft = FieldTypes[field.type]
             if ft then
-                writePath(staging, field.configKey, ft.toStaging(val))
+                writePath(staging, field.configKey, ft.toStaging(val, field))
             end
         end
     end
@@ -482,6 +518,21 @@ function public.warnIfSpecialConfigBypassedState(name, enabled, specialState, mo
     end
 end
 
+local function NormalizeInteger(field, value)
+    local num = tonumber(value)
+    if num == nil then
+        num = tonumber(field.default) or 0
+    end
+    num = math.floor(num)
+    if field.min ~= nil and num < field.min then
+        num = field.min
+    end
+    if field.max ~= nil and num > field.max then
+        num = field.max
+    end
+    return num
+end
+
 -- =============================================================================
 -- FIELD TYPE REGISTRY
 -- =============================================================================
@@ -607,6 +658,106 @@ FieldTypes.radio = {
         end
         imgui.NewLine()
         return newVal, changed
+    end,
+}
+
+FieldTypes.int32 = {
+    validate = function(field, prefix)
+        if field.default ~= nil and type(field.default) ~= "number" then
+            libWarn(prefix .. ": int32 default must be number, got " .. type(field.default))
+        end
+    end,
+    toHash = function(field, value)
+        return tostring(NormalizeInteger(field, value))
+    end,
+    fromHash = function(field, str)
+        return NormalizeInteger(field, tonumber(str))
+    end,
+    toStaging = function(val, field)
+        return NormalizeInteger(field or {}, val)
+    end,
+    draw = function(_, _, value)
+        return value, false
+    end,
+}
+
+FieldTypes.stepper = {
+    validate = function(field, prefix)
+        if type(field.default) ~= "number" then
+            libWarn(prefix .. ": stepper default must be number, got " .. type(field.default))
+        end
+        if type(field.min) ~= "number" then
+            libWarn(prefix .. ": stepper min must be number, got " .. type(field.min))
+        end
+        if type(field.max) ~= "number" then
+            libWarn(prefix .. ": stepper max must be number, got " .. type(field.max))
+        end
+        if type(field.min) == "number" and type(field.max) == "number" and field.min > field.max then
+            libWarn(prefix .. ": stepper min cannot exceed max")
+        end
+        if field.step ~= nil and (type(field.step) ~= "number" or field.step <= 0) then
+            libWarn(prefix .. ": stepper step must be a positive number")
+        end
+    end,
+    toHash = function(field, value)
+        return tostring(NormalizeInteger(field, value))
+    end,
+    fromHash = function(field, str)
+        return NormalizeInteger(field, tonumber(str))
+    end,
+    toStaging = function(val, field)
+        return NormalizeInteger(field or {}, val)
+    end,
+    draw = function(imgui, field, value)
+        local current = NormalizeInteger(field, value)
+        local step = math.floor(tonumber(field.step) or 1)
+        local changed = false
+        local newVal = current
+
+        imgui.Text(field.label or field.configKey)
+        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
+            imgui.SetTooltip(field.tooltip)
+        end
+        imgui.SameLine()
+        if imgui.Button("-") and current > field.min then
+            newVal = NormalizeInteger(field, current - step)
+            changed = newVal ~= current
+        end
+        imgui.SameLine()
+        imgui.Text(tostring(newVal))
+        imgui.SameLine()
+        if imgui.Button("+") and current < field.max then
+            newVal = NormalizeInteger(field, current + step)
+            changed = newVal ~= current
+        end
+        return newVal, changed
+    end,
+}
+
+FieldTypes.separator = {
+    validate = function(field, prefix)
+        if field.label ~= nil and type(field.label) ~= "string" then
+            libWarn(prefix .. ": separator label must be string")
+        end
+    end,
+    toHash = function()
+        return ""
+    end,
+    fromHash = function()
+        return nil
+    end,
+    toStaging = function()
+        return nil
+    end,
+    draw = function(imgui, field)
+        if field.label and field.label ~= "" then
+            imgui.Separator()
+            imgui.Text(field.label)
+            imgui.Separator()
+        else
+            imgui.Separator()
+        end
+        return nil, false
     end,
 }
 
