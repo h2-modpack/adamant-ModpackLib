@@ -15,8 +15,8 @@ local lib = rom.mods["adamant-ModpackLib"]
 | Function | Purpose |
 |---|---|
 | `lib.isEnabled(modConfig, packId)` | True if module plus coordinator master toggle are both on |
-| `lib.warn(packId, enabled, msg)` | Framework diagnostic print. For framework-detected problems. Do not use for normal module tracing. |
-| `lib.log(name, enabled, msg)` | Module trace print, gated by the caller-supplied boolean |
+| `lib.warn(packId, enabled, fmt, ...)` | Framework diagnostic print, printf-style. For framework-detected problems. Do not use for normal module tracing. |
+| `lib.log(name, enabled, fmt, ...)` | Module trace print, printf-style, gated by the caller-supplied boolean |
 | `lib.createBackupSystem()` | Returns `backup, revert` for isolated state save/restore |
 | `lib.standaloneUI(def, config, apply, revert)` | Returns menu-bar callback for standalone regular modules |
 | `lib.readPath(tbl, key)` | Read from table using string or path key |
@@ -26,6 +26,7 @@ local lib = rom.mods["adamant-ModpackLib"]
 | `lib.createSpecialState(config, schema)` | Returns a managed `specialState` object for special modules |
 | `lib.captureSpecialConfigSnapshot(modConfig, schema)` | Debug helper for detecting direct config writes in special-module UI |
 | `lib.warnIfSpecialConfigBypassedState(name, enabled, specialState, modConfig, schema, before)` | Debug helper that logs when a special writes schema-backed config directly during draw |
+| `lib.isFieldVisible(field, values)` | Returns true if `field.visibleIf` is absent or `values[field.visibleIf] == true` |
 | `lib.FieldTypes` | The field type registry table |
 
 ## Module contract
@@ -91,6 +92,17 @@ It exposes:
 - `specialState.flushToConfig()`
 - `specialState.isDirty()`
 
+### Schema caching
+
+`lib.validateSchema` writes two cached values onto each field descriptor at declaration time:
+
+| Field | Value | Purpose |
+|---|---|---|
+| `field._schemaKey` | `table.concat(configKey, ".")` for path keys, `tostring(configKey)` for strings | Stable hash key used by `captureSpecialConfigSnapshot`, `warnIfSpecialConfigBypassedState`, and the hash encode/decode loops |
+| `field._imguiId` | `"##" .. tostring(configKey)` | Stable ImGui widget ID reused by `drawField` every frame |
+
+These are written once and never recomputed. Do not overwrite them.
+
 ### Special-module rules
 
 For schema-backed state:
@@ -119,6 +131,21 @@ All field types live in the `FieldTypes` registry in `src/main.lua`. Each type i
 | `fromHash(field, str)` | Deserialize value from canonical hash string |
 | `toStaging(val)` | Transform config value for managed special-state staging |
 | `draw(imgui, field, value, width)` | Render the ImGui widget for regular-module options |
+
+### Built-in field types
+
+| Type | Widget | Notes |
+|---|---|---|
+| `checkbox` | `imgui.Checkbox` | `default` must be boolean |
+| `dropdown` | `imgui.BeginCombo` | `values` must be a non-empty list of strings |
+| `radio` | `imgui.RadioButton` | `values` must be a non-empty list of strings |
+| `int32` | display only (no widget) | `default`, `min`, `max` must be numbers; value is clamped and floored |
+| `stepper` | `-` / `+` buttons + text | `default`, `min`, `max` must be numbers; `step` optional positive number |
+| `separator` | `imgui.Separator` | `label` optional; no `configKey`, not encoded in hash |
+
+All string-valued types (`dropdown`, `radio`) reject values containing `|` since that character is used as the hash delimiter.
+
+For `stepper`, the resolved step value is cached on `field._step` at `validateSchema` time to avoid recomputation every frame.
 
 Note: special modules use field types as typed state descriptors for hashing and state management, but Framework does not render `stateSchema` fields automatically.
 
@@ -156,8 +183,15 @@ Two distinct functions, two distinct purposes:
 
 | Function | Purpose | Gated by |
 |---|---|---|
-| `lib.warn(packId, enabled, msg)` | Framework-detected problems such as schema errors, discovery errors, skipped modules | Caller-supplied coordinator debug flag |
-| `lib.log(name, enabled, msg)` | Module author traces and debug warnings | Caller-supplied boolean, usually `config.DebugMode` |
+| `lib.warn(packId, enabled, fmt, ...)` | Framework-detected problems such as schema errors, discovery errors, skipped modules | Caller-supplied coordinator debug flag |
+| `lib.log(name, enabled, fmt, ...)` | Module author traces and debug warnings | Caller-supplied boolean, usually `config.DebugMode` |
+
+Both functions accept printf-style arguments — string building is deferred past the gate, so no allocation occurs when disabled:
+
+```lua
+lib.warn(packId, config.DebugMode, "Skipping %s: missing id", modName)
+lib.log("MyMod", config.DebugMode, "hook fired: value=%s", value)
+```
 
 Console output is visually distinct:
 

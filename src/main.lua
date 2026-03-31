@@ -67,33 +67,33 @@ end
 
 --- Lib-internal diagnostic — gated on lib's own DebugMode (libConfig.DebugMode).
 --- Used by validateSchema, FieldTypes, and drawField. Not part of the public API.
-local function libWarn(msg)
-    if libConfig.DebugMode then
-        print("[lib] " .. msg)
-    end
+local function libWarn(fmt, ...)
+    if not libConfig.DebugMode then return end
+    print("[lib] " .. (select('#', ...) > 0 and string.format(fmt, ...) or fmt))
 end
 
 --- Print a framework diagnostic warning, gated on the caller's enabled flag.
---- Mirrors lib.log — the caller owns the gate.
---- @param packId  string   Pack identifier shown as the console prefix
---- @param enabled boolean  Pass the coordinator's config.DebugMode
---- @param msg     string   The warning message
-function public.warn(packId, enabled, msg)
-    if enabled then
-        print("[" .. packId .. "] " .. msg)
-    end
+--- Accepts printf-style args: warn(packId, enabled, "foo %s", bar).
+--- String building is deferred past the gate — no allocation when disabled.
+--- @param packId  string
+--- @param enabled boolean
+--- @param fmt     string
+--- @param ...     any
+function public.warn(packId, enabled, fmt, ...)
+    if not enabled then return end
+    print("[" .. packId .. "] " .. (select('#', ...) > 0 and string.format(fmt, ...) or fmt))
 end
 
 --- Print a module-level diagnostic trace when the module's own DebugMode is enabled.
---- Call this for intentional author traces — execution flow, values, decisions.
---- Distinct from lib.warn, which is for framework-detected problems.
---- @param name string    Module identifier shown as the console prefix
---- @param enabled boolean  Pass config.DebugMode directly
---- @param msg string     The trace message
-function public.log(name, enabled, msg)
-    if enabled then
-        print("[" .. name .. "] " .. msg)
-    end
+--- Accepts printf-style args: log(name, enabled, "foo %s", bar).
+--- String building is deferred past the gate — no allocation when disabled.
+--- @param name    string
+--- @param enabled boolean
+--- @param fmt     string
+--- @param ...     any
+function public.log(name, enabled, fmt, ...)
+    if not enabled then return end
+    print("[" .. name .. "] " .. (select('#', ...) > 0 and string.format(fmt, ...) or fmt))
 end
 
 --- Create an isolated backup/restore pair.
@@ -108,7 +108,8 @@ function public.createBackupSystem()
     local function backup(tbl, ...)
         savedValues[tbl] = savedValues[tbl] or {}
         local saved = savedValues[tbl]
-        for _, key in ipairs({...}) do
+        for i = 1, select('#', ...) do
+            local key = select(i, ...)
             if saved[key] == nil then
                 local v = tbl[key]
                 saved[key] = (v == nil) and NIL or (type(v) == "table" and rom.game.DeepCopyTable(v) or v)
@@ -247,6 +248,15 @@ function public.writePath(tbl, key, value)
     tbl[key] = value
 end
 
+-- Stable string key for a configKey that may be a string or table path.
+-- {"Parent", "Child"} -> "Parent.Child",  "SimpleKey" -> "SimpleKey"
+local function SpecialFieldKey(configKey)
+    if type(configKey) == "table" then
+        return table.concat(configKey, ".")
+    end
+    return tostring(configKey)
+end
+
 -- =============================================================================
 -- FIELD TYPE DISPATCHERS
 -- =============================================================================
@@ -265,7 +275,7 @@ function public.drawField(imgui, field, value, width)
         end
         return ft.draw(imgui, field, value, width)
     end
-    libWarn("drawField: unknown type '" .. tostring(field.type) .. "'")
+    libWarn("drawField: unknown type '%s'", field.type)
     return value, false
 end
 
@@ -286,29 +296,32 @@ end
 --- @param label string   Name shown in warnings (e.g. module name)
 function public.validateSchema(schema, label)
     if type(schema) ~= "table" then
-        libWarn(label .. ": schema is not a table")
+        libWarn("%s: schema is not a table", label)
         return
     end
     for i, field in ipairs(schema) do
         local prefix = label .. " field #" .. i
         if field.type ~= "separator" and not field.configKey then
-            libWarn(prefix .. ": missing configKey")
+            libWarn("%s: missing configKey", prefix)
+        end
+        if field.configKey then
+            field._schemaKey = SpecialFieldKey(field.configKey)
         end
         if not field.type then
-            libWarn(prefix .. ": missing type")
+            libWarn("%s: missing type", prefix)
         else
             local ft = FieldTypes[field.type]
             if not ft then
-                libWarn(prefix .. ": unknown type '" .. tostring(field.type) .. "'")
+                libWarn("%s: unknown type '%s'", prefix, field.type)
             elseif ft.validate then
                 field._imguiId = "##" .. tostring(field.configKey)
                 ft.validate(field, prefix)
             end
             if field.visibleIf ~= nil and type(field.visibleIf) ~= "string" then
-                libWarn(prefix .. ": visibleIf must be a flat string configKey")
+                libWarn("%s: visibleIf must be a flat string configKey", prefix)
             end
             if field.indent ~= nil and type(field.indent) ~= "boolean" then
-                libWarn(prefix .. ": indent must be boolean")
+                libWarn("%s: indent must be boolean", prefix)
             end
         end
     end
@@ -478,13 +491,6 @@ end
 -- SPECIAL MODULE DEBUG HELPERS
 -- =============================================================================
 
-local function SpecialFieldKey(configKey)
-    if type(configKey) == "table" then
-        return table.concat(configKey, ".")
-    end
-    return tostring(configKey)
-end
-
 --- Capture the current config values for a special module's schema-backed fields.
 --- Useful for detecting direct config writes during DrawTab/DrawQuickContent.
 --- @param modConfig table
@@ -493,7 +499,7 @@ end
 function public.captureSpecialConfigSnapshot(modConfig, schema)
     local snapshot = {}
     for _, field in ipairs(schema or {}) do
-        snapshot[SpecialFieldKey(field.configKey)] = public.readPath(modConfig, field.configKey)
+        snapshot[field._schemaKey or SpecialFieldKey(field.configKey)] = public.readPath(modConfig, field.configKey)
     end
     return snapshot
 end
@@ -506,12 +512,13 @@ end
 --- @param schema table
 --- @param before table
 function public.warnIfSpecialConfigBypassedState(name, enabled, specialState, modConfig, schema, before)
+    if not enabled then return end
     if specialState.isDirty() then return end
     for _, field in ipairs(schema or {}) do
-        local key = SpecialFieldKey(field.configKey)
+        local key = field._schemaKey or SpecialFieldKey(field.configKey)
         local current = public.readPath(modConfig, field.configKey)
         if current ~= before[key] then
-            public.log(name, enabled,
+            public.log(name, true,
                 "special UI modified config directly; use public.specialState for schema-backed state")
             return
         end
@@ -548,7 +555,7 @@ end
 FieldTypes.checkbox = {
     validate = function(field, prefix)
         if field.default ~= nil and type(field.default) ~= "boolean" then
-            libWarn(prefix .. ": checkbox default must be boolean, got " .. type(field.default))
+            libWarn("%s: checkbox default must be boolean, got %s", prefix, type(field.default))
         end
     end,
     toHash    = function(_, value) return value and "1" or "0" end,
@@ -567,13 +574,13 @@ FieldTypes.checkbox = {
 FieldTypes.dropdown = {
     validate = function(field, prefix)
         if not field.values then
-            libWarn(prefix .. ": dropdown missing values list")
+            libWarn("%s: dropdown missing values list", prefix)
         elseif type(field.values) ~= "table" or #field.values == 0 then
-            libWarn(prefix .. ": dropdown values must be a non-empty list")
+            libWarn("%s: dropdown values must be a non-empty list", prefix)
         else
             for _, v in ipairs(field.values) do
                 if type(v) == "string" and string.find(v, "|", 1, true) then
-                    libWarn(prefix .. ": value '" .. v .. "' contains reserved separator '|'")
+                    libWarn("%s: value '%s' contains reserved separator '|'", prefix, v)
                 end
             end
         end
@@ -620,13 +627,13 @@ FieldTypes.dropdown = {
 FieldTypes.radio = {
     validate = function(field, prefix)
         if not field.values then
-            libWarn(prefix .. ": radio missing values list")
+            libWarn("%s: radio missing values list", prefix)
         elseif type(field.values) ~= "table" or #field.values == 0 then
-            libWarn(prefix .. ": radio values must be a non-empty list")
+            libWarn("%s: radio values must be a non-empty list", prefix)
         else
             for _, v in ipairs(field.values) do
                 if type(v) == "string" and string.find(v, "|", 1, true) then
-                    libWarn(prefix .. ": value '" .. v .. "' contains reserved separator '|'")
+                    libWarn("%s: value '%s' contains reserved separator '|'", prefix, v)
                 end
             end
         end
@@ -664,7 +671,7 @@ FieldTypes.radio = {
 FieldTypes.int32 = {
     validate = function(field, prefix)
         if field.default ~= nil and type(field.default) ~= "number" then
-            libWarn(prefix .. ": int32 default must be number, got " .. type(field.default))
+            libWarn("%s: int32 default must be number, got %s", prefix, type(field.default))
         end
     end,
     toHash = function(field, value)
@@ -684,20 +691,21 @@ FieldTypes.int32 = {
 FieldTypes.stepper = {
     validate = function(field, prefix)
         if type(field.default) ~= "number" then
-            libWarn(prefix .. ": stepper default must be number, got " .. type(field.default))
+            libWarn("%s: stepper default must be number, got %s", prefix, type(field.default))
         end
         if type(field.min) ~= "number" then
-            libWarn(prefix .. ": stepper min must be number, got " .. type(field.min))
+            libWarn("%s: stepper min must be number, got %s", prefix, type(field.min))
         end
         if type(field.max) ~= "number" then
-            libWarn(prefix .. ": stepper max must be number, got " .. type(field.max))
+            libWarn("%s: stepper max must be number, got %s", prefix, type(field.max))
         end
         if type(field.min) == "number" and type(field.max) == "number" and field.min > field.max then
-            libWarn(prefix .. ": stepper min cannot exceed max")
+            libWarn("%s: stepper min cannot exceed max", prefix)
         end
         if field.step ~= nil and (type(field.step) ~= "number" or field.step <= 0) then
-            libWarn(prefix .. ": stepper step must be a positive number")
+            libWarn("%s: stepper step must be a positive number", prefix)
         end
+        field._step = math.floor(tonumber(field.step) or 1)
     end,
     toHash = function(field, value)
         return tostring(NormalizeInteger(field, value))
@@ -710,7 +718,7 @@ FieldTypes.stepper = {
     end,
     draw = function(imgui, field, value)
         local current = NormalizeInteger(field, value)
-        local step = math.floor(tonumber(field.step) or 1)
+        local step = field._step or math.floor(tonumber(field.step) or 1)
         local changed = false
         local newVal = current
 
@@ -724,7 +732,12 @@ FieldTypes.stepper = {
             changed = newVal ~= current
         end
         imgui.SameLine()
-        imgui.Text(tostring(newVal))
+        -- Cache the string on the field to avoid tostring allocation every frame
+        if field._lastStepperVal ~= newVal then
+            field._lastStepperStr = tostring(newVal)
+            field._lastStepperVal = newVal
+        end
+        imgui.Text(field._lastStepperStr)
         imgui.SameLine()
         if imgui.Button("+") and current < field.max then
             newVal = NormalizeInteger(field, current + step)
@@ -737,7 +750,7 @@ FieldTypes.stepper = {
 FieldTypes.separator = {
     validate = function(field, prefix)
         if field.label ~= nil and type(field.label) ~= "string" then
-            libWarn(prefix .. ": separator label must be string")
+            libWarn("%s: separator label must be string", prefix)
         end
     end,
     toHash = function()
