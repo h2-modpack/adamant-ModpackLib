@@ -2,6 +2,11 @@
 
 Shared utility library for adamant modpack modules. Provides the module contract, UI primitives, managed special-state handling, and the field type system.
 
+See also:
+
+- `FIELD_TYPES.md` for the dedicated field type contract
+- `../adamant-ModpackFramework/HASH_PROFILE_ABI.md` for the shared hash/profile ABI policy
+
 ## Architecture
 
 Single-file library (`src/main.lua`) loaded as `adamant-ModpackLib`. Modules access it with:
@@ -27,6 +32,10 @@ local lib = rom.mods["adamant-ModpackLib"]
 | `lib.isFieldVisible(field, values)` | Returns true if `field.visibleIf` is absent or `values[field.visibleIf] == true` |
 | `lib.FieldTypes` | The field type registry table |
 
+`lib.createStore(...)` is the only supported store constructor. Do not build hand-rolled store tables.
+Underscore-prefixed store members such as `_config` and `_backend` are Lib internals, not supported
+module API.
+
 ## Module contract
 
 Every module must expose `public.definition`:
@@ -49,6 +58,30 @@ public.definition.revert = revert
 - `apply` is called when the module is enabled
 - `revert` is called when disabled, usually the closure from `createBackupSystem()`
 - Framework wraps both in `pcall`; a failing module should not crash the pack UI
+
+### Mutation authoring contract
+
+For modules that mutate game data, `apply` / `revert` is still an author-owned semantic contract.
+Framework and Lib orchestrate when those functions run; they do not verify that the module backed up
+the right keys or restored them completely.
+
+Current standard:
+
+- `lib.createBackupSystem()` is the default backup / restore primitive
+- call `backup(...)` before every write performed by `apply()`
+- use the returned `restore()` as `revert()` unless the module has a clear reason to wrap it
+- set `definition.dataMutation = true` when `apply` / `revert` touches game data rather than only config
+
+Do not default to ad hoc saved-value tables when `createBackupSystem()` is sufficient. If the
+mutation contract is tightened in the future, modules already using the shared primitive will be the
+easiest to migrate.
+
+Likely future direction:
+
+- explicit mutation modes such as `patch` vs `manual`
+- a Lib-owned patch / mutation plan for common mutation modules
+
+Until then, `apply` / `revert` remains an explicit author responsibility.
 
 ### Inline options (regular modules)
 
@@ -101,6 +134,14 @@ It exposes:
 
 These are written once and never recomputed. Do not overwrite them.
 
+Lib and Framework also mutate descriptor tables in place with additional cached runtime fields such
+as `_readValue`, `_writeValue`, `_pushId`, `_hashKey`, and stepper display caches. Treat schema and
+field tables as per-module declarations, not immutable shared constants:
+
+- declare schemas freshly in the module loader/setup path
+- do not share field descriptor tables across modules or schemas
+- do not mutate descriptor objects after validation/discovery
+
 ### Special-module rules
 
 For schema-backed state:
@@ -118,6 +159,8 @@ Standalone special-module flow:
 - after `DrawTab` / `DrawQuickContent`, the module should call `specialState.flushToConfig()` if dirty
 
 ## Field type system
+
+This section is a summary. See `FIELD_TYPES.md` for the full contract.
 
 All field types live in the `FieldTypes` registry in `src/main.lua`. Each type implements:
 

@@ -5,8 +5,6 @@ local _coordinators = shared.coordinators
 local SpecialFieldKey = shared.SpecialFieldKey
 local PrepareSchemaFieldRuntimeMetadata = shared.PrepareSchemaFieldRuntimeMetadata
 local IsSchemaConfigField = shared.IsSchemaConfigField
-local CreateSpecialState
-
 local function GetSchemaConfigFields(schema)
     if type(schema) ~= "table" then
         return {}
@@ -62,8 +60,7 @@ end
 --- Create managed staging state for a special module.
 --- @param schema table
 --- @return table
-
-CreateSpecialState = function(store, schema)
+function shared.CreateSpecialState(store, schema)
     local modConfig = store._config
     public.validateSchema(schema, _PLUGIN.guid or "unknown module")
 
@@ -232,7 +229,7 @@ CreateSpecialState = function(store, schema)
         end,
     }
 end
-shared.CreateSpecialState = CreateSpecialState
+
 --- Run one special-module UI draw pass and flush managed state if dirty.
 --- @param opts table
 --- @return boolean
@@ -243,6 +240,12 @@ function public.runSpecialUiPass(opts)
     end
 
     local specialState = opts.specialState
+    if not specialState or type(specialState.isDirty) ~= "function" or type(specialState.flushToConfig) ~= "function" then
+        if shared.libWarn then
+            shared.libWarn("runSpecialUiPass: specialState is missing or malformed; pass skipped")
+        end
+        return false
+    end
     draw(opts.imgui or rom.ImGui, specialState, opts.theme)
 
     if specialState.isDirty() then

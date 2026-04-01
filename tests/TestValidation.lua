@@ -44,6 +44,17 @@ function TestValidateSchema:testUnknownType()
     lib.validateSchema(schema, "TestMod")
     lu.assertTrue(#Warnings > 0)
     lu.assertStrContains(Warnings[1], "unknown type")
+    lu.assertEquals(#(schema._configFields or {}), 0)
+end
+
+function TestValidateSchema:testUnknownTypeExcludedFromConfigFields()
+    local schema = {
+        { type = "checkbox", configKey = "Good" },
+        { type = "slider", configKey = "Bad" },
+    }
+    lib.validateSchema(schema, "TestMod")
+    lu.assertEquals(#(schema._configFields or {}), 1)
+    lu.assertEquals(schema._configFields[1].configKey, "Good")
 end
 
 function TestValidateSchema:testDropdownMissingValues()
@@ -77,4 +88,14 @@ function TestValidateSchema:testNotATable()
     lib.validateSchema("not a table", "TestMod")
     lu.assertTrue(#Warnings > 0)
     lu.assertStrContains(Warnings[1], "not a table")
+end
+
+function TestValidateSchema:testVisibleIfWarnsWhenNotInSameSchema()
+    local schema = {
+        { type = "checkbox", configKey = "Enabled", default = false },
+        { type = "checkbox", configKey = "Strict", default = false, visibleIf = "OtherModuleFlag" },
+    }
+    lib.validateSchema(schema, "TestMod")
+    lu.assertTrue(#Warnings > 0)
+    lu.assertStrContains(table.concat(Warnings, "\n"), "visibleIf 'OtherModuleFlag'")
 end

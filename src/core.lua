@@ -217,7 +217,7 @@ end
 --- @param schema table|nil
 --- @return table
 function public.createStore(modConfig, schema)
-    local backend = public.getConfigBackend(modConfig)
+    local backend = GetConfigBackend(modConfig)
     local store = {
         _config = modConfig,
         _backend = backend,
@@ -353,7 +353,7 @@ local function GetChalkSectionAndKey(configKey)
     return "config", tostring(configKey)
 end
 
-function public.getConfigBackend(config)
+function GetConfigBackend(config)
     if not chalk or type(chalk.original) ~= "function" then
         return nil
     end
@@ -424,6 +424,7 @@ function public.getConfigBackend(config)
     ConfigBackendCache[rawConfig] = backend
     return backend
 end
+shared.GetConfigBackend = GetConfigBackend
 
 SpecialFieldKey = function(configKey)
     if type(configKey) == "table" then

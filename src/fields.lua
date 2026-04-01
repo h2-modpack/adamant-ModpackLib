@@ -43,28 +43,26 @@ function public.validateSchema(schema, label)
         libWarn("%s: schema is not a table", label)
         return
     end
+
+    local knownKeys = {}
+    for _, field in ipairs(schema) do
+        if field.configKey ~= nil and type(field.configKey) == "string" then
+            knownKeys[field.configKey] = true
+        end
+    end
+
     local seenKeys = {}
     local configFields = {}
     for i, field in ipairs(schema) do
         local prefix = label .. " field #" .. i
+        local ft = nil
         if field.type ~= "separator" and not field.configKey then
             libWarn("%s: missing configKey", prefix)
-        end
-        if field.configKey then
-            PrepareSchemaFieldRuntimeMetadata(field)
-            if IsSchemaConfigField(field) then
-                if seenKeys[field._schemaKey] then
-                    libWarn("%s: duplicate configKey '%s'", prefix, field._schemaKey)
-                else
-                    seenKeys[field._schemaKey] = true
-                end
-                table.insert(configFields, field)
-            end
         end
         if not field.type then
             libWarn("%s: missing type", prefix)
         else
-            local ft = FieldTypes[field.type]
+            ft = FieldTypes[field.type]
             if not ft then
                 libWarn("%s: unknown type '%s'", prefix, field.type)
             elseif ft.validate then
@@ -73,9 +71,24 @@ function public.validateSchema(schema, label)
             end
             if field.visibleIf ~= nil and type(field.visibleIf) ~= "string" then
                 libWarn("%s: visibleIf must be a flat string configKey", prefix)
+            elseif field.visibleIf ~= nil and not knownKeys[field.visibleIf] then
+                libWarn("%s: visibleIf '%s' does not match any configKey in this schema; hosted rendering treats it as module-local",
+                    prefix, tostring(field.visibleIf))
             end
             if field.indent ~= nil and type(field.indent) ~= "boolean" then
                 libWarn("%s: indent must be boolean", prefix)
+            end
+        end
+
+        if field.configKey and ft then
+            PrepareSchemaFieldRuntimeMetadata(field)
+            if IsSchemaConfigField(field) then
+                if seenKeys[field._schemaKey] then
+                    libWarn("%s: duplicate configKey '%s'", prefix, field._schemaKey)
+                else
+                    seenKeys[field._schemaKey] = true
+                    table.insert(configFields, field)
+                end
             end
         end
     end
