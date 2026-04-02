@@ -556,6 +556,19 @@ end
 --- @param store table Module store created by lib.createStore(...).
 --- @return function renderMenu Callback suitable for `rom.gui.add_to_menu_bar(...)`.
 function public.standaloneUI(def, store)
+    local function TrySetEnabled(enabled)
+        local ok, err = public.setDefinitionEnabled(def, store, enabled)
+        if ok then
+            if public.affectsRunData(def) then rom.game.SetupRunData() end
+        else
+            libWarnAlways("%s %s failed: %s",
+                tostring(def.name or def.id or "module"),
+                enabled and "enable" or "disable",
+                tostring(err))
+        end
+        return ok, err
+    end
+
     local function onUiStateFlushed()
         if public.affectsRunData(def) and store.read("Enabled") == true then
             rom.game.SetupRunData()
@@ -606,15 +619,7 @@ function public.standaloneUI(def, store)
             local enabled = store.read("Enabled") == true
             local val, chg = imgui.Checkbox(def.name, enabled)
             if chg then
-                local ok, err = public.setDefinitionEnabled(def, store, val)
-                if ok then
-                    if public.affectsRunData(def) then rom.game.SetupRunData() end
-                else
-                    libWarnAlways("%s %s failed: %s",
-                        tostring(def.name or def.id or "module"),
-                        val and "enable" or "disable",
-                        tostring(err))
-                end
+                TrySetEnabled(val)
             end
             if imgui.IsItemHovered() and (def.tooltip or "") ~= "" then
                 imgui.SetTooltip(def.tooltip)

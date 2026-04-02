@@ -62,8 +62,12 @@ function shared.CreateUiState(modConfig, configBackend, schema)
         fieldByKey[schemaKey] = field
     end
 
+    local function getField(key)
+        return fieldByKey[SpecialFieldKey(key)]
+    end
+
     local function normalizeValue(key, value)
-        local field = fieldByKey[SpecialFieldKey(key)]
+        local field = getField(key)
         if not field then
             return value
         end
@@ -123,6 +127,30 @@ function shared.CreateUiState(modConfig, configBackend, schema)
         dirty = true
     end
 
+    local function clearDirty()
+        dirty = false
+        dirtyKeys = {}
+    end
+
+    local function readStagingValue(key)
+        local field = getField(key)
+        if field then
+            return field._readValue(staging), field
+        end
+        return public.readPath(staging, key), nil
+    end
+
+    local function writeStagingValue(key, value)
+        local field = getField(key)
+        local normalized = normalizeValue(key, value)
+        if field then
+            field._writeValue(staging, normalized)
+        else
+            public.writePath(staging, key, normalized)
+        end
+        markDirty(key)
+    end
+
     copyConfigToStaging()
 
     local readonlyCache = setmetatable({}, { __mode = "k" })
@@ -178,56 +206,29 @@ function shared.CreateUiState(modConfig, configBackend, schema)
 
     local function snapshot()
         copyConfigToStaging()
-        dirty = false
-        dirtyKeys = {}
+        clearDirty()
     end
 
     local function sync()
         copyStagingToConfig()
-        dirty = false
-        dirtyKeys = {}
+        clearDirty()
     end
 
     return {
         view = makeReadonly(staging),
         get = function(key)
-            local field = fieldByKey[SpecialFieldKey(key)]
-            if field then
-                return field._readValue(staging)
-            end
-            return public.readPath(staging, key)
+            return readStagingValue(key)
         end,
         set = function(key, value)
-            local field = fieldByKey[SpecialFieldKey(key)]
-            local normalized = normalizeValue(key, value)
-            if field then
-                field._writeValue(staging, normalized)
-            else
-                public.writePath(staging, key, normalized)
-            end
-            markDirty(key)
+            writeStagingValue(key, value)
         end,
         update = function(key, updater)
-            local field = fieldByKey[SpecialFieldKey(key)]
-            local current = field and field._readValue(staging) or public.readPath(staging, key)
-            local normalized = normalizeValue(key, updater(current))
-            if field then
-                field._writeValue(staging, normalized)
-            else
-                public.writePath(staging, key, normalized)
-            end
-            markDirty(key)
+            local current = readStagingValue(key)
+            writeStagingValue(key, updater(current))
         end,
         toggle = function(key)
-            local field = fieldByKey[SpecialFieldKey(key)]
-            local current = field and field._readValue(staging) or public.readPath(staging, key)
-            local normalized = normalizeValue(key, not (current == true))
-            if field then
-                field._writeValue(staging, normalized)
-            else
-                public.writePath(staging, key, normalized)
-            end
-            markDirty(key)
+            local current = readStagingValue(key)
+            writeStagingValue(key, not (current == true))
         end,
         reloadFromConfig = snapshot,
         flushToConfig = sync,
@@ -476,17 +477,17 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
             end
 
             if drawTab then
-                    public.runUiStatePass({
-                        name = def.name,
-                        imgui = imgui,
-                        uiState = uiState,
-                        theme = opts.theme,
-                        commit = function(state)
-                            return public.commitUiState(def, store, state)
-                        end,
-                        draw = drawTab,
-                        onFlushed = onStateFlushed,
-                    })
+                public.runUiStatePass({
+                    name = def.name,
+                    imgui = imgui,
+                    uiState = uiState,
+                    theme = opts.theme,
+                    commit = function(state)
+                        return public.commitUiState(def, store, state)
+                    end,
+                    draw = drawTab,
+                    onFlushed = onStateFlushed,
+                })
             end
 
             imgui.End()
