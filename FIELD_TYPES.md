@@ -112,6 +112,15 @@ Note:
 - `default` must be boolean
 - hash form should remain stable boolean string encoding
 
+### `string`
+
+- widget: `imgui.InputText`
+- `default` must be string when present
+- `maxLen` is optional and must be a positive number when present
+- hash form is the raw string value
+- decode falls back to `default` or `""` when nil
+- staging value is the same string value used by the widget
+
 ### `dropdown`
 
 - widget: `imgui.BeginCombo`
@@ -206,6 +215,12 @@ FieldTypes.mytype = {
         return value, false
     end,
 }
+```
+
+Simple persisted text field:
+
+```lua
+{ type = "string", configKey = "TargetBoonKey", default = "", maxLen = 128 }
 ```
 
 Before adding one, decide all of:

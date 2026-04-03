@@ -160,6 +160,56 @@ FieldTypes.checkbox = {
     end,
 }
 
+FieldTypes.string = {
+    validate = function(field, prefix)
+        if field.default ~= nil and type(field.default) ~= "string" then
+            libWarn("%s: string default must be string, got %s", prefix, type(field.default))
+        end
+        if field.maxLen ~= nil and (type(field.maxLen) ~= "number" or field.maxLen < 1) then
+            libWarn("%s: string maxLen must be a positive number", prefix)
+        end
+        field._maxLen = math.floor(tonumber(field.maxLen) or 256)
+        if field._maxLen < 1 then
+            field._maxLen = 256
+        end
+    end,
+    toHash = function(_, value)
+        return tostring(value or "")
+    end,
+    fromHash = function(field, str)
+        if str == nil then
+            return field.default or ""
+        end
+        return tostring(str)
+    end,
+    toStaging = function(val, field)
+        if val == nil then
+            return (field and field.default) or ""
+        end
+        return tostring(val)
+    end,
+    draw = function(imgui, field, value, width)
+        local current = value
+        if current == nil then
+            current = field.default or ""
+        end
+        current = tostring(current)
+
+        imgui.Text(field.label or field.configKey)
+        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
+            imgui.SetTooltip(field.tooltip)
+        end
+        imgui.SameLine()
+        if width then imgui.PushItemWidth(width) end
+        local newVal, changed = imgui.InputText(field._imguiId, current, field._maxLen or 256)
+        if width then imgui.PopItemWidth() end
+        if not changed then
+            return current, false
+        end
+        return tostring(newVal or ""), true
+    end,
+}
+
 FieldTypes.dropdown = {
     validate = function(field, prefix)
         if not field.values then

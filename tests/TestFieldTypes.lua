@@ -42,6 +42,93 @@ end
 -- DROPDOWN
 -- =============================================================================
 
+TestString = {}
+
+local stringField = {
+    type = "string",
+    configKey = "Label",
+    default = "Default",
+    maxLen = 64,
+}
+
+function TestString:testToHash()
+    lu.assertEquals(lib.FieldTypes.string.toHash(stringField, "BridalGlow"), "BridalGlow")
+end
+
+function TestString:testFromHash()
+    lu.assertEquals(lib.FieldTypes.string.fromHash(stringField, "BridalGlow"), "BridalGlow")
+end
+
+function TestString:testFromHashNilFallsBackToDefault()
+    lu.assertEquals(lib.FieldTypes.string.fromHash(stringField, nil), "Default")
+end
+
+function TestString:testToStaging()
+    lu.assertEquals(lib.FieldTypes.string.toStaging("Apollo", stringField), "Apollo")
+end
+
+function TestString:testToStagingNilFallsBackToDefault()
+    lu.assertEquals(lib.FieldTypes.string.toStaging(nil, stringField), "Default")
+end
+
+function TestString:testValidateWarnsOnBadDefault()
+    local field = { type = "string", configKey = "X", default = false }
+    CaptureWarnings()
+    lib.FieldTypes.string.validate(field, "test")
+    local warned = #Warnings > 0
+    RestoreWarnings()
+    lu.assertTrue(warned)
+end
+
+function TestString:testValidateWarnsOnBadMaxLen()
+    local field = { type = "string", configKey = "X", default = "", maxLen = 0 }
+    CaptureWarnings()
+    lib.FieldTypes.string.validate(field, "test")
+    local warned = #Warnings > 0
+    RestoreWarnings()
+    lu.assertTrue(warned)
+end
+
+function TestString:testDrawUsesInputText()
+    local field = {
+        type = "string",
+        configKey = "Label",
+        label = "Label",
+        default = "",
+        maxLen = 32,
+        _imguiId = "##Label",
+        _maxLen = 32,
+    }
+    local seen = {}
+    local imgui = {
+        Text = function(label)
+            seen.label = label
+        end,
+        IsItemHovered = function() return false end,
+        SameLine = function() end,
+        PushItemWidth = function(width)
+            seen.width = width
+        end,
+        PopItemWidth = function() end,
+        InputText = function(id, value, maxLen)
+            seen.id = id
+            seen.value = value
+            seen.maxLen = maxLen
+            return "Updated", true
+        end,
+    }
+
+    local nextValue, changed = lib.FieldTypes.string.draw(imgui, field, "Current", 220)
+
+    lu.assertEquals(seen.label, "Label")
+    lu.assertEquals(seen.id, "##Label")
+    lu.assertEquals(seen.value, "Current")
+    lu.assertEquals(seen.maxLen, 32)
+    lu.assertEquals(seen.width, 220)
+    lu.assertEquals(nextValue, "Updated")
+    lu.assertTrue(changed)
+end
+
 TestDropdown = {}
 
 local dropdownField = {

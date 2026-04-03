@@ -102,6 +102,7 @@ public.definition = {
     affectsRunData = false,
     options = {
         { type = "checkbox", configKey = "Strict", label = "Strict Mode", default = false },
+        { type = "string", configKey = "Label", label = "Label", default = "", maxLen = 64 },
     },
 }
 ```
@@ -134,6 +135,7 @@ public.definition = {
     affectsRunData = true,
     stateSchema = {
         { type = "dropdown", configKey = "Mode", values = { "A", "B" }, default = "A" },
+        { type = "string", configKey = "TargetKey", default = "", maxLen = 128 },
         { type = "checkbox", configKey = { "Nested", "Flag" }, default = false },
     },
 }
