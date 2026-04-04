@@ -188,25 +188,11 @@ FieldTypes.string = {
         end
         return tostring(val)
     end,
-    draw = function(imgui, field, value, width)
-        local current = value
-        if current == nil then
-            current = field.default or ""
+    draw = function(_, field, value)
+        if value == nil then
+            return field.default or "", false
         end
-        current = tostring(current)
-
-        imgui.Text(field.label or field.configKey)
-        if imgui.IsItemHovered() and (field.tooltip or "") ~= "" then
-            imgui.SetTooltip(field.tooltip)
-        end
-        imgui.SameLine()
-        if width then imgui.PushItemWidth(width) end
-        local newVal, changed = imgui.InputText(field._imguiId, current, field._maxLen or 256)
-        if width then imgui.PopItemWidth() end
-        if not changed then
-            return current, false
-        end
-        return tostring(newVal or ""), true
+        return tostring(value), false
     end,
 }
 

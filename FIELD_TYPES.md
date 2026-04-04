@@ -114,7 +114,7 @@ Note:
 
 ### `string`
 
-- widget: `imgui.InputText`
+- no normal interactive widget in hosted options
 - `default` must be string when present
 - `maxLen` is optional and must be a positive number when present
 - hash form is the raw string value

@@ -89,7 +89,7 @@ function TestString:testValidateWarnsOnBadMaxLen()
     lu.assertTrue(warned)
 end
 
-function TestString:testDrawUsesInputText()
+function TestString:testDrawIsNoOp()
     local field = {
         type = "string",
         configKey = "Label",
@@ -99,34 +99,11 @@ function TestString:testDrawUsesInputText()
         _imguiId = "##Label",
         _maxLen = 32,
     }
-    local seen = {}
-    local imgui = {
-        Text = function(label)
-            seen.label = label
-        end,
-        IsItemHovered = function() return false end,
-        SameLine = function() end,
-        PushItemWidth = function(width)
-            seen.width = width
-        end,
-        PopItemWidth = function() end,
-        InputText = function(id, value, maxLen)
-            seen.id = id
-            seen.value = value
-            seen.maxLen = maxLen
-            return "Updated", true
-        end,
-    }
 
-    local nextValue, changed = lib.FieldTypes.string.draw(imgui, field, "Current", 220)
+    local nextValue, changed = lib.FieldTypes.string.draw({}, field, "Current", 220)
 
-    lu.assertEquals(seen.label, "Label")
-    lu.assertEquals(seen.id, "##Label")
-    lu.assertEquals(seen.value, "Current")
-    lu.assertEquals(seen.maxLen, 32)
-    lu.assertEquals(seen.width, 220)
-    lu.assertEquals(nextValue, "Updated")
-    lu.assertTrue(changed)
+    lu.assertEquals(nextValue, "Current")
+    lu.assertFalse(changed)
 end
 
 TestDropdown = {}
