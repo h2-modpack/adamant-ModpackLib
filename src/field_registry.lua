@@ -94,6 +94,9 @@ StorageTypes.bool = {
     fromHash = function(_, str)
         return str == "1"
     end,
+    packWidth = function(_)
+        return 1
+    end,
 }
 
 StorageTypes.int = {
@@ -111,6 +114,9 @@ StorageTypes.int = {
         if type(node.min) == "number" and type(node.max) == "number" and node.min > node.max then
             libWarn("%s: int min cannot exceed max", prefix)
         end
+        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1) then
+            libWarn("%s: int width must be a positive number", prefix)
+        end
     end,
     normalize = function(node, value)
         return NormalizeInteger(node, value)
@@ -120,6 +126,17 @@ StorageTypes.int = {
     end,
     fromHash = function(node, str)
         return NormalizeInteger(node, tonumber(str))
+    end,
+    packWidth = function(node)
+        if type(node.width) == "number" and node.width >= 1 then
+            return math.floor(node.width)
+        end
+        if type(node.min) == "number" and type(node.max) == "number" then
+            local range = node.max - node.min
+            if range <= 0 then return 1 end
+            return math.ceil(math.log(range + 1) / math.log(2))
+        end
+        return nil
     end,
 }
 
@@ -684,6 +701,15 @@ end
 function public.getStorageRoots(storage)
     if type(storage) ~= "table" then return {} end
     return rawget(storage, "_rootNodes") or {}
+end
+
+function public.getPackWidth(node)
+    if type(node) ~= "table" then return nil end
+    local storageType = StorageTypes[node.type]
+    if storageType and storageType.packWidth then
+        return storageType.packWidth(node)
+    end
+    return nil
 end
 
 function public.getStorageAliases(storage)

@@ -1,5 +1,44 @@
 local lu = require('luaunit')
 
+-- =============================================================================
+-- getPackWidth
+-- =============================================================================
+
+TestGetPackWidth = {}
+
+function TestGetPackWidth:testBoolAlwaysReturnsOne()
+    lu.assertEquals(lib.getPackWidth({ type = "bool" }), 1)
+end
+
+function TestGetPackWidth:testIntDerivesFromMinMax()
+    -- min=0, max=7 → range 7 → ceil(log2(8)) = 3
+    lu.assertEquals(lib.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
+    -- min=0, max=15 → range 15 → ceil(log2(16)) = 4
+    lu.assertEquals(lib.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
+    -- min=1, max=12 → range 11 → ceil(log2(12)) = 4
+    lu.assertEquals(lib.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
+end
+
+function TestGetPackWidth:testIntUsesExplicitWidthOverMinMax()
+    lu.assertEquals(lib.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
+end
+
+function TestGetPackWidth:testIntWithNoMaxReturnsNil()
+    lu.assertNil(lib.getPackWidth({ type = "int", min = 0 }))
+end
+
+function TestGetPackWidth:testStringReturnsNil()
+    lu.assertNil(lib.getPackWidth({ type = "string" }))
+end
+
+function TestGetPackWidth:testUnknownTypeReturnsNil()
+    lu.assertNil(lib.getPackWidth({ type = "unknown" }))
+end
+
+-- =============================================================================
+-- dataDefaults
+-- =============================================================================
+
 TestDataDefaults = {}
 
 local function makeStore(definition, config, dataDefaults)
