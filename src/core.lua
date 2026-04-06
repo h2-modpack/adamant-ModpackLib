@@ -569,7 +569,7 @@ function public.standaloneUI(def, store)
                         return public.commitUiState(def, store, state)
                     end,
                     draw = function()
-                        public.drawUiTree(imgui, def.ui, store.uiState, imgui.GetWindowWidth() * 0.45)
+                        public.drawUiTree(imgui, def.ui, store.uiState, imgui.GetWindowWidth() * 0.45, def.customTypes)
                     end,
                     onFlushed = onUiStateFlushed,
                 })
@@ -764,7 +764,7 @@ function public.createStore(modConfig, definition, dataDefaults)
     if storage then
         public.validateStorage(storage, label)
         if type(definition.ui) == "table" then
-            public.validateUi(definition.ui, label, storage)
+            public.validateUi(definition.ui, label, storage, definition.customTypes)
         end
     elseif type(definition) == "table" and type(definition.ui) == "table" and #definition.ui > 0 then
         libWarnAlways("%s: definition.ui declared without definition.storage; UI state disabled", label)

@@ -202,6 +202,9 @@ function shared.CreateUiState(modConfig, configBackend, storage)
         isDirty = function()
             return dirty
         end,
+        getAliasNode = function(alias)
+            return aliasNodes[alias]
+        end,
         collectConfigMismatches = function()
             local mismatches = {}
             for _, root in ipairs(rootNodes) do
@@ -395,7 +398,7 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
             local drawTab = getDrawTab()
             if not drawTab and type(def.ui) == "table" and #def.ui > 0 then
                 drawTab = function(ui)
-                    public.drawUiTree(ui, def.ui, uiState, ui.GetWindowWidth() * 0.4)
+                    public.drawUiTree(ui, def.ui, uiState, ui.GetWindowWidth() * 0.4, def.customTypes)
                 end
             end
 

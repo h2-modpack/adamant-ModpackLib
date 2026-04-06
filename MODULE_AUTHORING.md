@@ -304,9 +304,10 @@ Ordering:
 After release, treat these as compatibility-sensitive:
 - regular `definition.id`
 - special `modName`
-- storage aliases
-- root `configKey` layout
+- storage root `alias` values — these are the hash keys
 - storage defaults
 - storage type hash encodings
+
+`alias` is the frozen hash surface. If you omit `alias` on a root, it defaults to the stringified `configKey`, which means `configKey` is effectively frozen for that root too. If you declare an explicit `alias`, you can safely rename the underlying `configKey` (restructure Chalk config) without breaking saved hashes or profiles — the alias stays stable.
 
 If those change, existing hashes and saved profiles may stop mapping cleanly.

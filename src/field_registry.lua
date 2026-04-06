@@ -66,6 +66,67 @@ local function AssertRegistryContracts(registry, required, label)
     end
 end
 
+local function ValidateCustomTypes(customTypes, label)
+    if type(customTypes) ~= "table" then
+        error((label or "module") .. ": definition.customTypes must be a table", 0)
+    end
+    local widgets = customTypes.widgets
+    local layouts = customTypes.layouts
+    if widgets ~= nil then
+        if type(widgets) ~= "table" then
+            error((label or "module") .. ": customTypes.widgets must be a table", 0)
+        end
+        for typeName, item in pairs(widgets) do
+            if WidgetTypes[typeName] then
+                error(("%s: customTypes.widgets '%s' collides with built-in widget type"):format(
+                    label or "module", tostring(typeName)), 0)
+            end
+            if LayoutTypes[typeName] then
+                error(("%s: customTypes.widgets '%s' collides with built-in layout type"):format(
+                    label or "module", tostring(typeName)), 0)
+            end
+            AssertRegistryContracts({ [typeName] = item }, REQUIRED_WIDGET_METHODS, "Widget")
+            if type(item) == "table" and type(item.binds) ~= "table" then
+                error(("%s: customTypes.widgets '%s' must declare a binds table"):format(
+                    label or "module", tostring(typeName)), 0)
+            end
+        end
+    end
+    if layouts ~= nil then
+        if type(layouts) ~= "table" then
+            error((label or "module") .. ": customTypes.layouts must be a table", 0)
+        end
+        for typeName, item in pairs(layouts) do
+            if WidgetTypes[typeName] then
+                error(("%s: customTypes.layouts '%s' collides with built-in widget type"):format(
+                    label or "module", tostring(typeName)), 0)
+            end
+            if LayoutTypes[typeName] then
+                error(("%s: customTypes.layouts '%s' collides with built-in layout type"):format(
+                    label or "module", tostring(typeName)), 0)
+            end
+            AssertRegistryContracts({ [typeName] = item }, REQUIRED_LAYOUT_METHODS, "Layout")
+        end
+    end
+end
+
+local function MergeCustomTypes(customTypes)
+    if not customTypes then
+        return WidgetTypes, LayoutTypes
+    end
+    local mergedWidgets = {}
+    for k, v in pairs(WidgetTypes) do mergedWidgets[k] = v end
+    if type(customTypes.widgets) == "table" then
+        for k, v in pairs(customTypes.widgets) do mergedWidgets[k] = v end
+    end
+    local mergedLayouts = {}
+    for k, v in pairs(LayoutTypes) do mergedLayouts[k] = v end
+    if type(customTypes.layouts) == "table" then
+        for k, v in pairs(customTypes.layouts) do mergedLayouts[k] = v end
+    end
+    return mergedWidgets, mergedLayouts
+end
+
 function public.validateRegistries()
     AssertRegistryContracts(StorageTypes, REQUIRED_STORAGE_METHODS, "Storage")
     AssertRegistryContracts(WidgetTypes, REQUIRED_WIDGET_METHODS, "Widget")
@@ -512,6 +573,29 @@ WidgetTypes.steppedRange = {
     end,
 }
 
+WidgetTypes.packedCheckboxList = {
+    binds = { value = { storageType = "int" } },
+    validate = function(_, _)
+        -- child list is runtime-resolved from the packedInt root at draw time
+    end,
+    draw = function(imgui, node, bound)
+        local children = bound.value and bound.value.children
+        if not children or #children == 0 then
+            libWarn("packedCheckboxList: no packed children for alias '%s'; bind to a packedInt root",
+                tostring(node.binds and node.binds.value or "?"))
+            return
+        end
+        for _, child in ipairs(children) do
+            local val = child.get()
+            if val == nil then val = false end
+            imgui.PushID(child.alias)
+            local newVal, changed = imgui.Checkbox(child.label, val == true)
+            if changed then child.set(newVal) end
+            imgui.PopID()
+        end
+    end,
+}
+
 LayoutTypes.separator = {
     validate = function(node, prefix)
         if node.label ~= nil and type(node.label) ~= "string" then
@@ -582,6 +666,7 @@ local function ValidateChildAlias(bitNode, root, storage, seenAliases, seenRootK
     local storageType = StorageTypes[bitNode.type]
     local child = {
         alias = bitNode.alias,
+        label = bitNode.label or bitNode.alias,
         type = bitNode.type,
         default = bitNode.default,
         min = bitNode.min,
@@ -802,7 +887,9 @@ local function ValidateVisibleIf(prefix, node, storageNodes)
     end
 end
 
-local function ValidateUiNode(node, prefix, storageNodes)
+local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTypes)
+    widgetTypes = widgetTypes or WidgetTypes
+    layoutTypes = layoutTypes or LayoutTypes
     if type(node) ~= "table" then
         libWarn("%s: ui node is not a table", prefix)
         return
@@ -812,8 +899,8 @@ local function ValidateUiNode(node, prefix, storageNodes)
         return
     end
 
-    local widgetType = WidgetTypes[node.type]
-    local layoutType = LayoutTypes[node.type]
+    local widgetType = widgetTypes[node.type]
+    local layoutType = layoutTypes[node.type]
     if widgetType and layoutType then
         libWarn("%s: node type '%s' is both widget and layout", prefix, tostring(node.type))
         return
@@ -840,7 +927,7 @@ local function ValidateUiNode(node, prefix, storageNodes)
                 libWarn("%s: children must be a table", prefix)
             else
                 for childIndex, child in ipairs(node.children) do
-                    ValidateUiNode(child, prefix .. " child #" .. childIndex, storageNodes)
+                    ValidateUiNode(child, prefix .. " child #" .. childIndex, storageNodes, widgetTypes, layoutTypes)
                 end
             end
         end
@@ -849,28 +936,34 @@ local function ValidateUiNode(node, prefix, storageNodes)
     ValidateVisibleIf(prefix, node, storageNodes)
 end
 
-function public.validateUi(uiNodes, label, storage)
+function public.validateUi(uiNodes, label, storage, customTypes)
     if type(uiNodes) ~= "table" then
         libWarn("%s: ui is not a table", label)
         return
     end
+    if customTypes ~= nil then
+        ValidateCustomTypes(customTypes, label)
+    end
+    local widgetTypes, layoutTypes = MergeCustomTypes(customTypes)
     local storageNodes = EnsurePreparedStorage(storage, label and (label .. " storage") or "validateUi storage")
     for index, node in ipairs(uiNodes) do
-        ValidateUiNode(node, label .. " ui #" .. index, storageNodes)
+        ValidateUiNode(node, label .. " ui #" .. index, storageNodes, widgetTypes, layoutTypes)
     end
 end
 
-function public.prepareUiNode(node, label, storage)
+function public.prepareUiNode(node, label, storage, customTypes)
     local prefix = label or "prepareUiNode"
-    ValidateUiNode(node, prefix, EnsurePreparedStorage(storage, prefix .. " storage"))
+    local widgetTypes, layoutTypes = MergeCustomTypes(customTypes)
+    ValidateUiNode(node, prefix, EnsurePreparedStorage(storage, prefix .. " storage"), widgetTypes, layoutTypes)
 end
 
-function public.prepareUiNodes(nodes, label, storage)
+function public.prepareUiNodes(nodes, label, storage, customTypes)
     local prefix = label or "prepareUiNodes"
     local preparedStorage = EnsurePreparedStorage(storage, prefix .. " storage")
+    local widgetTypes, layoutTypes = MergeCustomTypes(customTypes)
     local registry = {}
     for _, node in ipairs(nodes) do
-        ValidateUiNode(node, prefix, preparedStorage)
+        ValidateUiNode(node, prefix, preparedStorage, widgetTypes, layoutTypes)
         for _, alias in pairs(node.binds or {}) do
             registry[alias] = node
         end
@@ -912,8 +1005,8 @@ function public.isUiNodeVisible(node, view)
     return value == true
 end
 
-local function DrawLayoutNode(imgui, node, drawChild)
-    local layoutType = LayoutTypes[node.type]
+local function DrawLayoutNode(imgui, node, drawChild, layoutTypes)
+    local layoutType = layoutTypes[node.type]
     if not layoutType then
         return false, false
     end
@@ -929,19 +1022,21 @@ local function DrawLayoutNode(imgui, node, drawChild)
     return true, changed
 end
 
-function public.drawUiNode(imgui, node, uiState, width)
+function public.drawUiNode(imgui, node, uiState, width, customTypes)
     if not public.isUiNodeVisible(node, uiState and uiState.view) then
         return false
     end
 
+    local widgetTypes, layoutTypes = MergeCustomTypes(customTypes)
+
     local function drawChild(child)
-        return public.drawUiNode(imgui, child, uiState, width)
+        return public.drawUiNode(imgui, child, uiState, width, customTypes)
     end
 
-    local wasLayout, layoutChanged = DrawLayoutNode(imgui, node, drawChild)
+    local wasLayout, layoutChanged = DrawLayoutNode(imgui, node, drawChild, layoutTypes)
     if wasLayout then return layoutChanged end
 
-    local widgetType = WidgetTypes[node.type]
+    local widgetType = widgetTypes[node.type]
     if not widgetType then
         libWarn("drawUiNode: unknown node type '%s'", tostring(node.type))
         return false
@@ -950,16 +1045,37 @@ function public.drawUiNode(imgui, node, uiState, width)
     imgui.PushID(node._imguiId or tostring(node.type))
     if node.indent then imgui.Indent() end
 
-    -- Build generic bound table from widget's binds declaration
+    -- Build bound table from widget's binds declaration.
+    -- packedInt root binds also expose .children = { alias, label, get, set }.
     local bound = { _changed = false }
     for bindName in pairs(widgetType.binds) do
         local alias = node.binds and node.binds[bindName]
         if alias then
             local a = alias
-            bound[bindName] = {
+            local bindEntry = {
                 get = function(_) return uiState.get(a) end,
                 set = function(_, val) uiState.set(a, val); bound._changed = true end,
             }
+            if uiState.getAliasNode then
+                local aliasNode = uiState.getAliasNode(a)
+                if aliasNode and aliasNode.type == "packedInt" and aliasNode._bitAliases then
+                    bindEntry.children = {}
+                    for _, child in ipairs(aliasNode._bitAliases) do
+                        local childAlias = child.alias
+                        local childLabel = child.label or childAlias
+                        table.insert(bindEntry.children, {
+                            alias = childAlias,
+                            label = childLabel,
+                            get = function() return uiState.get(childAlias) end,
+                            set = function(val)
+                                uiState.set(childAlias, val)
+                                bound._changed = true
+                            end,
+                        })
+                    end
+                end
+            end
+            bound[bindName] = bindEntry
         end
     end
 
@@ -970,13 +1086,13 @@ function public.drawUiNode(imgui, node, uiState, width)
     return bound._changed
 end
 
-function public.drawUiTree(imgui, nodes, uiState, width)
+function public.drawUiTree(imgui, nodes, uiState, width, customTypes)
     if type(nodes) ~= "table" then
         return false
     end
     local changed = false
     for _, node in ipairs(nodes) do
-        if public.drawUiNode(imgui, node, uiState, width) then
+        if public.drawUiNode(imgui, node, uiState, width, customTypes) then
             changed = true
         end
     end

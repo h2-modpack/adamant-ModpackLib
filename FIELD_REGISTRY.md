@@ -59,6 +59,8 @@ Example:
 
 `packedInt` is a root storage type whose children are alias-addressable packed partitions.
 
+Use `packedInt` when you want to reduce Chalk config entries by co-locating related flags. For most modules, separate `bool` roots are the right choice.
+
 Example:
 
 ```lua
@@ -78,6 +80,8 @@ Rules:
 - packed bit ranges may not overlap
 - packed child defaults are encoded into the root default when the root default is omitted
 - only the root persists and hashes directly
+
+By default each storage root hashes as its own key. Framework supports optional `hashGroups` for coordinators that want to compress multiple independent roots into a single base62 token — see the coordinator guide. This is an optimization; modules do not need to declare `hashGroups` for hashing to work correctly.
 
 ## Widget Types
 
@@ -237,8 +241,8 @@ public.definition = {
         { type = "int", alias = "Count", configKey = "Count", default = 3, min = 1, max = 9 },
     },
     ui = {
-        { type = "checkbox", bind = "EnabledFlag", label = "Enabled" },
-        { type = "stepper", bind = "Count", label = "Count", min = 1, max = 9, step = 1 },
+        { type = "checkbox", binds = { value = "EnabledFlag" }, label = "Enabled" },
+        { type = "stepper", binds = { value = "Count" }, label = "Count", min = 1, max = 9, step = 1 },
     },
 }
 ```
