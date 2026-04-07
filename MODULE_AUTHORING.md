@@ -51,7 +51,7 @@ end
 
 ## Regular Modules
 
-Regular modules participate in category/group rendering and may expose hosted declarative UI.
+Regular modules participate in category/subgroup rendering and may expose hosted declarative UI.
 
 Example:
 
@@ -61,7 +61,7 @@ public.definition = {
     id = "ExampleModule",
     name = "Example Module",
     category = "Run Mods",
-    group = "General",
+    subgroup = "General",
     tooltip = "What this module does.",
     default = false,
     affectsRunData = false,
@@ -106,7 +106,7 @@ public.definition = {
     modpack = PACK_ID,
     id = "ExampleSpecial",
     name = "Example Special",
-    tabLabel = "Example",
+    shortName = "Example",
     special = true,
     default = false,
     affectsRunData = true,
@@ -121,6 +121,7 @@ public.definition = {
 
 Rules:
 - special-module hash namespace is the module `modName`
+- `shortName` is optional and only needed when a compact UI surface should use a shorter label than `name`
 - storage may still use nested raw config paths
 - alias names are the UI and `uiState` access surface
 
