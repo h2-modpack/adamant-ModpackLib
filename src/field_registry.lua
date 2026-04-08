@@ -52,6 +52,117 @@ end
 
 shared.ChoiceDisplay = ChoiceDisplay
 
+local function GetCursorPosXSafe(imgui)
+    local getCursorPosX = imgui and imgui.GetCursorPosX
+    if type(getCursorPosX) == "function" then
+        return getCursorPosX() or 0
+    end
+    return 0
+end
+
+local function BuildGeometrySet(widgetType)
+    if type(widgetType) ~= "table" or type(widgetType.geometry) ~= "table" then
+        return {}
+    end
+    local allowed = {}
+    for _, key in ipairs(widgetType.geometry) do
+        allowed[key] = true
+    end
+    return allowed
+end
+
+local function ValidateWidgetGeometry(node, prefix, widgetType)
+    if node.geometry == nil then
+        return
+    end
+    if type(node.geometry) ~= "table" then
+        libWarn("%s: geometry must be a table", prefix)
+        return
+    end
+    local allowed = BuildGeometrySet(widgetType)
+    for key, value in pairs(node.geometry) do
+        if not allowed[key] then
+            libWarn("%s: geometry key '%s' is not supported by widget type '%s'",
+                prefix, tostring(key), tostring(node.type))
+        elseif key == "valueAlign" then
+            if value ~= "center" and value ~= "right" then
+                libWarn("%s: geometry.valueAlign must be one of 'center' or 'right'", prefix)
+            end
+        elseif string.sub(tostring(key), -5) == "Width" then
+            if type(value) ~= "number" or value <= 0 then
+                libWarn("%s: geometry.%s must be a positive number", prefix, tostring(key))
+            end
+        elseif type(value) ~= "number" then
+            libWarn("%s: geometry.%s must be a number", prefix, tostring(key))
+        elseif value < 0 then
+            libWarn("%s: geometry.%s must be a non-negative number", prefix, tostring(key))
+        end
+    end
+    local valueAlign = type(node.geometry) == "table" and node.geometry.valueAlign or nil
+    local valueWidth = type(node.geometry) == "table" and node.geometry.valueWidth or nil
+    local valueStart = type(node.geometry) == "table" and node.geometry.valueStart or nil
+    if (valueAlign == "center" or valueAlign == "right")
+        and (type(valueWidth) ~= "number" or valueWidth <= 0) then
+        libWarn("%s: geometry.valueAlign requires geometry.valueWidth", prefix)
+    end
+    if type(valueStart) == "number" then
+        if valueAlign ~= nil then
+            libWarn("%s: geometry.valueStart cannot be combined with geometry.valueAlign", prefix)
+        end
+        if valueWidth ~= nil then
+            libWarn("%s: geometry.valueStart cannot be combined with geometry.valueWidth", prefix)
+        end
+    end
+end
+
+local function GetGeometryNumber(node, key)
+    local geometry = type(node) == "table" and node.geometry or nil
+    local value = type(geometry) == "table" and geometry[key] or nil
+    if type(value) == "number" then
+        return value
+    end
+    return nil
+end
+
+local function GetGeometryWidth(node, key)
+    local value = GetGeometryNumber(node, key)
+    if type(value) == "number" and value > 0 then
+        return value
+    end
+    return nil
+end
+
+local function GetGeometryAlign(node, key)
+    local geometry = type(node) == "table" and node.geometry or nil
+    local value = type(geometry) == "table" and geometry[key] or nil
+    if value == "center" or value == "right" then
+        return value
+    end
+    return nil
+end
+
+local function GetStyleMetricX(style, key, fallback)
+    local metric = style and style[key]
+    if type(metric) == "table" and type(metric.x) == "number" then
+        return metric.x
+    end
+    return fallback
+end
+
+local function CalcTextWidth(imgui, text)
+    if type(imgui.CalcTextSize) ~= "function" then
+        return #(tostring(text or ""))
+    end
+    local width = imgui.CalcTextSize(tostring(text or ""))
+    return type(width) == "number" and width or 0
+end
+
+local function EstimateButtonWidth(imgui, label)
+    local style = type(imgui.GetStyle) == "function" and imgui.GetStyle() or nil
+    local framePaddingX = GetStyleMetricX(style, "FramePadding", 0)
+    return CalcTextWidth(imgui, label) + framePaddingX * 2
+end
+
 local function AssertRegistryContracts(registry, required, label)
     for typeName, item in pairs(registry) do
         if type(item) ~= "table" then
@@ -62,6 +173,22 @@ local function AssertRegistryContracts(registry, required, label)
                 error(("%s type '%s' is missing required method '%s'"):format(
                     label, tostring(typeName), method), 0)
             end
+        end
+    end
+end
+
+local function AssertWidgetGeometryContract(widgetType, typeName, label)
+    if widgetType.geometry == nil then
+        return
+    end
+    if type(widgetType.geometry) ~= "table" then
+        error(("%s type '%s' geometry must be a list of non-empty strings"):format(
+            label, tostring(typeName)), 0)
+    end
+    for index, key in ipairs(widgetType.geometry) do
+        if type(key) ~= "string" or key == "" then
+            error(("%s type '%s' geometry[%d] must be a non-empty string"):format(
+                label, tostring(typeName), index), 0)
         end
     end
 end
@@ -90,6 +217,7 @@ local function ValidateCustomTypes(customTypes, label)
                 error(("%s: customTypes.widgets '%s' must declare a binds table"):format(
                     label or "module", tostring(typeName)), 0)
             end
+            AssertWidgetGeometryContract(item, typeName, "Widget")
         end
     end
     if layouts ~= nil then
@@ -135,6 +263,7 @@ function public.validateRegistries()
         if type(widgetType.binds) ~= "table" then
             error(("Widget type '%s' must declare a binds table"):format(tostring(typeName)), 0)
         end
+        AssertWidgetGeometryContract(widgetType, typeName, "Widget")
     end
     return true
 end
@@ -321,38 +450,88 @@ StorageTypes.packedInt = {
 -- These are pure render functions: take a value, return (newValue, changed).
 -- Widget draw functions use these internally; drawUiNode uses the bound contract.
 
-local function RenderStepper(imgui, node, value)
+local function RenderStepper(imgui, node, value, options)
+    options = options or {}
     local current = NormalizeInteger(node, value)
     local step = node._step or 1
     local fastStep = node._fastStep
     local newValue = current
     local changed = false
 
-    local labelStart = imgui.GetCursorPosX()
-    imgui.Text(node.label or "")
-    if imgui.IsItemHovered() and (node.tooltip or "") ~= "" then
-        imgui.SetTooltip(node.tooltip)
+    local style = type(imgui.GetStyle) == "function" and imgui.GetStyle() or nil
+    local itemSpacingX = GetStyleMetricX(style, "ItemSpacing", 0)
+    local minusWidth = EstimateButtonWidth(imgui, "-")
+    local rowStart = options.rowStart or GetCursorPosXSafe(imgui)
+    local geometryNode = options.geometryNode or node
+    local controlStartKey = options.controlStartKey or "controlStart"
+    local label = node.label or ""
+    local hasLabel = options.drawLabel ~= false and label ~= ""
+    if hasLabel then
+        imgui.Text(label)
+        if imgui.IsItemHovered() and (node.tooltip or "") ~= "" then
+            imgui.SetTooltip(node.tooltip)
+        end
     end
-    if node.controlOffset then
-        imgui.SetCursorPosX(labelStart + node.controlOffset)
-    else
+    local controlBase
+    local controlStart = GetGeometryNumber(geometryNode, controlStartKey)
+    if controlStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+        if hasLabel then
+            imgui.SameLine()
+        end
+        imgui.SetCursorPosX(rowStart + controlStart)
+        controlBase = rowStart + controlStart
+    elseif hasLabel then
         imgui.SameLine()
+        controlBase = GetCursorPosXSafe(imgui)
+    else
+        controlBase = GetCursorPosXSafe(imgui)
+    end
+
+    local decrementStart = GetGeometryNumber(geometryNode, "decrementStart")
+    if decrementStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+        imgui.SetCursorPosX(controlBase + decrementStart)
     end
 
     if imgui.Button("-") and current > node.min then
         newValue = NormalizeInteger(node, current - step)
         changed = newValue ~= current
     end
-    imgui.SameLine()
-    local valueStart = imgui.GetCursorPosX()
+    local explicitValueStart = GetGeometryNumber(geometryNode, "valueStart")
+    if explicitValueStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+        imgui.SameLine()
+        imgui.SetCursorPosX(controlBase + explicitValueStart)
+    elseif decrementStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+        imgui.SameLine()
+        imgui.SetCursorPosX(controlBase + decrementStart + minusWidth + itemSpacingX)
+    else
+        imgui.SameLine()
+    end
+    local valueSlotStart = GetCursorPosXSafe(imgui)
     if node._lastStepperVal ~= newValue then
         node._lastStepperStr = tostring(newValue)
         node._lastStepperVal = newValue
     end
-    imgui.Text(node._lastStepperStr)
-    imgui.SameLine()
-    if node.valueWidth then
-        imgui.SetCursorPosX(valueStart + node.valueWidth)
+    local valueText = node._lastStepperStr
+    local incrementStart = GetGeometryNumber(geometryNode, "incrementStart")
+    local valueWidth = GetGeometryWidth(geometryNode, "valueWidth")
+    local valueAlign = GetGeometryAlign(geometryNode, "valueAlign")
+    if valueWidth and valueAlign ~= nil
+        and type(imgui.SetCursorPosX) == "function" then
+        local textWidth = CalcTextWidth(imgui, valueText)
+        local alignOffset = valueAlign == "center"
+            and math.max((valueWidth - textWidth) / 2, 0)
+            or math.max(valueWidth - textWidth, 0)
+        imgui.SetCursorPosX(valueSlotStart + alignOffset)
+    end
+    imgui.Text(valueText)
+    if incrementStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+        imgui.SameLine()
+        imgui.SetCursorPosX(controlBase + incrementStart)
+    else
+        imgui.SameLine()
+        if valueWidth and type(imgui.SetCursorPosX) == "function" then
+            imgui.SetCursorPosX(valueSlotStart + valueWidth + itemSpacingX)
+        end
     end
     if imgui.Button("+") and current < node.max then
         newValue = NormalizeInteger(node, current + step)
@@ -394,6 +573,7 @@ WidgetTypes.checkbox = {
 
 WidgetTypes.dropdown = {
     binds = { value = { storageType = "string" } },
+    geometry = { "controlStart", "controlWidth" },
     validate = function(node, prefix)
         if not node.values then
             libWarn("%s: dropdown missing values list", prefix)
@@ -409,9 +589,6 @@ WidgetTypes.dropdown = {
         if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
             libWarn("%s: dropdown displayValues must be a table", prefix)
         end
-        if node.controlOffset ~= nil and (type(node.controlOffset) ~= "number" or node.controlOffset <= 0) then
-            libWarn("%s: dropdown controlOffset must be a positive number", prefix)
-        end
     end,
     draw = function(imgui, node, bound, width)
         local current = NormalizeChoiceValue(node, bound.value:get())
@@ -421,24 +598,28 @@ WidgetTypes.dropdown = {
         end
 
         local previewValue = (node.values and node.values[currentIdx]) or ""
-        local getCursorPosX = imgui.GetCursorPosX
-        local labelStart = type(getCursorPosX) == "function" and getCursorPosX() or 0
+        local rowStart = GetCursorPosXSafe(imgui)
+        local label = node.label or (node.binds and node.binds.value) or ""
+        local hasLabel = label ~= ""
 
-        imgui.Text(node.label or (node.binds and node.binds.value) or "")
-        if imgui.IsItemHovered() and (node.tooltip or "") ~= "" then
-            imgui.SetTooltip(node.tooltip)
+        if hasLabel then
+            imgui.Text(label)
+            if imgui.IsItemHovered() and (node.tooltip or "") ~= "" then
+                imgui.SetTooltip(node.tooltip)
+            end
         end
-        if node.controlOffset then
-            if type(imgui.SetCursorPosX) == "function" then
-                imgui.SetCursorPosX(labelStart + node.controlOffset)
-            else
+        local controlStart = GetGeometryNumber(node, "controlStart")
+        if controlStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+            if hasLabel then
                 imgui.SameLine()
             end
-        else
+            imgui.SetCursorPosX(rowStart + controlStart)
+        elseif hasLabel then
             imgui.SameLine()
         end
 
-        if width then imgui.PushItemWidth(width) end
+        local controlWidth = GetGeometryWidth(node, "controlWidth") or width
+        if controlWidth then imgui.PushItemWidth(controlWidth) end
         if imgui.BeginCombo(node._imguiId, ChoiceDisplay(node, previewValue)) then
             for index, candidate in ipairs(node.values or {}) do
                 if imgui.Selectable(ChoiceDisplay(node, candidate), index == currentIdx) then
@@ -449,7 +630,7 @@ WidgetTypes.dropdown = {
             end
             imgui.EndCombo()
         end
-        if width then imgui.PopItemWidth() end
+        if controlWidth then imgui.PopItemWidth() end
     end,
 }
 
@@ -497,18 +678,13 @@ local function ValidateStepper(node, prefix)
     if node.fastStep ~= nil and (type(node.fastStep) ~= "number" or node.fastStep <= 0) then
         libWarn("%s: stepper fastStep must be a positive number", prefix)
     end
-    if node.controlOffset ~= nil and (type(node.controlOffset) ~= "number" or node.controlOffset <= 0) then
-        libWarn("%s: stepper controlOffset must be a positive number", prefix)
-    end
-    if node.valueWidth ~= nil and (type(node.valueWidth) ~= "number" or node.valueWidth <= 0) then
-        libWarn("%s: stepper valueWidth must be a positive number", prefix)
-    end
     node._step = math.floor(tonumber(node.step) or 1)
     node._fastStep = node.fastStep and math.floor(node.fastStep) or nil
 end
 
 WidgetTypes.stepper = {
     binds = { value = { storageType = "int" } },
+    geometry = { "controlStart", "decrementStart", "valueStart", "valueWidth", "valueAlign", "incrementStart" },
     validate = ValidateStepper,
     draw = function(imgui, node, bound)
         local newValue, changed = RenderStepper(imgui, node, bound.value:get())
@@ -521,25 +697,21 @@ WidgetTypes.steppedRange = {
         min = { storageType = "int" },
         max = { storageType = "int" },
     },
+    geometry = {
+        "controlStart", "control2Start", "separatorStart",
+        "decrementStart", "valueStart", "valueWidth", "valueAlign", "incrementStart",
+    },
     validate = function(node, prefix)
-        if node.controlOffset ~= nil and (type(node.controlOffset) ~= "number" or node.controlOffset <= 0) then
-            libWarn("%s: steppedRange controlOffset must be a positive number", prefix)
-        end
-        if node.separatorWidth ~= nil and (type(node.separatorWidth) ~= "number" or node.separatorWidth <= 0) then
-            libWarn("%s: steppedRange separatorWidth must be a positive number", prefix)
-        end
         local minStepper = {
             label = node.label,
             default = node.default,
             min = node.min, max = node.max,
             step = node.step, fastStep = node.fastStep,
-            controlOffset = node.controlOffset, valueWidth = node.valueWidth,
         }
         local maxStepper = {
             default = node.defaultMax or node.default,
             min = node.min, max = node.max,
             step = node.step, fastStep = node.fastStep,
-            valueWidth = node.valueWidth,
         }
         ValidateStepper(minStepper, prefix .. " min")
         ValidateStepper(maxStepper, prefix .. " max")
@@ -559,37 +731,45 @@ WidgetTypes.steppedRange = {
         minStepper.max = maxValue
         maxStepper.min = minValue
 
-        if node.label and node.label ~= "" then
-            local labelStart = imgui.GetCursorPosX()
-            imgui.Text(node.label)
-            if node.controlOffset then
-                imgui.SetCursorPosX(labelStart + node.controlOffset)
-            else
-                imgui.SameLine()
-            end
-        end
+        local rowStart = GetCursorPosXSafe(imgui)
 
         imgui.PushID((node._imguiId or "range") .. "_min")
-        local newMin, minChanged = RenderStepper(imgui, minStepper, minValue)
+        local newMin, minChanged = RenderStepper(imgui, minStepper, minValue, {
+            rowStart = rowStart,
+            drawLabel = true,
+            geometryNode = node,
+            controlStartKey = "controlStart",
+        })
         imgui.PopID()
 
         -- update live constraint before rendering max
         maxStepper.min = newMin
 
-        if node.separatorWidth then
+        local separatorStart = GetGeometryNumber(node, "separatorStart")
+        local control2Start = GetGeometryNumber(node, "control2Start")
+        imgui.SameLine()
+        if separatorStart ~= nil and type(imgui.SetCursorPosX) == "function" then
+            imgui.SetCursorPosX(rowStart + separatorStart)
+            imgui.Text("to")
+        elseif control2Start ~= nil and type(imgui.SetCursorPosX) == "function" then
             local TO_HALF_WIDTH = 7
-            local afterMin = imgui.GetCursorPosX()
-            imgui.SetCursorPosX(afterMin + node.separatorWidth / 2 - TO_HALF_WIDTH)
+            local afterMin = GetCursorPosXSafe(imgui)
+            local beforeMax = rowStart + control2Start
+            local separatorX = afterMin + math.max((beforeMax - afterMin) / 2 - TO_HALF_WIDTH, 0)
+            imgui.SetCursorPosX(separatorX)
             imgui.Text("to")
-            imgui.SetCursorPosX(afterMin + node.separatorWidth)
         else
-            imgui.SameLine()
             imgui.Text("to")
-            imgui.SameLine()
         end
+        imgui.SameLine()
 
         imgui.PushID((node._imguiId or "range") .. "_max")
-        local newMax, maxChanged = RenderStepper(imgui, maxStepper, maxValue)
+        local newMax, maxChanged = RenderStepper(imgui, maxStepper, maxValue, {
+            rowStart = rowStart,
+            drawLabel = false,
+            geometryNode = node,
+            controlStartKey = "control2Start",
+        })
         imgui.PopID()
 
         if minChanged then bound.min:set(newMin) end
@@ -960,6 +1140,7 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
 
     if widgetType then
         widgetType.validate(node, prefix)
+        ValidateWidgetGeometry(node, prefix, widgetType)
         if node.quickId ~= nil and (type(node.quickId) ~= "string" or node.quickId == "") then
             libWarn("%s: quickId must be a non-empty string", prefix)
         end

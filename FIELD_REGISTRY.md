@@ -123,6 +123,21 @@ For widgets bound to a packed root, Lib may also expose:
 
 which is how `packedCheckboxList` receives packed child rows.
 
+Some widgets also support a widget-local `geometry` bag for manual horizontal placement.
+
+First-pass built-in support:
+- `dropdown`: `controlStart`, `controlWidth`
+- `stepper`: `controlStart`, `decrementStart`, `valueStart`, `valueWidth`, `valueAlign`, `incrementStart`
+- `steppedRange`: `controlStart`, `control2Start`, `separatorStart`, plus the shared stepper keys above
+
+`controlStart`, `control2Start`, and `separatorStart` are relative to the current row origin after any `indent`.
+`decrementStart`, `valueStart`, `valueWidth`, and `incrementStart` are relative to the enclosing stepper control start.
+`valueStart` is the absolute value-text position.
+`valueAlign` may be `center` or `right` and aligns the value text inside an explicit `valueWidth` slot derived after the decrement button.
+Start positions must be non-negative.
+`valueAlign` requires an explicit `valueWidth`.
+`valueStart` cannot be combined with `valueWidth` or `valueAlign`.
+
 ### `steppedRange`
 
 `steppedRange` is a widget, not storage.
@@ -137,6 +152,13 @@ Example:
 { type = "steppedRange",
   label = "Depth",
   binds = { min = "DepthMin", max = "DepthMax" },
+  geometry = {
+    separatorStart = 260,
+    control2Start = 300,
+    valueWidth = 14,
+    valueAlign = "center",
+    incrementStart = 42,
+  },
   min = 1,
   max = 10,
   step = 1 }
@@ -222,10 +244,11 @@ Lib hard-validates registry contracts through:
 ### `dropdown` and `radio`
 - expect string storage
 - validate value lists
+- `dropdown` supports optional `geometry`
 
 ### `stepper`
 - expects int storage
-- supports `step`, `fastStep`, `controlOffset`, and `valueWidth`
+- supports `step`, `fastStep`, and optional `geometry`
 
 ### `packedCheckboxList`
 - expects a packed root bind

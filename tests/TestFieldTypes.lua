@@ -6,7 +6,16 @@ local function makeStore(definition, config)
 end
 
 local function makeBasicImgui()
-    local state = { buttonResponses = {}, checkboxResponses = {}, selectables = {}, pushIds = {} }
+    local state = {
+        buttonResponses = {},
+        checkboxResponses = {},
+        selectables = {},
+        pushIds = {},
+        cursorPosX = 0,
+        setCursorPosXCalls = {},
+        pushItemWidths = {},
+        sameLineCalls = 0,
+    }
 
     local imgui = {
         _state = state,
@@ -31,11 +40,18 @@ local function makeBasicImgui()
         end,
         Text = function() end,
         TextColored = function() end,
-        SameLine = function() end,
+        CalcTextSize = function(text)
+            return #(tostring(text or "")) * 8
+        end,
+        SameLine = function()
+            state.sameLineCalls = state.sameLineCalls + 1
+        end,
         NewLine = function() end,
         IsItemHovered = function() return false end,
         SetTooltip = function() end,
-        PushItemWidth = function() end,
+        PushItemWidth = function(a, b)
+            table.insert(state.pushItemWidths, b or a)
+        end,
         PopItemWidth = function() end,
         PushID = function(_, value)
             table.insert(state.pushIds, value)
@@ -48,9 +64,18 @@ local function makeBasicImgui()
             return true
         end,
         GetCursorPosX = function()
-            return 0
+            return state.cursorPosX
         end,
-        SetCursorPosX = function() end,
+        GetStyle = function()
+            return {
+                FramePadding = { x = 4, y = 3 },
+                ItemSpacing = { x = 8, y = 4 },
+            }
+        end,
+        SetCursorPosX = function(x)
+            state.cursorPosX = x
+            table.insert(state.setCursorPosXCalls, x)
+        end,
         Button = function()
             local nextResponse = table.remove(state.buttonResponses, 1)
             return nextResponse == true
@@ -308,4 +333,150 @@ function TestUiNodes:testDrawUiNodeReturnsChangedWhenLayoutChildChanges()
 
     lu.assertTrue(changed)
     lu.assertFalse(store.uiState.get("Enabled"))
+end
+
+function TestUiNodes:testDropdownGeometryControlsStartAndWidth()
+    local definition = {
+        storage = {
+            { type = "string", alias = "Mode", configKey = "Mode", default = "A" },
+        },
+        ui = {
+            {
+                type = "dropdown",
+                binds = { value = "Mode" },
+                label = "Mode",
+                values = { "A", "B" },
+                geometry = { controlStart = 220, controlWidth = 180 },
+            },
+        },
+    }
+    local store = makeStore(definition, { Mode = "A" })
+    local imgui = makeBasicImgui()
+    imgui._state.cursorPosX = 12
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState, 300)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(imgui._state.sameLineCalls, 1)
+    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 232)
+    lu.assertEquals(imgui._state.pushItemWidths[1], 180)
+end
+
+function TestUiNodes:testSteppedRangeGeometryAppliesWithoutLabel()
+    local definition = {
+        storage = {
+            { type = "int", alias = "MinDepth", configKey = "MinDepth", default = 2, min = 1, max = 10 },
+            { type = "int", alias = "MaxDepth", configKey = "MaxDepth", default = 8, min = 1, max = 10 },
+        },
+        ui = {
+            {
+                type = "steppedRange",
+                binds = { min = "MinDepth", max = "MaxDepth" },
+                label = "",
+                min = 1,
+                max = 10,
+                geometry = {
+                    separatorStart = 180,
+                    control2Start = 220,
+                    decrementStart = 0,
+                    valueWidth = 24,
+                    valueAlign = "center",
+                    incrementStart = 42,
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { MinDepth = 2, MaxDepth = 8 })
+    local imgui = makeBasicImgui()
+    imgui._state.cursorPosX = 16
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertTrue(#imgui._state.setCursorPosXCalls >= 5)
+    local sawCenteredFirstValue = false
+    local sawFirstValueStart = false
+    local sawFirstIncrementStart = false
+    local sawSeparatorStart = false
+    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+        if x == 40 then
+            sawFirstValueStart = true
+        end
+        if x == 48 then
+            sawCenteredFirstValue = true
+        end
+        if x == 58 then
+            sawFirstIncrementStart = true
+        end
+        if x == 196 then
+            sawSeparatorStart = true
+        end
+    end
+    lu.assertTrue(sawFirstValueStart)
+    lu.assertTrue(sawCenteredFirstValue)
+    lu.assertTrue(sawFirstIncrementStart)
+    lu.assertTrue(sawSeparatorStart)
+    local sawSecondControlStart = false
+    local sawSecondValueStart = false
+    local sawCenteredSecondValue = false
+    local sawSecondIncrementStart = false
+    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+        if x == 236 then
+            sawSecondControlStart = true
+        end
+        if x == 260 then
+            sawSecondValueStart = true
+        end
+        if x == 268 then
+            sawCenteredSecondValue = true
+        end
+        if x == 278 then
+            sawSecondIncrementStart = true
+        end
+    end
+    lu.assertTrue(sawSecondControlStart)
+    lu.assertTrue(sawSecondValueStart)
+    lu.assertTrue(sawCenteredSecondValue)
+    lu.assertTrue(sawSecondIncrementStart)
+end
+
+function TestUiNodes:testStepperCentersValueWithinExplicitValueWidth()
+    local definition = {
+        storage = {
+            { type = "int", alias = "Count", configKey = "Count", default = 7, min = 1, max = 10 },
+        },
+        ui = {
+            {
+                type = "stepper",
+                binds = { value = "Count" },
+                label = "",
+                min = 1,
+                max = 10,
+                geometry = {
+                    decrementStart = 0,
+                    valueWidth = 28,
+                    incrementStart = 60,
+                    valueAlign = "center",
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Count = 7 })
+    local imgui = makeBasicImgui()
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    local sawCenteredValue = false
+    local sawIncrementStart = false
+    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+        if x == 24 then
+            sawCenteredValue = true
+        end
+        if x == 60 then
+            sawIncrementStart = true
+        end
+    end
+    lu.assertTrue(sawCenteredValue)
+    lu.assertTrue(sawIncrementStart)
 end

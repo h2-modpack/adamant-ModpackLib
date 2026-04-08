@@ -215,6 +215,7 @@ definition.customTypes = {
     widgets = {
         myWidget = {
             binds = { value = { storageType = "int" } },
+            geometry = { "controlStart", "controlWidth" }, -- optional supported geometry keys
             validate = function(node, prefix) ... end,
             draw = function(imgui, node, bound, width) ... end,
         },
@@ -231,7 +232,41 @@ definition.customTypes = {
 Rules:
 - custom widget and layout type names may not collide with built-in names
 - custom widgets must declare `binds`
+- custom widgets may optionally declare `geometry = { ... }` to whitelist supported `node.geometry` keys
 - all UI helpers that accept `customTypes` merge them with built-ins for validation and draw
+
+## Widget Geometry
+
+Certain widgets support a widget-local `geometry` bag for manual horizontal placement:
+
+```lua
+{
+    type = "dropdown",
+    binds = { value = "Mode" },
+    label = "Mode",
+    values = { "Vanilla", "Forced" },
+    geometry = {
+        controlStart = 220,
+        controlWidth = 180,
+    },
+}
+```
+
+Current built-in support:
+- `dropdown`: `controlStart`, `controlWidth`
+- `stepper`: `controlStart`, `decrementStart`, `valueStart`, `valueWidth`, `valueAlign`, `incrementStart`
+- `steppedRange`: `controlStart`, `control2Start`, `separatorStart`, plus the shared stepper keys above
+
+Behavior:
+- `controlStart`, `control2Start`, and `separatorStart` are relative to the current row origin after any `indent`
+- `decrementStart`, `valueStart`, `valueWidth`, and `incrementStart` are relative to the enclosing stepper control start
+- `valueStart` is the absolute value-text position
+- `valueAlign` may be `center` or `right` and aligns the value text inside an explicit `valueWidth` slot derived after the decrement button
+- start positions must be non-negative
+- `valueAlign` requires an explicit `valueWidth`
+- `valueStart` cannot be combined with `valueWidth` or `valueAlign`
+- if a geometry key is omitted, the widget falls back to its default rendering
+- unknown geometry keys warn during validation
 
 ## Managed UI State
 

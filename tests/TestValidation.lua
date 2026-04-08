@@ -228,3 +228,129 @@ function TestUiValidation:testValidateUiAcceptsRawStorage()
 
     lu.assertEquals(#Warnings, 0)
 end
+
+function TestUiValidation:testWidgetGeometryRejectsUnknownKeys()
+    local storage = {
+        { type = "string", alias = "Mode", configKey = "Mode", default = "A" },
+    }
+    lib.validateStorage(storage, "Geometry")
+
+    lib.validateUi({
+        {
+            type = "dropdown",
+            binds = { value = "Mode" },
+            label = "Mode",
+            values = { "A", "B" },
+            geometry = { controlStart = 120, separatorStart = 200 },
+        },
+    }, "Geometry", storage)
+
+    assertWarningContains("geometry key 'separatorStart' is not supported by widget type 'dropdown'")
+end
+
+function TestUiValidation:testCustomWidgetGeometryIsValidated()
+    local storage = {
+        { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
+    }
+    lib.validateStorage(storage, "CustomGeometry")
+
+    lib.validateUi({
+        {
+            type = "fancyStepper",
+            binds = { value = "Count" },
+            geometry = { controlStart = 120 },
+        },
+    }, "CustomGeometry", storage, {
+        widgets = {
+            fancyStepper = {
+                binds = { value = { storageType = "int" } },
+                geometry = { "controlStart" },
+                validate = function() end,
+                draw = function() end,
+            },
+        },
+    })
+
+    lu.assertEquals(#Warnings, 0)
+end
+
+function TestUiValidation:testValueAlignRequiresKnownAlignment()
+    local storage = {
+        { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
+    }
+    lib.validateStorage(storage, "ValueAlign")
+
+    lib.validateUi({
+        {
+            type = "stepper",
+            binds = { value = "Count" },
+            label = "Count",
+            min = 1,
+            max = 5,
+            geometry = { valueAlign = "middle" },
+        },
+    }, "ValueAlign", storage)
+
+    assertWarningContains("geometry.valueAlign must be one of 'center' or 'right'")
+end
+
+function TestUiValidation:testValueAlignRequiresValueWidth()
+    local storage = {
+        { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
+    }
+    lib.validateStorage(storage, "ValueWidthRequired")
+
+    lib.validateUi({
+        {
+            type = "stepper",
+            binds = { value = "Count" },
+            label = "Count",
+            min = 1,
+            max = 5,
+            geometry = { valueAlign = "center" },
+        },
+    }, "ValueWidthRequired", storage)
+
+    assertWarningContains("geometry.valueAlign requires geometry.valueWidth")
+end
+
+function TestUiValidation:testValueStartCannotBeCombinedWithAlignedValueGeometry()
+    local storage = {
+        { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
+    }
+    lib.validateStorage(storage, "ValueGeometryConflict")
+
+    lib.validateUi({
+        {
+            type = "stepper",
+            binds = { value = "Count" },
+            label = "Count",
+            min = 1,
+            max = 5,
+            geometry = { valueStart = 20, valueWidth = 24, valueAlign = "center" },
+        },
+    }, "ValueGeometryConflict", storage)
+
+    assertWarningContains("geometry.valueStart cannot be combined with geometry.valueAlign")
+    assertWarningContains("geometry.valueStart cannot be combined with geometry.valueWidth")
+end
+
+function TestUiValidation:testNegativeGeometryStartWarns()
+    local storage = {
+        { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
+    }
+    lib.validateStorage(storage, "NegativeGeometry")
+
+    lib.validateUi({
+        {
+            type = "stepper",
+            binds = { value = "Count" },
+            label = "Count",
+            min = 1,
+            max = 5,
+            geometry = { decrementStart = -10 },
+        },
+    }, "NegativeGeometry", storage)
+
+    assertWarningContains("geometry.decrementStart must be a non-negative number")
+end

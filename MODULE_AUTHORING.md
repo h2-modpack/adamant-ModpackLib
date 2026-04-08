@@ -214,6 +214,7 @@ public.definition.customTypes = {
     widgets = {
         myWidget = {
             binds = { value = { storageType = "int" } },
+            geometry = { "controlStart", "controlWidth" }, -- optional supported geometry keys
             validate = function(node, prefix) end,
             draw = function(imgui, node, bound, width) end,
         },
@@ -233,6 +234,15 @@ These custom types can be used by:
 - Framework rendering
 - special-module calls to `lib.drawUiNode(...)` / `lib.drawUiTree(...)`
 
+Built-in widgets may also accept a widget-local `geometry` bag for manual horizontal placement.
+`controlStart`, `control2Start`, and `separatorStart` are relative to the current row origin after any `indent`.
+`decrementStart`, `valueStart`, `valueWidth`, and `incrementStart` are relative to the enclosing stepper control start.
+`valueStart` is the absolute value-text position.
+`valueAlign` may be `center` or `right` and aligns the value text inside an explicit `valueWidth` slot derived after the decrement button.
+Start positions must be non-negative.
+`valueAlign` requires an explicit `valueWidth`.
+`valueStart` cannot be combined with `valueWidth` or `valueAlign`.
+
 ### `steppedRange`
 
 This is now a pure widget bound to two aliases:
@@ -244,7 +254,21 @@ storage = {
 }
 
 ui = {
-    { type = "steppedRange", binds = { min = "DepthMin", max = "DepthMax" }, label = "Depth", min = 1, max = 10, step = 1 },
+    {
+        type = "steppedRange",
+        binds = { min = "DepthMin", max = "DepthMax" },
+        label = "Depth",
+        geometry = {
+            separatorStart = 260,
+            control2Start = 300,
+            valueWidth = 14,
+            valueAlign = "center",
+            incrementStart = 42,
+        },
+        min = 1,
+        max = 10,
+        step = 1,
+    },
 }
 ```
 
