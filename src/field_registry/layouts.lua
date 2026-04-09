@@ -11,7 +11,8 @@ LayoutTypes.separator = {
             libWarn("%s: separator label must be string", prefix)
         end
     end,
-    render = function(imgui, node)
+    render = function(imgui, node, drawChild)
+        local _ = drawChild
         if node.label and node.label ~= "" then
             imgui.Separator()
             imgui.Text(node.label)
@@ -38,7 +39,8 @@ LayoutTypes.group = {
             libWarn("%s: group children must be a table", prefix)
         end
     end,
-    render = function(imgui, node)
+    render = function(imgui, node, drawChild)
+        local _ = drawChild
         if node.collapsible == true then
             local flags = node.defaultOpen == true and 32 or 0
             return imgui.CollapsingHeader(node.label or "", flags)
@@ -50,7 +52,7 @@ LayoutTypes.group = {
     end,
 }
 
-local function ValidatePanelColumn(node, prefix, index, column, seenNames)
+local function ValidatePanelColumn(prefix, index, column, seenNames)
     local columnPrefix = ("%s columns[%d]"):format(prefix, index)
     if type(column) ~= "table" then
         libWarn("%s must be a table", columnPrefix)
@@ -134,13 +136,14 @@ local function ValidatePanelChild(node, prefix, childIndex, child)
 end
 
 LayoutTypes.panel = {
+    handlesChildren = true,
     validate = function(node, prefix)
         if type(node.columns) ~= "table" or #node.columns == 0 then
             libWarn("%s: panel columns must be a non-empty list", prefix)
         else
             local seenNames = {}
             for index, column in ipairs(node.columns) do
-                ValidatePanelColumn(node, prefix, index, column, seenNames)
+                ValidatePanelColumn(prefix, index, column, seenNames)
             end
         end
         if node.children ~= nil and type(node.children) ~= "table" then
@@ -182,7 +185,6 @@ LayoutTypes.panel = {
 
         local changed = false
         local currentLine = nil
-        local firstOnLine = true
 
         for _, entry in ipairs(entries) do
             if currentLine ~= entry.line then
@@ -190,8 +192,7 @@ LayoutTypes.panel = {
                     imgui.NewLine()
                 end
                 currentLine = entry.line
-                firstOnLine = true
-            elseif not firstOnLine then
+            else
                 imgui.SameLine()
             end
 
@@ -215,10 +216,9 @@ LayoutTypes.panel = {
             if drawChild(entry.child, runtimeGeometry) then
                 changed = true
             end
-            firstOnLine = false
         end
 
-        return true, changed, true
+        return true, changed
     end,
 }
 
@@ -227,8 +227,14 @@ local function DrawLayoutNode(imgui, node, drawChild, layoutTypes)
     if not layoutType then
         return false, false
     end
-    local open, layoutChanged, handledChildren = layoutType.render(imgui, node, drawChild)
-    if handledChildren then
+    -- Layout render contract:
+    --   open = render(imgui, node, drawChild)
+    --   or, when layoutType.handlesChildren == true:
+    --   open, changed = render(imgui, node, drawChild)
+    -- Layouts with handlesChildren = true fully own child rendering and must
+    -- report any child-driven change via the second return value.
+    local open, layoutChanged = layoutType.render(imgui, node, drawChild)
+    if layoutType.handlesChildren == true then
         return true, layoutChanged == true
     end
     local changed = false

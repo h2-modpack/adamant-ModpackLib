@@ -6,6 +6,7 @@ local LayoutTypes = shared.LayoutTypes
 local libWarn = shared.libWarn
 local registry = shared.fieldRegistry or {}
 shared.fieldRegistry = registry
+local mergedCustomTypesCache = setmetatable({}, { __mode = "k" })
 
 local REQUIRED_STORAGE_METHODS = { "validate", "normalize", "toHash", "fromHash" }
 local REQUIRED_LAYOUT_METHODS  = { "validate", "render" }
@@ -221,6 +222,10 @@ local function ValidateWidgetGeometry(node, prefix, widgetType)
         widgetType,
         type(widgetType) == "table" and widgetType.defaultGeometry or nil)
     node._slotGeometry = ParseWidgetGeometry(node, prefix, widgetType, node.geometry)
+    if type(widgetType) == "table" and type(widgetType.validateGeometry) == "function" then
+        widgetType.validateGeometry(node, prefix .. " defaultGeometry", node._defaultSlotGeometry)
+        widgetType.validateGeometry(node, prefix, node._slotGeometry)
+    end
 end
 
 registry.ValidateWidgetGeometry = ValidateWidgetGeometry
@@ -412,7 +417,6 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
     local orderedPositions = GetOrderedSlotPositions(node, renderSlots)
 
     local currentLine = nil
-    local firstOnLine = true
 
     for _, position in ipairs(orderedPositions) do
         local entry = renderSlots[position]
@@ -433,8 +437,7 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
                     imgui.NewLine()
                 end
                 currentLine = entry.line
-                firstOnLine = true
-            elseif not firstOnLine and slot.sameLine ~= false then
+            elseif slot.sameLine ~= false then
                 imgui.SameLine()
             end
 
@@ -452,7 +455,6 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
             if type(entry.width) == "number" and entry.width > 0 then
                 imgui.PopItemWidth()
             end
-            firstOnLine = false
         end
     end
     return changed
@@ -557,6 +559,10 @@ local function MergeCustomTypes(customTypes)
     if not customTypes then
         return WidgetTypes, LayoutTypes
     end
+    local cached = mergedCustomTypesCache[customTypes]
+    if cached then
+        return cached.widgets, cached.layouts
+    end
     local mergedWidgets = {}
     for k, v in pairs(WidgetTypes) do mergedWidgets[k] = v end
     if type(customTypes.widgets) == "table" then
@@ -567,6 +573,10 @@ local function MergeCustomTypes(customTypes)
     if type(customTypes.layouts) == "table" then
         for k, v in pairs(customTypes.layouts) do mergedLayouts[k] = v end
     end
+    mergedCustomTypesCache[customTypes] = {
+        widgets = mergedWidgets,
+        layouts = mergedLayouts,
+    }
     return mergedWidgets, mergedLayouts
 end
 

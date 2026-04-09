@@ -13,13 +13,50 @@ local ChoiceDisplay = registry.ChoiceDisplay
 local GetCursorPosXSafe = registry.GetCursorPosXSafe
 local GetStyleMetricX = registry.GetStyleMetricX
 local CalcTextWidth = registry.CalcTextWidth
-local EstimateButtonWidth = registry.EstimateButtonWidth
+-- local EstimateButtonWidth = registry.EstimateButtonWidth
 local DrawWidgetSlots = registry.DrawWidgetSlots
 local GetSlotGeometry = registry.GetSlotGeometry
 local ShowPreparedTooltip = registry.ShowPreparedTooltip
 local AlignSlotContent = registry.AlignSlotContent
 
 local DEFAULT_PACKED_SLOT_COUNT = 32
+
+local function BuildIndexedSlots(count, buildSlot)
+    local slots = {}
+    for index = 1, count do
+        slots[index] = buildSlot(index)
+    end
+    return slots
+end
+
+local function WarnIgnoredSlotKeys(prefix, geometry, slotName, keys, widgetTypeName)
+    local slot = type(geometry) == "table" and geometry[slotName] or nil
+    if type(slot) ~= "table" then
+        return
+    end
+    for _, key in ipairs(keys) do
+        if slot[key] ~= nil then
+            libWarn("%s: geometry slot '%s' %s is ignored by widget type '%s'",
+                prefix, tostring(slotName), tostring(key), tostring(widgetTypeName))
+        end
+    end
+end
+
+local function WarnIgnoredDynamicSlotKeys(prefix, geometry, pattern, keys, widgetTypeName)
+    if type(geometry) ~= "table" then
+        return
+    end
+    for slotName, slot in pairs(geometry) do
+        if type(slotName) == "string" and string.match(slotName, pattern) and type(slot) == "table" then
+            for _, key in ipairs(keys) do
+                if slot[key] ~= nil then
+                    libWarn("%s: geometry slot '%s' %s is ignored by widget type '%s'",
+                        prefix, tostring(slotName), tostring(key), tostring(widgetTypeName))
+                end
+            end
+        end
+    end
+end
 
 local function CreateStepperSlotTemplate(node, options)
     options = options or {}
@@ -37,12 +74,26 @@ local function CreateStepperSlotTemplate(node, options)
         return name
     end
 
+    local function GetStepperLimits()
+        local ctx = node._stepperCtx
+        local minValue = ctx and ctx.min ~= nil and ctx.min or node.min
+        local maxValue = ctx and ctx.max ~= nil and ctx.max or node.max
+        return minValue, maxValue
+    end
+
     local function CommitValue(nextValue)
         local ctx = node._stepperCtx
         if not ctx or not ctx.boundValue then
             return false
         end
+        local minValue, maxValue = GetStepperLimits()
         local normalized = NormalizeInteger(node, nextValue)
+        if minValue ~= nil and normalized < minValue then
+            normalized = minValue
+        end
+        if maxValue ~= nil and normalized > maxValue then
+            normalized = maxValue
+        end
         if normalized ~= ctx.renderedValue then
             ctx.renderedValue = normalized
             ctx.boundValue:set(normalized)
@@ -70,7 +121,8 @@ local function CreateStepperSlotTemplate(node, options)
         draw = function(imgui)
             local ctx = node._stepperCtx
             local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
-            if imgui.Button("-") and renderedValue > node.min then
+            local minValue = GetStepperLimits()
+            if imgui.Button("-") and renderedValue > minValue then
                 return CommitValue(renderedValue - (node._step or 1))
             end
             return false
@@ -102,12 +154,13 @@ local function CreateStepperSlotTemplate(node, options)
         draw = function(imgui, slot)
             local ctx = node._stepperCtx
             local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
+            local _, maxValue = GetStepperLimits()
             local style = imgui.GetStyle()
             local itemSpacingX = GetStyleMetricX(style, "ItemSpacing", 0)
             if slot.start == nil and ctx.valueSlotWidth and ctx.valueSlotStart ~= nil then
                 imgui.SetCursorPosX(ctx.valueSlotStart + ctx.valueSlotWidth + itemSpacingX)
             end
-            if imgui.Button("+") and renderedValue < node.max then
+            if imgui.Button("+") and renderedValue < maxValue then
                 return CommitValue(renderedValue + (node._step or 1))
             end
             return false
@@ -121,7 +174,8 @@ local function CreateStepperSlotTemplate(node, options)
             draw = function(imgui)
                 local ctx = node._stepperCtx
                 local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
-                if imgui.Button("<<") and renderedValue > node.min then
+                local minValue = GetStepperLimits()
+                if imgui.Button("<<") and renderedValue > minValue then
                     return CommitValue(renderedValue - fastStep)
                 end
                 return false
@@ -133,7 +187,8 @@ local function CreateStepperSlotTemplate(node, options)
             draw = function(imgui)
                 local ctx = node._stepperCtx
                 local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
-                if imgui.Button(">>") and renderedValue < node.max then
+                local _, maxValue = GetStepperLimits()
+                if imgui.Button(">>") and renderedValue < maxValue then
                     return CommitValue(renderedValue + fastStep)
                 end
                 return false
@@ -144,10 +199,12 @@ local function CreateStepperSlotTemplate(node, options)
     return slots
 end
 
-local function PrepareStepperDrawContext(node, boundValue)
+local function PrepareStepperDrawContext(node, boundValue, limits)
     local ctx = node._stepperCtx or {}
     ctx.boundValue = boundValue
     ctx.renderedValue = NormalizeInteger(node, boundValue:get())
+    ctx.min = limits and limits.min or node.min
+    ctx.max = limits and limits.max or node.max
     ctx.valueSlotStart = nil
     ctx.valueSlotWidth = nil
     node._stepperCtx = ctx
@@ -352,8 +409,10 @@ WidgetTypes.radio = {
                 end,
             })
         end
-        for index, candidate in ipairs(node.values or {}) do
-            table.insert(slots, {
+        local optionValues = node.values or {}
+        local optionSlots = BuildIndexedSlots(#optionValues, function(index)
+            local candidate = optionValues[index]
+            return {
                 name = "option:" .. tostring(index),
                 sameLine = label == "" and index > 1,
                 draw = function(imgui)
@@ -366,9 +425,17 @@ WidgetTypes.radio = {
                     end
                     return false
                 end,
-            })
+            }
+        end)
+        for _, slot in ipairs(optionSlots) do
+            table.insert(slots, slot)
         end
         node._radioSlots = slots
+    end,
+    validateGeometry = function(node, prefix, geometry)
+        local _ = node
+        WarnIgnoredSlotKeys(prefix, geometry, "label", { "width", "align" }, "radio")
+        WarnIgnoredDynamicSlotKeys(prefix, geometry, "^option:%d+$", { "width", "align" }, "radio")
     end,
     draw = function(imgui, node, bound)
         local ctx = node._radioCtx or {}
@@ -453,20 +520,19 @@ WidgetTypes.steppedRange = {
             sameLine = true,
             draw = function(imgui, slot)
                 local ctx = node._rangeCtx or {}
-                local maxStepperNode = node._maxStepper
-                if ctx.boundMin ~= nil then
-                    maxStepperNode.min = ctx.boundMin:get()
-                end
+                local separatorText = "to"
+                local separatorWidth = CalcTextWidth(imgui, separatorText)
                 if slot.start == nil then
                     local beforeMax = GetSlotGeometry(node, "max.decrement")
                     if beforeMax and type(beforeMax.start) == "number" then
-                        local TO_HALF_WIDTH = 7
                         local afterMin = GetCursorPosXSafe(imgui)
-                        local separatorX = afterMin + math.max(((ctx.rowStart + beforeMax.start) - afterMin) / 2 - TO_HALF_WIDTH, 0)
+                        local separatorX = afterMin
+                            + math.max(((ctx.rowStart + beforeMax.start) - afterMin - separatorWidth) / 2, 0)
                         imgui.SetCursorPosX(separatorX)
                     end
                 end
-                imgui.Text("to")
+                AlignSlotContent(imgui, slot, separatorWidth)
+                imgui.Text(separatorText)
                 return false
             end,
         })
@@ -484,16 +550,12 @@ WidgetTypes.steppedRange = {
 
         local minValue = bound.min:get()
         local maxValue = bound.max:get()
-        minStepper.max = maxValue
-        maxStepper.min = minValue
 
         local rowStart = GetCursorPosXSafe(imgui)
         node._rangeCtx = node._rangeCtx or {}
-        node._rangeCtx.boundMin = bound.min
-        node._rangeCtx.boundMax = bound.max
         node._rangeCtx.rowStart = rowStart
-        PrepareStepperDrawContext(minStepper, bound.min)
-        PrepareStepperDrawContext(maxStepper, bound.max)
+        PrepareStepperDrawContext(minStepper, bound.min, { min = minStepper.min, max = maxValue })
+        PrepareStepperDrawContext(maxStepper, bound.max, { min = minValue, max = maxStepper.max })
         return DrawWidgetSlots(imgui, node, node._rangeSlots, rowStart)
     end,
 }
@@ -526,9 +588,8 @@ WidgetTypes.packedCheckboxList = {
             node.slotCount = math.floor(node.slotCount)
         end
 
-        node._packedSlots = {}
-        for index = 1, node.slotCount do
-            node._packedSlots[index] = {
+        node._packedSlots = BuildIndexedSlots(node.slotCount, function(index)
+            return {
                 name = "item:" .. tostring(index),
                 line = index,
                 hidden = false,
@@ -545,7 +606,11 @@ WidgetTypes.packedCheckboxList = {
                     return changed
                 end,
             }
-        end
+        end)
+    end,
+    validateGeometry = function(node, prefix, geometry)
+        local _ = node
+        WarnIgnoredDynamicSlotKeys(prefix, geometry, "^item:%d+$", { "width", "align" }, "packedCheckboxList")
     end,
     draw = function(imgui, node, bound)
         local children = bound.value and bound.value.children

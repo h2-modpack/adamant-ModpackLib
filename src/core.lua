@@ -331,6 +331,115 @@ function public.affectsRunData(def)
     return def.affectsRunData == true
 end
 
+local KnownDefinitionKeys = {
+    modpack = true,
+    id = true,
+    name = true,
+    shortName = true,
+    special = true,
+    category = true,
+    subgroup = true,
+    tooltip = true,
+    default = true,
+    affectsRunData = true,
+    storage = true,
+    ui = true,
+    customTypes = true,
+    patchPlan = true,
+    apply = true,
+    revert = true,
+    selectQuickUi = true,
+    hashGroups = true,
+}
+
+local function IsLikelyDefinitionTable(def)
+    if type(def) ~= "table" then
+        return false
+    end
+
+    if def.stateSchema ~= nil or def.options ~= nil then
+        return true
+    end
+
+    for key in pairs(def) do
+        if type(key) == "string" and KnownDefinitionKeys[key] then
+            return true
+        end
+    end
+
+    return false
+end
+
+function public.validateDefinition(def, label)
+    if not IsLikelyDefinitionTable(def) then
+        return def
+    end
+
+    local prefix = tostring(label or def.name or def.id or _PLUGIN.guid or "module")
+
+    for key in pairs(def) do
+        if type(key) == "string"
+            and key ~= "stateSchema"
+            and key ~= "options"
+            and not KnownDefinitionKeys[key] then
+            libWarnAlways("%s: unknown definition key '%s'", prefix, tostring(key))
+        end
+    end
+
+    local function warnType(key, expected)
+        if def[key] ~= nil and type(def[key]) ~= expected then
+            libWarnAlways("%s: definition.%s should be %s, got %s",
+                prefix, key, expected, type(def[key]))
+        end
+    end
+
+    for _, key in ipairs({ "modpack", "id", "name", "shortName", "category", "subgroup", "tooltip" }) do
+        warnType(key, "string")
+    end
+    -- Discovery accepts any default value type; do not type-check it.
+    for _, key in ipairs({ "special", "affectsRunData" }) do
+        warnType(key, "boolean")
+    end
+    for _, key in ipairs({ "storage", "ui", "customTypes", "hashGroups" }) do
+        warnType(key, "table")
+    end
+    for _, key in ipairs({ "patchPlan", "apply", "revert", "selectQuickUi" }) do
+        warnType(key, "function")
+    end
+
+    if def.special == true then
+        if def.category ~= nil then
+            libWarnAlways("%s: special modules ignore definition.category", prefix)
+        end
+        if def.subgroup ~= nil then
+            libWarnAlways("%s: special modules ignore definition.subgroup", prefix)
+        end
+        if def.selectQuickUi ~= nil then
+            libWarnAlways("%s: special modules ignore definition.selectQuickUi; use DrawQuickContent for Quick Setup", prefix)
+        end
+        if def.modpack ~= nil and def.name == nil then
+            libWarnAlways("%s: coordinated special modules should declare definition.name", prefix)
+        end
+    else
+        if def.shortName ~= nil then
+            libWarnAlways("%s: regular modules ignore definition.shortName", prefix)
+        end
+        if def.modpack ~= nil and def.id == nil then
+            libWarnAlways("%s: coordinated regular modules should declare definition.id", prefix)
+        end
+    end
+
+    local inferred, info = public.inferMutationShape(def)
+    if info.hasApply ~= info.hasRevert then
+        libWarnAlways("%s: manual lifecycle requires both definition.apply and definition.revert", prefix)
+    end
+    if public.affectsRunData(def) and not inferred then
+        libWarnAlways("%s: affectsRunData=true but module exposes neither patchPlan nor apply/revert", prefix)
+    end
+
+    return def
+end
+
 function public.valuesEqual(node, a, b)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
     if storageType and type(storageType.equals) == "function" then
@@ -760,6 +869,10 @@ function public.createStore(modConfig, definition, dataDefaults)
     local label = type(definition) == "table"
         and tostring(definition.name or definition.id or _PLUGIN.guid or "module")
         or tostring(_PLUGIN.guid or "module")
+
+    if type(definition) == "table" then
+        public.validateDefinition(definition, label)
+    end
 
     if storage then
         public.validateStorage(storage, label)

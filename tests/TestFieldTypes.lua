@@ -530,6 +530,7 @@ function TestUiNodes:testPrepareWidgetNodeCachesSlotGeometryForDirectCustomWidge
     lu.assertEquals(node._defaultSlotGeometry.increment.start, 92)
     lu.assertEquals(node._defaultSlotGeometry.value.width, 60)
     lu.assertEquals(node._defaultSlotGeometry.value.align, "center")
+    lu.assertTrue(type(node._imguiId) == "string" and node._imguiId ~= "")
 end
 
 function TestUiNodes:testNodeGeometryOverridesWidgetDefaultGeometry()
@@ -565,6 +566,31 @@ function TestUiNodes:testNodeGeometryOverridesWidgetDefaultGeometry()
     lu.assertEquals(valueSlot.align, "right")
     lu.assertEquals(node._defaultSlotGeometry.value.start, 24)
     lu.assertEquals(valueSlot.align, "right")
+end
+
+function TestUiNodes:testZeroBindCustomWidgetsGetDistinctFallbackImguiIds()
+    local customTypes = {
+        widgets = {
+            rarityBadge = {
+                binds = {},
+                slots = { "value" },
+                validate = function() end,
+                draw = function(imgui, node)
+                    imgui.Text(node.text or "")
+                    return false
+                end,
+            },
+        },
+    }
+    local nodeA = { type = "rarityBadge", text = "A" }
+    local nodeB = { type = "rarityBadge", text = "B" }
+
+    lib.prepareWidgetNode(nodeA, "RarityBadgeA", customTypes)
+    lib.prepareWidgetNode(nodeB, "RarityBadgeB", customTypes)
+
+    lu.assertTrue(type(nodeA._imguiId) == "string" and nodeA._imguiId ~= "")
+    lu.assertTrue(type(nodeB._imguiId) == "string" and nodeB._imguiId ~= "")
+    lu.assertNotEquals(nodeA._imguiId, nodeB._imguiId)
 end
 
 function TestUiNodes:testGetQuickUiNodeIdFallsBackToBinds()
@@ -682,6 +708,50 @@ function TestUiNodes:testPanelLayoutCanPlaceChildrenIntoColumnsAndLines()
     lu.assertEquals(imgui._state.pushItemWidths[3], 100)
 end
 
+function TestUiNodes:testCustomLayoutCanDelegateChildRenderingThroughDrawChild()
+    local sawDrawChild = false
+    local definition = {
+        storage = {
+            { type = "bool", alias = "Enabled", configKey = "Enabled", default = true },
+        },
+        customTypes = {
+            layouts = {
+                delegatingLayout = {
+                    handlesChildren = true,
+                    validate = function() end,
+                    render = function(imgui, node, drawChild)
+                        sawDrawChild = type(drawChild) == "function"
+                        local changed = false
+                        for _, child in ipairs(node.children or {}) do
+                            if drawChild(child) then
+                                changed = true
+                            end
+                        end
+                        return true, changed
+                    end,
+                },
+            },
+        },
+        ui = {
+            {
+                type = "delegatingLayout",
+                children = {
+                    { type = "checkbox", binds = { value = "Enabled" }, label = "Enabled" },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Enabled = true })
+    local imgui = makeBasicImgui()
+    imgui._state.checkboxResponses = { false }
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState, nil, definition.customTypes)
+
+    lu.assertTrue(sawDrawChild)
+    lu.assertTrue(changed)
+    lu.assertFalse(store.uiState.get("Enabled"))
+end
+
 function TestUiNodes:testDropdownGeometryControlsStartAndWidth()
     local definition = {
         storage = {
@@ -792,6 +862,36 @@ function TestUiNodes:testSteppedRangeGeometryAppliesWithoutLabel()
     lu.assertTrue(sawSecondValueStart)
     lu.assertTrue(sawCenteredSecondValue)
     lu.assertTrue(sawSecondIncrementStart)
+end
+
+function TestUiNodes:testSteppedRangeDrawDoesNotMutatePreparedStepperBounds()
+    local definition = {
+        storage = {
+            { type = "int", alias = "MinDepth", configKey = "MinDepth", default = 2, min = 1, max = 10 },
+            { type = "int", alias = "MaxDepth", configKey = "MaxDepth", default = 8, min = 1, max = 10 },
+        },
+        ui = {
+            {
+                type = "steppedRange",
+                binds = { min = "MinDepth", max = "MaxDepth" },
+                label = "Depth",
+                min = 1,
+                max = 10,
+            },
+        },
+    }
+    local store = makeStore(definition, { MinDepth = 4, MaxDepth = 6 })
+    local node = definition.ui[1]
+    local minStepper = node._minStepper
+    local maxStepper = node._maxStepper
+    local initialMinStepperMax = minStepper.max
+    local initialMaxStepperMin = maxStepper.min
+
+    local changed = lib.drawUiNode(makeBasicImgui(), node, store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(minStepper.max, initialMinStepperMax)
+    lu.assertEquals(maxStepper.min, initialMaxStepperMin)
 end
 
 function TestUiNodes:testStepperCentersValueWithinExplicitValueWidth()

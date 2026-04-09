@@ -155,6 +155,63 @@ Otherwise declaration order breaks ties and preserves slots without explicit `st
 
 `slotCount` is the declaration-time slot capacity for `packedCheckboxList`. Packed children may be omitted at runtime, but the widget does not invent new slots beyond the declared count.
 
+`radio` option slots and `packedCheckboxList` item slots currently use `line` and
+`start` meaningfully. `width` and `align` are accepted by the generic geometry
+parser but warn because those widgets do not consume them.
+
+### Slot intent by built-in widget
+
+The generic parser accepts `line`, `start`, `width`, and `align`, but built-in
+widgets do not all consume every key the same way. Authors should treat the
+following as the meaningful geometry surface:
+
+- `text.value`
+  - use `line` / `start` to place the text block
+  - `width` + `align` are meaningful when you want centered/right-aligned text inside a fixed slot
+- `checkbox.control`
+  - use `line` / `start` to place the whole checkbox row
+  - `width` / `align` are not meaningful for the built-in checkbox draw path
+- `dropdown.label`
+  - use `line` / `start` to place the label text
+  - `width` / `align` are not meaningful
+- `dropdown.control`
+  - use `line` / `start` to place the combo box
+  - `width` is meaningful and sets the combo width
+  - `align` is not meaningful
+- `radio.label`
+  - use `line` / `start` to place the label text
+  - `width` / `align` are not meaningful
+- `radio.option:N`
+  - use `line` / `start` to place each option explicitly
+  - `width` / `align` are not meaningful and currently warn
+- `stepper.label`
+  - use `line` / `start` to place the label text
+  - `width` / `align` are not meaningful
+- `stepper.decrement`, `stepper.increment`, `stepper.fastDecrement`, `stepper.fastIncrement`
+  - use `line` / `start` to place the buttons
+  - `width` / `align` are not meaningful
+- `stepper.value`
+  - use `line` / `start` to place the numeric value slot
+  - `width` + `align` are meaningful and control value-slot alignment
+- `steppedRange.label`
+  - use `line` / `start` to place the shared label text
+  - `width` / `align` are not meaningful
+- `steppedRange.min.value`, `steppedRange.max.value`
+  - use `line` / `start` to place the value slots
+  - `width` + `align` are meaningful and control value-slot alignment
+- `steppedRange.min.decrement`, `steppedRange.min.increment`, `steppedRange.min.fastDecrement`, `steppedRange.min.fastIncrement`
+  - use `line` / `start` to place the left-side buttons
+  - `width` / `align` are not meaningful
+- `steppedRange.max.decrement`, `steppedRange.max.increment`, `steppedRange.max.fastDecrement`, `steppedRange.max.fastIncrement`
+  - use `line` / `start` to place the right-side buttons
+  - `width` / `align` are not meaningful
+- `steppedRange.separator`
+  - use `line` / `start` to place the separator text
+  - `width` + `align` are meaningful when you want the separator aligned inside a fixed slot
+- `packedCheckboxList.item:N`
+  - use `line` / `start` to place each packed child row
+  - `width` / `align` are not meaningful and currently warn
+
 At draw time, `lib.drawUiNode(...)` may also receive a runtime geometry override using the same `geometry.slots` shape.
 Runtime overrides are validated against the already-declared slot schema and may additionally set:
 - `hidden`
@@ -307,15 +364,20 @@ Lib hard-validates registry contracts through:
 - expect string storage
 - validate value lists
 - `dropdown` supports optional `geometry`
+- `dropdown.control` is the meaningful width-bearing slot
+- `radio` is mainly a `line` / `start` placement widget; option slots do not consume `width` / `align`
 
 ### `stepper`
 - expects int storage
 - supports `step`, `fastStep`, and optional `geometry`
+- `value` is the meaningful aligned slot
+- button slots are best treated as explicit `line` / `start` positions
 
 ### `packedCheckboxList`
 - expects a packed root bind
 - renders checkbox rows for the packed child aliases under that root
 - useful when a module wants a generic packed-flag checklist without hand-writing the child loop
+- item slots are best treated as explicit `line` / `start` positions
 
 ### `separator`
 - layout only
@@ -356,6 +418,11 @@ Rules:
 - custom widgets may optionally declare `defaultGeometry = { slots = { ... } }` as their baseline slot layout
 - custom widgets may optionally declare `dynamicSlots(node, slotName) -> ok, err` for declaration-time-dependent slot names
 - custom layouts must implement `validate(...)` and `render(...)`
+- custom layouts may declare `handlesChildren = true` when they own child placement
+- custom layout `render(...)` receives `(imgui, node, drawChild)`
+- simple layouts may ignore `drawChild` and return just `open`
+- layouts with `handlesChildren = true` should return `open, changed`
+- layouts with `handlesChildren = true` should call `drawChild(child, runtimeGeometry?)` themselves and report child changes through `changed`
 
 Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
 Custom widgets that want Lib-managed slot placement may call `lib.drawWidgetSlots(...)` from inside `draw(...)`.

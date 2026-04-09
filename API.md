@@ -26,6 +26,10 @@ Creates the module-owned store facade around persisted config.
 When provided, Lib uses it to seed storage-node defaults for nodes that do not
 declare an explicit `default`.
 
+Before storage/UI validation, Lib also runs `lib.validateDefinition(...)` on the
+flat `definition` table to catch unknown keys, ignored special/regular fields,
+and incomplete lifecycle declarations early.
+
 Normal access:
 - `store.read(keyOrAlias)`
 - `store.write(keyOrAlias, value)`
@@ -45,6 +49,22 @@ Rules:
 - packed child aliases are required
 - widgets bind by alias, not raw `configKey`
 - `store.read/write` accept either a storage alias or a raw config key
+
+### `lib.validateDefinition(def, label?)`
+
+Runs the early definition warning pass for the flat module definition table.
+
+Current warnings cover:
+- unknown top-level definition keys
+- wrong value types for known definition fields
+- regular-only fields used on specials
+- special-only fields used on regular modules
+- incomplete manual lifecycle declarations like `apply` without `revert`
+- `affectsRunData = true` without any supported lifecycle
+
+This helper does not replace storage/UI validation.
+It exists to keep authoring mistakes visible without changing the flat shape of
+`definition`.
 
 ### `store.read(keyOrAlias)`
 
@@ -254,8 +274,9 @@ definition.customTypes = {
     },
     layouts = {
         myLayout = {
+            handlesChildren = true, -- optional: layout owns child drawing
             validate = function(node, prefix) ... end,
-            render = function(imgui, node) ... end,
+            render = function(imgui, node, drawChild) ... end,
         },
     },
 }
@@ -271,6 +292,14 @@ Rules:
 - all UI helpers that accept `customTypes` merge them with built-ins for validation and draw
 
 Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
+
+Custom layout `render(...)` contract:
+- `render(imgui, node, drawChild)` always receives `drawChild`
+- return `open` for simple layouts that let Lib recurse children normally
+- layouts that own child placement should declare `handlesChildren = true`
+- when `handlesChildren = true`, `render(...)` should return `open, changed`
+- when `handlesChildren = true`, the layout owns child rendering and should call `drawChild(child, runtimeGeometry?)` itself
+- when `handlesChildren = true`, `changed` must include any child-driven state change
 
 ## Widget Geometry
 
@@ -316,6 +345,20 @@ Behavior:
 - runtime geometry overrides may additionally set `hidden = true` on a slot to skip rendering it without reflow
 - if a slot is omitted, the widget falls back to its default rendering for that slot
 - unknown top-level geometry keys and unsupported slot names warn during validation
+- `radio` option slots and `packedCheckboxList` item slots meaningfully use `line` and `start`; `width` and `align` are accepted by the generic parser but currently warn because those widgets do not consume them
+
+Built-in slot intent:
+- `text.value`: use `line` / `start`; `width` + `align` are meaningful
+- `checkbox.control`: use `line` / `start`; `width` / `align` are not meaningful
+- `dropdown.label`: use `line` / `start`; `width` / `align` are not meaningful
+- `dropdown.control`: use `line` / `start`; `width` is meaningful; `align` is not
+- `radio.option:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn
+- `stepper.value`: use `line` / `start`; `width` + `align` are meaningful
+- `stepper` button slots: use `line` / `start`; `width` / `align` are not meaningful
+- `steppedRange.min.value`, `steppedRange.max.value`: use `line` / `start`; `width` + `align` are meaningful
+- `steppedRange.separator`: use `line` / `start`; `width` + `align` are meaningful
+- `steppedRange` button slots: use `line` / `start`; `width` / `align` are not meaningful
+- `packedCheckboxList.item:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn
 
 ## Managed UI State
 

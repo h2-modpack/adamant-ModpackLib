@@ -26,6 +26,79 @@ There is no supported use of:
 - `definition.options`
 - `definition.stateSchema`
 
+`lib.createStore(...)` now runs an early definition warning pass before storage/UI
+validation. It warns on:
+- unknown top-level definition keys
+- fields that exist but are ignored by the current module kind
+- incomplete lifecycle declarations like `apply` without `revert`
+
+That warning pass keeps the flat `definition` shape, but makes authoring mistakes
+visible much earlier.
+
+## Definition By Consumer
+
+The runtime shape stays flat, but authors should think about `definition` in
+consumer groups.
+
+Framework discovery and routing reads:
+- `modpack`
+- `special`
+- `id`
+- `name`
+- `shortName`
+- `category`
+- `subgroup`
+- `tooltip`
+- `default`
+
+Lib store and hosted UI reads:
+- `storage`
+- `ui`
+- `customTypes`
+
+Framework hosted Quick Setup reads:
+- `selectQuickUi`
+
+Lifecycle and run-data behavior reads:
+- `affectsRunData`
+- `patchPlan`
+- `apply`
+- `revert`
+
+Framework hash/profile encoding may also read:
+- `hashGroups`
+
+Authoring rule:
+- keep the table flat
+- but place fields mentally by consumer so you know why each field exists
+
+## Special vs Regular Decision Guide
+
+Use a regular module when:
+- the module belongs under a category/subgroup in the main Framework UI
+- the module can be described through `definition.ui`
+- Quick Setup should come from `quick = true` widget nodes
+- the stable hash namespace should be `definition.id`
+
+Use a special module when:
+- the module owns its own dedicated sidebar tab
+- the module needs custom `DrawTab` and/or `DrawQuickContent`
+- the module wants the special-module hash namespace based on `modName`
+- category/subgroup routing does not make sense
+
+Framework-visible differences:
+- regular modules are routed by `definition.category` / `definition.subgroup`
+- special modules ignore `definition.category` / `definition.subgroup`
+- regular modules use `definition.id` as their hash namespace
+- special modules use `modName` as their hash namespace
+- regular modules can filter hosted quick nodes through `definition.selectQuickUi`
+- special modules ignore `definition.selectQuickUi`; Quick Setup uses `DrawQuickContent`
+- regular modules ignore `shortName`
+- special modules may use `shortName` for compact sidebar labels
+
+Validation and warning rule:
+- if you put a special-only field on a regular module, or a regular-only field on a special module, Lib/Framework now warn instead of silently leaving the mismatch implicit
+
 ## State Access Rules
 
 These are contract rules:
@@ -82,6 +155,7 @@ public.definition = {
 
 Rules:
 - `definition.id` is the regular-module hash namespace
+- coordinated regular modules should declare `definition.id`
 - storage aliases should be stable after release
 - root aliases default to `configKey` when omitted
 - widgets bind by alias
@@ -121,9 +195,11 @@ public.definition = {
 
 Rules:
 - special-module hash namespace is the module `modName`
+- coordinated special modules should declare `definition.name`
 - `shortName` is optional and only needed when a compact UI surface should use a shorter label than `name`
 - storage may still use nested raw config paths
 - alias names are the UI and `uiState` access surface
+- `category`, `subgroup`, and `selectQuickUi` are ignored on special modules
 
 Supported public UI entrypoints:
 - `public.DrawQuickContent(ui, uiState, theme)`
@@ -224,8 +300,9 @@ public.definition.customTypes = {
     },
     layouts = {
         myLayout = {
+            handlesChildren = true, -- optional: layout owns child drawing
             validate = function(node, prefix) end,
-            render = function(imgui, node) return true end,
+            render = function(imgui, node, drawChild) return true end,
         },
     },
 }
@@ -239,6 +316,9 @@ These custom types can be used by:
 
 Today, `slots` is a validation surface. Custom widget `draw(...)` logic still reads `node.geometry` itself when it wants custom placement.
 `dynamicSlots(...)` is the optional escape hatch for declaration-time-dependent slot names like `option:N`.
+Custom layout `render(...)` always receives `drawChild`.
+Simple layouts can ignore it and return just `open`.
+Layouts that want to own child placement should declare `handlesChildren = true`, return `open, changed`, and call `drawChild(child, runtimeGeometry?)` themselves.
 
 Built-in widgets may also accept a widget-local `geometry` bag for manual horizontal placement.
 Geometry is now expressed through `geometry.slots`, where each slot descriptor may declare:
@@ -261,6 +341,17 @@ Otherwise declaration order breaks ties and preserves slots without explicit `st
 `packedCheckboxList` supports `item:N` slot names. If `slotCount` is omitted, Lib defaults it to `32`.
 
 `slotCount` is the declaration-time slot capacity for `packedCheckboxList`. Packed children may be omitted at runtime, but the widget does not create new slots beyond the declared capacity.
+
+Meaningful built-in slot intent:
+- `text.value`: use `start`, and optional `width` + `align` when you want text aligned inside a slot
+- `checkbox.control`: use `start` to move the whole checkbox row
+- `dropdown.control`: use `start` and `width`; `label` is mainly a text-position slot
+- `radio.option:N`: use `line` / `start` to place each option; do not expect `width` / `align` to do anything useful
+- `stepper.value`: this is the slot where `width` + `align` matter
+- `stepper` button slots are mainly explicit `line` / `start` anchors
+- `steppedRange.min.value` / `max.value`: these are the meaningful aligned value slots
+- `steppedRange.separator`: may also use `width` + `align` if you want the separator text in a fixed slot
+- `packedCheckboxList.item:N`: use `line` / `start` to place rows; do not expect `width` / `align` to do anything useful
 
 ### `steppedRange`
 

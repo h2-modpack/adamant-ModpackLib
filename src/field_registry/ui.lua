@@ -11,6 +11,7 @@ local ValidateWidgetGeometry = registry.ValidateWidgetGeometry
 local PrepareRuntimeWidgetGeometry = registry.PrepareRuntimeWidgetGeometry
 local EnsurePreparedStorage = registry.EnsurePreparedStorage
 local DrawLayoutNode = registry.DrawLayoutNode
+local nextAnonymousImguiId = 0
 
 local function AssertUiBind(prefix, node, storageNodes, bindName, expectedKind)
     local alias = node.binds and node.binds[bindName]
@@ -110,6 +111,34 @@ local function DeriveQuickUiNodeId(node)
     return table.concat(parts, "|")
 end
 
+local function EnsureNodeImguiId(node, prefix, widgetType)
+    if type(node) ~= "table" then
+        return
+    end
+    if type(node._imguiId) == "string" and node._imguiId ~= "" then
+        return
+    end
+
+    local idParts = {}
+    local binds = type(widgetType) == "table" and type(widgetType.binds) == "table" and widgetType.binds or nil
+    if binds ~= nil then
+        for bindName in pairs(binds) do
+            local alias = type(node.binds) == "table" and node.binds[bindName] or nil
+            if type(alias) == "string" and alias ~= "" then
+                table.insert(idParts, tostring(bindName) .. "=" .. alias)
+            end
+        end
+    end
+    if #idParts > 0 then
+        table.sort(idParts)
+        node._imguiId = "##" .. table.concat(idParts, "__")
+        return
+    end
+
+    nextAnonymousImguiId = nextAnonymousImguiId + 1
+    node._imguiId = string.format("##anon_%d_%s", nextAnonymousImguiId, tostring(prefix or node.type or "node"))
+end
+
 local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTypes)
     widgetTypes = widgetTypes or WidgetTypes
     layoutTypes = layoutTypes or LayoutTypes
@@ -139,13 +168,10 @@ local function ValidateUiNode(node, prefix, storageNodes, widgetTypes, layoutTyp
         if node.quickId ~= nil and (type(node.quickId) ~= "string" or node.quickId == "") then
             libWarn("%s: quickId must be a non-empty string", prefix)
         end
-        local idParts = {}
         for bindName, bindSpec in pairs(widgetType.binds) do
             AssertUiBind(prefix, node, storageNodes, bindName, bindSpec.storageType)
-            table.insert(idParts, tostring(node.binds and node.binds[bindName] or bindName))
         end
-        table.sort(idParts)
-        node._imguiId = "##" .. table.concat(idParts, "__")
+        EnsureNodeImguiId(node, prefix, widgetType)
         node._quickId = DeriveQuickUiNodeId(node)
     else
         layoutType.validate(node, prefix)
@@ -202,6 +228,7 @@ function public.prepareWidgetNode(node, label, customTypes)
     end
     widgetType.validate(node, prefix)
     ValidateWidgetGeometry(node, prefix, widgetType)
+    EnsureNodeImguiId(node, prefix, widgetType)
 end
 
 function public.prepareUiNodes(nodes, label, storage, customTypes)
@@ -319,8 +346,16 @@ function public.drawUiNode(imgui, node, uiState, width, customTypes, runtimeGeom
         else
             node._runtimeSlotGeometry = nil
         end
-        drawChanged = widgetType.draw(imgui, node, bound, width) == true
+        local ok, result = xpcall(function()
+            return widgetType.draw(imgui, node, bound, width) == true
+        end, function(err)
+            return debug.traceback(err, 2)
+        end)
         node._runtimeSlotGeometry = previousRuntimeGeometry
+        if not ok then
+            error(result, 0)
+        end
+        drawChanged = result == true
     else
         libWarn("drawUiNode: widget type '%s' is missing draw", tostring(node.type))
     end

@@ -283,6 +283,34 @@ function TestUiValidation:testCustomWidgetGeometryIsValidated()
     lu.assertEquals(#Warnings, 0)
 end
 
+function TestUiValidation:testMergeCustomTypesCachesByTableIdentity()
+    local mergeCustomTypes = AdamantModpackLib_Internal.shared.fieldRegistry.MergeCustomTypes
+    local customTypes = {
+        widgets = {
+            fancyStepper = {
+                binds = { value = { storageType = "int" } },
+                slots = { "control" },
+                validate = function() end,
+                draw = function() end,
+            },
+        },
+        layouts = {
+            fancyPanel = {
+                validate = function() end,
+                render = function() return true end,
+            },
+        },
+    }
+
+    local widgetsA, layoutsA = mergeCustomTypes(customTypes)
+    local widgetsB, layoutsB = mergeCustomTypes(customTypes)
+
+    lu.assertIs(widgetsA, widgetsB)
+    lu.assertIs(layoutsA, layoutsB)
+    lu.assertNotNil(widgetsA.fancyStepper)
+    lu.assertNotNil(layoutsA.fancyPanel)
+end
+
 function TestUiValidation:testValueAlignRequiresKnownAlignment()
     local storage = {
         { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
@@ -427,6 +455,30 @@ function TestUiValidation:testRadioOptionSlotMustBeInRange()
     assertWarningContains("geometry slot 'option:3' is out of range for 2 radio options")
 end
 
+function TestUiValidation:testRadioWarnsWhenWidthOrAlignAreIgnoredByOptionSlots()
+    local storage = {
+        { type = "string", alias = "Mode", configKey = "Mode", default = "A" },
+    }
+    lib.validateStorage(storage, "RadioIgnoredGeometry")
+
+    lib.validateUi({
+        {
+            type = "radio",
+            binds = { value = "Mode" },
+            label = "",
+            values = { "A", "B" },
+            geometry = {
+                slots = {
+                    { name = "option:1", start = 0, width = 80, align = "right" },
+                },
+            },
+        },
+    }, "RadioIgnoredGeometry", storage)
+
+    assertWarningContains("geometry slot 'option:1' width is ignored by widget type 'radio'")
+    assertWarningContains("geometry slot 'option:1' align is ignored by widget type 'radio'")
+end
+
 function TestUiValidation:testCustomWidgetDynamicSlotsCanValidateNames()
     local storage = {
         { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
@@ -546,6 +598,37 @@ function TestUiValidation:testPackedCheckboxListUsesDefaultSlotCountWhenOmitted(
     }, "PackedImplicitSlotCount", storage)
 
     assertWarningContains("geometry slot 'item:33' is out of range for packedCheckboxList slotCount 32")
+end
+
+function TestUiValidation:testPackedCheckboxListWarnsWhenWidthOrAlignAreIgnoredByItemSlots()
+    local storage = {
+        {
+            type = "packedInt",
+            alias = "PackedFlags",
+            configKey = "PackedFlags",
+            bits = {
+                { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false },
+                { alias = "FlagB", offset = 1, width = 1, type = "bool", default = false },
+            },
+        },
+    }
+    lib.validateStorage(storage, "PackedIgnoredGeometry")
+
+    lib.validateUi({
+        {
+            type = "packedCheckboxList",
+            binds = { value = "PackedFlags" },
+            slotCount = 2,
+            geometry = {
+                slots = {
+                    { name = "item:1", line = 1, start = 0, width = 100, align = "center" },
+                },
+            },
+        },
+    }, "PackedIgnoredGeometry", storage)
+
+    assertWarningContains("geometry slot 'item:1' width is ignored by widget type 'packedCheckboxList'")
+    assertWarningContains("geometry slot 'item:1' align is ignored by widget type 'packedCheckboxList'")
 end
 
 function TestUiValidation:testPanelChildColumnMustExist()
