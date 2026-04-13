@@ -4,7 +4,12 @@ local LayoutTypes = shared.LayoutTypes
 local libWarn = shared.libWarn
 local registry = shared.fieldRegistry
 local GetCursorPosXSafe = registry.GetCursorPosXSafe
+local GetCursorPosYSafe = registry.GetCursorPosYSafe
+local SetCursorPosSafe = registry.SetCursorPosSafe
+local GetStyleMetricX = registry.GetStyleMetricX
 local NormalizeColor = registry.NormalizeColor
+local EstimateStructuredRowAdvanceY = registry.EstimateStructuredRowAdvanceY
+local DrawStructuredAt = registry.DrawStructuredAt
 
 LayoutTypes.separator = {
     validate = function(node, prefix)
@@ -110,7 +115,7 @@ end
 
 local function WithTabLabelColor(imgui, child, drawFn)
     local color = type(child) == "table" and child._tabLabelColor or nil
-    if type(color) ~= "table" or type(imgui.PushStyleColor) ~= "function" or type(imgui.PopStyleColor) ~= "function" then
+    if type(color) ~= "table" then
         return drawFn()
     end
 
@@ -162,11 +167,6 @@ LayoutTypes.horizontalTabs = {
     end,
     render = function(imgui, node, drawChild, _, bound)
         local changed = false
-        if not imgui.BeginTabBar or not imgui.BeginTabItem or not imgui.EndTabItem or not imgui.EndTabBar then
-            libWarn("drawUiNode: horizontalTabs requires BeginTabBar/BeginTabItem/EndTabItem/EndTabBar support")
-            return true, false
-        end
-
         local children = type(node.children) == "table" and node.children or {}
         local requestedKey = bound and bound.activeTab and bound.activeTab.get and bound.activeTab:get() or nil
         local activeChild, activeIndex = FindTabbedChildByKey(children, requestedKey or node._activeTabKey)
@@ -223,11 +223,6 @@ LayoutTypes.verticalTabs = {
         ValidateTabbedChildren(node, prefix, "verticalTabs")
     end,
     render = function(imgui, node, drawChild, _, bound)
-        if not imgui.BeginChild or not imgui.EndChild or not imgui.Selectable or not imgui.SameLine then
-            libWarn("drawUiNode: verticalTabs requires BeginChild/EndChild/Selectable/SameLine support")
-            return true, false
-        end
-
         local children = type(node.children) == "table" and node.children or {}
         if #children == 0 then
             return true, false
@@ -245,32 +240,61 @@ LayoutTypes.verticalTabs = {
 
         local changed = false
         local sidebarWidth = node.sidebarWidth or 180
-        imgui.BeginChild(node.id .. "##tabs", sidebarWidth, 0, true)
-        for index, child in ipairs(children) do
-            local childKey = GetTabbedChildKey(child, index)
-            local selected = WithTabLabelColor(imgui, child, function()
-                return imgui.Selectable(child.tabLabel, childKey == node._activeTabKey)
-            end)
-            if selected then
-                node._activeTabKey = childKey
-                if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
-                    local currentBound = bound.activeTab:get()
-                    if currentBound ~= node._activeTabKey then
-                        bound.activeTab:set(node._activeTabKey)
+        local gap = GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
+        local originX = GetCursorPosXSafe(imgui)
+        local originY = GetCursorPosYSafe(imgui)
+
+        local _, _, sidebarEndY, sidebarHeight = DrawStructuredAt(
+            imgui,
+            originX,
+            originY,
+            EstimateStructuredRowAdvanceY(imgui),
+            function()
+                imgui.BeginChild(node.id .. "##tabs", sidebarWidth, 0, true)
+                for index, child in ipairs(children) do
+                    local childKey = GetTabbedChildKey(child, index)
+                    local selected = WithTabLabelColor(imgui, child, function()
+                        return imgui.Selectable(child.tabLabel, childKey == node._activeTabKey)
+                    end)
+                    if selected then
+                        node._activeTabKey = childKey
+                        if bound and bound.activeTab and bound.activeTab.get and bound.activeTab.set then
+                            local currentBound = bound.activeTab:get()
+                            if currentBound ~= node._activeTabKey then
+                                bound.activeTab:set(node._activeTabKey)
+                            end
+                        end
                     end
                 end
-            end
-        end
-        imgui.EndChild()
+                imgui.EndChild()
+                return false
+            end)
 
-        imgui.SameLine()
+        local activeChildChanged, _, detailEndY, detailHeight = DrawStructuredAt(
+            imgui,
+            originX + sidebarWidth + gap,
+            originY,
+            EstimateStructuredRowAdvanceY(imgui),
+            function()
+                imgui.BeginChild(node.id .. "##detail", 0, 0, true)
+                activeChild = select(1, FindTabbedChildByKey(children, node._activeTabKey))
+                local childChanged = false
+                if activeChild ~= nil and drawChild(activeChild) then
+                    childChanged = true
+                end
+                imgui.EndChild()
+                return childChanged
+            end)
+        changed = activeChildChanged or changed
 
-        imgui.BeginChild(node.id .. "##detail", 0, 0, true)
-        activeChild = select(1, FindTabbedChildByKey(children, node._activeTabKey))
-        if activeChild ~= nil and drawChild(activeChild) then
-            changed = true
+        local finalY = originY + math.max(sidebarHeight or 0, detailHeight or 0)
+        if type(sidebarEndY) == "number" and sidebarEndY > finalY then
+            finalY = sidebarEndY
         end
-        imgui.EndChild()
+        if type(detailEndY) == "number" and detailEndY > finalY then
+            finalY = detailEndY
+        end
+        SetCursorPosSafe(imgui, originX, finalY)
 
         return true, changed
     end,
@@ -476,26 +500,6 @@ local function BuildPanelRows(entries, orderedPositions)
     return rows
 end
 
-local function EstimatePanelRowAdvanceY(imgui)
-    if type(imgui.GetFrameHeightWithSpacing) == "function" then
-        local value = imgui.GetFrameHeightWithSpacing()
-        if type(value) == "number" and value > 0 then
-            return value
-        end
-    end
-    if type(imgui.GetTextLineHeightWithSpacing) == "function" then
-        local value = imgui.GetTextLineHeightWithSpacing()
-        if type(value) == "number" and value > 0 then
-            return value
-        end
-    end
-
-    local style = type(imgui.GetStyle) == "function" and imgui.GetStyle() or nil
-    local framePaddingY = GetStyleMetricY(style, "FramePadding", 3)
-    local itemSpacingY = GetStyleMetricY(style, "ItemSpacing", 4)
-    return 16 + framePaddingY * 2 + itemSpacingY
-end
-
 LayoutTypes.panel = {
     handlesChildren = true,
     validate = function(node, prefix)
@@ -525,14 +529,14 @@ LayoutTypes.panel = {
             imgui.PushID(node.id)
         end
 
-        local rowStart = GetCursorPosXSafe(imgui)
+        local rowStartX = GetCursorPosXSafe(imgui)
+        local rowStartY = GetCursorPosYSafe(imgui)
         local entries = BuildPanelEntries(node)
         local orderedPositions = GetOrderedPanelEntries(node, entries)
         local rows = BuildPanelRows(entries, orderedPositions)
 
         local changed = false
-        local hasCursorY = type(imgui.GetCursorPosY) == "function" and type(imgui.SetCursorPosY) == "function"
-        local finalRowMaxY = nil
+        local defaultRowAdvance = EstimateStructuredRowAdvanceY(imgui)
         local renderRows = {}
 
         for _, row in ipairs(rows) do
@@ -550,52 +554,39 @@ LayoutTypes.panel = {
             end
         end
 
-        for rowIndex, row in ipairs(renderRows) do
-            local rowBaseY = hasCursorY and imgui.GetCursorPosY() or nil
-            local rowMaxY = rowBaseY
+        local currentRowY = rowStartY
+
+        for _, row in ipairs(renderRows) do
+            local rowAdvance = defaultRowAdvance
 
             for entryIndex, entry in ipairs(row.entries) do
-                if entryIndex > 1 then
+                if entryIndex > 1 and type(entry.start) ~= "number" then
                     imgui.SameLine()
                 end
 
-                if type(entry.start) == "number" then
-                    imgui.SetCursorPosX(rowStart + entry.start)
-                end
-                if hasCursorY and rowBaseY ~= nil then
-                    imgui.SetCursorPosY(rowBaseY)
-                end
-
-                if drawChild(entry.child) then
+                local childX = type(entry.start) == "number" and (rowStartX + entry.start) or GetCursorPosXSafe(imgui)
+                local childChanged, nextX, _, childAdvance = DrawStructuredAt(
+                    imgui,
+                    childX,
+                    currentRowY,
+                    defaultRowAdvance,
+                    function()
+                        return drawChild(entry.child) == true
+                    end)
+                if childChanged then
                     changed = true
                 end
-
-                if hasCursorY then
-                    local cursorY = imgui.GetCursorPosY()
-                    if rowMaxY == nil or cursorY > rowMaxY then
-                        rowMaxY = cursorY
-                    end
+                if childAdvance > rowAdvance then
+                    rowAdvance = childAdvance
                 end
+
+                SetCursorPosSafe(imgui, nextX, currentRowY)
             end
 
-            if hasCursorY and rowBaseY ~= nil and (rowMaxY == nil or rowMaxY <= rowBaseY) then
-                rowMaxY = rowBaseY + EstimatePanelRowAdvanceY(imgui)
-            end
-            finalRowMaxY = rowMaxY
-            if rowIndex < #renderRows then
-                if hasCursorY and rowMaxY ~= nil then
-                    imgui.SetCursorPosX(rowStart)
-                    imgui.SetCursorPosY(rowMaxY)
-                elseif type(imgui.NewLine) == "function" then
-                    imgui.NewLine()
-                end
-            end
+            currentRowY = currentRowY + rowAdvance
         end
 
-        if hasCursorY and finalRowMaxY ~= nil then
-            imgui.SetCursorPosX(rowStart)
-            imgui.SetCursorPosY(finalRowMaxY)
-        end
+        SetCursorPosSafe(imgui, rowStartX, currentRowY)
 
         if hasPanelId then
             imgui.PopID()

@@ -571,11 +571,7 @@ WidgetTypes.confirmButton = {
                         imgui.SameLine()
                         local remaining = math.max(0, (state.expiresAt or 0) - (state.now or 0))
                         local statusText = string.format("Confirmation expires in %.1fs", remaining)
-                        if type(imgui.TextDisabled) == "function" then
-                            imgui.TextDisabled(statusText)
-                        else
-                            imgui.Text(statusText)
-                        end
+                        imgui.TextDisabled(statusText)
                         ShowPreparedTooltip(imgui, node)
                         return false
                     end
@@ -1025,11 +1021,7 @@ WidgetTypes.radio = {
         ctx.boundValue = bound.value
         ctx.current = NormalizeChoiceValue(node, bound.value:get())
         node._radioCtx = ctx
-        local changed = DrawWidgetSlots(imgui, node, node._radioSlots, GetCursorPosXSafe(imgui))
-        if (node._label or "") == "" then
-            imgui.NewLine()
-        end
-        return changed
+        return DrawWidgetSlots(imgui, node, node._radioSlots, GetCursorPosXSafe(imgui))
     end,
 }
 
@@ -1068,42 +1060,44 @@ WidgetTypes.mappedRadio = {
             or {}
         node._mappedRadioCtx = ctx
 
-        local changed = DrawWidgetSlots(imgui, node, node._mappedRadioSlots, GetCursorPosXSafe(imgui))
         local hasLabel = (node._label or "") ~= ""
+        local slots = {}
+        for _, slot in ipairs(node._mappedRadioSlots or {}) do
+            slots[#slots + 1] = slot
+        end
         for index, option in ipairs(ctx.options or {}) do
-            local label
-            local selected
-            if type(option) == "table" then
-                label = tostring(option.label or option.value or "")
-                selected = option.selected == true
-            else
-                label = tostring(option or "")
-                selected = ctx.current ~= nil and option == ctx.current or false
-            end
-
-            if hasLabel or index > 1 then
-                imgui.SameLine()
-            end
-
-            if imgui.RadioButton(label, selected) then
-                if type(option) == "table" and type(option.onSelect) == "function" then
-                    changed = option.onSelect(option, ctx.boundValue, ctx.uiState, node) == true or changed
-                else
-                    local nextValue = type(option) == "table" and option.value or option
-                    if nextValue ~= ctx.current then
-                        ctx.boundValue:set(nextValue)
-                        ctx.current = nextValue
-                        changed = true
+            slots[#slots + 1] = {
+                name = "option:" .. tostring(index),
+                sameLine = hasLabel or index > 1,
+                draw = function(imgui)
+                    local label
+                    local selected
+                    if type(option) == "table" then
+                        label = tostring(option.label or option.value or "")
+                        selected = option.selected == true
+                    else
+                        label = tostring(option or "")
+                        selected = ctx.current ~= nil and option == ctx.current or false
                     end
-                end
-            end
+
+                    if imgui.RadioButton(label, selected) then
+                        if type(option) == "table" and type(option.onSelect) == "function" then
+                            return option.onSelect(option, ctx.boundValue, ctx.uiState, node) == true
+                        end
+
+                        local nextValue = type(option) == "table" and option.value or option
+                        if nextValue ~= ctx.current then
+                            ctx.boundValue:set(nextValue)
+                            ctx.current = nextValue
+                            return true
+                        end
+                    end
+                    return false
+                end,
+            }
         end
 
-        if not hasLabel and #(ctx.options or {}) > 0 then
-            imgui.NewLine()
-        end
-
-        return changed
+        return DrawWidgetSlots(imgui, node, slots, GetCursorPosXSafe(imgui))
     end,
 }
 
@@ -1137,40 +1131,41 @@ WidgetTypes.packedRadio = {
         end
 
         local selection = ClassifyPackedChoice(node, children)
-        local changed = DrawWidgetSlots(imgui, node, node._packedRadioSlots, GetCursorPosXSafe(imgui))
         local hasLabel = (node._label or "") ~= ""
-
-        local pendingClear = false
-        local pendingAlias = nil
-        if hasLabel then
-            imgui.SameLine()
+        local slots = {}
+        for _, slot in ipairs(node._packedRadioSlots or {}) do
+            slots[#slots + 1] = slot
         end
-        if imgui.RadioButton(node.noneLabel or "None", selection.state == "none") then
-            pendingClear = true
+        slots[#slots + 1] = {
+            name = "option:none",
+            sameLine = hasLabel,
+            draw = function(imgui)
+                if imgui.RadioButton(node.noneLabel or "None", selection.state == "none") then
+                    return ClearPackedChoiceSelection(children, selection) == true
+                end
+                return false
+            end,
+        }
+        for index, child in ipairs(children) do
+            slots[#slots + 1] = {
+                name = "option:" .. tostring(index),
+                sameLine = true,
+                draw = function(imgui)
+                    local optionColor = node._valueColors and node._valueColors[child.alias] or nil
+                    local clicked = DrawWithValueColor(imgui, optionColor, function()
+                        return imgui.RadioButton(
+                            GetPackedChoiceLabel(node, child),
+                            selection.selectedChild and selection.selectedChild.alias == child.alias or false)
+                    end)
+                    if clicked then
+                        return ApplyPackedChoiceSelection(children, child.alias, selection) == true
+                    end
+                    return false
+                end,
+            }
         end
 
-        for _, child in ipairs(children) do
-            imgui.SameLine()
-            local optionColor = node._valueColors and node._valueColors[child.alias] or nil
-            local clicked = DrawWithValueColor(imgui, optionColor, function()
-                return imgui.RadioButton(
-                    GetPackedChoiceLabel(node, child),
-                    selection.selectedChild and selection.selectedChild.alias == child.alias or false)
-            end)
-            if clicked then
-                pendingClear = false
-                pendingAlias = child.alias
-            end
-        end
-
-        if pendingAlias ~= nil then
-            changed = ApplyPackedChoiceSelection(children, pendingAlias, selection) or changed
-        elseif pendingClear then
-            changed = ClearPackedChoiceSelection(children, selection) or changed
-        end
-
-        imgui.NewLine()
-        return changed
+        return DrawWidgetSlots(imgui, node, slots, GetCursorPosXSafe(imgui))
     end,
 }
 

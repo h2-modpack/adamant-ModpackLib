@@ -13,7 +13,10 @@ local function makeBasicImgui()
         selectables = {},
         pushIds = {},
         cursorPosX = 0,
+        cursorPosY = 0,
         setCursorPosXCalls = {},
+        setCursorPosCalls = {},
+        cursorEvents = {},
         pushItemWidths = {},
         sameLineCalls = 0,
         newLineCalls = 0,
@@ -49,17 +52,24 @@ local function makeBasicImgui()
         Selectable = function(label, selected)
             table.insert(state.selectableCalls, { label = label, selected = selected == true })
             local nextResponse = table.remove(state.selectables, 1)
+            state.cursorPosY = state.cursorPosY + 26
             return nextResponse == true
         end,
         RadioButton = function()
             local nextResponse = table.remove(state.selectables, 1)
+            state.cursorPosY = state.cursorPosY + 26
             return nextResponse == true
         end,
-        Text = function() end,
+        Text = function()
+            state.cursorPosY = state.cursorPosY + 26
+        end,
         TextDisabled = function(text)
             table.insert(state.textDisabledCalls, text)
+            state.cursorPosY = state.cursorPosY + 26
         end,
-        TextColored = function() end,
+        TextColored = function()
+            state.cursorPosY = state.cursorPosY + 26
+        end,
         PushStyleColor = function(...)
             table.insert(state.pushStyleColorCalls, { ... })
         end,
@@ -74,6 +84,7 @@ local function makeBasicImgui()
         end,
         NewLine = function()
             state.newLineCalls = state.newLineCalls + 1
+            state.cursorPosY = state.cursorPosY + 26
         end,
         IsItemHovered = function() return false end,
         SetTooltip = function() end,
@@ -94,33 +105,54 @@ local function makeBasicImgui()
         GetCursorPosX = function()
             return state.cursorPosX
         end,
+        GetCursorPosY = function()
+            return state.cursorPosY
+        end,
         GetStyle = function()
             return {
                 FramePadding = { x = 4, y = 3 },
                 ItemSpacing = { x = 8, y = 4 },
             }
         end,
+        GetFrameHeightWithSpacing = function()
+            return 26
+        end,
         ImGuiCol = {
             Text = 1,
         },
+        SetCursorPos = function(x, y)
+            state.cursorPosX = x
+            state.cursorPosY = y
+            table.insert(state.setCursorPosCalls, { x = x, y = y })
+            table.insert(state.cursorEvents, { kind = "xy", x = x, y = y })
+        end,
         SetCursorPosX = function(x)
             state.cursorPosX = x
             table.insert(state.setCursorPosXCalls, x)
+            table.insert(state.cursorEvents, { kind = "x", x = x, y = state.cursorPosY })
+        end,
+        SetCursorPosY = function(y)
+            state.cursorPosY = y
+            table.insert(state.cursorEvents, { kind = "y", x = state.cursorPosX, y = y })
         end,
         InputText = function(label, current, maxLen)
             table.insert(state.inputTextCalls, { label = label, current = current, maxLen = maxLen })
             local nextResponse = table.remove(state.inputTextResponses, 1)
             if type(nextResponse) == "table" then
+                state.cursorPosY = state.cursorPosY + 26
                 return nextResponse.value, nextResponse.changed == true
             end
             if nextResponse ~= nil then
+                state.cursorPosY = state.cursorPosY + 26
                 return nextResponse, tostring(nextResponse) ~= tostring(current or "")
             end
+            state.cursorPosY = state.cursorPosY + 26
             return current, false
         end,
         Button = function(label)
             table.insert(state.buttonLabels, label)
             local nextResponse = table.remove(state.buttonResponses, 1)
+            state.cursorPosY = state.cursorPosY + 26
             return nextResponse == true
         end,
         BeginTabBar = function(id)
@@ -160,6 +192,26 @@ local function makeBasicImgui()
     }
 
     return imgui
+end
+
+local function getCursorXs(imgui)
+    local xs = {}
+    for _, event in ipairs(imgui._state.cursorEvents or {}) do
+        if type(event) == "table" and type(event.x) == "number" then
+            xs[#xs + 1] = event.x
+        end
+    end
+    return xs
+end
+
+local function sawCursorPosition(imgui, x, y)
+    for _, event in ipairs(imgui._state.cursorEvents or {}) do
+        if type(event) == "table" and event.kind == "xy"
+            and event.x == x and event.y == y then
+            return true
+        end
+    end
+    return false
 end
 
 TestStorageTypes = {}
@@ -244,7 +296,7 @@ function TestUiNodes:testCheckboxCanUseControlSlotGeometry()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 120)
+    lu.assertTrue(sawCursorPosition(imgui, 120, 0))
 end
 
 function TestUiNodes:testTextWidgetCanUseValueSlotGeometryAndColor()
@@ -270,8 +322,8 @@ function TestUiNodes:testTextWidgetCanUseValueSlotGeometryAndColor()
     lu.assertFalse(changed)
     lu.assertEquals(#coloredCalls, 1)
     lu.assertEquals(coloredCalls[1].text, "Epic")
-    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 20)
-    lu.assertEquals(imgui._state.setCursorPosXCalls[2], 54)
+    lu.assertTrue(sawCursorPosition(imgui, 20, 0))
+    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 54)
 end
 
 
@@ -417,7 +469,7 @@ function TestUiNodes:testInputTextWidgetWritesTransientAliasAndUsesStorageMaxLen
     lu.assertTrue(changed)
     lu.assertEquals(store.uiState.get("FilterText"), "Apollo")
     lu.assertEquals(imgui._state.inputTextCalls[1].maxLen, 64)
-    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 120)
+    lu.assertTrue(sawCursorPosition(imgui, 120, 0))
     lu.assertEquals(imgui._state.pushItemWidths[1], 180)
 end
 
@@ -961,11 +1013,11 @@ function TestUiNodes:testPanelLayoutCanPlaceChildrenIntoColumnsAndLines()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertEquals(imgui._state.newLineCalls, 1)
+    lu.assertEquals(imgui._state.newLineCalls, 0)
 
     local saw0 = false
     local saw120 = false
-    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+    for _, x in ipairs(getCursorXs(imgui)) do
         if x == 0 then
             saw0 = true
         elseif x == 120 then
@@ -1225,7 +1277,7 @@ function TestUiNodes:testVerticalTabsLayoutSelectsAndRendersActiveChild()
     lu.assertEquals(imgui._state.beginChildren[1].id, "ExampleVerticalTabs##tabs")
     lu.assertEquals(imgui._state.beginChildren[1].width, 220)
     lu.assertEquals(imgui._state.beginChildren[2].id, "ExampleVerticalTabs##detail")
-    lu.assertEquals(imgui._state.sameLineCalls, 1)
+    lu.assertEquals(imgui._state.sameLineCalls, 0)
     lu.assertEquals(imgui._state.endChildCalls, 2)
     lu.assertTrue(imgui._state.selectableCalls[1].selected)
     lu.assertFalse(imgui._state.selectableCalls[2].selected)
@@ -1288,8 +1340,8 @@ function TestUiNodes:testDropdownGeometryControlsStartAndWidth()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState, 300)
 
     lu.assertFalse(changed)
-    lu.assertEquals(imgui._state.sameLineCalls, 1)
-    lu.assertEquals(imgui._state.setCursorPosXCalls[1], 232)
+    lu.assertEquals(imgui._state.sameLineCalls, 0)
+    lu.assertTrue(sawCursorPosition(imgui, 232, 0))
     lu.assertEquals(imgui._state.pushItemWidths[1], 180)
 end
 
@@ -1395,12 +1447,13 @@ function TestUiNodes:testSteppedRangeGeometryAppliesWithoutLabel()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertTrue(#imgui._state.setCursorPosXCalls >= 5)
+    local cursorXs = getCursorXs(imgui)
+    lu.assertTrue(#cursorXs >= 7)
     local sawCenteredFirstValue = false
     local sawFirstValueStart = false
     local sawFirstIncrementStart = false
     local sawSeparatorStart = false
-    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+    for _, x in ipairs(cursorXs) do
         if x == 40 then
             sawFirstValueStart = true
         end
@@ -1422,7 +1475,7 @@ function TestUiNodes:testSteppedRangeGeometryAppliesWithoutLabel()
     local sawSecondValueStart = false
     local sawCenteredSecondValue = false
     local sawSecondIncrementStart = false
-    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+    for _, x in ipairs(cursorXs) do
         if x == 236 then
             sawSecondControlStart = true
         end
@@ -1503,7 +1556,8 @@ function TestUiNodes:testStepperCentersValueWithinExplicitValueWidth()
     local sawValueStart = false
     local sawCenteredValue = false
     local sawIncrementStart = false
-    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+    local cursorXs = getCursorXs(imgui)
+    for _, x in ipairs(cursorXs) do
         if x == 24 then
             sawValueStart = true
         end
@@ -1547,11 +1601,13 @@ function TestUiNodes:testStepperGeometrySortsSlotsByLineThenStart()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertTrue(imgui._state.newLineCalls >= 1)
+    lu.assertEquals(imgui._state.newLineCalls, 0)
+    lu.assertTrue(sawCursorPosition(imgui, 24, 26))
+    lu.assertTrue(sawCursorPosition(imgui, 60, 26))
 
     local first24 = nil
     local first60 = nil
-    for index, x in ipairs(imgui._state.setCursorPosXCalls) do
+    for index, x in ipairs(getCursorXs(imgui)) do
         if x == 24 and first24 == nil then
             first24 = index
         elseif x == 60 and first60 == nil then
@@ -1591,13 +1647,15 @@ function TestUiNodes:testRadioGeometryCanLayOutOptionsAcrossLines()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertTrue(imgui._state.newLineCalls >= 2)
+    lu.assertEquals(imgui._state.newLineCalls, 0)
+    lu.assertTrue(sawCursorPosition(imgui, 0, 26))
+    lu.assertTrue(sawCursorPosition(imgui, 80, 26))
 
     local first0 = nil
     local first80 = nil
     local second0 = nil
     local second80 = nil
-    for _, x in ipairs(imgui._state.setCursorPosXCalls) do
+    for _, x in ipairs(getCursorXs(imgui)) do
         if x == 0 then
             if first0 == nil then
                 first0 = true

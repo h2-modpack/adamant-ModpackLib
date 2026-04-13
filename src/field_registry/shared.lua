@@ -106,6 +106,22 @@ end
 
 registry.GetCursorPosXSafe = GetCursorPosXSafe
 
+local function GetCursorPosYSafe(imgui)
+    local value = imgui.GetCursorPosY()
+    if type(value) == "number" then
+        return value
+    end
+    return 0
+end
+
+registry.GetCursorPosYSafe = GetCursorPosYSafe
+
+local function SetCursorPosSafe(imgui, x, y)
+    imgui.SetCursorPos(x, y)
+end
+
+registry.SetCursorPosSafe = SetCursorPosSafe
+
 local function BuildSlotSet(widgetType)
     if type(widgetType) ~= "table" or type(widgetType.slots) ~= "table" then
         return {}
@@ -275,12 +291,53 @@ end
 
 registry.GetStyleMetricX = GetStyleMetricX
 
+local function GetStyleMetricY(style, key, fallback)
+    local metric = style and style[key]
+    if type(metric) == "table" and type(metric.y) == "number" then
+        return metric.y
+    end
+    return fallback
+end
+
+registry.GetStyleMetricY = GetStyleMetricY
+
 local function CalcTextWidth(imgui, text)
     local width = imgui.CalcTextSize(tostring(text or ""))
     return type(width) == "number" and width or 0
 end
 
 registry.CalcTextWidth = CalcTextWidth
+
+local function EstimateStructuredRowAdvanceY(imgui)
+    local value = imgui.GetFrameHeightWithSpacing()
+    if type(value) == "number" and value > 0 then
+        return value
+    end
+    value = imgui.GetTextLineHeightWithSpacing()
+    if type(value) == "number" and value > 0 then
+        return value
+    end
+    local style = imgui.GetStyle()
+    local framePaddingY = type(style) == "table" and GetStyleMetricY(style, "FramePadding", 3) or 3
+    local itemSpacingY = type(style) == "table" and GetStyleMetricY(style, "ItemSpacing", 4) or 4
+    return 16 + framePaddingY * 2 + itemSpacingY
+end
+
+registry.EstimateStructuredRowAdvanceY = EstimateStructuredRowAdvanceY
+
+local function DrawStructuredAt(imgui, startX, startY, fallbackHeight, drawFn)
+    SetCursorPosSafe(imgui, startX, startY)
+    local changed = drawFn() == true
+    local endX = GetCursorPosXSafe(imgui)
+    local endY = GetCursorPosYSafe(imgui)
+    local consumedHeight = endY - startY
+    if type(consumedHeight) ~= "number" or consumedHeight <= 0 then
+        consumedHeight = fallbackHeight
+    end
+    return changed, endX, endY, consumedHeight
+end
+
+registry.DrawStructuredAt = DrawStructuredAt
 
 local function ShowPreparedTooltip(imgui, node)
     if node and node._hasTooltip == true and imgui.IsItemHovered() then
@@ -367,6 +424,8 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
 
     local changed = false
     rowStart = rowStart or GetCursorPosXSafe(imgui)
+    local rowStartY = GetCursorPosYSafe(imgui)
+    local defaultRowAdvance = EstimateStructuredRowAdvanceY(imgui)
     local renderSlots = type(node) == "table" and node._renderSlotCache or nil
     if type(renderSlots) ~= "table" then
         renderSlots = {}
@@ -401,6 +460,8 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
     local orderedPositions = GetOrderedSlotPositions(node, renderSlots)
 
     local currentLine = nil
+    local currentRowY = rowStartY
+    local currentRowAdvance = defaultRowAdvance
 
     for _, position in ipairs(orderedPositions) do
         local entry = renderSlots[position]
@@ -420,29 +481,47 @@ local function DrawWidgetSlots(imgui, node, slots, rowStart)
 
             if currentLine ~= entry.line then
                 if currentLine ~= nil then
-                    imgui.NewLine()
+                    currentRowY = currentRowY + currentRowAdvance
                 end
                 currentLine = entry.line
-            elseif slot.sameLine ~= false then
+                currentRowAdvance = defaultRowAdvance
+            elseif slot.sameLine ~= false and type(entry.start) ~= "number" then
                 imgui.SameLine()
             end
 
+            local slotX = type(entry.start) == "number" and (rowStart + entry.start) or GetCursorPosXSafe(imgui)
             if type(entry.start) == "number" then
-                imgui.SetCursorPosX(rowStart + entry.start)
+                merged.start = entry.start
             end
-            if type(entry.width) == "number" and entry.width > 0 then
-                imgui.PushItemWidth(entry.width)
-            end
-            imgui.PushID((slot.name or "slot") .. "_" .. tostring(entry.index))
-            if slot.draw(imgui, merged, rowStart) then
+            local slotChanged, nextX, _, consumedAdvance = DrawStructuredAt(
+                imgui,
+                slotX,
+                currentRowY,
+                defaultRowAdvance,
+                function()
+                    if type(entry.width) == "number" and entry.width > 0 then
+                        imgui.PushItemWidth(entry.width)
+                    end
+                    imgui.PushID((slot.name or "slot") .. "_" .. tostring(entry.index))
+                    local drewChanged = slot.draw(imgui, merged, rowStart) == true
+                    imgui.PopID()
+                    if type(entry.width) == "number" and entry.width > 0 then
+                        imgui.PopItemWidth()
+                    end
+                    return drewChanged
+                end)
+            if slotChanged then
                 changed = true
             end
-            imgui.PopID()
-            if type(entry.width) == "number" and entry.width > 0 then
-                imgui.PopItemWidth()
+            if consumedAdvance > currentRowAdvance then
+                currentRowAdvance = consumedAdvance
             end
+
+            SetCursorPosSafe(imgui, nextX, currentRowY)
         end
     end
+
+    SetCursorPosSafe(imgui, rowStart, currentRowY + currentRowAdvance)
     return changed
 end
 

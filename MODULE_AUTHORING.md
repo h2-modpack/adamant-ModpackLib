@@ -204,6 +204,11 @@ Rules:
 Supported public UI entrypoints:
 - `public.DrawQuickContent(ui, uiState, theme)`
 - `public.DrawTab(ui, uiState, theme)`
+- optional special-module orchestration hooks:
+  - `public.BeforeDrawQuickContent(ui, uiState, theme)`
+  - `public.AfterDrawQuickContent(ui, uiState, theme, changed)`
+  - `public.BeforeDrawTab(ui, uiState, theme)`
+  - `public.AfterDrawTab(ui, uiState, theme, changed)`
 
 If `public.DrawTab` is absent and `definition.ui` exists, Lib can render `definition.ui` automatically.
 
@@ -217,12 +222,19 @@ local specialUi = lib.standaloneSpecialUI(
     {
         getDrawQuickContent = function() return public.DrawQuickContent end,
         getDrawTab = function() return public.DrawTab end,
+        getBeforeDrawTab = function() return public.BeforeDrawTab end,
+        getAfterDrawTab = function() return public.AfterDrawTab end,
     }
 )
 
 rom.gui.add_imgui(specialUi.renderWindow)
 rom.gui.add_to_menu_bar(specialUi.addMenuBar)
 ```
+
+Use these hooks for special-module orchestration that should stay outside widget/layout definitions, for example:
+- pre-draw derived-text refresh
+- post-draw reactions to active root or active tab changes
+- module-local cache invalidation after a real UI change
 
 ## Storage Authoring
 
@@ -261,6 +273,33 @@ Derived display text:
 - use transient string aliases plus `lib.runDerivedText(...)` when a plain `text` widget should display computed summaries, empty-state messages, or status lines
 - keep the compute logic module-side; Lib only provides the lightweight refresh helper
 - this helper is intentionally string-only and should not be used to drive dynamic widget or layout structure
+
+### Cache conventions
+
+Lib now uses caching actively, but cache ownership is intentionally split:
+
+- Lib-owned mechanical caches:
+  - prepared-node metadata
+  - bound caches
+  - slot/panel order caches
+  - internal merged-registry caches
+- module-owned semantic caches:
+  - prepared node trees cached with `lib.getCachedPreparedNode(...)`
+  - derived-text caches passed to `lib.runDerivedText(...)`
+  - domain summaries, selector labels, and other module-specific memoized values
+
+Authoring rules:
+- cache reusable prepared node subtrees when rebuilding them every frame would be wasteful
+- keep signature design module-side; Lib should not infer semantic invalidation for you
+- change the cache signature when the rendered structure meaningfully changes
+- use explicit invalidation when cached semantic summaries or labels become stale because domain data changed outside the builder signature path
+- keep long-lived semantic caches on module-owned tables, not on transient local draw variables
+- treat node-attached Lib caches as mechanical implementation detail; module code should not invalidate or depend on them directly
+
+Practical split:
+- use `lib.getCachedPreparedNode(...)` for reusable prepared UI trees
+- use `lib.runDerivedText(...)` with a caller-owned cache for derived display strings
+- keep one-off function-local lookup caches local when they only save repeated reads within a single computation
 
 ### Packed storage
 
@@ -373,6 +412,17 @@ Custom layout `render(...)` always receives `drawChild`.
 Simple layouts can ignore it and return just `open`.
 Layouts that want to own child placement should declare `handlesChildren = true`, return `open, changed`, and call `drawChild(child)` themselves.
 
+Structured rendering contract:
+- parents/layouts assign child start positions
+- structured children should begin rendering from that assigned start
+- structured children should leave the cursor settled at the bottom of the space they consumed before returning
+- Lib uses that settled end position as the parent footprint signal
+
+Leaf-widget rule:
+- widgets should be treated as leaf renderers by default
+- widget-local immediate-mode composition is fine when it stays self-contained inside the widget
+- recursively drawing another full structured widget/layout from inside a widget should be treated as an exception, not the normal pattern
+
 Built-in widgets may also accept a widget-local `geometry` bag for manual horizontal placement.
 Geometry is now expressed through `geometry.slots`, where each slot descriptor may declare:
 - `name`
@@ -382,6 +432,7 @@ Geometry is now expressed through `geometry.slots`, where each slot descriptor m
 - `align`
 
 `line` defaults to `1` and must be a positive integer when present.
+`line` is the public vertical placement surface. Lib resolves row `y` internally; raw `y` is not part of the authoring contract.
 `start` is relative to the current row origin after any `indent`.
 `width` must be positive when present.
 `align` may be `center` or `right` and requires an explicit `width`.
@@ -413,6 +464,8 @@ Meaningful built-in slot intent:
 
 Tabbed layout presentation:
 - `horizontalTabs` / `verticalTabs` children may declare `tabLabelColor = { r, g, b }` or `{ r, g, b, a }` to color the child tab label
+
+`panel` and `verticalTabs` now own internal row/pane positioning explicitly. Module authors still describe vertical structure with `line` and tree shape rather than raw `y`.
 
 ### `steppedRange`
 

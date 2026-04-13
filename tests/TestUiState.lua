@@ -304,6 +304,37 @@ function TestUiState:testRunUiStatePassIgnoresTransientOnlyEdits()
     lu.assertEquals(store.uiState.view.FilterText, "Apollo")
 end
 
+function TestUiState:testRunUiStatePassCallsBeforeAndAfterDrawWithChangedFlag()
+    local config = { Enabled = false }
+    local store = lib.createStore(config, makeTransientDefinition())
+    local calls = {}
+
+    local changed = lib.runUiStatePass({
+        uiState = store.uiState,
+        beforeDraw = function(_, uiState)
+            calls[#calls + 1] = "before"
+            uiState.set("FilterText", "Apollo")
+        end,
+        draw = function(_, uiState)
+            calls[#calls + 1] = "draw"
+            uiState.set("FilterMode", "enabled")
+            return true
+        end,
+        afterDraw = function(_, uiState, _, drawChanged)
+            calls[#calls + 1] = drawChanged and "after:true" or "after:false"
+            uiState.set("SummaryText", uiState.view.FilterText .. ":" .. uiState.view.FilterMode)
+        end,
+        commit = function()
+            calls[#calls + 1] = "commit"
+            return true, nil
+        end,
+    })
+
+    lu.assertFalse(changed)
+    lu.assertEquals(calls, { "before", "draw", "after:true" })
+    lu.assertEquals(store.uiState.view.SummaryText, "Apollo:enabled")
+end
+
 function TestUiState:testRunDerivedTextUpdatesTransientStringAlias()
     local config = { Enabled = false }
     local store = lib.createStore(config, makeTransientDefinition())

@@ -170,6 +170,7 @@ Each slot descriptor may declare:
 - `align`
 
 `line` defaults to `1` and must be a positive integer when present.
+`line` is the public vertical placement surface. Lib resolves row `y` internally; raw `y` is not part of the geometry contract.
 `start` is relative to the current row origin after any `indent`.
 `width` must be positive when present.
 `align` may be `center` or `right` and requires an explicit `width`.
@@ -349,6 +350,7 @@ Rules:
 - child `panel.key` provides a stable identity for the child within the panel
 
 `panel` positions children row-by-row.
+`panel.line` remains the public vertical descriptor. Lib resolves explicit internal row `y` values and settles row advancement after each rendered child group.
 
 `horizontalTabs` is a thin layout wrapper over ImGui tab bars:
 
@@ -411,6 +413,7 @@ Rules:
 - child `tabId` is optional and, when present, is used as the stable internal active-tab key
 - `verticalTabs` keeps its current active child on the prepared node and defaults to the first child when no active tab has been chosen yet
 - `verticalTabs` owns child rendering and only draws the active child in the detail pane
+- `verticalTabs` uses explicit internal pane positioning; callers still describe structure declaratively rather than supplying raw `y`
 
 ## Binding Rules
 
@@ -566,6 +569,18 @@ Rules:
 - simple layouts may ignore `drawChild` and return just `open`
 - layouts with `handlesChildren = true` should return `open, changed`
 - layouts with `handlesChildren = true` should call `drawChild(child)` themselves and report child changes through `changed`
+
+Structured rendering contract:
+- parents/layouts assign child start positions
+- structured children should begin rendering from that assigned start
+- structured children should leave the cursor settled at the bottom of the space they consumed before returning
+- Lib uses that settled end position as the parent footprint signal
+- this contract applies to Lib-managed slot rendering, `panel`, `verticalTabs`, and custom layouts that own child placement
+
+Leaf-widget rule:
+- widgets should be treated as leaf renderers by default
+- widget-local immediate-mode composition is fine when it stays self-contained inside the widget
+- recursively drawing another full structured widget/layout from inside a widget should be treated as an exception, not the default authoring model
 
 Custom widgets may stay fully imperative, but widgets that declare `slots` and `defaultGeometry` can call `lib.drawWidgetSlots(...)` from inside `draw(...)` to reuse Lib-managed slot ordering and geometry merging.
 

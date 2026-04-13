@@ -211,6 +211,11 @@ Supports:
 - layout recursion through `children`
 - module-local custom widget/layout registries through `customTypes`
 
+Contract:
+- pass prepared nodes created through `lib.prepareUiNode(...)` / `lib.prepareUiNodes(...)`
+- Lib owns structured child start positions during draw
+- structured children are expected to settle the cursor at the bottom of the space they consumed before returning
+
 ### `lib.drawUiTree(imgui, nodes, uiState, width?, customTypes?)`
 
 Draws an ordered UI node list.
@@ -222,6 +227,8 @@ Public helper for custom widget `draw(...)` implementations that want Lib-manage
 Behavior:
 - uses the prepared slot geometry from `node.geometry`
 - defaults `rowStart` to the current cursor X
+- keeps `line` as the public vertical descriptor; actual row `y` is resolved internally by Lib
+- slots with explicit `start` use explicit positioning; slots without `start` may still use inline horizontal flow within the resolved row
 - returns `true` if any slot draw returns `true`
 
 ### `lib.alignSlotContent(imgui, slot, contentWidth)`
@@ -305,6 +312,8 @@ Custom layout `render(...)` contract:
 - when `handlesChildren = true`, `render(...)` should return `open, changed`
 - when `handlesChildren = true`, the layout owns child rendering and should call `drawChild(child)` itself
 - when `handlesChildren = true`, `changed` must include any child-driven state change
+- Lib-managed structured layouts assign child start positions explicitly; custom layouts that own child placement should preserve the same rule
+- child widgets/layouts should settle the cursor at the bottom of the space they consumed before control returns to the parent layout
 
 ## Widget Geometry
 
@@ -342,6 +351,7 @@ Behavior:
 - `geometry.slots` is a list of slot descriptors
 - each slot descriptor may declare `name`, `line`, `start`, `width`, and `align`
 - `line` defaults to `1` and must be a positive integer when present
+- `line` is the public vertical placement surface; Lib resolves it to explicit internal row `y`
 - `start` is relative to the current row origin after any `indent`
 - `width` must be positive when present
 - `align` may be `center` or `right` and requires an explicit `width`
@@ -410,9 +420,17 @@ Runs one draw pass for managed alias-backed state and flushes or commits if dirt
 
 Important options:
 - `uiState`
+- `beforeDraw(imgui, uiState, theme)` optional pre-draw hook
 - `draw(imgui, uiState, theme)`
+- `afterDraw(imgui, uiState, theme, changed)` optional post-draw hook
 - `commit(uiState)` optional transactional commit hook
 - `onFlushed()` optional success callback
+
+Behavior:
+- `beforeDraw(...)` runs before `draw(...)`
+- `draw(...)` may return `true` to indicate a meaningful UI change during that draw pass
+- `afterDraw(...)` runs after `draw(...)` and receives that boolean `changed` signal
+- `beforeDraw(...)` and `afterDraw(...)` may still stage `uiState` changes; commit/flush handling runs after both hooks complete
 
 ### `lib.runDerivedText(uiState, entries, cache?)`
 
@@ -442,9 +460,36 @@ Behavior:
 - values are normalized with `tostring(...)`
 - `signature(uiState)` may be used to skip recomputation when inputs are unchanged
 - `cache` is caller-owned and optional
+- when a cache is used, the caller owns its lifecycle and invalidation boundary; changing the derived-text entry set or meaningfully changing `signature(...)` inputs should produce a new signature value or a fresh cache
 - only writes `uiState.set(alias, value)` when the derived text changed
 
 This helper is intentionally limited to string display state. It is not a general reactive widget or layout system.
+
+### `lib.getCachedPreparedNode(cacheEntry, signature, buildFn, opts?)`
+
+Reusable prepared-node cache helper for special modules and other caller-owned UI builders.
+
+Returns:
+- `cacheEntry`
+- `node`
+- `rebuilt`
+- `previousNode`
+
+Behavior:
+- if `cacheEntry.signature == signature` and `cacheEntry.node` exists, returns the cached prepared node unchanged
+- otherwise calls `buildFn(previousNode)` to produce the next node
+- if `opts.reuseState(node, previousNode)` is provided, it runs after rebuild so caller-owned node state can be copied forward explicitly
+- the caller owns the cache table, signature contents, and invalidation boundary
+
+Cache ownership convention:
+- Lib owns mechanical caches attached to prepared nodes and internal helper tables
+- modules own semantic cache signatures and invalidation policy
+- change the signature when the rendered structure meaningfully changes
+- use explicit invalidation when cached semantic summaries or labels become stale because underlying domain data changed outside the node-builder path
+
+Typical use:
+- cache prepared tab trees, panels, and other reusable node subtrees in special modules
+- preserve small pieces of caller-owned UI state through `reuseState(...)` when rebuild is necessary
 
 ### `lib.commitUiState(def, store, uiState)`
 
@@ -586,6 +631,20 @@ Returns a menu-bar callback for regular modules running without a coordinator.
 Returns `{ renderWindow, addMenuBar }` for special modules running without a coordinator.
 
 If `def.ui` exists and no custom `DrawTab` is supplied, the helper renders `def.ui` automatically.
+
+Supported optional hook accessors:
+- `getBeforeDrawQuickContent()`
+- `getAfterDrawQuickContent()`
+- `getBeforeDrawTab()`
+- `getAfterDrawTab()`
+
+Static hook options are also accepted:
+- `beforeDrawQuickContent`
+- `afterDrawQuickContent`
+- `beforeDrawTab`
+- `afterDrawTab`
+
+These hooks are forwarded into `lib.runUiStatePass(...)` for the quick-content and tab passes respectively.
 
 ## Path Helpers
 

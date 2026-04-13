@@ -283,7 +283,18 @@ function public.runUiStatePass(opts)
         end
         return false
     end
-    draw(opts.imgui or rom.ImGui, uiState, opts.theme)
+    local imgui = opts.imgui or rom.ImGui
+    local beforeDraw = opts.beforeDraw
+    if type(beforeDraw) == "function" then
+        beforeDraw(imgui, uiState, opts.theme)
+    end
+
+    local drawChanged = draw(imgui, uiState, opts.theme) == true
+
+    local afterDraw = opts.afterDraw
+    if type(afterDraw) == "function" then
+        afterDraw(imgui, uiState, opts.theme, drawChanged)
+    end
 
     if uiState.isDirty() then
         if type(opts.commit) == "function" then
@@ -473,11 +484,39 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
         return opts.drawQuickContent
     end
 
+    local function getBeforeDrawQuickContent()
+        if type(opts.getBeforeDrawQuickContent) == "function" then
+            return opts.getBeforeDrawQuickContent()
+        end
+        return opts.beforeDrawQuickContent
+    end
+
+    local function getAfterDrawQuickContent()
+        if type(opts.getAfterDrawQuickContent) == "function" then
+            return opts.getAfterDrawQuickContent()
+        end
+        return opts.afterDrawQuickContent
+    end
+
     local function getDrawTab()
         if type(opts.getDrawTab) == "function" then
             return opts.getDrawTab()
         end
         return opts.drawTab
+    end
+
+    local function getBeforeDrawTab()
+        if type(opts.getBeforeDrawTab) == "function" then
+            return opts.getBeforeDrawTab()
+        end
+        return opts.beforeDrawTab
+    end
+
+    local function getAfterDrawTab()
+        if type(opts.getAfterDrawTab) == "function" then
+            return opts.getAfterDrawTab()
+        end
+        return opts.afterDrawTab
     end
 
     local function onStateFlushed()
@@ -523,7 +562,11 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
             end
 
             local drawQuickContent = getDrawQuickContent()
+            local beforeDrawQuickContent = getBeforeDrawQuickContent()
+            local afterDrawQuickContent = getAfterDrawQuickContent()
             local drawTab = getDrawTab()
+            local beforeDrawTab = getBeforeDrawTab()
+            local afterDrawTab = getAfterDrawTab()
             if not drawTab and type(def.ui) == "table" and #def.ui > 0 then
                 drawTab = function(ui)
                     public.drawUiTree(ui, def.ui, uiState, ui.GetWindowWidth() * 0.4, def.customTypes)
@@ -544,7 +587,9 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
                     commit = function(state)
                         return public.commitUiState(def, store, state)
                     end,
+                    beforeDraw = beforeDrawQuickContent,
                     draw = drawQuickContent,
+                    afterDraw = afterDrawQuickContent,
                     onFlushed = onStateFlushed,
                 })
             end
@@ -563,7 +608,9 @@ function public.standaloneSpecialUI(def, store, uiState, opts)
                     commit = function(state)
                         return public.commitUiState(def, store, state)
                     end,
+                    beforeDraw = beforeDrawTab,
                     draw = drawTab,
+                    afterDraw = afterDrawTab,
                     onFlushed = onStateFlushed,
                 })
             end
