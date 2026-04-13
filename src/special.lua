@@ -312,6 +312,69 @@ function public.runUiStatePass(opts)
     return false
 end
 
+function public.runDerivedText(uiState, entries, cache)
+    if not uiState or type(uiState.set) ~= "function" or type(uiState.view) ~= "table" then
+        if shared.libWarn then
+            shared.libWarn("runDerivedText: uiState is missing or malformed; pass skipped")
+        end
+        return false
+    end
+    if type(entries) ~= "table" then
+        return false
+    end
+
+    local changed = false
+    local derivedCache = type(cache) == "table" and cache or nil
+
+    for index, entry in ipairs(entries) do
+        local alias = type(entry) == "table" and entry.alias or nil
+        local compute = type(entry) == "table" and entry.compute or nil
+        if type(alias) ~= "string" or alias == "" then
+            if shared.libWarn then
+                shared.libWarn("runDerivedText: entries[%d].alias must be a non-empty string", index)
+            end
+        elseif type(compute) ~= "function" then
+            if shared.libWarn then
+                shared.libWarn("runDerivedText: entries[%d].compute must be a function", index)
+            end
+        else
+            local cached = derivedCache and derivedCache[alias] or nil
+            local currentValue = uiState.view[alias]
+            local signatureFn = entry.signature
+            local signature = nil
+            local useCachedValue = false
+
+            if type(signatureFn) == "function" then
+                signature = signatureFn(uiState)
+                if cached and cached.signature == signature then
+                    useCachedValue = true
+                end
+            end
+
+            local nextValue
+            if useCachedValue then
+                nextValue = cached.value
+            else
+                nextValue = tostring(compute(uiState) or "")
+            end
+
+            if currentValue ~= nextValue then
+                uiState.set(alias, nextValue)
+                changed = true
+            end
+
+            if derivedCache then
+                derivedCache[alias] = {
+                    signature = signature,
+                    value = nextValue,
+                }
+            end
+        end
+    end
+
+    return changed
+end
+
 function public.auditAndResyncUiState(name, uiState)
     if not uiState or type(uiState.collectConfigMismatches) ~= "function" or type(uiState.reloadFromConfig) ~= "function" then
         return {}

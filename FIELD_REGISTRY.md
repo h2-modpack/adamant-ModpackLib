@@ -375,6 +375,7 @@ Rules:
 Rules:
 - `id` is required and must be a non-empty string
 - each child must declare `tabLabel`
+- child `tabLabelColor = { r, g, b }` or `{ r, g, b, a }` is optional and colors that tab label only
 - child `tabId` is optional and, when present, is appended as `##<tabId>` to the rendered tab item label
 - `horizontalTabs` owns child rendering and only draws the child for the currently open tab item
 - v1 intentionally mirrors ImGui tab-bar behavior and does not introduce separate alias-backed selection state
@@ -406,6 +407,7 @@ Rules:
 - `id` is required and must be a non-empty string
 - `sidebarWidth` is optional and defaults to `180`
 - each child must declare `tabLabel`
+- child `tabLabelColor = { r, g, b }` or `{ r, g, b, a }` is optional and colors that tab label only
 - child `tabId` is optional and, when present, is used as the stable internal active-tab key
 - `verticalTabs` keeps its current active child on the prepared node and defaults to the first child when no active tab has been chosen yet
 - `verticalTabs` owns child rendering and only draws the active child in the detail pane
@@ -485,6 +487,7 @@ Lib hard-validates registry contracts through:
 - `inputText.control` is the meaningful width-bearing slot
 - `inputText.control` does not consume `align`
 - `dropdown` and `radio` expect direct choice storage backed by either `string` or `int`
+- `dropdown` and `radio` support optional `displayValues[value]` and `valueColors[value]` keyed by the declared choice values
 - `mappedDropdown` accepts any bound storage type and delegates preview/option semantics to callbacks
 - `mappedRadio` accepts any bound storage type and delegates option semantics to callbacks
 - `dropdown` and `radio` validate value lists and expect `node.values` entries to be strings or integers
@@ -509,9 +512,11 @@ Lib hard-validates registry contracts through:
 - expects `binds.value` to be an `int`-kind alias whose root type is explicitly `packedInt`
 - renders checkbox rows for the packed child aliases under that root
 - optionally accepts a string bind at `binds.filterText`; when present, only matching child labels are rendered
+- optionally accepts a string bind at `binds.filterMode`; supported values are `all`, `checked`, and `unchecked`
+- optional `valueColors[childAlias]` colors the rendered checkbox label for that packed child row
 - useful when a module wants a generic packed-flag checklist without hand-writing the child loop
-- visible children are those whose `label` contains the current filter text (case-insensitive substring match)
-- `item:N` geometry targets the visible filtered rows after compaction when filtering is active
+- visible children are those whose `label` contains the current filter text (case-insensitive substring match) and whose checked state matches the current filter mode
+- `item:N` geometry targets the visible rows after compaction when filtering is active
 
 ### `separator`
 - layout only

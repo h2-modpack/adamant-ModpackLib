@@ -207,7 +207,7 @@ Supports:
 - scalar widgets through `binds`
 - `steppedRange` through `binds.min` / `binds.max`
 - `packedCheckboxList` through packed child alias expansion
-- `packedCheckboxList` through packed child alias expansion and optional filter-string binding
+- `packedCheckboxList` through packed child alias expansion and optional filter binds (`filterText`, `filterMode`)
 - layout recursion through `children`
 - module-local custom widget/layout registries through `customTypes`
 
@@ -364,17 +364,21 @@ Built-in slot intent:
 - `inputText.label`: use `line` / `start`; `width` / `align` are not meaningful
 - `inputText.control`: use `line` / `start`; `width` is meaningful; `align` is not and currently warns
 - `dropdown.label`: use `line` / `start`; `width` / `align` are not meaningful
-- `dropdown.control`: use `line` / `start`; `width` is meaningful; `align` is not
+- `dropdown.control`: use `line` / `start`; `width` is meaningful; `align` is not; `displayValues` / `valueColors` affect rendered presentation only
 - `mappedDropdown.label`: use `line` / `start`; `width` / `align` are not meaningful
 - `mappedDropdown.control`: use `line` / `start`; `width` is meaningful; `align` is not
 - `mappedRadio.label`: use `line` / `start`; `width` / `align` are not meaningful
-- `radio.option:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn
+- `radio.option:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn; `displayValues` / `valueColors` affect rendered presentation only
 - `stepper.value`: use `line` / `start`; `width` + `align` are meaningful; `displayValues` / `valueColors` affect rendered presentation only
 - `stepper` button slots: use `line` / `start`; `width` / `align` are not meaningful
 - `steppedRange.min.value`, `steppedRange.max.value`: use `line` / `start`; `width` + `align` are meaningful
 - `steppedRange.separator`: use `line` / `start`; `width` + `align` are meaningful
 - `steppedRange` button slots: use `line` / `start`; `width` / `align` are not meaningful
-- `packedCheckboxList.item:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn
+- `packedCheckboxList.item:N`: use `line` / `start`; `width` / `align` are not meaningful and currently warn; optional `filterText`, `filterMode`, and `valueColors[childAlias]` affect which packed rows render and how their labels are styled
+
+Text/tab presentation:
+- `text.color = { r, g, b }` or `{ r, g, b, a }` colors a single rendered text node
+- `horizontalTabs` and `verticalTabs` children may declare `tabLabelColor = { r, g, b }` or `{ r, g, b, a }` to color that child tab label
 
 ## Managed UI State
 
@@ -409,6 +413,38 @@ Important options:
 - `draw(imgui, uiState, theme)`
 - `commit(uiState)` optional transactional commit hook
 - `onFlushed()` optional success callback
+
+### `lib.runDerivedText(uiState, entries, cache?)`
+
+Runs a lightweight derived-text pass for transient string aliases.
+
+Use this for:
+- summaries
+- empty-state messages
+- status lines
+
+Entry shape:
+
+```lua
+{
+    alias = "SummaryText",
+    compute = function(uiState)
+        return "Current: " .. tostring(uiState.view.Mode)
+    end,
+    signature = function(uiState)
+        return uiState.view.Mode
+    end, -- optional
+}
+```
+
+Behavior:
+- `compute(uiState)` returns the next text value
+- values are normalized with `tostring(...)`
+- `signature(uiState)` may be used to skip recomputation when inputs are unchanged
+- `cache` is caller-owned and optional
+- only writes `uiState.set(alias, value)` when the derived text changed
+
+This helper is intentionally limited to string display state. It is not a general reactive widget or layout system.
 
 ### `lib.commitUiState(def, store, uiState)`
 

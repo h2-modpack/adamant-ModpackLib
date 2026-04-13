@@ -20,6 +20,8 @@ local function makeBasicImgui()
         buttonLabels = {},
         inputTextCalls = {},
         textDisabledCalls = {},
+        pushStyleColorCalls = {},
+        popStyleColorCalls = 0,
         beginTabBars = {},
         beginTabItems = {},
         beginTabBarResponses = {},
@@ -58,6 +60,12 @@ local function makeBasicImgui()
             table.insert(state.textDisabledCalls, text)
         end,
         TextColored = function() end,
+        PushStyleColor = function(...)
+            table.insert(state.pushStyleColorCalls, { ... })
+        end,
+        PopStyleColor = function()
+            state.popStyleColorCalls = state.popStyleColorCalls + 1
+        end,
         CalcTextSize = function(text)
             return #(tostring(text or "")) * 8
         end,
@@ -92,6 +100,9 @@ local function makeBasicImgui()
                 ItemSpacing = { x = 8, y = 4 },
             }
         end,
+        ImGuiCol = {
+            Text = 1,
+        },
         SetCursorPosX = function(x)
             state.cursorPosX = x
             table.insert(state.setCursorPosXCalls, x)
@@ -263,6 +274,40 @@ function TestUiNodes:testTextWidgetCanUseValueSlotGeometryAndColor()
     lu.assertEquals(imgui._state.setCursorPosXCalls[2], 54)
 end
 
+
+function TestUiNodes:testTextWidgetRendersFromBoundStringAlias()
+    local definition = {
+        storage = {
+            { type = "string", alias = "StatusText", lifetime = "transient", default = "" },
+        },
+        ui = {
+            { type = "text", binds = { value = "StatusText" } },
+        },
+    }
+    local store = makeStore(definition, {})
+    local imgui = makeBasicImgui()
+    local textCalls = {}
+    imgui.Text = function(text) table.insert(textCalls, text) end
+
+    store.uiState.set("StatusText", "2/5 Banned")
+    lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+    lu.assertEquals(textCalls[1], "2/5 Banned")
+
+    store.uiState.set("StatusText", "0/5 Banned")
+    textCalls = {}
+    lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+    lu.assertEquals(textCalls[1], "0/5 Banned")
+end
+
+function TestUiNodes:testTextWidgetFallsBackToStaticTextWhenUnbound()
+    local imgui = makeBasicImgui()
+    local textCalls = {}
+    imgui.Text = function(text) table.insert(textCalls, text) end
+    local node = { type = "text", text = "Static Label" }
+    lib.prepareWidgetNode(node, "TextWidget")
+    lib.drawUiNode(imgui, node, { view = {} })
+    lu.assertEquals(textCalls[1], "Static Label")
+end
 
 function TestUiNodes:testButtonWidgetInvokesOnClickWithUiState()
     local definition = {
@@ -732,7 +777,7 @@ end
 function TestUiNodes:testPrepareWidgetNodeCachesSlotGeometryForDirectCustomWidget()
     local customTypes = {
         widgets = {
-            rarityBadge = {
+            customBadge = {
                 binds = { value = { storageType = "int" } },
                 slots = { "decrement", "value", "increment" },
                 defaultGeometry = {
@@ -748,7 +793,7 @@ function TestUiNodes:testPrepareWidgetNodeCachesSlotGeometryForDirectCustomWidge
         },
     }
     local node = {
-        type = "rarityBadge",
+        type = "customBadge",
     }
 
     lib.prepareWidgetNode(node, "DirectRarityBadge", customTypes)
@@ -799,7 +844,7 @@ end
 function TestUiNodes:testZeroBindCustomWidgetsGetDistinctFallbackImguiIds()
     local customTypes = {
         widgets = {
-            rarityBadge = {
+            customBadge = {
                 binds = {},
                 slots = { "value" },
                 validate = function() end,
@@ -810,8 +855,8 @@ function TestUiNodes:testZeroBindCustomWidgetsGetDistinctFallbackImguiIds()
             },
         },
     }
-    local nodeA = { type = "rarityBadge", text = "A" }
-    local nodeB = { type = "rarityBadge", text = "B" }
+    local nodeA = { type = "customBadge", text = "A" }
+    local nodeB = { type = "customBadge", text = "B" }
 
     lib.prepareWidgetNode(nodeA, "RarityBadgeA", customTypes)
     lib.prepareWidgetNode(nodeB, "RarityBadgeB", customTypes)
@@ -916,7 +961,7 @@ function TestUiNodes:testPanelLayoutCanPlaceChildrenIntoColumnsAndLines()
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
 
     lu.assertFalse(changed)
-    lu.assertEquals(imgui._state.newLineCalls, 0)
+    lu.assertEquals(imgui._state.newLineCalls, 1)
 
     local saw0 = false
     local saw120 = false
@@ -1020,6 +1065,35 @@ function TestUiNodes:testHorizontalTabsLayoutRendersOnlyActiveTabChild()
     lu.assertFalse(store.uiState.get("EnabledB"))
 end
 
+function TestUiNodes:testHorizontalTabsLayoutCanColorTabLabels()
+    local node = {
+        type = "horizontalTabs",
+        id = "ExampleTabs",
+        children = {
+            {
+                type = "text",
+                text = "First",
+                tabLabel = "First",
+                tabLabelColor = { 0.9, 0.5, 0.2, 1 },
+            },
+            {
+                type = "text",
+                text = "Second",
+                tabLabel = "Second",
+            },
+        },
+    }
+    lib.prepareUiNode(node, "HorizontalTabsColor", {})
+    local imgui = makeBasicImgui()
+    imgui._state.beginTabItemResponses = { false, false }
+
+    local changed = lib.drawUiNode(imgui, node, { view = {} })
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#imgui._state.pushStyleColorCalls, 1)
+    lu.assertEquals(imgui._state.popStyleColorCalls, 1)
+end
+
 function TestUiNodes:testVerticalTabsLayoutSelectsAndRendersActiveChild()
     local definition = {
         storage = {
@@ -1066,6 +1140,35 @@ function TestUiNodes:testVerticalTabsLayoutSelectsAndRendersActiveChild()
     lu.assertFalse(imgui._state.selectableCalls[2].selected)
     lu.assertTrue(store.uiState.get("EnabledA"))
     lu.assertFalse(store.uiState.get("EnabledB"))
+end
+
+function TestUiNodes:testVerticalTabsLayoutCanColorTabLabels()
+    local node = {
+        type = "verticalTabs",
+        id = "ExampleVerticalTabs",
+        children = {
+            {
+                type = "text",
+                text = "First",
+                tabLabel = "First",
+                tabLabelColor = { 0.2, 0.7, 0.3, 1 },
+            },
+            {
+                type = "text",
+                text = "Second",
+                tabLabel = "Second",
+            },
+        },
+    }
+    lib.prepareUiNode(node, "VerticalTabsColor", {})
+    local imgui = makeBasicImgui()
+    imgui._state.selectables = { false, false }
+
+    local changed = lib.drawUiNode(imgui, node, { view = {} })
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#imgui._state.pushStyleColorCalls, 1)
+    lu.assertEquals(imgui._state.popStyleColorCalls, 1)
 end
 
 function TestUiNodes:testDropdownGeometryControlsStartAndWidth()
@@ -1127,7 +1230,7 @@ function TestUiNodes:testDropdownCanBindIntChoiceValues()
         return true
     end
     imgui.Selectable = function(label)
-        return label == "Two"
+        return tostring(label):match("^Two##") ~= nil
     end
 
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
@@ -1135,6 +1238,36 @@ function TestUiNodes:testDropdownCanBindIntChoiceValues()
     lu.assertTrue(changed)
     lu.assertEquals(seenPreview, "One")
     lu.assertEquals(store.uiState.get("Mode"), 2)
+end
+
+function TestUiNodes:testDropdownCanApplyValueColorsToPreviewAndOptions()
+    local definition = {
+        storage = {
+            { type = "int", alias = "Mode", configKey = "Mode", default = 1, min = 0, max = 3 },
+        },
+        ui = {
+            {
+                type = "dropdown",
+                binds = { value = "Mode" },
+                values = { 0, 1, 2 },
+                displayValues = { [0] = "Off", [1] = "One", [2] = "Two" },
+                valueColors = {
+                    [1] = { 0.1, 0.2, 0.3, 1 },
+                    [2] = { 0.8, 0.7, 0.6, 1 },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Mode = 1 })
+    local imgui = makeBasicImgui()
+    imgui.BeginCombo = function() return true end
+    imgui.Selectable = function() return false end
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#imgui._state.pushStyleColorCalls, 3)
+    lu.assertEquals(imgui._state.popStyleColorCalls, 3)
 end
 
 function TestUiNodes:testSteppedRangeGeometryAppliesWithoutLabel()
@@ -1424,6 +1557,35 @@ function TestUiNodes:testRadioCanBindIntChoiceValues()
     lu.assertEquals(store.uiState.get("Mode"), 2)
 end
 
+function TestUiNodes:testRadioCanApplyValueColorsToOptions()
+    local definition = {
+        storage = {
+            { type = "int", alias = "Mode", configKey = "Mode", default = 1, min = 0, max = 3 },
+        },
+        ui = {
+            {
+                type = "radio",
+                binds = { value = "Mode" },
+                label = "",
+                values = { 0, 1, 2 },
+                displayValues = { [0] = "Off", [1] = "One", [2] = "Two" },
+                valueColors = {
+                    [1] = { 0.1, 0.2, 0.3, 1 },
+                    [2] = { 0.8, 0.7, 0.6, 1 },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Mode = 1 })
+    local imgui = makeBasicImgui()
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#imgui._state.pushStyleColorCalls, 2)
+    lu.assertEquals(imgui._state.popStyleColorCalls, 2)
+end
+
 function TestUiNodes:testPackedCheckboxListCanUseDeclaredItemSlots()
     local definition = {
         storage = {
@@ -1531,7 +1693,7 @@ function TestUiNodes:testMappedDropdownCanUseCustomPreviewAndSelectionMapping()
         return true
     end
     imgui.Selectable = function(label)
-        return label == "Force"
+        return tostring(label):match("^Force##") ~= nil
     end
 
     local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
@@ -1708,6 +1870,79 @@ function TestUiNodes:testPackedCheckboxListFiltersItemsByLabelSubstring()
     lu.assertEquals(#checkboxLabels, 2)
     lu.assertEquals(checkboxLabels[1], "Alpha")
     lu.assertEquals(checkboxLabels[2], "Gamma")
+end
+
+function TestUiNodes:testPackedCheckboxListFiltersItemsByCheckedState()
+    local definition = {
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Flags",
+                configKey = "Flags",
+                bits = {
+                    { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false, label = "Alpha" },
+                    { alias = "FlagB", offset = 1, width = 1, type = "bool", default = false, label = "Beta" },
+                    { alias = "FlagC", offset = 2, width = 1, type = "bool", default = false, label = "Gamma" },
+                },
+            },
+            { type = "string", alias = "FilterMode", configKey = "FilterMode", default = "all" },
+        },
+        ui = {
+            {
+                type = "packedCheckboxList",
+                binds = { value = "Flags", filterMode = "FilterMode" },
+            },
+        },
+    }
+    local store = makeStore(definition, { Flags = 5, FilterMode = "checked" })
+    local imgui = makeBasicImgui()
+    local checkboxLabels = {}
+    imgui.Checkbox = function(label, current)
+        checkboxLabels[#checkboxLabels + 1] = { label = label, current = current }
+        return current, false
+    end
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#checkboxLabels, 2)
+    lu.assertEquals(checkboxLabels[1].label, "Alpha")
+    lu.assertEquals(checkboxLabels[2].label, "Gamma")
+    lu.assertTrue(checkboxLabels[1].current)
+    lu.assertTrue(checkboxLabels[2].current)
+end
+
+function TestUiNodes:testPackedCheckboxListCanApplyAliasColors()
+    local definition = {
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Flags",
+                configKey = "Flags",
+                bits = {
+                    { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false, label = "Alpha" },
+                    { alias = "FlagB", offset = 1, width = 1, type = "bool", default = false, label = "Beta" },
+                },
+            },
+        },
+        ui = {
+            {
+                type = "packedCheckboxList",
+                binds = { value = "Flags" },
+                valueColors = {
+                    FlagB = { 0.2, 0.4, 0.6, 1 },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Flags = 0 })
+    local imgui = makeBasicImgui()
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertFalse(changed)
+    lu.assertEquals(#imgui._state.pushStyleColorCalls, 1)
+    lu.assertEquals(imgui._state.popStyleColorCalls, 1)
 end
 
 function TestUiNodes:testPackedCheckboxListRendersAllItemsWhenFilterBindIsOmitted()

@@ -550,6 +550,72 @@ function TestUiValidation:testStepperValueColorsMustBeColorTables()
     assertWarningContains("stepper valueColors[2] must be a 3- or 4-number color table")
 end
 
+function TestUiValidation:testDropdownValueColorsMustBeColorTables()
+    local storage = {
+        { type = "int", alias = "Mode", configKey = "Mode", default = 1, min = 0, max = 3 },
+    }
+    lib.validateStorage(storage, "DropdownValueColors")
+
+    lib.validateUi({
+        {
+            type = "dropdown",
+            binds = { value = "Mode" },
+            values = { 0, 1, 2 },
+            valueColors = {
+                [1] = "bad",
+            },
+        },
+    }, "DropdownValueColors", storage)
+
+    assertWarningContains("dropdown valueColors[1] must be a 3- or 4-number color table")
+end
+
+function TestUiValidation:testRadioValueColorsMustBeColorTables()
+    local storage = {
+        { type = "int", alias = "Mode", configKey = "Mode", default = 1, min = 0, max = 3 },
+    }
+    lib.validateStorage(storage, "RadioValueColors")
+
+    lib.validateUi({
+        {
+            type = "radio",
+            binds = { value = "Mode" },
+            values = { 0, 1, 2 },
+            valueColors = {
+                [1] = "bad",
+            },
+        },
+    }, "RadioValueColors", storage)
+
+    assertWarningContains("radio valueColors[1] must be a 3- or 4-number color table")
+end
+
+function TestUiValidation:testPackedCheckboxListValueColorsMustBeColorTables()
+    local storage = {
+        {
+            type = "packedInt",
+            alias = "PackedFlags",
+            configKey = "PackedFlags",
+            bits = {
+                { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false },
+            },
+        },
+    }
+    lib.validateStorage(storage, "PackedValueColors")
+
+    lib.validateUi({
+        {
+            type = "packedCheckboxList",
+            binds = { value = "PackedFlags" },
+            valueColors = {
+                FlagA = "bad",
+            },
+        },
+    }, "PackedValueColors", storage)
+
+    assertWarningContains("packedCheckboxList valueColors[FlagA] must be a 3- or 4-number color table")
+end
+
 function TestUiValidation:testValueAlignRequiresValueWidth()
     local storage = {
         { type = "int", alias = "Count", configKey = "Count", default = 2, min = 1, max = 5 },
@@ -1025,6 +1091,20 @@ function TestUiValidation:testHorizontalTabsRequiresIdAndChildTabLabels()
     assertWarningContains("horizontalTabs child tabId must be a non-empty string")
 end
 
+function TestUiValidation:testHorizontalTabsChildTabLabelColorMustBeColorTable()
+    lib.validateUi({
+        {
+            type = "horizontalTabs",
+            id = "Tabs",
+            children = {
+                { type = "text", text = "A", tabLabel = "First", tabLabelColor = "bad" },
+            },
+        },
+    }, "HorizontalTabsColorValidation", {})
+
+    assertWarningContains("horizontalTabs child tabLabelColor must be a 3- or 4-number color table")
+end
+
 function TestUiValidation:testVerticalTabsRequiresIdAndValidSidebarWidth()
     lib.validateUi({
         {
@@ -1041,4 +1121,18 @@ function TestUiValidation:testVerticalTabsRequiresIdAndValidSidebarWidth()
     assertWarningContains("verticalTabs sidebarWidth must be a positive number")
     assertWarningContains("verticalTabs child tabLabel must be a non-empty string")
     assertWarningContains("verticalTabs child tabId must be a non-empty string")
+end
+
+function TestUiValidation:testVerticalTabsChildTabLabelColorMustBeColorTable()
+    lib.validateUi({
+        {
+            type = "verticalTabs",
+            id = "Tabs",
+            children = {
+                { type = "text", text = "A", tabLabel = "First", tabLabelColor = "bad" },
+            },
+        },
+    }, "VerticalTabsColorValidation", {})
+
+    assertWarningContains("verticalTabs child tabLabelColor must be a 3- or 4-number color table")
 end

@@ -58,6 +58,47 @@ local function WarnIgnoredDynamicSlotKeys(prefix, geometry, pattern, keys, widge
     end
 end
 
+local function ValidateValueColorsTable(node, prefix, widgetName)
+    node._valueColors = nil
+    if node.valueColors == nil then
+        return
+    end
+    if type(node.valueColors) ~= "table" then
+        libWarn("%s: %s valueColors must be a table", prefix, widgetName)
+        return
+    end
+
+    local normalizedColors = {}
+    for key, color in pairs(node.valueColors) do
+        local normalized = NormalizeColor(color)
+        if normalized == nil then
+            libWarn("%s: %s valueColors[%s] must be a 3- or 4-number color table", prefix, widgetName, tostring(key))
+        else
+            normalizedColors[key] = normalized
+        end
+    end
+    node._valueColors = normalizedColors
+end
+
+local function DrawWithValueColor(imgui, color, drawFn)
+    if type(color) ~= "table" or type(imgui.PushStyleColor) ~= "function" or type(imgui.PopStyleColor) ~= "function" then
+        return drawFn()
+    end
+
+    local textEnum = imgui.ImGuiCol and imgui.ImGuiCol.Text or 0
+    imgui.PushStyleColor(textEnum, color[1], color[2], color[3], color[4])
+    local ok, a, b, c, d = pcall(drawFn)
+    imgui.PopStyleColor()
+    if not ok then
+        error(a)
+    end
+    return a, b, c, d
+end
+
+local function MakeSelectableId(label, uniqueId)
+    return tostring(label or "") .. "##" .. tostring(uniqueId or "")
+end
+
 local function CreateStepperSlotTemplate(node, options)
     options = options or {}
     local fastStep = node._fastStep
@@ -137,12 +178,12 @@ local function CreateStepperSlotTemplate(node, options)
             local renderedValue = ctx and ctx.renderedValue or NormalizeInteger(node, node.default)
             ctx.valueSlotStart = GetCursorPosXSafe(imgui)
             ctx.valueSlotWidth = slot.width
-            if node._lastStepperVal ~= renderedValue or node._lastStepperStr == nil then
+            if ctx._lastStepperVal ~= renderedValue or ctx._lastStepperStr == nil then
                 local displayValue = node.displayValues and node.displayValues[renderedValue]
-                node._lastStepperStr = tostring(displayValue ~= nil and displayValue or renderedValue)
-                node._lastStepperVal = renderedValue
+                ctx._lastStepperStr = tostring(displayValue ~= nil and displayValue or renderedValue)
+                ctx._lastStepperVal = renderedValue
             end
-            local valueText = node._lastStepperStr
+            local valueText = ctx._lastStepperStr
             AlignSlotContent(imgui, slot, CalcTextWidth(imgui, valueText))
             local color = node._valueColors and node._valueColors[renderedValue] or nil
             if type(color) == "table" then
@@ -249,7 +290,7 @@ WidgetTypes.checkbox = {
 }
 
 WidgetTypes.text = {
-    binds = {},
+    binds = { value = { storageType = "string", optional = true } },
     slots = { "value" },
     validate = function(node, prefix)
         if node.text ~= nil and type(node.text) ~= "string" then
@@ -283,7 +324,7 @@ WidgetTypes.text = {
             {
                 name = "value",
                 draw = function(imgui, slot)
-                    local text = node._text or ""
+                    local text = node._boundText ~= nil and tostring(node._boundText) or node._text or ""
                     local color = node._color
                     AlignSlotContent(imgui, slot, CalcTextWidth(imgui, text))
                     if type(color) == "table" then
@@ -297,7 +338,8 @@ WidgetTypes.text = {
             },
         }
     end,
-    draw = function(imgui, node)
+    draw = function(imgui, node, bound)
+        node._boundText = bound.value and bound.value:get() or nil
         return DrawWidgetSlots(imgui, node, node._textSlots, GetCursorPosXSafe(imgui))
     end,
 }
@@ -502,6 +544,7 @@ WidgetTypes.dropdown = {
         if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
             libWarn("%s: dropdown displayValues must be a table", prefix)
         end
+        ValidateValueColorsTable(node, prefix, "dropdown")
         PrepareWidgetText(node, node.binds and node.binds.value)
         local hasLabel = (node._label or "") ~= ""
         node._dropdownSlots = {
@@ -519,16 +562,33 @@ WidgetTypes.dropdown = {
                 sameLine = hasLabel,
                 draw = function(imgui)
                     local ctx = node._dropdownCtx or {}
-                    if imgui.BeginCombo(node._imguiId, ChoiceDisplay(node, ctx.previewValue or "")) then
-                        for index, candidate in ipairs(node.values or {}) do
-                            if imgui.Selectable(ChoiceDisplay(node, candidate), index == ctx.currentIdx) then
+                    local previewColor = node._valueColors and node._valueColors[ctx.previewValue] or nil
+                    local opened = DrawWithValueColor(imgui, previewColor, function()
+                        return imgui.BeginCombo(node._imguiId, ChoiceDisplay(node, ctx.previewValue or ""))
+                    end)
+                    ShowPreparedTooltip(imgui, node)
+                    if opened then
+                        local changed = false
+                        local pendingValue = nil
+                          for index, candidate in ipairs(node.values or {}) do
+                              local optionColor = node._valueColors and node._valueColors[candidate] or nil
+                              local selected = DrawWithValueColor(imgui, optionColor, function()
+                                  return imgui.Selectable(
+                                      MakeSelectableId(ChoiceDisplay(node, candidate), index),
+                                      false)
+                              end)
+                            if selected then
                                 if candidate ~= ctx.current then
-                                    ctx.boundValue:set(candidate)
-                                    return true
+                                    pendingValue = candidate
                                 end
                             end
                         end
                         imgui.EndCombo()
+                        if pendingValue ~= nil then
+                            ctx.boundValue:set(pendingValue)
+                            changed = true
+                        end
+                        return changed
                     end
                     return false
                 end,
@@ -564,6 +624,9 @@ WidgetTypes.mappedDropdown = {
         if type(node.getOptions) ~= "function" then
             libWarn("%s: mappedDropdown getOptions must be function", prefix)
         end
+        if node.getPreviewColor ~= nil and type(node.getPreviewColor) ~= "function" then
+            libWarn("%s: mappedDropdown getPreviewColor must be function", prefix)
+        end
         PrepareWidgetText(node, node.binds and node.binds.value)
         local hasLabel = (node._label or "") ~= ""
         node._mappedDropdownSlots = {
@@ -581,23 +644,31 @@ WidgetTypes.mappedDropdown = {
                 sameLine = hasLabel,
                 draw = function(imgui)
                     local ctx = node._mappedDropdownCtx or {}
-                    if not imgui.BeginCombo(node._imguiId, ctx.preview or "") then
+                    local opened = DrawWithValueColor(imgui, ctx.previewColor, function()
+                        return imgui.BeginCombo(node._imguiId, ctx.preview or "")
+                    end)
+                    ShowPreparedTooltip(imgui, node)
+                    if not opened then
                         return false
                     end
 
                     local changed = false
                     for _, option in ipairs(ctx.options or {}) do
                         local label
-                        local selected
                         if type(option) == "table" then
                             label = tostring(option.label or option.value or "")
-                            selected = option.selected == true
                         else
                             label = tostring(option or "")
-                            selected = ctx.current ~= nil and option == ctx.current or false
                         end
 
-                        if imgui.Selectable(label, selected) then
+                        local optionColor = type(option) == "table" and option.color or nil
+                        local clicked = DrawWithValueColor(imgui, optionColor, function()
+                            local uniqueId = type(option) == "table"
+                                and (option.id or option.value or label)
+                                or option
+                            return imgui.Selectable(MakeSelectableId(label, uniqueId), false)
+                        end)
+                        if clicked then
                             if type(option) == "table" and type(option.onSelect) == "function" then
                                 changed = option.onSelect(option, ctx.boundValue, ctx.uiState, node) == true or changed
                             else
@@ -628,6 +699,9 @@ WidgetTypes.mappedDropdown = {
         ctx.preview = type(node.getPreview) == "function"
             and tostring(node.getPreview(node, bound, uiState) or "")
             or ""
+        ctx.previewColor = type(node.getPreviewColor) == "function"
+            and node.getPreviewColor(node, bound, uiState)
+            or nil
         ctx.options = type(node.getOptions) == "function"
             and node.getOptions(node, bound, uiState)
             or {}
@@ -669,6 +743,7 @@ WidgetTypes.radio = {
         if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
             libWarn("%s: radio displayValues must be a table", prefix)
         end
+        ValidateValueColorsTable(node, prefix, "radio")
         PrepareWidgetText(node, node.binds and node.binds.value)
         local label = node._label or ""
         local slots = {}
@@ -687,10 +762,14 @@ WidgetTypes.radio = {
             local candidate = optionValues[index]
             return {
                 name = "option:" .. tostring(index),
-                sameLine = label == "" and index > 1,
+                sameLine = true,
                 draw = function(imgui)
                     local ctx = node._radioCtx or {}
-                    if imgui.RadioButton(ChoiceDisplay(node, candidate), ctx.current == candidate) then
+                    local optionColor = node._valueColors and node._valueColors[candidate] or nil
+                    local selected = DrawWithValueColor(imgui, optionColor, function()
+                        return imgui.RadioButton(ChoiceDisplay(node, candidate), ctx.current == candidate)
+                    end)
+                    if selected then
                         if candidate ~= ctx.current then
                             ctx.boundValue:set(candidate)
                             return true
@@ -799,7 +878,6 @@ WidgetTypes.mappedRadio = {
 
 local function ValidateStepper(node, prefix)
     StorageTypes.int.validate(node, prefix)
-    node._valueColors = nil
     if node.step ~= nil and (type(node.step) ~= "number" or node.step <= 0) then
         libWarn("%s: stepper step must be a positive number", prefix)
     end
@@ -809,22 +887,7 @@ local function ValidateStepper(node, prefix)
     if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
         libWarn("%s: stepper displayValues must be a table", prefix)
     end
-    if node.valueColors ~= nil then
-        if type(node.valueColors) ~= "table" then
-            libWarn("%s: stepper valueColors must be a table", prefix)
-        else
-            local normalizedColors = {}
-            for key, color in pairs(node.valueColors) do
-                local normalized = NormalizeColor(color)
-                if normalized == nil then
-                    libWarn("%s: stepper valueColors[%s] must be a 3- or 4-number color table", prefix, tostring(key))
-                else
-                    normalizedColors[key] = normalized
-                end
-            end
-            node._valueColors = normalizedColors
-        end
-    end
+    ValidateValueColorsTable(node, prefix, "stepper")
     node._step = math.floor(tonumber(node.step) or 1)
     node._fastStep = node.fastStep and math.floor(node.fastStep) or nil
     PrepareWidgetText(node, node.binds and node.binds.value)
@@ -931,6 +994,7 @@ WidgetTypes.packedCheckboxList = {
     binds = {
         value = { storageType = "int", rootType = "packedInt" },
         filterText = { storageType = "string", optional = true },
+        filterMode = { storageType = "string", optional = true },
     },
     dynamicSlots = function(node, slotName)
         local itemIndex = type(slotName) == "string" and tonumber(string.match(slotName, "^item:(%d+)$")) or nil
@@ -957,6 +1021,8 @@ WidgetTypes.packedCheckboxList = {
         else
             node.slotCount = math.floor(node.slotCount)
         end
+
+        ValidateValueColorsTable(node, prefix, "packedCheckboxList")
 
         -- packedCheckboxList renders items directly in draw(), but it still needs
         -- stable per-item slot descriptors so static geometry can target
@@ -986,6 +1052,11 @@ WidgetTypes.packedCheckboxList = {
         if type(filterText) ~= "string" then filterText = "" end
         local lowerFilter = filterText:lower()
         local hasFilter = lowerFilter ~= ""
+        local filterModeBind = bound.filterMode
+        local filterMode = filterModeBind and filterModeBind.get() or "all"
+        if filterMode ~= "checked" and filterMode ~= "unchecked" then
+            filterMode = "all"
+        end
         local rowStart = GetCursorPosXSafe(imgui)
         local currentLine = nil
         local visibleIndex = 0
@@ -993,7 +1064,13 @@ WidgetTypes.packedCheckboxList = {
         for _, child in ipairs(children) do
             if child ~= nil then
                 local label = child.label or ""
-                local visible = not hasFilter or label:lower():find(lowerFilter, 1, true) ~= nil
+                local val = child.get()
+                if val == nil then val = false end
+                local matchesText = not hasFilter or label:lower():find(lowerFilter, 1, true) ~= nil
+                local matchesMode = filterMode == "all"
+                    or (filterMode == "checked" and val == true)
+                    or (filterMode == "unchecked" and val ~= true)
+                local visible = matchesText and matchesMode
                 if visible and visibleIndex < node.slotCount then
                     visibleIndex = visibleIndex + 1
                     local slot = node._packedSlots[visibleIndex]
@@ -1012,9 +1089,10 @@ WidgetTypes.packedCheckboxList = {
                     end
 
                     imgui.PushID((slotName or "item") .. "_" .. tostring(visibleIndex))
-                    local val = child.get()
-                    if val == nil then val = false end
-                    local newVal, childChanged = imgui.Checkbox(label, val == true)
+                    local color = node._valueColors and node._valueColors[child.alias] or nil
+                    local newVal, childChanged = DrawWithValueColor(imgui, color, function()
+                        return imgui.Checkbox(label, val == true)
+                    end)
                     if childChanged then
                         child.set(newVal)
                         changed = true

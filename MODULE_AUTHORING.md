@@ -257,6 +257,11 @@ When to use transient aliases:
 - keep state module-local when it is only internal navigation or scratch for one contained widget/view
 - do not promote purely local widget navigation into transient storage unless another UI surface actually needs to read it
 
+Derived display text:
+- use transient string aliases plus `lib.runDerivedText(...)` when a plain `text` widget should display computed summaries, empty-state messages, or status lines
+- keep the compute logic module-side; Lib only provides the lightweight refresh helper
+- this helper is intentionally string-only and should not be used to drive dynamic widget or layout structure
+
 ### Packed storage
 
 Use `packedInt` when you want alias-addressable packed children:
@@ -283,6 +288,7 @@ Examples:
 
 ```lua
 { type = "text", text = "Section Title" }
+{ type = "text", text = "Warning", color = { 1, 0.5, 0.2, 1 } }
 { type = "button", label = "Reset Filter", onClick = function(uiState) uiState.reset("FilterText") end }
 { type = "checkbox", binds = { value = "EnabledFlag" }, label = "Enabled" }
 { type = "inputText", binds = { value = "FilterText" }, label = "Filter" }
@@ -383,6 +389,7 @@ Slots are rendered in ascending `line`.
 Within the same line, slots with explicit `start` values are ordered by `start`.
 Otherwise declaration order breaks ties and preserves slots without explicit `start`.
 `text` supports a single `value` slot.
+`text.color` may be used to color a single text node.
 `button` supports a single `control` slot.
 `checkbox` supports a single `control` slot.
 `inputText` supports `label` and `control`.
@@ -403,6 +410,9 @@ Meaningful built-in slot intent:
 - `steppedRange.min.value` / `max.value`: these are the meaningful aligned value slots
 - `steppedRange.separator`: may also use `width` + `align` if you want the separator text in a fixed slot
 - `packedCheckboxList.item:N`: use `line` / `start` to place rows; do not expect `width` / `align` to do anything useful
+
+Tabbed layout presentation:
+- `horizontalTabs` / `verticalTabs` children may declare `tabLabelColor = { r, g, b }` or `{ r, g, b, a }` to color the child tab label
 
 ### `steppedRange`
 
@@ -572,8 +582,12 @@ public.definition.ui = {
         binds = {
             value = "PackedFlags",
             filterText = "FilterText", -- optional; omit to render all packed rows
+            filterMode = "FilterMode", -- optional; all/checked/unchecked
         },
         slotCount = 16,
+        valueColors = {
+            FlagBoss = { 0.85, 0.3, 0.3, 1 },
+        },
     },
 }
 ```

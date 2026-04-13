@@ -4,6 +4,7 @@ local LayoutTypes = shared.LayoutTypes
 local libWarn = shared.libWarn
 local registry = shared.fieldRegistry
 local GetCursorPosXSafe = registry.GetCursorPosXSafe
+local NormalizeColor = registry.NormalizeColor
 
 LayoutTypes.separator = {
     validate = function(node, prefix)
@@ -67,6 +68,14 @@ local function GetHorizontalTabItemLabel(child)
     return tabLabel
 end
 
+local function GetStyleMetricY(style, key, fallback)
+    local metric = style and style[key]
+    if type(metric) == "table" and type(metric.y) == "number" then
+        return metric.y
+    end
+    return fallback
+end
+
 local function ValidateTabbedChildren(node, prefix, layoutName)
     if node.children ~= nil and type(node.children) ~= "table" then
         libWarn("%s: %s children must be a table", prefix, layoutName)
@@ -84,10 +93,35 @@ local function ValidateTabbedChildren(node, prefix, layoutName)
                 if child.tabId ~= nil and (type(child.tabId) ~= "string" or child.tabId == "") then
                     libWarn("%s: %s child tabId must be a non-empty string", childPrefix, layoutName)
                 end
+                child._tabLabelColor = nil
+                if child.tabLabelColor ~= nil then
+                    local normalized = NormalizeColor(child.tabLabelColor)
+                    if normalized == nil then
+                        libWarn("%s: %s child tabLabelColor must be a 3- or 4-number color table", childPrefix, layoutName)
+                    else
+                        child._tabLabelColor = normalized
+                    end
+                end
             end
         end
     end
     return true
+end
+
+local function WithTabLabelColor(imgui, child, drawFn)
+    local color = type(child) == "table" and child._tabLabelColor or nil
+    if type(color) ~= "table" or type(imgui.PushStyleColor) ~= "function" or type(imgui.PopStyleColor) ~= "function" then
+        return drawFn()
+    end
+
+    local textEnum = imgui.ImGuiCol and imgui.ImGuiCol.Text or 0
+    imgui.PushStyleColor(textEnum, color[1], color[2], color[3], color[4])
+    local ok, a, b, c, d = pcall(drawFn)
+    imgui.PopStyleColor()
+    if not ok then
+        error(a)
+    end
+    return a, b, c, d
 end
 
 local function GetTabbedChildKey(child, index)
@@ -133,7 +167,13 @@ LayoutTypes.horizontalTabs = {
         if imgui.BeginTabBar(node.id) then
             for _, child in ipairs(node.children or {}) do
                 local tabItemLabel = GetHorizontalTabItemLabel(child)
-                if tabItemLabel ~= nil and imgui.BeginTabItem(tabItemLabel) then
+                local opened = false
+                if tabItemLabel ~= nil then
+                    opened = WithTabLabelColor(imgui, child, function()
+                        return imgui.BeginTabItem(tabItemLabel)
+                    end)
+                end
+                if opened then
                     if drawChild(child) then
                         changed = true
                     end
@@ -177,7 +217,10 @@ LayoutTypes.verticalTabs = {
         imgui.BeginChild(node.id .. "##tabs", sidebarWidth, 0, true)
         for index, child in ipairs(children) do
             local childKey = GetTabbedChildKey(child, index)
-            if imgui.Selectable(child.tabLabel, childKey == node._activeTabKey) then
+            local selected = WithTabLabelColor(imgui, child, function()
+                return imgui.Selectable(child.tabLabel, childKey == node._activeTabKey)
+            end)
+            if selected then
                 node._activeTabKey = childKey
             end
         end
@@ -374,6 +417,48 @@ local function GetOrderedPanelEntries(node, entries)
     return orderedPositions
 end
 
+local function BuildPanelRows(entries, orderedPositions)
+    local rows = {}
+    local rowCount = 0
+    local currentLine = nil
+
+    for _, position in ipairs(orderedPositions) do
+        local entry = entries[position]
+        if currentLine ~= entry.line then
+            currentLine = entry.line
+            rowCount = rowCount + 1
+            rows[rowCount] = {
+                line = currentLine,
+                entries = {},
+            }
+        end
+        local row = rows[rowCount]
+        row.entries[#row.entries + 1] = entry
+    end
+
+    return rows
+end
+
+local function EstimatePanelRowAdvanceY(imgui)
+    if type(imgui.GetFrameHeightWithSpacing) == "function" then
+        local value = imgui.GetFrameHeightWithSpacing()
+        if type(value) == "number" and value > 0 then
+            return value
+        end
+    end
+    if type(imgui.GetTextLineHeightWithSpacing) == "function" then
+        local value = imgui.GetTextLineHeightWithSpacing()
+        if type(value) == "number" and value > 0 then
+            return value
+        end
+    end
+
+    local style = type(imgui.GetStyle) == "function" and imgui.GetStyle() or nil
+    local framePaddingY = GetStyleMetricY(style, "FramePadding", 3)
+    local itemSpacingY = GetStyleMetricY(style, "ItemSpacing", 4)
+    return 16 + framePaddingY * 2 + itemSpacingY
+end
+
 LayoutTypes.panel = {
     handlesChildren = true,
     validate = function(node, prefix)
@@ -394,36 +479,84 @@ LayoutTypes.panel = {
             end
         end
     end,
-    render = function(imgui, node, drawChild)
+    render = function(imgui, node, drawChild, uiState)
         local rowStart = GetCursorPosXSafe(imgui)
         local entries = BuildPanelEntries(node)
         local orderedPositions = GetOrderedPanelEntries(node, entries)
+        local rows = BuildPanelRows(entries, orderedPositions)
 
         local changed = false
-        local currentLine = nil
+        local hasCursorY = type(imgui.GetCursorPosY) == "function" and type(imgui.SetCursorPosY) == "function"
+        local finalRowMaxY = nil
+        local renderRows = {}
 
-        for _, position in ipairs(orderedPositions) do
-            local entry = entries[position]
-            if currentLine ~= entry.line then
-                currentLine = entry.line
-            else
-                imgui.SameLine()
+        for _, row in ipairs(rows) do
+            local visibleEntries = {}
+            for _, entry in ipairs(row.entries) do
+                if public.isUiNodeVisible(entry.child, uiState and uiState.view) then
+                    visibleEntries[#visibleEntries + 1] = entry
+                end
+            end
+            if #visibleEntries > 0 then
+                renderRows[#renderRows + 1] = {
+                    line = row.line,
+                    entries = visibleEntries,
+                }
+            end
+        end
+
+        for rowIndex, row in ipairs(renderRows) do
+            local rowBaseY = hasCursorY and imgui.GetCursorPosY() or nil
+            local rowMaxY = rowBaseY
+
+            for entryIndex, entry in ipairs(row.entries) do
+                if entryIndex > 1 then
+                    imgui.SameLine()
+                end
+
+                if type(entry.start) == "number" then
+                    imgui.SetCursorPosX(rowStart + entry.start)
+                end
+                if hasCursorY and rowBaseY ~= nil then
+                    imgui.SetCursorPosY(rowBaseY)
+                end
+
+                if drawChild(entry.child) then
+                    changed = true
+                end
+
+                if hasCursorY then
+                    local cursorY = imgui.GetCursorPosY()
+                    if rowMaxY == nil or cursorY > rowMaxY then
+                        rowMaxY = cursorY
+                    end
+                end
             end
 
-            if type(entry.start) == "number" then
-                imgui.SetCursorPosX(rowStart + entry.start)
+            if hasCursorY and rowBaseY ~= nil and (rowMaxY == nil or rowMaxY <= rowBaseY) then
+                rowMaxY = rowBaseY + EstimatePanelRowAdvanceY(imgui)
             end
+            finalRowMaxY = rowMaxY
+            if rowIndex < #renderRows then
+                if hasCursorY and rowMaxY ~= nil then
+                    imgui.SetCursorPosX(rowStart)
+                    imgui.SetCursorPosY(rowMaxY)
+                elseif type(imgui.NewLine) == "function" then
+                    imgui.NewLine()
+                end
+            end
+        end
 
-            if drawChild(entry.child) then
-                changed = true
-            end
+        if hasCursorY and finalRowMaxY ~= nil then
+            imgui.SetCursorPosX(rowStart)
+            imgui.SetCursorPosY(finalRowMaxY)
         end
 
         return true, changed
     end,
 }
 
-local function DrawLayoutNode(imgui, node, drawChild, layoutTypes)
+local function DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState)
     local layoutType = layoutTypes[node.type]
     if not layoutType then
         return false, false
@@ -434,17 +567,15 @@ local function DrawLayoutNode(imgui, node, drawChild, layoutTypes)
     --   open, changed = render(imgui, node, drawChild)
     -- Layouts with handlesChildren = true fully own child rendering and must
     -- report any child-driven change via the second return value.
-    local open, layoutChanged = layoutType.render(imgui, node, drawChild)
+    local open, layoutChanged = layoutType.render(imgui, node, drawChild, uiState)
     if layoutType.handlesChildren == true then
         return true, layoutChanged == true
     end
     local changed = false
     if open and type(node.children) == "table" then
-        if node.type == "group" then imgui.Indent() end
         for _, child in ipairs(node.children) do
             if drawChild(child) then changed = true end
         end
-        if node.type == "group" then imgui.Unindent() end
     end
     return true, changed
 end

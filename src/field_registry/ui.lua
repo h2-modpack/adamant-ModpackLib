@@ -363,7 +363,7 @@ function public.drawUiNode(imgui, node, uiState, width, customTypes)
         return public.drawUiNode(imgui, child, uiState, width, customTypes)
     end
 
-    local wasLayout, layoutChanged = DrawLayoutNode(imgui, node, drawChild, layoutTypes)
+    local wasLayout, layoutChanged = DrawLayoutNode(imgui, node, drawChild, layoutTypes, uiState)
     if wasLayout then return layoutChanged end
 
     local widgetType = widgetTypes[node.type]

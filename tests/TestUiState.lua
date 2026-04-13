@@ -39,6 +39,7 @@ local function makeTransientDefinition()
             { type = "bool", alias = "Enabled", configKey = "Enabled", default = false },
             { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
             { type = "string", alias = "FilterMode", lifetime = "transient", default = "all", maxLen = 16 },
+            { type = "string", alias = "SummaryText", lifetime = "transient", default = "", maxLen = 128 },
         },
         ui = {
             { type = "checkbox", binds = { value = "Enabled" }, label = "Enabled" },
@@ -301,4 +302,71 @@ function TestUiState:testRunUiStatePassIgnoresTransientOnlyEdits()
     lu.assertEquals(commitCalls, 0)
     lu.assertEquals(flushedCalls, 0)
     lu.assertEquals(store.uiState.view.FilterText, "Apollo")
+end
+
+function TestUiState:testRunDerivedTextUpdatesTransientStringAlias()
+    local config = { Enabled = false }
+    local store = lib.createStore(config, makeTransientDefinition())
+    local uiState = store.uiState
+
+    local changed = lib.runDerivedText(uiState, {
+        {
+            alias = "SummaryText",
+            compute = function(state)
+                return state.view.FilterText == "" and "No filter" or ("Filter: " .. state.view.FilterText)
+            end,
+        },
+    }, {})
+
+    lu.assertTrue(changed)
+    lu.assertEquals(uiState.view.SummaryText, "No filter")
+
+    uiState.set("FilterText", "Apollo")
+    changed = lib.runDerivedText(uiState, {
+        {
+            alias = "SummaryText",
+            compute = function(state)
+                return state.view.FilterText == "" and "No filter" or ("Filter: " .. state.view.FilterText)
+            end,
+        },
+    }, {})
+
+    lu.assertTrue(changed)
+    lu.assertEquals(uiState.view.SummaryText, "Filter: Apollo")
+end
+
+function TestUiState:testRunDerivedTextSkipsRecomputeWhenSignatureIsStable()
+    local config = { Enabled = false }
+    local store = lib.createStore(config, makeTransientDefinition())
+    local uiState = store.uiState
+    local cache = {}
+    local computeCalls = 0
+
+    local entries = {
+        {
+            alias = "SummaryText",
+            signature = function(state)
+                return state.view.FilterMode
+            end,
+            compute = function(state)
+                computeCalls = computeCalls + 1
+                return "Mode: " .. tostring(state.view.FilterMode)
+            end,
+        },
+    }
+
+    local changed = lib.runDerivedText(uiState, entries, cache)
+    lu.assertTrue(changed)
+    lu.assertEquals(uiState.view.SummaryText, "Mode: all")
+    lu.assertEquals(computeCalls, 1)
+
+    changed = lib.runDerivedText(uiState, entries, cache)
+    lu.assertFalse(changed)
+    lu.assertEquals(computeCalls, 1)
+
+    uiState.set("FilterMode", "checked")
+    changed = lib.runDerivedText(uiState, entries, cache)
+    lu.assertTrue(changed)
+    lu.assertEquals(uiState.view.SummaryText, "Mode: checked")
+    lu.assertEquals(computeCalls, 2)
 end
