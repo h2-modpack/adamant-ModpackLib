@@ -570,6 +570,30 @@ function TestUiValidation:testDropdownValueColorsMustBeColorTables()
     assertWarningContains("dropdown valueColors[1] must be a 3- or 4-number color table")
 end
 
+function TestUiValidation:testPackedDropdownRejectsUnknownSelectionMode()
+    local storage = {
+        {
+            type = "packedInt",
+            alias = "Flags",
+            configKey = "Flags",
+            bits = {
+                { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false, label = "Alpha" },
+            },
+        },
+    }
+    lib.validateStorage(storage, "PackedDropdownMode")
+
+    lib.validateUi({
+        {
+            type = "packedDropdown",
+            binds = { value = "Flags" },
+            selectionMode = "mystery",
+        },
+    }, "PackedDropdownMode", storage)
+
+    assertWarningContains("packedDropdown selectionMode must be 'singleEnabled' or 'singleRemaining'")
+end
+
 function TestUiValidation:testRadioValueColorsMustBeColorTables()
     local storage = {
         { type = "int", alias = "Mode", configKey = "Mode", default = 1, min = 0, max = 3 },

@@ -1703,6 +1703,94 @@ function TestUiNodes:testMappedDropdownCanUseCustomPreviewAndSelectionMapping()
     lu.assertEquals(store.uiState.view.Mask, 3)
 end
 
+function TestUiNodes:testPackedDropdownCanSelectSingleRemainingChild()
+    local definition = {
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Flags",
+                configKey = "Flags",
+                bits = {
+                    { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false, label = "Alpha" },
+                    { alias = "FlagB", offset = 1, width = 1, type = "bool", default = false, label = "Beta" },
+                    { alias = "FlagC", offset = 2, width = 1, type = "bool", default = false, label = "Gamma" },
+                },
+            },
+        },
+        ui = {
+            {
+                type = "packedDropdown",
+                binds = { value = "Flags" },
+                selectionMode = "singleRemaining",
+                noneLabel = "None",
+                multipleLabel = "Multiple",
+                displayValues = {
+                    FlagA = "Alpha",
+                    FlagB = "Beta",
+                    FlagC = "Gamma",
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Flags = 0 })
+    local imgui = makeBasicImgui()
+    local seenPreview = nil
+    imgui.BeginCombo = function(_, preview)
+        seenPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        return tostring(label):match("^Beta##") ~= nil
+    end
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertTrue(changed)
+    lu.assertEquals(seenPreview, "None")
+    lu.assertTrue(store.uiState.get("FlagA"))
+    lu.assertFalse(store.uiState.get("FlagB"))
+    lu.assertTrue(store.uiState.get("FlagC"))
+end
+
+function TestUiNodes:testPackedRadioCanSelectSingleEnabledChild()
+    local definition = {
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Flags",
+                configKey = "Flags",
+                bits = {
+                    { alias = "FlagA", offset = 0, width = 1, type = "bool", default = false, label = "Alpha" },
+                    { alias = "FlagB", offset = 1, width = 1, type = "bool", default = false, label = "Beta" },
+                },
+            },
+        },
+        ui = {
+            {
+                type = "packedRadio",
+                binds = { value = "Flags" },
+                label = "",
+                displayValues = {
+                    FlagA = "Alpha",
+                    FlagB = "Beta",
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Flags = 0 })
+    local imgui = makeBasicImgui()
+    imgui._state.selectables = {}
+    imgui.RadioButton = function(label)
+        return label == "Beta"
+    end
+
+    local changed = lib.drawUiNode(imgui, definition.ui[1], store.uiState)
+
+    lu.assertTrue(changed)
+    lu.assertFalse(store.uiState.get("FlagA"))
+    lu.assertTrue(store.uiState.get("FlagB"))
+end
+
 function TestUiNodes:testMappedRadioCanUseCustomSelectionMapping()
     local definition = {
         storage = {

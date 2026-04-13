@@ -99,6 +99,144 @@ local function MakeSelectableId(label, uniqueId)
     return tostring(label or "") .. "##" .. tostring(uniqueId or "")
 end
 
+local function ValidateDisplayValuesTable(node, prefix, widgetName)
+    if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
+        libWarn("%s: %s displayValues must be a table", prefix, widgetName)
+    end
+end
+
+local function GetPackedChoiceMode(node)
+    local mode = node.selectionMode
+    if mode == nil or mode == "" then
+        return "singleEnabled"
+    end
+    return mode
+end
+
+local function GetPackedChoiceChildren(node, bound, widgetName)
+    local children = bound and bound.value and bound.value.children or nil
+    if type(children) ~= "table" then
+        libWarn("%s: no packed children for alias '%s'; bind to a packedInt root",
+            widgetName, tostring(node.binds and node.binds.value))
+        return nil
+    end
+    return children
+end
+
+local function GetPackedChoiceLabel(node, child)
+    if type(node.displayValues) == "table" and node.displayValues[child.alias] ~= nil then
+        return tostring(node.displayValues[child.alias])
+    end
+    return tostring(child.label or child.alias or "")
+end
+
+local function GetPackedChoiceNoneValue(mode)
+    if mode == "singleRemaining" then
+        return false
+    end
+    return false
+end
+
+local function IsPackedChoiceActive(mode, value)
+    if mode == "singleRemaining" then
+        return value == false
+    end
+    return value == true
+end
+
+local function GetPackedChoiceWriteValue(mode, isActive)
+    if mode == "singleRemaining" then
+        if isActive then
+            return false
+        end
+        return true
+    end
+    return isActive == true
+end
+
+local function ClassifyPackedChoice(node, children)
+    local mode = GetPackedChoiceMode(node)
+    local noneValue = GetPackedChoiceNoneValue(mode)
+    local activeCount = 0
+    local totalCount = 0
+    local lastActiveChild = nil
+
+    for _, child in ipairs(children or {}) do
+        totalCount = totalCount + 1
+        local value = child.get and child.get() or noneValue
+        if value == nil then
+            value = noneValue
+        end
+        if IsPackedChoiceActive(mode, value) then
+            activeCount = activeCount + 1
+            lastActiveChild = child
+        end
+    end
+
+    local state = "multiple"
+    if activeCount == 0 then
+        state = "none"
+    elseif activeCount == 1 then
+        state = "single"
+    elseif mode == "singleRemaining" and activeCount == totalCount then
+        state = "none"
+    end
+
+    return {
+        state = state,
+        selectedChild = state == "single" and lastActiveChild or nil,
+        mode = mode,
+        noneValue = noneValue,
+    }
+end
+
+local function ApplyPackedChoiceSelection(children, selectedAlias, selection)
+    local changed = false
+    for _, child in ipairs(children or {}) do
+        local shouldBeActive = child.alias == selectedAlias
+        local nextValue = GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
+        local currentValue = child.get and child.get() or selection.noneValue
+        if currentValue == nil then
+            currentValue = selection.noneValue
+        end
+        if currentValue ~= nextValue then
+            child.set(nextValue)
+            changed = true
+        end
+    end
+    return changed
+end
+
+local function ClearPackedChoiceSelection(children, selection)
+    local changed = false
+    for _, child in ipairs(children or {}) do
+        local currentValue = child.get and child.get() or selection.noneValue
+        if currentValue == nil then
+            currentValue = selection.noneValue
+        end
+        if currentValue ~= selection.noneValue then
+            child.set(selection.noneValue)
+            changed = true
+        end
+    end
+    return changed
+end
+
+local function ValidatePackedChoiceWidget(node, prefix, widgetName)
+    local mode = GetPackedChoiceMode(node)
+    if mode ~= "singleEnabled" and mode ~= "singleRemaining" then
+        libWarn("%s: %s selectionMode must be 'singleEnabled' or 'singleRemaining'", prefix, widgetName)
+    end
+    if node.noneLabel ~= nil and type(node.noneLabel) ~= "string" then
+        libWarn("%s: %s noneLabel must be a string", prefix, widgetName)
+    end
+    if node.multipleLabel ~= nil and type(node.multipleLabel) ~= "string" then
+        libWarn("%s: %s multipleLabel must be a string", prefix, widgetName)
+    end
+    ValidateDisplayValuesTable(node, prefix, widgetName)
+    ValidateValueColorsTable(node, prefix, widgetName)
+end
+
 local function CreateStepperSlotTemplate(node, options)
     options = options or {}
     local fastStep = node._fastStep
@@ -711,6 +849,99 @@ WidgetTypes.mappedDropdown = {
     end,
 }
 
+WidgetTypes.packedDropdown = {
+    binds = { value = { storageType = "int", rootType = "packedInt" } },
+    slots = { "label", "control" },
+    validate = function(node, prefix)
+        PrepareWidgetText(node, node.binds and node.binds.value)
+        ValidatePackedChoiceWidget(node, prefix, "packedDropdown")
+        local hasLabel = (node._label or "") ~= ""
+        node._packedDropdownSlots = {
+            {
+                name = "label",
+                hidden = not hasLabel,
+                draw = function(imgui)
+                    imgui.Text(node._label or "")
+                    ShowPreparedTooltip(imgui, node)
+                    return false
+                end,
+            },
+            {
+                name = "control",
+                sameLine = hasLabel,
+                draw = function(imgui)
+                    local ctx = node._packedDropdownCtx or {}
+                    local opened = DrawWithValueColor(imgui, ctx.previewColor, function()
+                        return imgui.BeginCombo(node._imguiId, ctx.preview or "")
+                    end)
+                    ShowPreparedTooltip(imgui, node)
+                    if not opened then
+                        return false
+                    end
+
+                    local changed = false
+                    local pendingClear = false
+                    local pendingAlias = nil
+                    if imgui.Selectable(MakeSelectableId(ctx.noneLabel or "None", "none"), false) then
+                        pendingClear = true
+                    end
+
+                    for _, child in ipairs(ctx.children or {}) do
+                        local optionColor = node._valueColors and node._valueColors[child.alias] or nil
+                        local clicked = DrawWithValueColor(imgui, optionColor, function()
+                            return imgui.Selectable(
+                                MakeSelectableId(GetPackedChoiceLabel(node, child), child.alias),
+                                false)
+                        end)
+                        if clicked then
+                            pendingClear = false
+                            pendingAlias = child.alias
+                        end
+                    end
+
+                    imgui.EndCombo()
+                    if pendingAlias ~= nil then
+                        changed = ApplyPackedChoiceSelection(ctx.children, pendingAlias, ctx.selection) or changed
+                    elseif pendingClear then
+                        changed = ClearPackedChoiceSelection(ctx.children, ctx.selection) or changed
+                    end
+                    return changed
+                end,
+            },
+        }
+    end,
+    validateGeometry = function(node, prefix, geometry)
+        local _ = node
+        WarnIgnoredSlotKeys(prefix, geometry, "label", { "width", "align" }, "packedDropdown")
+    end,
+    draw = function(imgui, node, bound, width)
+        local children = GetPackedChoiceChildren(node, bound, "packedDropdown")
+        if not children then
+            return false
+        end
+
+        local selection = ClassifyPackedChoice(node, children)
+        local ctx = node._packedDropdownCtx or {}
+        ctx.children = children
+        ctx.selection = selection
+        ctx.noneLabel = node.noneLabel or "None"
+        ctx.multipleLabel = node.multipleLabel or "Multiple"
+        if selection.state == "single" and selection.selectedChild then
+            ctx.preview = GetPackedChoiceLabel(node, selection.selectedChild)
+            ctx.previewColor = node._valueColors and node._valueColors[selection.selectedChild.alias] or nil
+        elseif selection.state == "multiple" then
+            ctx.preview = ctx.multipleLabel
+            ctx.previewColor = nil
+        else
+            ctx.preview = ctx.noneLabel
+            ctx.previewColor = nil
+        end
+        node._packedDropdownCtx = ctx
+        node._packedDropdownSlots[2].width = width
+        return DrawWidgetSlots(imgui, node, node._packedDropdownSlots, GetCursorPosXSafe(imgui))
+    end,
+}
+
 WidgetTypes.radio = {
     binds = { value = { storageType = { "string", "int" } } },
     slots = { "label" },
@@ -872,6 +1103,73 @@ WidgetTypes.mappedRadio = {
             imgui.NewLine()
         end
 
+        return changed
+    end,
+}
+
+WidgetTypes.packedRadio = {
+    binds = { value = { storageType = "int", rootType = "packedInt" } },
+    slots = { "label" },
+    validate = function(node, prefix)
+        PrepareWidgetText(node, node.binds and node.binds.value)
+        ValidatePackedChoiceWidget(node, prefix, "packedRadio")
+        node._packedRadioSlots = {}
+        local label = node._label or ""
+        if label ~= "" then
+            table.insert(node._packedRadioSlots, {
+                name = "label",
+                draw = function(imgui)
+                    imgui.Text(label)
+                    ShowPreparedTooltip(imgui, node)
+                    return false
+                end,
+            })
+        end
+    end,
+    validateGeometry = function(node, prefix, geometry)
+        local _ = node
+        WarnIgnoredSlotKeys(prefix, geometry, "label", { "width", "align" }, "packedRadio")
+    end,
+    draw = function(imgui, node, bound)
+        local children = GetPackedChoiceChildren(node, bound, "packedRadio")
+        if not children then
+            return false
+        end
+
+        local selection = ClassifyPackedChoice(node, children)
+        local changed = DrawWidgetSlots(imgui, node, node._packedRadioSlots, GetCursorPosXSafe(imgui))
+        local hasLabel = (node._label or "") ~= ""
+
+        local pendingClear = false
+        local pendingAlias = nil
+        if hasLabel then
+            imgui.SameLine()
+        end
+        if imgui.RadioButton(node.noneLabel or "None", selection.state == "none") then
+            pendingClear = true
+        end
+
+        for _, child in ipairs(children) do
+            imgui.SameLine()
+            local optionColor = node._valueColors and node._valueColors[child.alias] or nil
+            local clicked = DrawWithValueColor(imgui, optionColor, function()
+                return imgui.RadioButton(
+                    GetPackedChoiceLabel(node, child),
+                    selection.selectedChild and selection.selectedChild.alias == child.alias or false)
+            end)
+            if clicked then
+                pendingClear = false
+                pendingAlias = child.alias
+            end
+        end
+
+        if pendingAlias ~= nil then
+            changed = ApplyPackedChoiceSelection(children, pendingAlias, selection) or changed
+        elseif pendingClear then
+            changed = ClearPackedChoiceSelection(children, selection) or changed
+        end
+
+        imgui.NewLine()
         return changed
     end,
 }
