@@ -220,15 +220,17 @@ Contract:
 
 Draws an ordered UI node list.
 
-### `lib.drawWidgetSlots(imgui, node, slots, rowStart?)`
+### `lib.drawWidgetSlots(imgui, node, slots, rowStart?, rowStartY?)`
 
 Public helper for custom widget `draw(...)` implementations that want Lib-managed slot placement.
 
 Behavior:
 - uses the prepared slot geometry from `node.geometry`
 - defaults `rowStart` to the current cursor X
+- defaults `rowStartY` to the current cursor Y
 - keeps `line` as the public vertical descriptor; actual row `y` is resolved internally by Lib
 - slots with explicit `start` use explicit positioning; slots without `start` may still use inline horizontal flow within the resolved row
+- pass `rowStartY` explicitly when a custom widget is composing a local atomic sub-structure and should not inherit the ambient cursor baseline
 - returns `true` if any slot draw returns `true`
 
 ### `lib.alignSlotContent(imgui, slot, contentWidth)`
@@ -598,12 +600,19 @@ Widget definitions may also declare optional flat capability functions such as:
 
 ### `lib.WidgetHelpers`
 
-Reserved public namespace for future widget-specific authoring/tooling helpers.
+Public namespace for small widget-authoring helpers that do not belong on `lib.WidgetTypes`.
 
-Current status:
-- intentionally empty
-- not part of the runtime widget contract
-- reserved so future widget helper APIs do not need a breaking top-level naming change
+Current helpers:
+- `lib.WidgetHelpers.drawStructuredAt(imgui, startX, startY, fallbackHeight, drawFn)`
+- `lib.WidgetHelpers.estimateRowAdvanceY(imgui)`
+
+Use these for atomic custom widgets that need positioned local composition but should still participate honestly in the parent footprint contract.
+
+These helpers are intended for:
+- custom widget internals
+- local leaf-widget composition
+
+They are **not** a generic invitation to recursively draw full prepared widgets from inside other widgets.
 
 ### `lib.LayoutTypes`
 

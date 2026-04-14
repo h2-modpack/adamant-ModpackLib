@@ -407,6 +407,12 @@ These custom types can be used by:
 - special-module calls to `lib.drawUiNode(...)` / `lib.drawUiTree(...)`
 
 Custom widget `draw(...)` may stay fully imperative, or it may call `lib.drawWidgetSlots(...)` to let Lib manage slot ordering and geometry merging.
+If a custom widget is building an atomic local sub-structure and must avoid inheriting the surrounding cursor baseline, `lib.drawWidgetSlots(...)` may also be given an explicit `rowStartY`.
+For local positioned custom-widget composition, prefer:
+- `lib.WidgetHelpers.drawStructuredAt(...)`
+- `lib.WidgetHelpers.estimateRowAdvanceY(...)`
+
+These helpers are the supported way to keep a local custom widget honest about footprint settlement without recursively drawing another full structured widget.
 `dynamicSlots(...)` is the optional escape hatch for declaration-time-dependent slot names like `option:N`.
 Custom layout `render(...)` always receives `drawChild`.
 Simple layouts can ignore it and return just `open`.

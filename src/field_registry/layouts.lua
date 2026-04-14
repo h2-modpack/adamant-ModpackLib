@@ -73,14 +73,6 @@ local function GetHorizontalTabItemLabel(child)
     return tabLabel
 end
 
-local function GetStyleMetricY(style, key, fallback)
-    local metric = style and style[key]
-    if type(metric) == "table" and type(metric.y) == "number" then
-        return metric.y
-    end
-    return fallback
-end
-
 local function ValidateTabbedChildren(node, prefix, layoutName)
     if node.children ~= nil and type(node.children) ~= "table" then
         libWarn("%s: %s children must be a table", prefix, layoutName)

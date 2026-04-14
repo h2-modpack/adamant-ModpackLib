@@ -1,5 +1,6 @@
 local internal = AdamantModpackLib_Internal
 local shared = internal.shared
+local WidgetHelpers = shared.WidgetHelpers
 local StorageTypes = shared.StorageTypes
 local WidgetTypes = shared.WidgetTypes
 local LayoutTypes = shared.LayoutTypes
@@ -324,6 +325,9 @@ local function EstimateStructuredRowAdvanceY(imgui)
 end
 
 registry.EstimateStructuredRowAdvanceY = EstimateStructuredRowAdvanceY
+if type(WidgetHelpers) == "table" then
+    WidgetHelpers.estimateRowAdvanceY = EstimateStructuredRowAdvanceY
+end
 
 local function DrawStructuredAt(imgui, startX, startY, fallbackHeight, drawFn)
     SetCursorPosSafe(imgui, startX, startY)
@@ -338,6 +342,9 @@ local function DrawStructuredAt(imgui, startX, startY, fallbackHeight, drawFn)
 end
 
 registry.DrawStructuredAt = DrawStructuredAt
+if type(WidgetHelpers) == "table" then
+    WidgetHelpers.drawStructuredAt = DrawStructuredAt
+end
 
 local function ShowPreparedTooltip(imgui, node)
     if node and node._hasTooltip == true and imgui.IsItemHovered() then
@@ -417,14 +424,14 @@ local function GetOrderedSlotPositions(node, entries)
     return orderedPositions
 end
 
-local function DrawWidgetSlots(imgui, node, slots, rowStart)
+local function DrawWidgetSlots(imgui, node, slots, rowStart, rowStartY)
     if type(slots) ~= "table" then
         return false
     end
 
     local changed = false
     rowStart = rowStart or GetCursorPosXSafe(imgui)
-    local rowStartY = GetCursorPosYSafe(imgui)
+    rowStartY = type(rowStartY) == "number" and rowStartY or GetCursorPosYSafe(imgui)
     local defaultRowAdvance = EstimateStructuredRowAdvanceY(imgui)
     local renderSlots = type(node) == "table" and node._renderSlotCache or nil
     if type(renderSlots) ~= "table" then

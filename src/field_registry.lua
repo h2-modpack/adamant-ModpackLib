@@ -9,14 +9,19 @@ import 'field_registry/widgets.lua'
 import 'field_registry/layouts.lua'
 import 'field_registry/ui.lua'
 
-function public.drawWidgetSlots(imgui, node, slots, rowStart)
+function public.drawWidgetSlots(imgui, node, slots, rowStart, rowStartY)
     local registry = shared.fieldRegistry or {}
     local drawWidgetSlots = registry.DrawWidgetSlots
     local getCursorPosXSafe = registry.GetCursorPosXSafe
     if type(drawWidgetSlots) ~= "function" or type(getCursorPosXSafe) ~= "function" then
         return false
     end
-    return drawWidgetSlots(imgui, node, slots, rowStart or getCursorPosXSafe(imgui)) == true
+    return drawWidgetSlots(
+        imgui,
+        node,
+        slots,
+        rowStart or getCursorPosXSafe(imgui),
+        rowStartY) == true
 end
 
 function public.alignSlotContent(imgui, slot, contentWidth)

@@ -826,6 +826,92 @@ function TestUiNodes:testCustomWidgetCanUsePublicDrawWidgetSlotsHelper()
     lu.assertEquals(store.uiState.get("Count"), 3)
 end
 
+function TestUiNodes:testCustomWidgetCanPassExplicitRowStartYToDrawWidgetSlots()
+    local definition = {
+        storage = {
+            { type = "int", alias = "Count", configKey = "Count", default = 2, min = 0, max = 9 },
+        },
+        customTypes = {
+            widgets = {
+                fancyStepper = {
+                    binds = { value = { storageType = "int" } },
+                    slots = { "decrement", "value", "increment" },
+                    validate = function() end,
+                    draw = function(imgui, node, bound)
+                        local current = bound.value:get() or 0
+                        return lib.drawWidgetSlots(imgui, node, {
+                            {
+                                name = "decrement",
+                                draw = function()
+                                    imgui.Button("-")
+                                    return false
+                                end,
+                            },
+                            {
+                                name = "value",
+                                sameLine = true,
+                                draw = function()
+                                    imgui.Text(tostring(current))
+                                    return false
+                                end,
+                            },
+                            {
+                                name = "increment",
+                                sameLine = true,
+                                draw = function()
+                                    imgui.Button("+")
+                                    return false
+                                end,
+                            },
+                        }, 12, 48)
+                    end,
+                },
+            },
+        },
+        ui = {
+            {
+                type = "fancyStepper",
+                binds = { value = "Count" },
+                geometry = {
+                    slots = {
+                        { name = "decrement", start = 0 },
+                        { name = "value", start = 20, width = 40, align = "center" },
+                        { name = "increment", start = 70 },
+                    },
+                },
+            },
+        },
+    }
+    local store = makeStore(definition, { Count = 2 })
+    local imgui = makeBasicImgui()
+
+    lib.drawUiNode(imgui, definition.ui[1], store.uiState, nil, definition.customTypes)
+
+    lu.assertTrue(#imgui._state.setCursorPosCalls >= 1)
+    lu.assertEquals(imgui._state.setCursorPosCalls[1].x, 12)
+    lu.assertEquals(imgui._state.setCursorPosCalls[1].y, 48)
+end
+
+function TestUiNodes:testWidgetHelpersExposeStructuredPositionedDrawHelper()
+    local imgui = makeBasicImgui()
+    local changed, endX, endY, consumedHeight = lib.WidgetHelpers.drawStructuredAt(
+        imgui,
+        10,
+        20,
+        26,
+        function()
+            imgui.Text("Hello")
+            return true
+        end)
+
+    lu.assertTrue(changed)
+    lu.assertEquals(imgui._state.setCursorPosCalls[1].x, 10)
+    lu.assertEquals(imgui._state.setCursorPosCalls[1].y, 20)
+    lu.assertEquals(endY, 46)
+    lu.assertEquals(consumedHeight, 26)
+    lu.assertEquals(type(endX), "number")
+end
+
 function TestUiNodes:testPrepareWidgetNodeCachesSlotGeometryForDirectCustomWidget()
     local customTypes = {
         widgets = {

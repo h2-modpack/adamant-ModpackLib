@@ -1069,7 +1069,7 @@ WidgetTypes.mappedRadio = {
             slots[#slots + 1] = {
                 name = "option:" .. tostring(index),
                 sameLine = hasLabel or index > 1,
-                draw = function(imgui)
+                draw = function()
                     local label
                     local selected
                     if type(option) == "table" then
@@ -1139,8 +1139,8 @@ WidgetTypes.packedRadio = {
         slots[#slots + 1] = {
             name = "option:none",
             sameLine = hasLabel,
-            draw = function(imgui)
-                if imgui.RadioButton(node.noneLabel or "None", selection.state == "none") then
+            draw = function(_imgui)
+                if _imgui.RadioButton(node.noneLabel or "None", selection.state == "none") then
                     return ClearPackedChoiceSelection(children, selection) == true
                 end
                 return false
@@ -1150,10 +1150,10 @@ WidgetTypes.packedRadio = {
             slots[#slots + 1] = {
                 name = "option:" .. tostring(index),
                 sameLine = true,
-                draw = function(imgui)
+                draw = function(_imgui)
                     local optionColor = node._valueColors and node._valueColors[child.alias] or nil
-                    local clicked = DrawWithValueColor(imgui, optionColor, function()
-                        return imgui.RadioButton(
+                    local clicked = DrawWithValueColor(_imgui, optionColor, function()
+                        return _imgui.RadioButton(
                             GetPackedChoiceLabel(node, child),
                             selection.selectedChild and selection.selectedChild.alias == child.alias or false)
                     end)

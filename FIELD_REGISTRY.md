@@ -551,8 +551,11 @@ Modules may extend the built-in registries with:
 - custom widgets must declare `binds`
 - custom widgets must declare `draw(...)`
 
-`lib.WidgetHelpers` is currently reserved and intentionally empty.
-It exists as the future home for widget-specific authoring/tooling helpers without mixing those helpers into the runtime `WidgetTypes` contract table.
+`lib.WidgetHelpers` is the public home for small widget-authoring helpers that do not belong in the runtime `WidgetTypes` contract table.
+
+Current helpers:
+- `lib.WidgetHelpers.drawStructuredAt(...)`
+- `lib.WidgetHelpers.estimateRowAdvanceY(...)`
 
 Rules:
 - custom widget names may not collide with built-in widget or layout names
@@ -576,6 +579,7 @@ Structured rendering contract:
 - structured children should leave the cursor settled at the bottom of the space they consumed before returning
 - Lib uses that settled end position as the parent footprint signal
 - this contract applies to Lib-managed slot rendering, `panel`, `verticalTabs`, and custom layouts that own child placement
+- `lib.drawWidgetSlots(...)` may be given an explicit `rowStartY` when a custom widget must avoid inheriting the ambient cursor baseline
 
 Leaf-widget rule:
 - widgets should be treated as leaf renderers by default
