@@ -1,5 +1,23 @@
-public.ui = public.ui or {}
-local ui = public.ui
+public.nav = public.nav or {}
+local nav = public.nav
+
+---@class NavTab
+---@field key string|number
+---@field label string|nil
+---@field group string|nil
+---@field color Color|nil
+
+---@class VerticalTabsOpts
+---@field id string|number|nil
+---@field navWidth number|nil
+---@field height number|nil
+---@field tabs NavTab[]|nil
+---@field activeKey string|number|nil
+
+---@class VisibilityCondition
+---@field alias string
+---@field value any
+---@field anyOf any[]|nil
 
 local function NormalizeTabs(tabs)
     if type(tabs) ~= "table" then
@@ -8,7 +26,10 @@ local function NormalizeTabs(tabs)
     return tabs
 end
 
-function ui.verticalTabs(imgui, opts)
+---@param imgui table
+---@param opts VerticalTabsOpts|nil
+---@return string|number|nil
+function nav.verticalTabs(imgui, opts)
     opts = opts or {}
     local id = tostring(opts.id or "verticalTabs")
     local navWidth = tonumber(opts.navWidth) or 180
@@ -21,11 +42,12 @@ function ui.verticalTabs(imgui, opts)
     for _, tab in ipairs(tabs) do
         local key = tab.key
         local label = tostring(tab.label or key or "")
+        local itemId = label .. "##" .. tostring(key)
         local group = type(tab.group) == "string" and tab.group or nil
         local selected = key == activeKey
         local color = tab.color
         if group ~= nil and group ~= currentGroup then
-            if currentGroup ~= nil and type(imgui.Separator) == "function" then
+            if currentGroup ~= nil then
                 imgui.Separator()
             end
             if type(imgui.TextDisabled) == "function" then
@@ -33,19 +55,19 @@ function ui.verticalTabs(imgui, opts)
             else
                 imgui.Text(group)
             end
-            if type(imgui.Separator) == "function" then
-                imgui.Separator()
-            end
+            
+            imgui.Separator()
+            
             currentGroup = group
         end
-        if type(color) == "table" and type(imgui.PushStyleColor) == "function" and type(imgui.PopStyleColor) == "function" then
+        if type(color) == "table" then
             local textEnum = imgui.ImGuiCol and imgui.ImGuiCol.Text or 0
             imgui.PushStyleColor(textEnum, color[1], color[2], color[3], color[4] or 1)
         end
-        if imgui.Selectable(label, selected) then
+        if imgui.Selectable(itemId, selected) then
             activeKey = key
         end
-        if type(color) == "table" and type(imgui.PopStyleColor) == "function" then
+        if type(color) == "table" then
             imgui.PopStyleColor()
         end
     end
@@ -55,7 +77,10 @@ function ui.verticalTabs(imgui, opts)
     return activeKey
 end
 
-function ui.isVisible(uiState, condition)
+---@param uiState UiState|nil
+---@param condition string|VisibilityCondition|nil
+---@return boolean
+function nav.isVisible(uiState, condition)
     if condition == nil then
         return true
     end

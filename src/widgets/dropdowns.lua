@@ -1,35 +1,57 @@
 local internal = AdamantModpackLib_Internal
-local ui = internal.ui
-local widgets = internal.widgets
 local WidgetFns = public.widgets
 
-local NormalizeChoiceValue = ui.NormalizeChoiceValue
-local ChoiceDisplay = widgets.ChoiceDisplay
-local GetStyleMetricX = ui.GetStyleMetricX
-local EstimateButtonWidth = ui.EstimateButtonWidth
+local widgetHelpers = internal.widgetHelpers
+local NormalizeChoiceValue = widgetHelpers.NormalizeChoiceValue
+local ChoiceDisplay = widgetHelpers.ChoiceDisplay
+local DrawWithValueColor = widgetHelpers.DrawWithValueColor
+local MakeSelectableId = widgetHelpers.MakeSelectableId
+local GetPackedChoiceLabel = widgetHelpers.GetPackedChoiceLabel
+local ClassifyPackedChoice = widgetHelpers.ClassifyPackedChoice
+local ApplyPackedChoiceSelection = widgetHelpers.ApplyPackedChoiceSelection
+local ClearPackedChoiceSelection = widgetHelpers.ClearPackedChoiceSelection
 
-local choiceHelpers = widgets.choiceHelpers
-local DrawWithValueColor = choiceHelpers.DrawWithValueColor
-local MakeSelectableId = choiceHelpers.MakeSelectableId
-local GetPackedChoiceLabel = choiceHelpers.GetPackedChoiceLabel
-local ClassifyPackedChoice = choiceHelpers.ClassifyPackedChoice
-local ApplyPackedChoiceSelection = choiceHelpers.ApplyPackedChoiceSelection
-local ClearPackedChoiceSelection = choiceHelpers.ClearPackedChoiceSelection
+---@class DropdownOpts
+---@field label string|nil
+---@field tooltip string|nil
+---@field values ChoiceValue[]|nil
+---@field default ChoiceValue|nil
+---@field displayValues ChoiceDisplayValues|nil
+---@field valueColors ValueColorMap|nil
+---@field controlWidth number|nil
+---@field controlGap number|nil
+
+---@class MappedDropdownOption
+---@field id string|number|nil
+---@field label string|nil
+---@field value any
+---@field color Color|nil
+---@field onSelect fun(option: MappedDropdownOption, uiState: UiState): boolean|nil
+
+---@class MappedDropdownOpts
+---@field label string|nil
+---@field tooltip string|nil
+---@field controlWidth number|nil
+---@field controlGap number|nil
+---@field getPreview fun(view: table<string, any>): string|number|boolean|nil
+---@field getPreviewColor fun(view: table<string, any>): Color|nil
+---@field getOptions fun(view: table<string, any>): MappedDropdownOption[]|any[]
+
+---@class PackedDropdownOpts
+---@field label string|nil
+---@field tooltip string|nil
+---@field controlWidth number|nil
+---@field controlGap number|nil
+---@field displayValues ChoiceDisplayValues|nil
+---@field valueColors table<string, Color>|nil
+---@field noneLabel string|nil
+---@field multipleLabel string|nil
+---@field selectionMode PackedSelectionMode|nil
 
 local function ShowTooltip(imgui, tooltip)
-    if type(tooltip) == "string" and tooltip ~= "" and type(imgui.IsItemHovered) == "function" and imgui.IsItemHovered() then
+    if type(tooltip) == "string" and tooltip ~= "" and imgui.IsItemHovered() then
         imgui.SetTooltip(tooltip)
     end
-end
-
-local function SelectableCompat(imgui, label, selected)
-    local ok, result = pcall(function()
-        return imgui.Selectable(label, selected)
-    end)
-    if ok then
-        return result
-    end
-    return imgui.Selectable(label)
 end
 
 local function ResolvePackedChildren(uiState, alias, store)
@@ -59,12 +81,18 @@ local function ResolvePackedChildren(uiState, alias, store)
     return children
 end
 
+---@param imgui table
+---@param opts DropdownOpts|MappedDropdownOpts|PackedDropdownOpts
+---@param previewText string
+---@param previewColor Color|nil
+---@param drawControl fun(controlWidth: number|nil, previewColor: Color|nil): boolean
+---@return boolean
 local function DrawLabeledDropdownControl(imgui, opts, previewText, previewColor, drawControl)
     local labelText = tostring(opts.label or "")
-    local controlWidth = tonumber(opts.controlWidth) or (EstimateButtonWidth(imgui, previewText) + 16)
+    local controlWidth = tonumber(opts.controlWidth)
     local controlGap = tonumber(opts.controlGap)
     if controlGap == nil or controlGap < 0 then
-        controlGap = GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
+        controlGap = imgui.GetStyle().ItemSpacing.x
     end
 
     if labelText ~= "" then
@@ -73,7 +101,7 @@ local function DrawLabeledDropdownControl(imgui, opts, previewText, previewColor
         ShowTooltip(imgui, opts.tooltip)
         imgui.SameLine()
         if controlGap > 0 then
-            imgui.SetCursorPosX(ui.GetCursorPosXSafe(imgui) + controlGap)
+            imgui.SetCursorPosX(imgui.GetCursorPosX() + controlGap)
         end
     end
 
@@ -88,6 +116,11 @@ local function DrawLabeledDropdownControl(imgui, opts, previewText, previewColor
     return changed
 end
 
+---@param imgui table
+---@param uiState UiState
+---@param alias string
+---@param opts DropdownOpts|nil
+---@return boolean
 function WidgetFns.dropdown(imgui, uiState, alias, opts)
     opts = opts or {}
     local current = NormalizeChoiceValue(opts, uiState.view[alias])
@@ -122,7 +155,7 @@ function WidgetFns.dropdown(imgui, uiState, alias, opts)
         local changed = false
         for _, option in ipairs(optionEntries) do
             local clicked = DrawWithValueColor(imgui, option.color, function()
-                return SelectableCompat(imgui, MakeSelectableId(option.label, option.uniqueId), option.value == current)
+                return imgui.Selectable(MakeSelectableId(option.label, option.uniqueId), option.value == current)
             end)
             if clicked and option.value ~= current then
                 uiState.set(alias, option.value)
@@ -135,6 +168,11 @@ function WidgetFns.dropdown(imgui, uiState, alias, opts)
     end)
 end
 
+---@param imgui table
+---@param uiState UiState
+---@param alias string
+---@param opts MappedDropdownOpts|nil
+---@return boolean
 function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
     opts = opts or {}
     local preview = type(opts.getPreview) == "function"
@@ -158,7 +196,7 @@ function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
             local optionColor = type(option) == "table" and option.color or nil
             local uniqueId = type(option) == "table" and (option.id or option.value or label) or option
             local clicked = DrawWithValueColor(imgui, optionColor, function()
-                return SelectableCompat(imgui, MakeSelectableId(label, uniqueId), false)
+                return imgui.Selectable(MakeSelectableId(label, uniqueId), false)
             end)
             if clicked then
                 if type(option) == "table" and type(option.onSelect) == "function" then
@@ -174,6 +212,12 @@ function WidgetFns.mappedDropdown(imgui, uiState, alias, opts)
     end)
 end
 
+---@param imgui table
+---@param uiState UiState
+---@param alias string
+---@param store ManagedStore|nil
+---@param opts PackedDropdownOpts|nil
+---@return boolean
 function WidgetFns.packedDropdown(imgui, uiState, alias, store, opts)
     opts = opts or {}
     local children = ResolvePackedChildren(uiState, alias, store)
@@ -196,15 +240,15 @@ function WidgetFns.packedDropdown(imgui, uiState, alias, store, opts)
             return false
         end
         local changed = false
-        if SelectableCompat(imgui, MakeSelectableId(tostring(opts.noneLabel or "None"), "none"), selection.state == "none") then
+        if imgui.Selectable(MakeSelectableId(tostring(opts.noneLabel or "None"), "none"), selection.state == "none") then
             changed = ClearPackedChoiceSelection(children, selection) or changed
         end
         for _, child in ipairs(children) do
             local childLabel = GetPackedChoiceLabel(opts, child)
             local childColor = valueColors and valueColors[child.alias] or nil
             local clicked = DrawWithValueColor(imgui, childColor, function()
-                local isSelected = selection.selectedChild and selection.selectedChild.alias == child.alias
-                return SelectableCompat(imgui, MakeSelectableId(childLabel, child.alias), isSelected)
+                local isSelected = selection.selectedChild ~= nil and selection.selectedChild.alias == child.alias
+                return imgui.Selectable(MakeSelectableId(childLabel, child.alias), isSelected)
             end)
             if clicked then
                 changed = ApplyPackedChoiceSelection(children, child.alias, selection) or changed

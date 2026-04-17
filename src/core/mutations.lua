@@ -2,6 +2,25 @@ public.mutation = public.mutation or {}
 local mutation = public.mutation
 local mutationRuntime = setmetatable({}, { __mode = "k" })
 
+---@alias MutationShape "patch"|"manual"|"hybrid"
+
+---@class MutationInfo
+---@field hasPatch boolean
+---@field hasApply boolean
+---@field hasRevert boolean
+---@field hasManual boolean
+
+---@class MutationPlan
+---@field set fun(self: MutationPlan, tbl: table, key: any, value: any): MutationPlan
+---@field setMany fun(self: MutationPlan, tbl: table, kv: table): MutationPlan
+---@field transform fun(self: MutationPlan, tbl: table, key: any, fn: fun(current: any, key: any, tbl: table): any): MutationPlan
+---@field append fun(self: MutationPlan, tbl: table, key: any, value: any): MutationPlan
+---@field appendUnique fun(self: MutationPlan, tbl: table, key: any, value: any, equivalentFn: fun(a: any, b: any): boolean|nil): MutationPlan
+---@field removeElement fun(self: MutationPlan, tbl: table, key: any, value: any, equivalentFn: fun(a: any, b: any): boolean|nil): MutationPlan
+---@field setElement fun(self: MutationPlan, tbl: table, key: any, oldValue: any, newValue: any, equivalentFn: fun(a: any, b: any): boolean|nil): MutationPlan
+---@field apply fun(): boolean
+---@field revert fun(): boolean
+
 local function CloneMutationValue(value)
     if type(value) == "table" then
         return rom.game.DeepCopyTable(value)
@@ -55,9 +74,9 @@ local function BuildMutationPlan(def, store)
 end
 
 --- Infers which mutation lifecycle a module definition exposes.
----@param def table Candidate module definition table.
----@return string|nil shape Inferred lifecycle shape: `patch`, `manual`, `hybrid`, or nil.
----@return table info Flags describing which lifecycle hooks are present on the definition.
+---@param def ModuleDefinition Candidate module definition table.
+---@return MutationShape|nil shape Inferred lifecycle shape: `patch`, `manual`, `hybrid`, or nil.
+---@return MutationInfo info Flags describing which lifecycle hooks are present on the definition.
 function mutation.inferShape(def)
     local hasPatch = def and type(def.patchPlan) == "function" or false
     local hasApply = def and type(def.apply) == "function" or false
@@ -82,7 +101,7 @@ function mutation.inferShape(def)
 end
 
 --- Returns whether a module definition declares that it mutates live run data.
----@param def table|nil Candidate module definition table.
+---@param def ModuleDefinition|nil Candidate module definition table.
 ---@return boolean mutates True when the definition opts into run-data mutation behavior.
 function mutation.mutatesRunData(def)
     if not def then
@@ -129,7 +148,7 @@ function mutation.createBackup()
 end
 
 --- Creates a reversible mutation plan that can batch table updates and roll them back later.
----@return table plan Mutable mutation plan with operation builders plus apply/revert methods.
+---@return MutationPlan plan Mutable mutation plan with operation builders plus apply/revert methods.
 function mutation.createPlan()
     local backup, restore = mutation.createBackup()
     local operations = {}
@@ -360,8 +379,8 @@ function mutation.createPlan()
 end
 
 --- Applies a module definition's current mutation lifecycle to live run data.
----@param def table Module definition declaring mutation behavior.
----@param store table|nil Managed module store associated with the definition.
+---@param def ModuleDefinition Module definition declaring mutation behavior.
+---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
 function mutation.apply(def, store)
@@ -413,8 +432,8 @@ function mutation.apply(def, store)
 end
 
 --- Reverts a module definition's current mutation lifecycle from live run data.
----@param def table Module definition declaring mutation behavior.
----@param store table|nil Managed module store associated with the definition.
+---@param def ModuleDefinition Module definition declaring mutation behavior.
+---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reverted successfully.
 ---@return string|nil err Error message when the revert step fails.
 function mutation.revert(def, store)
@@ -452,8 +471,8 @@ function mutation.revert(def, store)
 end
 
 --- Sets the enabled state for a mutating module and applies or reverts live changes as needed.
----@param def table Module definition declaring mutation behavior.
----@param store table Managed module store associated with the definition.
+---@param def ModuleDefinition Module definition declaring mutation behavior.
+---@param store ManagedStore Managed module store associated with the definition.
 ---@param enabled boolean Desired enabled state.
 ---@return boolean ok True when the enabled state transition completed successfully.
 ---@return string|nil err Error message when the transition fails.
@@ -480,8 +499,8 @@ function mutation.setEnabled(def, store, enabled)
 end
 
 --- Reverts and reapplies a module definition's mutation lifecycle.
----@param def table Module definition declaring mutation behavior.
----@param store table|nil Managed module store associated with the definition.
+---@param def ModuleDefinition Module definition declaring mutation behavior.
+---@param store ManagedStore|nil Managed module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle reapplied successfully.
 ---@return string|nil err Error message when the reapply step fails.
 function mutation.reapply(def, store)

@@ -3,10 +3,32 @@ local _coordinators = internal.coordinators
 public.host = public.host or {}
 local host = public.host
 
+---@class DerivedTextEntry
+---@field alias string
+---@field compute fun(uiState: UiState): string|number|boolean|nil
+---@field signature fun(uiState: UiState): any|nil
+
+---@class DerivedTextCacheEntry
+---@field signature any
+---@field value string
+
+---@class StandaloneOpts
+---@field windowTitle string|nil
+---@field drawTab fun(imgui: table, uiState: UiState|nil)|nil
+---@field getDrawTab fun(): fun(imgui: table, uiState: UiState|nil)|nil|nil
+---@field beforeDrawTab fun(imgui: table, uiState: UiState|nil)|nil
+---@field getBeforeDrawTab fun(): fun(imgui: table, uiState: UiState|nil)|nil|nil
+---@field afterDrawTab fun(imgui: table, uiState: UiState|nil)|nil
+---@field getAfterDrawTab fun(): fun(imgui: table, uiState: UiState|nil)|nil|nil
+
+---@class StandaloneRuntime
+---@field renderWindow fun()
+---@field addMenuBar fun()
+
 --- Recomputes derived text aliases for a UI state and optionally caches computed signatures and values.
----@param uiState table UI state used to read view data and write derived aliases.
----@param entries table Ordered list of derived-text descriptors with `alias`, `compute`, and optional `signature`.
----@param cache table|nil Optional cache table keyed by alias.
+---@param uiState UiState UI state used to read view data and write derived aliases.
+---@param entries DerivedTextEntry[] Ordered list of derived-text descriptors with `alias`, `compute`, and optional `signature`.
+---@param cache table<string, DerivedTextCacheEntry>|nil Optional cache table keyed by alias.
 ---@return boolean changed True when any derived alias value changed.
 function host.runDerivedText(uiState, entries, cache)
     if not uiState or type(uiState.set) ~= "function" or type(uiState.view) ~= "table" then
@@ -73,7 +95,7 @@ end
 
 --- Audits staged UI state against persisted config values and reloads staged values from config.
 ---@param name string Label used when printing mismatch diagnostics.
----@param uiState table UI state exposing config mismatch and reload helpers.
+---@param uiState UiState UI state exposing config mismatch and reload helpers.
 ---@return table mismatches List of alias names whose staged values drifted from persisted config.
 function host.auditAndResyncState(name, uiState)
     if not uiState or type(uiState.collectConfigMismatches) ~= "function" or type(uiState.reloadFromConfig) ~= "function" then
@@ -89,9 +111,9 @@ function host.auditAndResyncState(name, uiState)
 end
 
 --- Commits staged UI state back to config and reapplies live mutations when required.
----@param def table Module definition declaring mutation behavior.
----@param store table Managed module store associated with the definition.
----@param uiState table UI state exposing transactional flush and reload helpers.
+---@param def ModuleDefinition Module definition declaring mutation behavior.
+---@param store ManagedStore Managed module store associated with the definition.
+---@param uiState UiState UI state exposing transactional flush and reload helpers.
 ---@return boolean ok True when the commit completed successfully.
 ---@return string|nil err Error message when the commit or rollback path fails.
 function host.commitState(def, store, uiState)
@@ -140,11 +162,11 @@ function host.commitState(def, store, uiState)
 end
 
 --- Creates standalone window and menu-bar renderers for a module.
----@param def table Module definition declaring UI and mutation behavior.
----@param store table Managed module store associated with the definition.
----@param uiState table|nil Optional UI state override; defaults to `store.uiState`.
----@param opts table|nil Optional standalone rendering hooks and window settings.
----@return table runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
+---@param def ModuleDefinition Module definition declaring UI and mutation behavior.
+---@param store ManagedStore Managed module store associated with the definition.
+---@param uiState UiState|nil Optional UI state override; defaults to `store.uiState`.
+---@param opts StandaloneOpts|nil Optional standalone rendering hooks and window settings.
+---@return StandaloneRuntime runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
 function host.standaloneUI(def, store, uiState, opts)
     opts = opts or {}
     uiState = uiState or (store and store.uiState) or nil

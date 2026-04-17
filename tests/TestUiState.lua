@@ -52,7 +52,7 @@ TestStore = {}
 
 function TestStore:testCreateStoreReadsAndWritesScalarAliasesAndRawKeys()
     local config = { Enabled = false, MaxGodsPerRun = 4 }
-    local store = lib.createStore(config, makeScalarDefinition())
+    local store = lib.store.create(config, makeScalarDefinition())
 
     lu.assertFalse(store.read("Enabled"))
     lu.assertEquals(store.read("MaxGods"), 4)
@@ -68,7 +68,7 @@ end
 
 function TestStore:testPackedAliasReadWriteUpdatesOwningRoot()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, makePackedDefinition())
+    local store = lib.store.create(config, makePackedDefinition())
 
     lu.assertFalse(store.read("EnabledBit"))
     lu.assertEquals(store.read("ModeBits"), 0)
@@ -85,7 +85,7 @@ end
 
 function TestStore:testReadBitsAndWriteBitsAreRawNumeric()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, {
+    local store = lib.store.create(config, {
         storage = {
             { type = "int", alias = "PackedValue", configKey = "Packed", default = 0 },
         },
@@ -100,7 +100,7 @@ end
 function TestStore:testTransientAliasesAreNotReadableThroughStore()
     CaptureWarnings()
     local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
 
     lu.assertNil(store.read("FilterText"))
     store.write("FilterText", "Aphrodite")
@@ -127,7 +127,7 @@ TestUiState = {}
 
 function TestUiState:testUiStateStagesScalarAliases()
     local config = { Enabled = true, MaxGodsPerRun = 5 }
-    local store = lib.createStore(config, makeScalarDefinition())
+    local store = lib.store.create(config, makeScalarDefinition())
     local uiState = store.uiState
 
     lu.assertTrue(uiState.view.Enabled)
@@ -145,7 +145,7 @@ end
 
 function TestUiState:testPackedAliasEditReencodesPackedRootOnFlush()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, makePackedDefinition())
+    local store = lib.store.create(config, makePackedDefinition())
     local uiState = store.uiState
 
     uiState.set("ModeBits", 2)
@@ -163,7 +163,7 @@ end
 
 function TestUiState:testReloadFromConfigRebuildsPackedChildren()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, makePackedDefinition())
+    local store = lib.store.create(config, makePackedDefinition())
     local uiState = store.uiState
 
     config.Packed = 5
@@ -176,11 +176,11 @@ end
 
 function TestUiState:testAuditAndResyncUiStateDetectsPackedDrift()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, makePackedDefinition())
+    local store = lib.store.create(config, makePackedDefinition())
     local uiState = store.uiState
 
     config.Packed = 5
-    local mismatches = lib.auditAndResyncUiState("PackedUiState", uiState)
+    local mismatches = lib.host.auditAndResyncState("PackedUiState", uiState)
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })
@@ -191,7 +191,7 @@ end
 
 function TestUiState:testReadonlyViewRejectsWrites()
     local config = { Enabled = true, MaxGodsPerRun = 5 }
-    local store = lib.createStore(config, makeScalarDefinition())
+    local store = lib.store.create(config, makeScalarDefinition())
 
     local ok, err = pcall(function()
         store.uiState.view.Enabled = false
@@ -203,7 +203,7 @@ end
 
 function TestUiState:testTransientAliasesLiveOnlyInUiState()
     local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
     local uiState = store.uiState
 
     lu.assertEquals(uiState.view.FilterText, "")
@@ -224,7 +224,7 @@ end
 
 function TestUiState:testReloadFromConfigResetsTransientAliasesToDefaults()
     local config = { Enabled = true }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
     local uiState = store.uiState
 
     uiState.set("FilterText", "Hera")
@@ -240,7 +240,7 @@ end
 
 function TestUiState:testResetRestoresTransientAliasDefault()
     local config = { Enabled = true }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
     local uiState = store.uiState
 
     uiState.set("FilterText", "Hermes")
@@ -252,7 +252,7 @@ end
 
 function TestUiState:testResetRestoresPersistedAliasDefaultAndMarksDirty()
     local config = { Enabled = true, MaxGodsPerRun = 5 }
-    local store = lib.createStore(config, makeScalarDefinition())
+    local store = lib.store.create(config, makeScalarDefinition())
     local uiState = store.uiState
 
     uiState.reset("Enabled")
@@ -266,7 +266,7 @@ end
 
 function TestUiState:testResetRestoresPackedChildDefault()
     local config = { Packed = 0 }
-    local store = lib.createStore(config, makePackedDefinition())
+    local store = lib.store.create(config, makePackedDefinition())
     local uiState = store.uiState
 
     uiState.set("EnabledBit", true)
@@ -278,69 +278,12 @@ function TestUiState:testResetRestoresPackedChildDefault()
     lu.assertEquals(uiState.view.Packed, 1)
 end
 
-function TestUiState:testRunUiStatePassIgnoresTransientOnlyEdits()
-    local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
-    local commitCalls = 0
-    local flushedCalls = 0
-
-    local changed = lib.runUiStatePass({
-        uiState = store.uiState,
-        draw = function(_, uiState)
-            uiState.set("FilterText", "Apollo")
-        end,
-        commit = function()
-            commitCalls = commitCalls + 1
-            return true, nil
-        end,
-        onFlushed = function()
-            flushedCalls = flushedCalls + 1
-        end,
-    })
-
-    lu.assertFalse(changed)
-    lu.assertEquals(commitCalls, 0)
-    lu.assertEquals(flushedCalls, 0)
-    lu.assertEquals(store.uiState.view.FilterText, "Apollo")
-end
-
-function TestUiState:testRunUiStatePassCallsBeforeAndAfterDrawWithChangedFlag()
-    local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
-    local calls = {}
-
-    local changed = lib.runUiStatePass({
-        uiState = store.uiState,
-        beforeDraw = function(_, uiState)
-            calls[#calls + 1] = "before"
-            uiState.set("FilterText", "Apollo")
-        end,
-        draw = function(_, uiState)
-            calls[#calls + 1] = "draw"
-            uiState.set("FilterMode", "enabled")
-            return true
-        end,
-        afterDraw = function(_, uiState, _, drawChanged)
-            calls[#calls + 1] = drawChanged and "after:true" or "after:false"
-            uiState.set("SummaryText", uiState.view.FilterText .. ":" .. uiState.view.FilterMode)
-        end,
-        commit = function()
-            calls[#calls + 1] = "commit"
-            return true, nil
-        end,
-    })
-
-    lu.assertFalse(changed)
-    lu.assertEquals(calls, { "before", "draw", "after:true" })
-    lu.assertEquals(store.uiState.view.SummaryText, "Apollo:enabled")
-end
-
 function TestUiState:testRunDerivedTextUpdatesTransientStringAlias()
     local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
     local uiState = store.uiState
 
-    local changed = lib.runDerivedText(uiState, {
+    local changed = lib.host.runDerivedText(uiState, {
         {
             alias = "SummaryText",
             compute = function(state)
@@ -353,7 +296,7 @@ function TestUiState:testRunDerivedTextUpdatesTransientStringAlias()
     lu.assertEquals(uiState.view.SummaryText, "No filter")
 
     uiState.set("FilterText", "Apollo")
-    changed = lib.runDerivedText(uiState, {
+    changed = lib.host.runDerivedText(uiState, {
         {
             alias = "SummaryText",
             compute = function(state)
@@ -368,7 +311,7 @@ end
 
 function TestUiState:testRunDerivedTextSkipsRecomputeWhenSignatureIsStable()
     local config = { Enabled = false }
-    local store = lib.createStore(config, makeTransientDefinition())
+    local store = lib.store.create(config, makeTransientDefinition())
     local uiState = store.uiState
     local cache = {}
     local computeCalls = 0
@@ -386,62 +329,18 @@ function TestUiState:testRunDerivedTextSkipsRecomputeWhenSignatureIsStable()
         },
     }
 
-    local changed = lib.runDerivedText(uiState, entries, cache)
+    local changed = lib.host.runDerivedText(uiState, entries, cache)
     lu.assertTrue(changed)
     lu.assertEquals(uiState.view.SummaryText, "Mode: all")
     lu.assertEquals(computeCalls, 1)
 
-    changed = lib.runDerivedText(uiState, entries, cache)
+    changed = lib.host.runDerivedText(uiState, entries, cache)
     lu.assertFalse(changed)
     lu.assertEquals(computeCalls, 1)
 
     uiState.set("FilterMode", "checked")
-    changed = lib.runDerivedText(uiState, entries, cache)
+    changed = lib.host.runDerivedText(uiState, entries, cache)
     lu.assertTrue(changed)
     lu.assertEquals(uiState.view.SummaryText, "Mode: checked")
     lu.assertEquals(computeCalls, 2)
-end
-
-function TestUiState:testGetCachedPreparedNodeReusesStableEntry()
-    local buildCalls = 0
-    local cacheEntry, node, rebuilt = lib.getCachedPreparedNode(nil, "alpha", function()
-        buildCalls = buildCalls + 1
-        return { id = buildCalls }
-    end)
-
-    lu.assertTrue(rebuilt)
-    lu.assertEquals(buildCalls, 1)
-    lu.assertEquals(node.id, 1)
-
-    local reusedCache, reusedNode, reused = lib.getCachedPreparedNode(cacheEntry, "alpha", function()
-        buildCalls = buildCalls + 1
-        return { id = buildCalls }
-    end)
-
-    lu.assertFalse(reused)
-    lu.assertEquals(buildCalls, 1)
-    lu.assertEquals(reusedCache, cacheEntry)
-    lu.assertEquals(reusedNode, node)
-end
-
-function TestUiState:testGetCachedPreparedNodeCanReusePreviousStateOnRebuild()
-    local cacheEntry = nil
-
-    cacheEntry = select(1, lib.getCachedPreparedNode(cacheEntry, "alpha", function()
-        return { _activeTabKey = "Olympians" }
-    end))
-
-    local nextCache, nextNode, rebuilt, previousNode = lib.getCachedPreparedNode(cacheEntry, "beta", function()
-        return {}
-    end, {
-        reuseState = function(node, oldNode)
-            node._activeTabKey = oldNode._activeTabKey
-        end,
-    })
-
-    lu.assertTrue(rebuilt)
-    lu.assertEquals(previousNode, cacheEntry.node)
-    lu.assertEquals(nextNode._activeTabKey, "Olympians")
-    lu.assertEquals(nextCache.node, nextNode)
-    lu.assertEquals(nextCache.signature, "beta")
 end

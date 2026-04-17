@@ -3,9 +3,15 @@ local coordinatorInternal = internal.coordinators
 public.coordinator = public.coordinator or {}
 local coordinator = public.coordinator
 
+---@class CoordinatorConfig
+---@field ModEnabled boolean
+
+---@class EnabledStore
+---@field read fun(keyOrAlias: string|table): any
+
 --- Registers coordinator metadata for a coordinated module pack.
 ---@param packId string Unique coordinator pack identifier.
----@param config table Coordinator configuration table.
+---@param config CoordinatorConfig Coordinator configuration table.
 function coordinator.register(packId, config)
     return coordinatorInternal.register(packId, config)
 end
@@ -18,7 +24,7 @@ function coordinator.isCoordinated(packId)
 end
 
 --- Returns whether a coordinated or standalone module should currently be treated as enabled.
----@param store table|nil Managed module store to read the Enabled flag from.
+---@param store EnabledStore|nil Managed module store to read the Enabled flag from.
 ---@param packId string|nil Unique coordinator pack identifier.
 ---@return boolean enabled True when the module should be considered enabled.
 function coordinator.isEnabled(store, packId)

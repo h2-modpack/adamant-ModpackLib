@@ -434,7 +434,7 @@ Because after the milestone is already reached, `once_loaded.*` executes immedia
 Good pattern:
 - `local dataDefaults = import("config.lua")`
 - `config = chalk.auto(...)`
-- recreate `store = lib.createStore(config, definition, dataDefaults)`
+- recreate `store = lib.store.create(config, definition, dataDefaults)`
 - recreate `uiState`
 - recreate framework/module derived state
 

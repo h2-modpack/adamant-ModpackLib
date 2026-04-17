@@ -1,13 +1,60 @@
 local internal = AdamantModpackLib_Internal
 local libWarn = internal.logging.warnIf
-local ui = internal.ui
-local widgets = internal.widgets
+local widgetHelpers = {}
 
-local NormalizeColor = ui.NormalizeColor
+---@alias Color number[]
+---@alias ChoiceValue any
+---@alias ChoiceDisplayValues table<any, string>
+---@alias ValueColorMap table<any, Color>
+---@alias PackedSelectionMode "singleEnabled"|"singleRemaining"
 
-local choiceHelpers = {}
+function widgetHelpers.NormalizeColor(value)
+    if type(value) ~= "table" then
+        return nil
+    end
+    local r = tonumber(value[1])
+    local g = tonumber(value[2])
+    local b = tonumber(value[3])
+    local a = value[4] ~= nil and tonumber(value[4]) or 1
+    if r == nil or g == nil or b == nil or a == nil then
+        return nil
+    end
+    return { r, g, b, a }
+end
 
-function choiceHelpers.ValidateValueColorsTable(node, prefix, widgetName)
+function widgetHelpers.NormalizeChoiceValue(node, value)
+    local values = node.values
+    if type(values) ~= "table" or #values == 0 then
+        return value ~= nil and value or node.default
+    end
+
+    if value ~= nil then
+        for _, candidate in ipairs(values) do
+            if candidate == value then
+                return candidate
+            end
+        end
+    end
+
+    if node.default ~= nil then
+        for _, candidate in ipairs(values) do
+            if candidate == node.default then
+                return candidate
+            end
+        end
+    end
+
+    return values[1]
+end
+
+function widgetHelpers.ChoiceDisplay(node, value)
+    if node.displayValues and node.displayValues[value] ~= nil then
+        return tostring(node.displayValues[value])
+    end
+    return tostring(value)
+end
+
+function widgetHelpers.ValidateValueColorsTable(node, prefix, widgetName)
     node._valueColors = nil
     if node.valueColors == nil then
         return
@@ -19,7 +66,7 @@ function choiceHelpers.ValidateValueColorsTable(node, prefix, widgetName)
 
     local normalizedColors = {}
     for key, color in pairs(node.valueColors) do
-        local normalized = NormalizeColor(color)
+        local normalized = widgetHelpers.NormalizeColor(color)
         if normalized == nil then
             libWarn("%s: %s valueColors[%s] must be a 3- or 4-number color table", prefix, widgetName, tostring(key))
         else
@@ -29,7 +76,7 @@ function choiceHelpers.ValidateValueColorsTable(node, prefix, widgetName)
     node._valueColors = normalizedColors
 end
 
-function choiceHelpers.DrawWithValueColor(imgui, color, drawFn)
+function widgetHelpers.DrawWithValueColor(imgui, color, drawFn)
     if type(color) ~= "table" or type(imgui.PushStyleColor) ~= "function" or type(imgui.PopStyleColor) ~= "function" then
         return drawFn()
     end
@@ -44,17 +91,17 @@ function choiceHelpers.DrawWithValueColor(imgui, color, drawFn)
     return a, b, c, d
 end
 
-function choiceHelpers.MakeSelectableId(label, uniqueId)
+function widgetHelpers.MakeSelectableId(label, uniqueId)
     return tostring(label or "") .. "##" .. tostring(uniqueId or "")
 end
 
-function choiceHelpers.ValidateDisplayValuesTable(node, prefix, widgetName)
+function widgetHelpers.ValidateDisplayValuesTable(node, prefix, widgetName)
     if node.displayValues ~= nil and type(node.displayValues) ~= "table" then
         libWarn("%s: %s displayValues must be a table", prefix, widgetName)
     end
 end
 
-function choiceHelpers.GetPackedChoiceMode(node)
+function widgetHelpers.GetPackedChoiceMode(node)
     local mode = node.selectionMode
     if mode == nil or mode == "" then
         return "singleEnabled"
@@ -62,7 +109,7 @@ function choiceHelpers.GetPackedChoiceMode(node)
     return mode
 end
 
-function choiceHelpers.GetPackedChoiceChildren(node, bound, widgetName)
+function widgetHelpers.GetPackedChoiceChildren(node, bound, widgetName)
     local children = bound and bound.value and bound.value.children or nil
     if type(children) ~= "table" then
         libWarn("%s: no packed children for alias '%s'; bind to a packedInt root",
@@ -72,28 +119,28 @@ function choiceHelpers.GetPackedChoiceChildren(node, bound, widgetName)
     return children
 end
 
-function choiceHelpers.GetPackedChoiceLabel(node, child)
+function widgetHelpers.GetPackedChoiceLabel(node, child)
     if type(node.displayValues) == "table" and node.displayValues[child.alias] ~= nil then
         return tostring(node.displayValues[child.alias])
     end
     return tostring(child.label or child.alias or "")
 end
 
-function choiceHelpers.GetPackedChoiceNoneValue(mode)
+function widgetHelpers.GetPackedChoiceNoneValue(mode)
     if mode == "singleRemaining" then
         return false
     end
     return false
 end
 
-function choiceHelpers.IsPackedChoiceActive(mode, value)
+function widgetHelpers.IsPackedChoiceActive(mode, value)
     if mode == "singleRemaining" then
         return value == false
     end
     return value == true
 end
 
-function choiceHelpers.GetPackedChoiceWriteValue(mode, isActive)
+function widgetHelpers.GetPackedChoiceWriteValue(mode, isActive)
     if mode == "singleRemaining" then
         if isActive then
             return false
@@ -103,9 +150,9 @@ function choiceHelpers.GetPackedChoiceWriteValue(mode, isActive)
     return isActive == true
 end
 
-function choiceHelpers.ClassifyPackedChoice(node, children)
-    local mode = choiceHelpers.GetPackedChoiceMode(node)
-    local noneValue = choiceHelpers.GetPackedChoiceNoneValue(mode)
+function widgetHelpers.ClassifyPackedChoice(node, children)
+    local mode = widgetHelpers.GetPackedChoiceMode(node)
+    local noneValue = widgetHelpers.GetPackedChoiceNoneValue(mode)
     local activeCount = 0
     local totalCount = 0
     local lastActiveChild = nil
@@ -116,7 +163,7 @@ function choiceHelpers.ClassifyPackedChoice(node, children)
         if value == nil then
             value = noneValue
         end
-        if choiceHelpers.IsPackedChoiceActive(mode, value) then
+        if widgetHelpers.IsPackedChoiceActive(mode, value) then
             activeCount = activeCount + 1
             lastActiveChild = child
         end
@@ -139,11 +186,11 @@ function choiceHelpers.ClassifyPackedChoice(node, children)
     }
 end
 
-function choiceHelpers.ApplyPackedChoiceSelection(children, selectedAlias, selection)
+function widgetHelpers.ApplyPackedChoiceSelection(children, selectedAlias, selection)
     local changed = false
     for _, child in ipairs(children or {}) do
         local shouldBeActive = child.alias == selectedAlias
-        local nextValue = choiceHelpers.GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
+        local nextValue = widgetHelpers.GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
         local currentValue = child.get and child.get() or selection.noneValue
         if currentValue == nil then
             currentValue = selection.noneValue
@@ -156,7 +203,7 @@ function choiceHelpers.ApplyPackedChoiceSelection(children, selectedAlias, selec
     return changed
 end
 
-function choiceHelpers.ClearPackedChoiceSelection(children, selection)
+function widgetHelpers.ClearPackedChoiceSelection(children, selection)
     local changed = false
     for _, child in ipairs(children or {}) do
         local currentValue = child.get and child.get() or selection.noneValue
@@ -171,8 +218,8 @@ function choiceHelpers.ClearPackedChoiceSelection(children, selection)
     return changed
 end
 
-function choiceHelpers.ValidatePackedChoiceWidget(node, prefix, widgetName)
-    local mode = choiceHelpers.GetPackedChoiceMode(node)
+function widgetHelpers.ValidatePackedChoiceWidget(node, prefix, widgetName)
+    local mode = widgetHelpers.GetPackedChoiceMode(node)
     if mode ~= "singleEnabled" and mode ~= "singleRemaining" then
         libWarn("%s: %s selectionMode must be 'singleEnabled' or 'singleRemaining'", prefix, widgetName)
     end
@@ -182,8 +229,8 @@ function choiceHelpers.ValidatePackedChoiceWidget(node, prefix, widgetName)
     if node.multipleLabel ~= nil and type(node.multipleLabel) ~= "string" then
         libWarn("%s: %s multipleLabel must be a string", prefix, widgetName)
     end
-    choiceHelpers.ValidateDisplayValuesTable(node, prefix, widgetName)
-    choiceHelpers.ValidateValueColorsTable(node, prefix, widgetName)
+    widgetHelpers.ValidateDisplayValuesTable(node, prefix, widgetName)
+    widgetHelpers.ValidateValueColorsTable(node, prefix, widgetName)
 end
 
-widgets.choiceHelpers = choiceHelpers
+internal.widgetHelpers = widgetHelpers

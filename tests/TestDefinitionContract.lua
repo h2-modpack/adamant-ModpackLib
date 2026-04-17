@@ -11,7 +11,7 @@ function TestDefinitionContract:tearDown()
 end
 
 function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionKey()
-    lib.createStore({}, {
+    lib.store.create({}, {
         id = "Example",
         name = "Example",
         storage = {
@@ -21,14 +21,15 @@ function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionK
         affectRunData = true,
     })
 
-    lu.assertEquals(#Warnings, 1)
+    lu.assertEquals(#Warnings, 2)
     lu.assertStrContains(Warnings[1], "unknown definition key 'affectRunData'")
+    lu.assertStrContains(Warnings[2], "definition.ui is ignored")
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnSpecialFieldsThatFrameworkIgnores()
-    lib.validateDefinition({
+    lib.store.create({}, {
         modpack = "test-pack",
-        special = true,
+        id = "ExampleSpecial",
         name = "Example Special",
         category = "Run Mods",
         subgroup = "General",
@@ -36,21 +37,21 @@ function TestDefinitionContract:testValidateDefinitionWarnsOnSpecialFieldsThatFr
         storage = {
             { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
         },
-    }, "Example Special")
+    })
 
     lu.assertEquals(#Warnings, 3)
-    lu.assertStrContains(Warnings[1], "special modules ignore definition.category")
-    lu.assertStrContains(Warnings[2], "special modules ignore definition.subgroup")
-    lu.assertStrContains(Warnings[3], "special modules ignore definition.selectQuickUi")
+    lu.assertStrContains(Warnings[1], "definition.category is ignored")
+    lu.assertStrContains(Warnings[2], "definition.subgroup is ignored")
+    lu.assertStrContains(Warnings[3], "definition.selectQuickUi is ignored")
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnIncompleteLifecycle()
-    lib.validateDefinition({
+    lib.store.create({}, {
         id = "Example",
         name = "Example",
         affectsRunData = true,
         apply = function() end,
-    }, "Example")
+    })
 
     lu.assertEquals(#Warnings, 2)
     lu.assertStrContains(Warnings[1], "manual lifecycle requires both definition.apply and definition.revert")

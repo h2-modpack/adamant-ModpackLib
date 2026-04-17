@@ -1,24 +1,35 @@
 local internal = AdamantModpackLib_Internal
-local ui = internal.ui
 local WidgetFns = public.widgets
 
-local NormalizeColor = ui.NormalizeColor
+local widgetHelpers = internal.widgetHelpers
+local NormalizeColor = widgetHelpers.NormalizeColor
+
+---@class TextOpts
+---@field color Color|nil
+---@field tooltip string|nil
+---@field alignToFramePadding boolean|nil
 
 local function ShowTooltip(imgui, tooltip)
-    if type(tooltip) == "string" and tooltip ~= "" and type(imgui.IsItemHovered) == "function" and imgui.IsItemHovered() then
+    if type(tooltip) == "string" and tooltip ~= "" and imgui.IsItemHovered() then
         imgui.SetTooltip(tooltip)
     end
 end
 
+---@param imgui table
+---@return nil
 function WidgetFns.separator(imgui)
     imgui.Separator()
 end
 
+---@param imgui table
+---@param text any
+---@param opts TextOpts|nil
+---@return nil
 function WidgetFns.text(imgui, text, opts)
     opts = opts or {}
     local renderedText = tostring(text or "")
     local color = NormalizeColor(opts.color)
-    if opts.alignToFramePadding == true and type(imgui.AlignTextToFramePadding) == "function" then
+    if opts.alignToFramePadding == true then
         imgui.AlignTextToFramePadding()
     end
     if type(color) == "table" then

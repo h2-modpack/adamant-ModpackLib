@@ -1,15 +1,24 @@
 local internal = AdamantModpackLib_Internal
-local ui = internal.ui
 local WidgetFns = public.widgets
 
-local GetStyleMetricX = ui.GetStyleMetricX
+---@class InputTextOpts
+---@field label string|nil
+---@field tooltip string|nil
+---@field maxLen number|nil
+---@field controlWidth number|nil
+---@field controlGap number|nil
 
 local function ShowTooltip(imgui, tooltip)
-    if type(tooltip) == "string" and tooltip ~= "" and type(imgui.IsItemHovered) == "function" and imgui.IsItemHovered() then
+    if type(tooltip) == "string" and tooltip ~= "" and imgui.IsItemHovered() then
         imgui.SetTooltip(tooltip)
     end
 end
 
+---@param imgui table
+---@param uiState UiState
+---@param alias string
+---@param opts InputTextOpts|nil
+---@return boolean
 function WidgetFns.inputText(imgui, uiState, alias, opts)
     opts = opts or {}
     local current = tostring((uiState and uiState.view and uiState.view[alias]) or "")
@@ -18,7 +27,7 @@ function WidgetFns.inputText(imgui, uiState, alias, opts)
     local controlWidth = tonumber(opts.controlWidth) or 120
     local controlGap = tonumber(opts.controlGap)
     if controlGap == nil or controlGap < 0 then
-        controlGap = GetStyleMetricX(imgui.GetStyle(), "ItemSpacing", 8)
+        controlGap = imgui.GetStyle().ItemSpacing.x
     end
 
     if label ~= "" then
@@ -27,7 +36,7 @@ function WidgetFns.inputText(imgui, uiState, alias, opts)
         ShowTooltip(imgui, opts.tooltip)
         imgui.SameLine()
         if controlGap > 0 then
-            imgui.SetCursorPosX(ui.GetCursorPosXSafe(imgui) + controlGap)
+            imgui.SetCursorPosX(imgui.GetCursorPosX() + controlGap)
         end
     end
 

@@ -1,10 +1,65 @@
 local internal = AdamantModpackLib_Internal
-local StorageTypes = public.registry.storage
+internal.storage = internal.storage or {}
+local storageInternal = internal.storage
+local StorageTypes = {}
+storageInternal.types = StorageTypes
 local libWarn = internal.logging.warnIf
-local ui = internal.ui
+local StorageKey = storageInternal.StorageKey
+local NormalizeInteger = storageInternal.NormalizeInteger
+
 public.storage = public.storage or {}
 local storageApi = public.storage
-local NormalizeInteger = ui.NormalizeInteger
+
+---@alias ConfigPath string|string[]
+---@alias StorageLifetime "'persistent'"|"'transient'"
+---@alias StorageValueKind "'bool'"|"'int'"|"'string'"
+---@alias StorageNodeType "'bool'"|"'int'"|"'string'"|"'packedInt'"
+
+---@class PackedBitNode
+---@field alias string
+---@field label string|nil
+---@field type "bool"|"int"
+---@field default any
+---@field min number|nil
+---@field max number|nil
+---@field offset number
+---@field width number
+---@field parent StorageNode|nil
+---@field _isBitAlias boolean|nil
+---@field _storageKey string|nil
+---@field _valueKind StorageValueKind|nil
+
+---@class StorageNode
+---@field alias string
+---@field label string|nil
+---@field type StorageNodeType
+---@field configKey ConfigPath|nil
+---@field lifetime "transient"|nil
+---@field default any
+---@field min number|nil
+---@field max number|nil
+---@field width number|nil
+---@field maxLen number|nil
+---@field bits PackedBitNode[]|nil
+---@field _isRoot boolean|nil
+---@field _lifetime "persistent"|"transient"|nil
+---@field _storageKey string|nil
+---@field _valueKind StorageValueKind|nil
+---@field _bitAliases PackedBitNode[]|nil
+
+---@class StorageSchema: StorageNode[]
+---@field _rootNodes StorageNode[]|nil
+---@field _transientRootNodes StorageNode[]|nil
+---@field _aliasNodes table<string, StorageNode|PackedBitNode>|nil
+---@field _persistedAliasNodes table<string, StorageNode>|nil
+---@field _rootByKey table<string, StorageNode>|nil
+
+local function GetBitValueMask(width)
+    local normalizedWidth = math.floor(tonumber(width) or 0)
+    if normalizedWidth <= 0 then return 0 end
+    if normalizedWidth >= 32 then return 0xFFFFFFFF end
+    return bit32.rshift(0xFFFFFFFF, 32 - normalizedWidth)
+end
 
 local function DeepValueEqual(a, b)
     if a == b then return true end
@@ -25,7 +80,7 @@ local function DeepValueEqual(a, b)
 end
 
 local function PrepareRootNodeMetadata(node)
-    node._storageKey = node.configKey ~= nil and ui.StorageKey(node.configKey) or nil
+    node._storageKey = node.configKey ~= nil and StorageKey(node.configKey) or nil
     if not node.alias and node._storageKey ~= nil then
         node.alias = node._storageKey
     end
@@ -84,7 +139,7 @@ local function EnsurePreparedStorage(storage, label)
     return storageApi.getAliases(storage)
 end
 
-ui.EnsurePreparedStorage = EnsurePreparedStorage
+storageInternal.EnsurePreparedStorage = EnsurePreparedStorage
 
 StorageTypes.bool = {
     valueKind = "bool",
@@ -265,7 +320,7 @@ StorageTypes.packedInt = {
 }
 
 --- Validates a storage schema and prepares its root, alias, and packed-bit metadata in place.
----@param storage table Ordered list of storage root descriptors to validate.
+---@param storage StorageSchema Ordered list of storage root descriptors to validate.
 ---@param label string Validation label used to prefix warnings.
 function storageApi.validate(storage, label)
     if type(storage) ~= "table" then
@@ -354,15 +409,15 @@ function storageApi.validate(storage, label)
                             local encoded = child.type == "bool"
                                 and (child.default == true and 1 or 0)
                                 or child.default
-                            node.default = public.accessors.writePackedBits(node.default, child.offset, child.width, encoded)
+                            node.default = storageApi.writePackedBits(node.default, child.offset, child.width, encoded)
                         end
                     else
                         node.default = NormalizeInteger(node, node.default)
                         for _, child in ipairs(node._bitAliases) do
                             if child.default == nil then
-                                child.default = public.accessors.readPackedBits(node.default, child.offset, child.width)
+                                child.default = storageApi.readPackedBits(node.default, child.offset, child.width)
                             else
-                                local expected = public.accessors.readPackedBits(node.default, child.offset, child.width)
+                                local expected = storageApi.readPackedBits(node.default, child.offset, child.width)
                                 local normalized = StorageTypes[child.type].normalize(child, child.default)
                                 local encoded = child.type == "bool"
                                     and (normalized == true and 1 or 0)
@@ -387,15 +442,15 @@ function storageApi.validate(storage, label)
 end
 
 --- Returns the prepared persistent root nodes for a validated storage schema.
----@param storage table Validated storage schema.
----@return table roots Prepared list of persistent root storage nodes.
+---@param storage StorageSchema Validated storage schema.
+---@return StorageNode[] roots Prepared list of persistent root storage nodes.
 function storageApi.getRoots(storage)
     if type(storage) ~= "table" then return {} end
     return rawget(storage, "_rootNodes") or {}
 end
 
 --- Returns the packed width contributed by a storage node, when the node type supports packing.
----@param node table Storage node to inspect.
+---@param node StorageNode|PackedBitNode Storage node to inspect.
 ---@return number|nil width Packed width in bits, or nil when the node is not packable.
 function storageApi.getPackWidth(node)
     if type(node) ~= "table" then return nil end
@@ -407,7 +462,7 @@ function storageApi.getPackWidth(node)
 end
 
 --- Compares two values using storage-type equality when available, falling back to deep equality.
----@param node table|nil Storage node whose type-specific equality should be used.
+---@param node StorageNode|PackedBitNode|nil Storage node whose type-specific equality should be used.
 ---@param a any First value to compare.
 ---@param b any Second value to compare.
 ---@return boolean equal True when the two values are considered equivalent for the storage node.
@@ -419,11 +474,66 @@ function storageApi.valuesEqual(node, a, b)
     return DeepValueEqual(a, b)
 end
 
+--- Encodes a storage value into its hash string form using the node's storage type.
+---@param node StorageNode|PackedBitNode Storage node whose type-specific hash encoder should be used.
+---@param value any Value to encode.
+---@return string|nil encoded Encoded hash value, or nil when the node type is unknown.
+function storageApi.toHash(node, value)
+    local storageType = node and node.type and StorageTypes[node.type] or nil
+    if not storageType or type(storageType.toHash) ~= "function" then
+        return nil
+    end
+    return storageType.toHash(node, value)
+end
+
+--- Decodes a storage value from its hash string form using the node's storage type.
+---@param node StorageNode|PackedBitNode Storage node whose type-specific hash decoder should be used.
+---@param str string Encoded hash value.
+---@return any decoded Decoded value, or nil when the node type is unknown.
+function storageApi.fromHash(node, str)
+    local storageType = node and node.type and StorageTypes[node.type] or nil
+    if not storageType or type(storageType.fromHash) ~= "function" then
+        return nil
+    end
+    return storageType.fromHash(node, str)
+end
+
 --- Returns the prepared alias map for a validated storage schema.
----@param storage table Validated storage schema.
----@return table aliases Map from storage alias to prepared storage node.
+---@param storage StorageSchema Validated storage schema.
+---@return table<string, StorageNode|PackedBitNode> aliases Map from storage alias to prepared storage node.
 function storageApi.getAliases(storage)
     if type(storage) ~= "table" then return {} end
     return rawget(storage, "_aliasNodes") or {}
 end
 
+--- Reads a bitfield value from a packed integer using an offset and width.
+---@param packed number|nil
+---@param offset number|nil
+---@param width number|nil
+---@return number
+function storageApi.readPackedBits(packed, offset, width)
+    local normalizedPacked = math.floor(tonumber(packed) or 0)
+    local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
+    local mask = GetBitValueMask(width)
+    if mask == 0 then return 0 end
+    return bit32.band(bit32.rshift(normalizedPacked, normalizedOffset), mask)
+end
+
+--- Writes a bitfield value into a packed integer using an offset and width.
+---@param packed number|nil
+---@param offset number|nil
+---@param width number|nil
+---@param value number|nil
+---@return number
+function storageApi.writePackedBits(packed, offset, width, value)
+    local normalizedPacked = math.floor(tonumber(packed) or 0)
+    local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
+    local mask = GetBitValueMask(width)
+    if mask == 0 then return normalizedPacked end
+    local normalizedValue = math.floor(tonumber(value) or 0)
+    if normalizedValue < 0 then normalizedValue = 0
+    elseif normalizedValue > mask then normalizedValue = mask end
+    local shiftedMask = bit32.lshift(mask, normalizedOffset)
+    local cleared = bit32.band(normalizedPacked, bit32.bnot(shiftedMask))
+    return bit32.bor(cleared, bit32.lshift(normalizedValue, normalizedOffset))
+end

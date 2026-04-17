@@ -3,7 +3,7 @@ local lu = require('luaunit')
 TestBackupSystem = {}
 
 function TestBackupSystem:testBackupAndRestoreScalar()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local tbl = { HP = 100, Name = "Player" }
 
     backup(tbl, "HP")
@@ -15,7 +15,7 @@ function TestBackupSystem:testBackupAndRestoreScalar()
 end
 
 function TestBackupSystem:testBackupAndRestoreMultipleKeys()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local tbl = { A = 1, B = 2, C = 3 }
 
     backup(tbl, "A", "B")
@@ -29,7 +29,7 @@ function TestBackupSystem:testBackupAndRestoreMultipleKeys()
 end
 
 function TestBackupSystem:testBackupNilValue()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local tbl = { A = 1 }
 
     backup(tbl, "Missing")
@@ -40,7 +40,7 @@ function TestBackupSystem:testBackupNilValue()
 end
 
 function TestBackupSystem:testBackupTable()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local inner = { x = 1, y = 2 }
     local tbl = { Data = inner }
 
@@ -54,7 +54,7 @@ function TestBackupSystem:testBackupTable()
 end
 
 function TestBackupSystem:testBackupOnlyFirstCall()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local tbl = { X = "original" }
 
     backup(tbl, "X")
@@ -66,7 +66,7 @@ function TestBackupSystem:testBackupOnlyFirstCall()
 end
 
 function TestBackupSystem:testMultipleTables()
-    local backup, restore = lib.createBackupSystem()
+    local backup, restore = lib.mutation.createBackup()
     local t1 = { A = 1 }
     local t2 = { B = 2 }
 
@@ -81,8 +81,8 @@ function TestBackupSystem:testMultipleTables()
 end
 
 function TestBackupSystem:testIsolatedSystems()
-    local backup1, restore1 = lib.createBackupSystem()
-    local backup2, restore2 = lib.createBackupSystem()
+    local backup1, restore1 = lib.mutation.createBackup()
+    local backup2, restore2 = lib.mutation.createBackup()
     local tbl = { X = "original" }
 
     backup1(tbl, "X")

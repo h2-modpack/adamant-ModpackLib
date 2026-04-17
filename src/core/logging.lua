@@ -5,8 +5,10 @@ public.logging = public.logging or {}
 local logging = public.logging
 local FormatMessage = loggingInternal.formatMessage
 
+---@alias LogName string
+
 --- Emits a module-scoped warning when the supplied condition is enabled.
----@param packId string Module or pack identifier used as the log prefix.
+---@param packId LogName Module or pack identifier used as the log prefix.
 ---@param enabled boolean Whether the warning should be emitted.
 ---@param fmt string Message format string.
 function logging.warnIf(packId, enabled, fmt, ...)
@@ -15,14 +17,14 @@ function logging.warnIf(packId, enabled, fmt, ...)
 end
 
 --- Emits a module-scoped warning unconditionally.
----@param packId string Module or pack identifier used as the log prefix.
+---@param packId LogName Module or pack identifier used as the log prefix.
 ---@param fmt string Message format string.
 function logging.warn(packId, fmt, ...)
     print(FormatMessage("[" .. packId .. "] ", fmt, ...))
 end
 
 --- Emits a module-scoped log line when the supplied condition is enabled.
----@param name string Module or subsystem identifier used as the log prefix.
+---@param name LogName Module or subsystem identifier used as the log prefix.
 ---@param enabled boolean Whether the log line should be emitted.
 ---@param fmt string Message format string.
 function logging.logIf(name, enabled, fmt, ...)

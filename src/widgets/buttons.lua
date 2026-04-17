@@ -1,11 +1,26 @@
 local WidgetFns = public.widgets
 
+---@class ButtonOpts
+---@field id string|number|nil
+---@field tooltip string|nil
+---@field onClick fun(imgui: table)|nil
+
+---@class ConfirmButtonOpts
+---@field tooltip string|nil
+---@field confirmLabel string|nil
+---@field cancelLabel string|nil
+---@field onConfirm fun(imgui: table)|nil
+
 local function ShowTooltip(imgui, tooltip)
-    if type(tooltip) == "string" and tooltip ~= "" and type(imgui.IsItemHovered) == "function" and imgui.IsItemHovered() then
+    if type(tooltip) == "string" and tooltip ~= "" and imgui.IsItemHovered() then
         imgui.SetTooltip(tooltip)
     end
 end
 
+---@param imgui table
+---@param label any
+---@param opts ButtonOpts|nil
+---@return boolean
 function WidgetFns.button(imgui, label, opts)
     opts = opts or {}
     local id = tostring(opts.id or label or "")
@@ -17,35 +32,34 @@ function WidgetFns.button(imgui, label, opts)
     return clicked == true
 end
 
+---@param imgui table
+---@param id string|number
+---@param label any
+---@param opts ConfirmButtonOpts|nil
+---@return boolean
 function WidgetFns.confirmButton(imgui, id, label, opts)
     opts = opts or {}
     local popupId = tostring(id) .. "##popup"
     local changed = false
-    if imgui.Button(tostring(label or "") .. "##" .. tostring(id)) and type(imgui.OpenPopup) == "function" then
+    if imgui.Button(tostring(label or "") .. "##" .. tostring(id)) then
         imgui.OpenPopup(popupId)
     end
     ShowTooltip(imgui, opts.tooltip)
-    if type(imgui.BeginPopup) == "function" and imgui.BeginPopup(popupId) then
+    if imgui.BeginPopup(popupId) then
         local confirmLabel = tostring(opts.confirmLabel or "Confirm")
         local cancelLabel = tostring(opts.cancelLabel or "Cancel")
         if imgui.Button(confirmLabel .. "##confirm_" .. tostring(id)) then
             if type(opts.onConfirm) == "function" then
                 opts.onConfirm(imgui)
             end
-            if type(imgui.CloseCurrentPopup) == "function" then
-                imgui.CloseCurrentPopup()
-            end
+            imgui.CloseCurrentPopup()
             changed = true
         end
-        if type(imgui.SameLine) == "function" then
-            imgui.SameLine()
-        end
-        if imgui.Button(cancelLabel .. "##cancel_" .. tostring(id)) and type(imgui.CloseCurrentPopup) == "function" then
+        imgui.SameLine()
+        if imgui.Button(cancelLabel .. "##cancel_" .. tostring(id)) then
             imgui.CloseCurrentPopup()
         end
-        if type(imgui.EndPopup) == "function" then
-            imgui.EndPopup()
-        end
+        imgui.EndPopup()
     end
     return changed
 end
