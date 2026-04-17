@@ -1,124 +1,51 @@
-local internal = AdamantModpackLib_Internal
-local WidgetTypes = public.registry.widgets
-local libWarn = internal.logging.warnIf
-local ui = internal.ui
-local widgets = internal.widgets
+local WidgetFns = public.widgets
 
-local PrepareWidgetText = widgets.PrepareWidgetText
-local EstimateButtonWidth = ui.EstimateButtonWidth
-local EstimateStructuredRowAdvanceY = ui.EstimateStructuredRowAdvanceY
-local DrawStructuredAt = ui.DrawStructuredAt
-local ShowPreparedTooltip = ui.ShowPreparedTooltip
+local function ShowTooltip(imgui, tooltip)
+    if type(tooltip) == "string" and tooltip ~= "" and type(imgui.IsItemHovered) == "function" and imgui.IsItemHovered() then
+        imgui.SetTooltip(tooltip)
+    end
+end
 
-WidgetTypes.button = {
-    binds = {},
-    params = {
-        label = { type = "string", required = true },
-        tooltip = { type = "string", optional = true },
-        onClick = { type = "function", optional = true },
-        quick = { type = "boolean", optional = true },
-    },
-    validate = function(node, prefix)
-        PrepareWidgetText(node)
-        if node._label == "" then
-            libWarn("%s: button requires non-empty label", prefix)
-        end
-        if node.onClick ~= nil and type(node.onClick) ~= "function" then
-            libWarn("%s: button onClick must be function", prefix)
-        end
-    end,
-    draw = function(imgui, node, _, x, y, _, _, uiState)
-        local label = (node._label or "") .. (node._imguiId or "")
-        local contentWidth = EstimateButtonWidth(imgui, node._label or "")
-        local changed, _, _, consumedHeight = DrawStructuredAt(
-            imgui,
-            x,
-            y,
-            EstimateStructuredRowAdvanceY(imgui),
-            function()
-                if imgui.Button(label) then
-                    ShowPreparedTooltip(imgui, node)
-                    return true
-                end
-                ShowPreparedTooltip(imgui, node)
-                return false
-            end)
-        if changed and type(node.onClick) == "function" then
-            node.onClick(uiState, node, imgui)
-        end
-        return contentWidth, consumedHeight, changed
-    end,
-}
+function WidgetFns.button(imgui, label, opts)
+    opts = opts or {}
+    local id = tostring(opts.id or label or "")
+    local clicked = imgui.Button(tostring(label or "") .. "##" .. id)
+    ShowTooltip(imgui, opts.tooltip)
+    if clicked and type(opts.onClick) == "function" then
+        opts.onClick(imgui)
+    end
+    return clicked == true
+end
 
-WidgetTypes.confirmButton = {
-    binds = {},
-    params = {
-        label = { type = "string", required = true },
-        tooltip = { type = "string", optional = true },
-        onConfirm = { type = "function", optional = true },
-        confirmLabel = { type = "string", optional = true },
-        cancelLabel = { type = "string", optional = true },
-        quick = { type = "boolean", optional = true },
-    },
-    validate = function(node, prefix)
-        PrepareWidgetText(node)
-        if node._label == "" then
-            libWarn("%s: confirmButton requires non-empty label", prefix)
+function WidgetFns.confirmButton(imgui, id, label, opts)
+    opts = opts or {}
+    local popupId = tostring(id) .. "##popup"
+    local changed = false
+    if imgui.Button(tostring(label or "") .. "##" .. tostring(id)) and type(imgui.OpenPopup) == "function" then
+        imgui.OpenPopup(popupId)
+    end
+    ShowTooltip(imgui, opts.tooltip)
+    if type(imgui.BeginPopup) == "function" and imgui.BeginPopup(popupId) then
+        local confirmLabel = tostring(opts.confirmLabel or "Confirm")
+        local cancelLabel = tostring(opts.cancelLabel or "Cancel")
+        if imgui.Button(confirmLabel .. "##confirm_" .. tostring(id)) then
+            if type(opts.onConfirm) == "function" then
+                opts.onConfirm(imgui)
+            end
+            if type(imgui.CloseCurrentPopup) == "function" then
+                imgui.CloseCurrentPopup()
+            end
+            changed = true
         end
-        if node.onConfirm ~= nil and type(node.onConfirm) ~= "function" then
-            libWarn("%s: confirmButton onConfirm must be function", prefix)
+        if type(imgui.SameLine) == "function" then
+            imgui.SameLine()
         end
-        if node.confirmLabel ~= nil and type(node.confirmLabel) ~= "string" then
-            libWarn("%s: confirmButton confirmLabel must be string", prefix)
+        if imgui.Button(cancelLabel .. "##cancel_" .. tostring(id)) and type(imgui.CloseCurrentPopup) == "function" then
+            imgui.CloseCurrentPopup()
         end
-        if node.cancelLabel ~= nil and type(node.cancelLabel) ~= "string" then
-            libWarn("%s: confirmButton cancelLabel must be string", prefix)
+        if type(imgui.EndPopup) == "function" then
+            imgui.EndPopup()
         end
-        node._confirmLabel = type(node.confirmLabel) == "string" and node.confirmLabel ~= "" and node.confirmLabel or "Confirm"
-        node._cancelLabel = type(node.cancelLabel) == "string" and node.cancelLabel ~= "" and node.cancelLabel or "Cancel"
-        node._confirmPopupId = (node._imguiId or "confirmButton") .. "##popup"
-    end,
-    draw = function(imgui, node, _, x, y, _, _, uiState)
-        local contentWidth = EstimateButtonWidth(imgui, node._label or "")
-        local changed, _, _, consumedHeight = DrawStructuredAt(
-            imgui,
-            x,
-            y,
-            EstimateStructuredRowAdvanceY(imgui),
-            function()
-                if imgui.Button((node._label or "") .. (node._imguiId or "")) then
-                    if type(imgui.OpenPopup) == "function" then
-                        imgui.OpenPopup(node._confirmPopupId)
-                    end
-                end
-                ShowPreparedTooltip(imgui, node)
-
-                local popupChanged = false
-                if type(imgui.BeginPopup) == "function" and imgui.BeginPopup(node._confirmPopupId) then
-                    if imgui.Button(node._confirmLabel .. (node._imguiId or "")) then
-                        if type(node.onConfirm) == "function" then
-                            node.onConfirm(uiState, node, imgui)
-                        end
-                        if type(imgui.CloseCurrentPopup) == "function" then
-                            imgui.CloseCurrentPopup()
-                        end
-                        popupChanged = true
-                    end
-                    if type(imgui.SameLine) == "function" then
-                        imgui.SameLine()
-                    end
-                    if imgui.Button(node._cancelLabel .. "##cancel" .. (node._imguiId or "")) then
-                        if type(imgui.CloseCurrentPopup) == "function" then
-                            imgui.CloseCurrentPopup()
-                        end
-                    end
-                    if type(imgui.EndPopup) == "function" then
-                        imgui.EndPopup()
-                    end
-                end
-
-                return popupChanged
-            end)
-        return contentWidth, consumedHeight, changed
-    end,
-}
+    end
+    return changed
+end

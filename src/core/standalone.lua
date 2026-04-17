@@ -2,19 +2,6 @@ local internal = AdamantModpackLib_Internal
 local libWarn = internal.logging.warn
 local coordinator = public.coordinator
 
-local function ResolveAvailableUiWidth(imgui)
-    if type(imgui.GetContentRegionAvail) == "function" then
-        local availX = imgui.GetContentRegionAvail()
-        if type(availX) == "number" and availX > 0 then
-            return availX
-        end
-    end
-    if type(imgui.GetWindowWidth) == "function" then
-        return imgui.GetWindowWidth()
-    end
-    return nil
-end
-
 --- Creates a standalone menu renderer for a regular coordinated-capable module.
 ---@param def table Module definition declaring UI, storage, and mutation behavior.
 ---@param store table Managed module store associated with the definition.
@@ -31,12 +18,6 @@ function coordinator.standaloneUI(def, store)
                 tostring(err))
         end
         return ok, err
-    end
-
-    local function onUiStateFlushed()
-        if public.mutation.mutatesRunData(def) and store.read("Enabled") == true then
-            rom.game.SetupRunData()
-        end
     end
 
     return function()
@@ -62,22 +43,6 @@ function coordinator.standaloneUI(def, store)
 
             if store.uiState and imgui.Button("Audit + Resync UI State") then
                 public.special.auditAndResyncState(def.name or def.id or "module", store.uiState)
-            end
-
-            if enabled and store.uiState and type(def.ui) == "table" and #def.ui > 0 then
-                imgui.Separator()
-                public.special.runPass({
-                    name = def.name,
-                    imgui = imgui,
-                    uiState = store.uiState,
-                    commit = function(state)
-                        return public.special.commitState(def, store, state)
-                    end,
-                    draw = function()
-                        public.ui.drawTree(imgui, def.ui, store.uiState, ResolveAvailableUiWidth(imgui), def.customTypes)
-                    end,
-                    onFlushed = onUiStateFlushed,
-                })
             end
 
             imgui.EndMenu()

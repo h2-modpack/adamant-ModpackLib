@@ -17,26 +17,21 @@ local function BuildManagedStorage(definition)
     end
 
     if definition.stateSchema ~= nil or definition.options ~= nil then
-        error("legacy definition.stateSchema/options are no longer supported; use definition.storage and definition.ui", 2)
+        error("legacy definition.stateSchema/options are no longer supported; use definition.storage", 2)
     end
 
     if definition.storage ~= nil
-        or definition.ui ~= nil
         or definition.special ~= nil
         or definition.id ~= nil
     then
-        local label = tostring(definition.name or definition.id or _PLUGIN.guid or "module")
         if type(definition.storage) == "table" then
             return definition.storage
-        end
-        if type(definition.ui) == "table" and #definition.ui > 0 then
-            internal.logging.warn("%s: module declares definition.ui but missing definition.storage; no uiState created", label)
         end
         return nil
     end
 
     if #definition > 0 then
-        error("createStore expects a module definition table; raw storage/ui arrays are not supported", 2)
+        error("createStore expects a module definition table; raw storage arrays are not supported", 2)
     end
     return nil
 end
@@ -413,11 +408,6 @@ function storeApi.create(modConfig, definition, dataDefaults)
 
     if storage then
         public.storage.validate(storage, label)
-        if type(definition.ui) == "table" then
-            public.ui.validate(definition.ui, label, storage, definition.customTypes)
-        end
-    elseif type(definition) == "table" and type(definition.ui) == "table" and #definition.ui > 0 then
-        internal.logging.warn("%s: definition.ui declared without definition.storage; UI state disabled", label)
     end
 
     local aliasNodes = storage and public.storage.getAliases(storage) or {}
@@ -541,8 +531,27 @@ function storeApi.create(modConfig, definition, dataDefaults)
         writeRaw(configKey, nextPacked)
     end
 
+    --- Returns packed child aliases for a packed root alias.
+    ---@param alias string Packed root alias.
+    ---@return table aliases Ordered list of `{ alias = string, label = string }` entries.
+    function store.getPackedAliases(alias)
+        local node = aliasNodes[alias]
+        if not node or node.type ~= "packedInt" then
+            return {}
+        end
+
+        local packedAliases = {}
+        for _, child in ipairs(node._bitAliases or {}) do
+            packedAliases[#packedAliases + 1] = {
+                alias = child.alias,
+                label = child.label or child.alias,
+            }
+        end
+        return packedAliases
+    end
+
     store.storage = storage
-    store.ui = type(definition) == "table" and definition.ui or nil
+    store.ui = nil
     store._persistedAliasNodes = persistedAliasNodes
 
     if storage then
