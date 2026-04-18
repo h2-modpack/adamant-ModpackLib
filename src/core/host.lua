@@ -166,6 +166,8 @@ end
 function host.standaloneUI(def, store, uiState, opts)
     opts = opts or {}
     uiState = uiState or (store and store.uiState) or nil
+    local DEFAULT_WINDOW_WIDTH = 960
+    local DEFAULT_WINDOW_HEIGHT = 720
 
     local function getDrawTab()
         if type(opts.getDrawTab) == "function" then
@@ -181,6 +183,15 @@ function host.standaloneUI(def, store, uiState, opts)
     end
 
     local showWindow = false
+    local didSeedWindowSize = false
+
+    local function seedWindowSize(imgui)
+        if didSeedWindowSize then
+            return
+        end
+        imgui.SetNextWindowSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, rom.ImGuiCond.FirstUseEver)
+        didSeedWindowSize = true
+    end
 
     local function renderWindow()
         if def.modpack and _coordinators[def.modpack] then return end
@@ -188,6 +199,7 @@ function host.standaloneUI(def, store, uiState, opts)
 
         local imgui = rom.ImGui
         local title = (opts.windowTitle or def.name) .. "###" .. tostring(def.id)
+        seedWindowSize(imgui)
         if imgui.Begin(title) then
             local enabled = store.read("Enabled") == true
             local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
