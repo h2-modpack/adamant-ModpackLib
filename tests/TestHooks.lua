@@ -373,3 +373,92 @@ function TestHooks:testCreateModuleHostSyncsCoordinatedRuntimeImmediately()
     lu.assertEquals(revertCalls, 0)
     lib.lifecycle.registerCoordinator(packId, nil)
 end
+
+function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState()
+    local packId = "hook-reload-pack"
+    local firstApplyCalls = 0
+    local firstRevertCalls = 0
+    local secondApplyCalls = 0
+    local secondRevertCalls = 0
+    lib.lifecycle.registerCoordinator(packId, { ModEnabled = true })
+
+    local function createSession()
+        return {
+            view = {},
+            read = function() end,
+            write = function() end,
+            reset = function() end,
+            isDirty = function()
+                return false
+            end,
+            _flushToConfig = function() end,
+            _reloadFromConfig = function() end,
+            auditMismatches = function()
+                return {}
+            end,
+        }
+    end
+
+    local store = {
+        read = function(key)
+            if key == "Enabled" then
+                return true
+            end
+            return false
+        end,
+    }
+
+    lib.createModuleHost({
+        definition = {
+            modpack = packId,
+            id = "Alpha",
+            name = "Alpha",
+            storage = {},
+            affectsRunData = true,
+            apply = function()
+                firstApplyCalls = firstApplyCalls + 1
+            end,
+            revert = function()
+                firstRevertCalls = firstRevertCalls + 1
+            end,
+        },
+        store = store,
+        session = createSession(),
+    })
+
+    lib.createModuleHost({
+        definition = {
+            modpack = packId,
+            id = "Alpha",
+            name = "Alpha",
+            storage = {},
+            affectsRunData = true,
+            apply = function()
+                secondApplyCalls = secondApplyCalls + 1
+            end,
+            revert = function()
+                secondRevertCalls = secondRevertCalls + 1
+            end,
+        },
+        store = store,
+        session = createSession(),
+    })
+
+    lu.assertEquals(firstApplyCalls, 1)
+    lu.assertEquals(firstRevertCalls, 1)
+    lu.assertEquals(secondApplyCalls, 1)
+    lu.assertEquals(secondRevertCalls, 0)
+
+    lib.lifecycle.registerCoordinator(packId, nil)
+    lib.lifecycle.revertMutation({
+        modpack = packId,
+        id = "Alpha",
+        name = "Alpha",
+        storage = {},
+        affectsRunData = true,
+        apply = function() end,
+        revert = function()
+            secondRevertCalls = secondRevertCalls + 1
+        end,
+    }, store)
+end
