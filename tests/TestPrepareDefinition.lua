@@ -3,10 +3,14 @@ local lu = require('luaunit')
 TestPrepareDefinition = {}
 
 function TestPrepareDefinition:setUp()
+    lib.lifecycle.registerCoordinator("test-pack", nil)
+    lib.lifecycle.registerCoordinatorRebuild("test-pack", nil)
     CaptureWarnings()
 end
 
 function TestPrepareDefinition:tearDown()
+    lib.lifecycle.registerCoordinator("test-pack", nil)
+    lib.lifecycle.registerCoordinatorRebuild("test-pack", nil)
     RestoreWarnings()
 end
 
@@ -68,6 +72,148 @@ function TestPrepareDefinition:testPrepareDefinitionMarksStructuralReloadMismatc
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
     lu.assertEquals(prepared.storage[1].alias, "OtherFlag")
+end
+
+function TestPrepareDefinition:testFinalizeModuleHostRequestsCoordinatorRebuildOnStructuralMismatch()
+    local owner = {}
+    local rebuildReason = nil
+
+    lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
+    lib.lifecycle.registerCoordinatorRebuild("test-pack", function(reason)
+        rebuildReason = reason
+        return true
+    end)
+
+    lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
+        },
+    })
+
+    local prepared = lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "OtherFlag", configKey = "OtherFlag", default = false },
+        },
+    })
+
+    local store, session = lib.createStore({
+        Enabled = false,
+        DebugMode = false,
+        OtherFlag = false,
+    }, prepared)
+    local host = lib.createModuleHost({
+        definition = prepared,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    local requested = lib.finalizeModuleHost(host)
+
+    lu.assertTrue(owner.requiresFullReload)
+    lu.assertTrue(requested)
+    lu.assertNotNil(rebuildReason)
+    lu.assertEquals(rebuildReason.kind, "structural_definition_changed")
+    lu.assertEquals(rebuildReason.moduleId, "Example")
+    lu.assertEquals(rebuildReason.modpack, "test-pack")
+    lu.assertEquals(#Warnings, 0)
+end
+
+function TestPrepareDefinition:testFinalizeModuleHostWarnsWhenCoordinatedRebuildCallbackIsMissing()
+    local owner = {}
+
+    lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
+
+    lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
+        },
+    })
+
+    local prepared = lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "OtherFlag", configKey = "OtherFlag", default = false },
+        },
+    })
+
+    local store, session = lib.createStore({
+        Enabled = false,
+        DebugMode = false,
+        OtherFlag = false,
+    }, prepared)
+    local host = lib.createModuleHost({
+        definition = prepared,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    local requested = lib.finalizeModuleHost(host)
+
+    lu.assertTrue(owner.requiresFullReload)
+    lu.assertFalse(requested)
+    lu.assertEquals(#Warnings, 1)
+    lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
+    lu.assertNotNil(prepared._pendingCoordinatorRebuildReason)
+end
+
+function TestPrepareDefinition:testFinalizeModuleHostKeepsPendingReasonWhenRebuildRequestIsRejected()
+    local owner = {}
+
+    lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
+    lib.lifecycle.registerCoordinatorRebuild("test-pack", function()
+        return false
+    end)
+
+    lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
+        },
+    })
+
+    local prepared = lib.prepareDefinition(owner, {
+        modpack = "test-pack",
+        id = "Example",
+        name = "Example",
+        storage = {
+            { type = "bool", alias = "OtherFlag", configKey = "OtherFlag", default = false },
+        },
+    })
+
+    local store, session = lib.createStore({
+        Enabled = false,
+        DebugMode = false,
+        OtherFlag = false,
+    }, prepared)
+    local host = lib.createModuleHost({
+        definition = prepared,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    local requested = lib.finalizeModuleHost(host)
+
+    lu.assertTrue(owner.requiresFullReload)
+    lu.assertFalse(requested)
+    lu.assertNotNil(prepared._pendingCoordinatorRebuildReason)
+    lu.assertEquals(#Warnings, 1)
+    lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
 end
 
 function TestPrepareDefinition:testPrepareDefinitionIgnoresBehaviorOnlyChanges()

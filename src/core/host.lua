@@ -201,7 +201,11 @@ function public.createModuleHost(opts)
     local identity = host.getIdentity()
     local meta = host.getMeta()
     local packId = identity.modpack
-    if type(packId) == "string" and packId ~= "" and public.isModuleCoordinated(packId) then
+    local pendingCoordinatorRebuild = type(def._pendingCoordinatorRebuildReason) == "table"
+    if not pendingCoordinatorRebuild
+        and type(packId) == "string"
+        and packId ~= ""
+        and public.isModuleCoordinated(packId) then
         local ok, err = host.applyOnLoad()
         if not ok then
             internal.logging.warn("%s coordinated runtime sync failed: %s",
@@ -211,6 +215,35 @@ function public.createModuleHost(opts)
     end
 
     return host
+end
+
+--- Finalizes a freshly published module host after assignment to `public.host`.
+--- Emits any queued coordinated rebuild request carried forward from prepareDefinition().
+---@param moduleHost ModuleHost
+---@return boolean requested True when a coordinated rebuild callback was invoked.
+function public.finalizeModuleHost(moduleHost)
+    assert(type(moduleHost) == "table", "finalizeModuleHost: moduleHost is required")
+    assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function"
+        and type(moduleHost.getDefinition) == "function",
+        "finalizeModuleHost: moduleHost metadata accessors are required")
+
+    local definition = moduleHost.getDefinition()
+    local reason = type(definition) == "table" and definition._pendingCoordinatorRebuildReason or nil
+    if type(reason) ~= "table" then
+        return false
+    end
+
+    local identity = moduleHost.getIdentity() or {}
+    local meta = moduleHost.getMeta() or {}
+    local requested = public.lifecycle.requestCoordinatorRebuild(identity.modpack, reason)
+    if requested then
+        definition._pendingCoordinatorRebuildReason = nil
+    else
+        internal.logging.warn("%s structural definition changed during hot reload; full reload required",
+            tostring(meta.name or identity.id or "module"))
+    end
+
+    return requested
 end
 
 --- Initializes standalone module hosting and returns window/menu-bar renderers.

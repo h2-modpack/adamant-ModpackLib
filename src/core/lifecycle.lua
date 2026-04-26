@@ -40,6 +40,33 @@ function lifecycleApi.registerCoordinator(packId, config)
     internal.coordinators[packId] = config
 end
 
+--- Registers a pack-level rebuild callback used when coordinated module structure changes.
+---@param packId string Unique coordinator pack identifier.
+---@param callback fun(reason: table)|nil Callback invoked when Lib requests a framework rebuild.
+function lifecycleApi.registerCoordinatorRebuild(packId, callback)
+    if callback == nil then
+        internal.coordinatorRebuilds[packId] = nil
+        return
+    end
+
+    assert(type(callback) == "function",
+        "registerCoordinatorRebuild: callback must be a function when provided")
+    internal.coordinatorRebuilds[packId] = callback
+end
+
+--- Requests a coordinated pack-level rebuild after a structural module change.
+---@param packId string Unique coordinator pack identifier.
+---@param reason table Reason metadata describing the rebuild request.
+---@return boolean requested True when a rebuild callback was registered and accepted the request.
+function lifecycleApi.requestCoordinatorRebuild(packId, reason)
+    local callback = packId and internal.coordinatorRebuilds[packId] or nil
+    if type(callback) ~= "function" then
+        return false
+    end
+
+    return callback(reason or {}) == true
+end
+
 --- Infers which mutation lifecycle a module definition exposes.
 ---@param def ModuleDefinition Candidate module definition table.
 ---@return MutationShape|nil shape Inferred lifecycle shape: `patch`, `manual`, `hybrid`, or nil.

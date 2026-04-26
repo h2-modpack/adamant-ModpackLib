@@ -16,10 +16,12 @@ local libConfig = chalk.auto('config.lua')
 public.config = libConfig
 
 local _coordinators = {}
+local _coordinatorRebuilds = {}
 AdamantModpackLib_Internal = AdamantModpackLib_Internal or {}
 local internal = AdamantModpackLib_Internal
 internal.libConfig = libConfig
 internal.coordinators = _coordinators
+internal.coordinatorRebuilds = _coordinatorRebuilds
 internal.logging = internal.logging or {}
 local fallbackHud = import 'core/private/fallback_hud.lua'
 

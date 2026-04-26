@@ -214,8 +214,17 @@ function definitionInternal.prepare(owner, dataDefaultsOrDefinition, definitionO
         local previousFingerprint = rawget(owner, "_definitionStructuralFingerprint")
         if previousFingerprint ~= nil and previousFingerprint ~= fingerprint then
             owner.requiresFullReload = true
-            public.logging.warn(label,
-                "structural definition changed during hot reload; full reload required")
+            if type(prepared.modpack) == "string" and public.isModuleCoordinated(prepared.modpack) then
+                prepared._pendingCoordinatorRebuildReason = {
+                    kind = "structural_definition_changed",
+                    moduleId = prepared.id,
+                    moduleName = prepared.name,
+                    modpack = prepared.modpack,
+                }
+            else
+                public.logging.warn(label,
+                    "structural definition changed during hot reload; full reload required")
+            end
         end
         owner._definitionStructuralFingerprint = fingerprint
     end

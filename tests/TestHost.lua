@@ -131,3 +131,44 @@ function TestHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
     lu.assertEquals(session.read("EnabledFlag"), false)
     lu.assertEquals(session.read("Count"), 6)
 end
+
+function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFrameworkRebuildIsPending()
+    local applyCalls = 0
+    local packId = "reload-pack"
+
+    lib.lifecycle.registerCoordinator(packId, { ModEnabled = true })
+    local definition = lib.prepareDefinition({}, {
+        modpack = packId,
+        id = "ReloadHost",
+        name = "Reload Host",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
+        },
+    })
+    definition._pendingCoordinatorRebuildReason = {
+        kind = "structural_definition_changed",
+        moduleId = "ReloadHost",
+        modpack = packId,
+    }
+
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+        EnabledFlag = false,
+    }, definition)
+    local originalApplyOnLoad = lib.lifecycle.applyOnLoad
+    lib.lifecycle.applyOnLoad = function(...)
+        applyCalls = applyCalls + 1
+        return originalApplyOnLoad(...)
+    end
+
+    lib.createModuleHost({
+        definition = definition,
+        store = store,
+        session = session,
+    })
+
+    lib.lifecycle.applyOnLoad = originalApplyOnLoad
+    lib.lifecycle.registerCoordinator(packId, nil)
+    lu.assertEquals(applyCalls, 0)
+end
