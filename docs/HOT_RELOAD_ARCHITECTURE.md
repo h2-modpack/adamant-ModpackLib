@@ -256,7 +256,7 @@ Changes to:
 - `definition.modpack`
 - `definition.name` or `shortName`
 - `definition.storage`
-- `definition.hashGroups`
+- `definition.hashGroupPlan` / host hash hints
 - module presence or discovery shape
 
 should be handled by a full reload.

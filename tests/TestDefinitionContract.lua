@@ -11,7 +11,7 @@ function TestDefinitionContract:tearDown()
 end
 
 function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionKey()
-    lib.createStore({}, {
+    lib.prepareDefinition({}, {
         id = "Example",
         name = "Example",
         storage = {
@@ -28,7 +28,7 @@ function TestDefinitionContract:testCreateStoreWarnsOnUnknownTopLevelDefinitionK
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnOldVocabularyKeysAsUnknown()
-    lib.createStore({}, {
+    lib.prepareDefinition({}, {
         modpack = "test-pack",
         id = "ExampleSpecial",
         name = "Example Special",
@@ -48,7 +48,7 @@ function TestDefinitionContract:testValidateDefinitionWarnsOnOldVocabularyKeysAs
 end
 
 function TestDefinitionContract:testValidateDefinitionWarnsOnIncompleteLifecycle()
-    lib.createStore({}, {
+    lib.prepareDefinition({}, {
         id = "Example",
         name = "Example",
         affectsRunData = true,

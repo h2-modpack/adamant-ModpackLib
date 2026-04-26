@@ -8,7 +8,6 @@ local imguiHelpers = public.imguiHelpers
 ---@field default ChoiceValue|nil
 ---@field displayValues ChoiceDisplayValues|nil
 ---@field valueColors ValueColorMap|nil
----@field labelWidth number|nil
 ---@field controlWidth number|nil
 ---@field controlGap number|nil
 
@@ -22,7 +21,6 @@ local imguiHelpers = public.imguiHelpers
 ---@class MappedDropdownOpts
 ---@field label string|nil
 ---@field tooltip string|nil
----@field labelWidth number|nil
 ---@field controlWidth number|nil
 ---@field controlGap number|nil
 ---@field getPreview fun(view: table<string, any>): string|number|boolean|nil
@@ -32,7 +30,6 @@ local imguiHelpers = public.imguiHelpers
 ---@class PackedDropdownOpts
 ---@field label string|nil
 ---@field tooltip string|nil
----@field labelWidth number|nil
 ---@field controlWidth number|nil
 ---@field controlGap number|nil
 ---@field displayValues ChoiceDisplayValues|nil
@@ -77,27 +74,22 @@ local function DrawComboPreviewText(imgui, previewText, previewColor)
     imgui.PopClipRect()
 end
 
-local function BeginPreviewCombo(imgui, id, previewText, previewColor)
-    local hasPreviewColor = type(previewColor) == "table"
-    local opened = imgui.BeginCombo(
-        id,
-        hasPreviewColor and "" or tostring(previewText or ""),
-        COMBO_FLAG_NONE
-    )
-    if hasPreviewColor then
-        DrawComboPreviewText(imgui, tostring(previewText or ""), previewColor)
-    end
-    return opened
-end
-
 ---@param imgui table
 ---@param opts DropdownOpts|MappedDropdownOpts|PackedDropdownOpts
 ---@param previewColor Color|nil
 ---@param drawControl fun(controlWidth: number|nil, previewColor: Color|nil): boolean
 ---@return boolean
 local function DrawLabeledDropdownControl(imgui, opts, previewColor, drawControl)
+    local labelText = tostring(opts.label or "")
     local controlWidth = tonumber(opts.controlWidth) or 0
-    helpers.DrawInlineLabel(imgui, opts.label, opts.tooltip, opts.controlGap, opts.labelWidth)
+    local controlGap = helpers.ResolveGap(imgui, opts.controlGap)
+
+    if labelText ~= "" then
+        imgui.AlignTextToFramePadding()
+        imgui.Text(labelText)
+        helpers.ShowTooltip(imgui, opts.tooltip)
+        helpers.SameLineWithGap(imgui, controlGap)
+    end
 
     if controlWidth > 0 then
         imgui.PushItemWidth(controlWidth)
@@ -140,7 +132,14 @@ function WidgetFns.dropdown(imgui, session, alias, opts)
     local previewColor = currentOption and currentOption.color or nil
 
     return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = BeginPreviewCombo(imgui, "##" .. tostring(alias), previewText, previewColor)
+        local opened = imgui.BeginCombo(
+            "##" .. tostring(alias),
+            previewColor and "" or previewText,
+            COMBO_FLAG_NONE
+        )
+        if previewColor then
+            DrawComboPreviewText(imgui, previewText, previewColor)
+        end
         if not opened then
             return false
         end
@@ -176,7 +175,14 @@ function WidgetFns.mappedDropdown(imgui, session, alias, opts)
         or {}
 
     return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = BeginPreviewCombo(imgui, "##" .. tostring(alias), preview, previewColor)
+        local opened = imgui.BeginCombo(
+            "##" .. tostring(alias),
+            previewColor and "" or preview,
+            COMBO_FLAG_NONE
+        )
+        if previewColor then
+            DrawComboPreviewText(imgui, preview, previewColor)
+        end
         if not opened then
             return false
         end
@@ -223,7 +229,12 @@ function WidgetFns.packedDropdown(imgui, session, alias, store, opts)
     end
 
     return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = BeginPreviewCombo(imgui, "##" .. tostring(alias), preview, previewColor)
+        local opened = imgui.BeginCombo(
+            "##" .. tostring(alias),
+            "",
+            COMBO_FLAG_NONE
+        )
+        DrawComboPreviewText(imgui, preview, previewColor)
         if not opened then
             return false
         end

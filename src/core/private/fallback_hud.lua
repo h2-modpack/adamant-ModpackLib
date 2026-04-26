@@ -70,7 +70,7 @@ function fallbackHud.createMarker()
         displayedText = nextText
     end
 
-    public.hooks.Wrap(AdamantModpackLib_Internal, "ShowHealthUI", "fallback-hud", function(base, args)
+    modutil.mod.Path.Wrap("ShowHealthUI", function(base, args)
         base(args)
         displayedText = nil
         updateMarker()

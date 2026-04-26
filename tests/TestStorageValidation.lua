@@ -77,13 +77,13 @@ end
 
 function TestStorageValidation:testResetSessionToDefaultsResetsChangedPersistentRoots()
     local config = { Flag = true, Count = 3, Filter = "ignored" }
-    local definition = {
+    local definition = lib.prepareDefinition({}, {
         storage = {
             { type = "bool", alias = "Flag", configKey = "Flag", default = false },
             { type = "int", alias = "Count", configKey = "Count", default = 1, min = 0, max = 5 },
             { type = "string", alias = "Filter", lifetime = "transient", default = "", maxLen = 32 },
         },
-    }
+    })
     local _, session = lib.createStore(config, definition)
 
     session.write("Filter", "live")
@@ -98,12 +98,12 @@ end
 
 function TestStorageValidation:testResetSessionToDefaultsCanExcludeAliases()
     local config = { Flag = true, ViewRegion = "Surface" }
-    local definition = {
+    local definition = lib.prepareDefinition({}, {
         storage = {
             { type = "bool", alias = "Flag", configKey = "Flag", default = false },
             { type = "string", alias = "ViewRegion", configKey = "ViewRegion", default = "Underworld" },
         },
-    }
+    })
     local _, session = lib.createStore(config, definition)
 
     local changed, count = lib.resetStorageToDefaults(definition.storage, session, {

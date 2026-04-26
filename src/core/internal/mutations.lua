@@ -1,12 +1,10 @@
 local mutationPlan = ...
 local internal = AdamantModpackLib_Internal
 internal.mutation = internal.mutation or {}
-internal.mutationRuntime = internal.mutationRuntime or {}
 
 local mutationInternal = internal.mutation
-local mutationRuntime = internal.mutationRuntime
-mutationRuntime.byKey = mutationRuntime.byKey or {}
-mutationRuntime.byStore = mutationRuntime.byStore or setmetatable({}, { __mode = "k" })
+local storeRuntime = setmetatable({}, { __mode = "k" })
+local moduleRuntime = {}
 
 ---@alias MutationShape "patch"|"manual"|"hybrid"
 
@@ -16,112 +14,47 @@ mutationRuntime.byStore = mutationRuntime.byStore or setmetatable({}, { __mode =
 ---@field hasRevert boolean
 ---@field hasManual boolean
 
-local function GetRuntimeBucket(def, store)
+local function GetRuntimeKey(def, store)
     if def and type(def.id) == "string" and def.id ~= "" then
-        local packId = (type(def.modpack) == "string" and def.modpack ~= "")
-            and def.modpack
-            or "_standalone"
-        return mutationRuntime.byKey, packId .. "::" .. def.id
+        local packId = type(def.modpack) == "string" and def.modpack or ""
+        return "module:" .. packId .. ":" .. def.id, moduleRuntime
     end
-
     if store then
-        return mutationRuntime.byStore, store
+        return store, storeRuntime
     end
+    return nil, nil
 end
 
-local function GetRuntimeEntry(def, store, create)
-    local bucket, key = GetRuntimeBucket(def, store)
+local function GetRuntimeState(def, store)
+    local key, bucket = GetRuntimeKey(def, store)
     if not bucket then
         return nil, nil, nil
     end
-
-    local entry = bucket[key]
-    if not entry and create then
-        entry = {}
-        bucket[key] = entry
-    end
-
-    return entry, bucket, key
+    return bucket[key], key, bucket
 end
 
-local function ClearRuntimeEntryIfEmpty(entry, bucket, key)
-    if entry and not entry.plan and not entry.manualRevert then
+local function SetRuntimeState(def, store, state)
+    local key, bucket = GetRuntimeKey(def, store)
+    if not bucket then
+        return
+    end
+    if state == nil or (state.plan == nil and state.manualRevert == nil) then
         bucket[key] = nil
+        return
     end
-end
-
-local function GetActiveMutationPlan(def, store)
-    local entry = GetRuntimeEntry(def, store, false)
-    return entry and entry.plan or nil
+    bucket[key] = state
 end
 
 local function SetActiveMutationPlan(def, store, plan)
-    local entry, bucket, key = GetRuntimeEntry(def, store, plan ~= nil)
-    if not entry then
-        return
-    end
-
-    entry.plan = plan
-    ClearRuntimeEntryIfEmpty(entry, bucket, key)
-end
-
-local function GetActiveManualRevert(def, store)
-    local entry = GetRuntimeEntry(def, store, false)
-    return entry and entry.manualRevert or nil
+    local runtime = GetRuntimeState(def, store) or {}
+    runtime.plan = plan
+    SetRuntimeState(def, store, runtime)
 end
 
 local function SetActiveManualRevert(def, store, revertFn)
-    local entry, bucket, key = GetRuntimeEntry(def, store, revertFn ~= nil)
-    if not entry then
-        return
-    end
-
-    entry.manualRevert = revertFn
-    ClearRuntimeEntryIfEmpty(entry, bucket, key)
-end
-
-local function RevertActiveManual(def, store)
-    local revertFn = GetActiveManualRevert(def, store)
-    if not revertFn then
-        return true, nil, false
-    end
-
-    local ok, err = pcall(revertFn)
-    if not ok then
-        return false, err, true
-    end
-
-    SetActiveManualRevert(def, store, nil)
-    return true, nil, true
-end
-
-local function RevertActivePlan(def, store)
-    local activePlan = GetActiveMutationPlan(def, store)
-    if not activePlan then
-        return true, nil, false
-    end
-
-    local ok, err = pcall(activePlan.revert, activePlan)
-    if not ok then
-        return false, err, true
-    end
-
-    SetActiveMutationPlan(def, store, nil)
-    return true, nil, true
-end
-
-local function RevertActiveMutation(def, store)
-    local okManual, errManual, didManual = RevertActiveManual(def, store)
-    if not okManual then
-        return false, errManual
-    end
-
-    local okPlan, errPlan, didPlan = RevertActivePlan(def, store)
-    if not okPlan then
-        return false, errPlan
-    end
-
-    return true, nil, didManual or didPlan
+    local runtime = GetRuntimeState(def, store) or {}
+    runtime.manualRevert = revertFn
+    SetRuntimeState(def, store, runtime)
 end
 
 local function BuildMutationPlan(def, store)
@@ -133,6 +66,61 @@ local function BuildMutationPlan(def, store)
     local plan = mutationPlan.createPlan()
     builder(plan, store)
     return plan
+end
+
+local function RevertActivePlan(def, store)
+    local runtime = GetRuntimeState(def, store)
+    local activePlan = runtime and runtime.plan or nil
+    if not activePlan then
+        return true, nil, false
+    end
+
+    local okPlan, errPlan = pcall(activePlan.revert, activePlan)
+    runtime.plan = nil
+    SetRuntimeState(def, store, runtime)
+    if not okPlan then
+        return false, errPlan, true
+    end
+    return true, nil, true
+end
+
+local function RevertActiveManual(def, store)
+    local runtime = GetRuntimeState(def, store)
+    local revertFn = runtime and runtime.manualRevert or nil
+    if type(revertFn) ~= "function" then
+        return true, nil, false
+    end
+
+    local okManual, errManual = pcall(revertFn)
+    runtime.manualRevert = nil
+    SetRuntimeState(def, store, runtime)
+    if not okManual then
+        return false, errManual, true
+    end
+    return true, nil, true
+end
+
+local function RevertActiveMutation(def, store)
+    local firstErr = nil
+    local didActive = false
+
+    local okManual, errManual, didManual = RevertActiveManual(def, store)
+    if not okManual and not firstErr then
+        firstErr = errManual
+    end
+    didActive = didActive or didManual
+
+    local okPlan, errPlan, didPlan = RevertActivePlan(def, store)
+    if not okPlan and not firstErr then
+        firstErr = errPlan
+    end
+    didActive = didActive or didPlan
+
+    if firstErr then
+        return false, firstErr, didActive
+    end
+
+    return true, nil, didActive
 end
 
 --- Infers which mutation lifecycle a module definition exposes.

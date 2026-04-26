@@ -21,7 +21,7 @@ Any unnecessary allocation or repeated C-boundary call inside those paths shows 
 
 This document assumes:
 - raw `config` stays local to `main.lua`
-- `local store, session = lib.createStore(config, public.definition, dataDefaults)` is the storage/session boundary
+- `local definition = lib.prepareDefinition(...)` and `local store, session = lib.createStore(config, definition)` are the contract/state boundaries
 - draw code reads staged values from `session.view`
 - runtime/gameplay code reads persisted values through `store.read(...)`
 - debug toggles write persisted values through `lib.lifecycle.setDebugMode(store, ...)`

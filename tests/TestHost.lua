@@ -34,6 +34,22 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     }
 
     local moduleHost = {
+        getIdentity = function()
+            return {
+                id = "StandaloneTest",
+                modpack = nil,
+            }
+        end,
+        getMeta = function()
+            return {
+                name = "Standalone Test",
+                shortName = nil,
+                tooltip = nil,
+            }
+        end,
+        affectsRunData = function()
+            return false
+        end,
         getDefinition = function()
             return { id = "StandaloneTest", name = "Standalone Test" }
         end,
@@ -72,4 +88,46 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "Standalone Test session commit failed")
     lu.assertStrContains(Warnings[1], "commit boom")
+end
+
+function TestHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
+    local capturedAuthorSession = nil
+    local definition = lib.prepareDefinition({}, {
+        id = "ResetHost",
+        name = "Reset Host",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
+            { type = "int", alias = "Count", configKey = "Count", default = 2, min = 0, max = 9 },
+        },
+    })
+    local store, session = lib.createStore({
+        EnabledFlag = true,
+        Count = 7,
+    }, definition)
+    local host = lib.createModuleHost({
+        definition = definition,
+        store = store,
+        session = session,
+        drawTab = function(_, authorSession)
+            capturedAuthorSession = authorSession
+        end,
+    })
+
+    host.drawTab({})
+
+    local changed, count = host.resetToDefaults()
+    lu.assertTrue(changed)
+    lu.assertEquals(count, 2)
+    lu.assertEquals(session.read("EnabledFlag"), false)
+    lu.assertEquals(session.read("Count"), 2)
+
+    session.write("EnabledFlag", true)
+    session.write("Count", 6)
+    local authorChanged, authorCount = capturedAuthorSession.resetToDefaults({
+        exclude = { Count = true },
+    })
+    lu.assertTrue(authorChanged)
+    lu.assertEquals(authorCount, 1)
+    lu.assertEquals(session.read("EnabledFlag"), false)
+    lu.assertEquals(session.read("Count"), 6)
 end

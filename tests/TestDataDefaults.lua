@@ -43,7 +43,10 @@ TestDataDefaults = {}
 
 local function makeStore(definition, config, dataDefaults)
     config = config or {}
-    local store, session = lib.createStore(config, definition, dataDefaults)
+    if not AdamantModpackLib_Internal.definition.isPrepared(definition) then
+        definition = lib.prepareDefinition({}, dataDefaults, definition)
+    end
+    local store, session = lib.createStore(config, definition)
     return store, session, config
 end
 
@@ -163,15 +166,17 @@ end
 
 -- createStore called twice on same definition (reload) does not double-apply dataDefaults
 function TestDataDefaults:testIdempotentOnSecondCreateStoreCall()
-    local node = { type = "int", alias = "MyCount", configKey = "MyCount", min = 0, max = 10 }
-    local definition = { storage = { node } }
+    local definition = lib.prepareDefinition({}, { MyCount = 5 }, {
+        storage = {
+            { type = "int", alias = "MyCount", configKey = "MyCount", min = 0, max = 10 },
+        },
+    })
 
-    makeStore(definition, {}, { MyCount = 5 })
-    lu.assertEquals(node.default, 5)
+    lu.assertEquals(definition.storage[1].default, 5)
 
-    -- Second call with different dataDefaults — explicit default should not be overwritten
+    -- Second call with different dataDefaults — prepared defaults stay fixed
     makeStore(definition, {}, { MyCount = 99 })
-    lu.assertEquals(node.default, 5)
+    lu.assertEquals(definition.storage[1].default, 5)
 end
 
 -- Multiple nodes all receive their defaults

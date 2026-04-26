@@ -3,6 +3,7 @@
 This is the public Lib surface.
 
 Preferred usage uses top-level module authoring helpers plus namespaces for specialized APIs:
+- `lib.prepareDefinition(...)`
 - `lib.createStore(...)`
 - `lib.createModuleHost(...)`
 - `lib.standaloneHost(...)`
@@ -59,9 +60,9 @@ remaining fully functional when absent.
 Typical provider:
 
 ```lua
-lib.integrations.register("run-director.god-availability", public.definition.id, {
+lib.integrations.register("run-director.god-availability", internal.definition.id, {
     isActive = function()
-        return lib.isModuleEnabled(store, public.definition.modpack)
+        return lib.isModuleEnabled(store, internal.definition.modpack)
     end,
     isAvailable = function(godKey)
         return true
@@ -96,13 +97,86 @@ Rules:
 
 ## Store And Session
 
-### `lib.createStore(config, definition, dataDefaults?)`
+### `lib.prepareDefinition(owner, dataDefaultsOrDefinition, definition?)`
+
+Creates the canonical definition object for a module from a raw authored definition table.
+
+What it does:
+- clones the authored definition into a Lib-owned table
+- hydrates missing persistent storage defaults from `dataDefaults` when provided
+- validates top-level definition keys and types
+- prepares `definition.storage` metadata when present
+- preserves optional `definition.hashGroupPlan` hash-compaction hints as structural contract data
+- records a structural fingerprint on the persistent `owner` table when provided
+- warns and marks `owner.requiresFullReload = true` when a later hot reload changes structural definition shape
+
+Structural reload checks cover:
+- `modpack`
+- `id`
+- `name`
+- `shortName`
+- `affectsRunData`
+- `storage`
+- `hashGroupPlan`
+
+Behavior-only fields such as:
+- `patchPlan`
+- `apply`
+- `revert`
+
+do not trigger a structural reload warning.
+
+Typical use:
+
+```lua
+local definition = lib.prepareDefinition(internal, dataDefaults, {
+    modpack = PACK_ID,
+    id = "ExampleModule",
+    name = "Example Module",
+    storage = internal.BuildStorage(dataDefaults),
+    hashGroupPlan = internal.BuildHashGroupPlan(),
+    patchPlan = internal.BuildPatchPlan,
+})
+```
+
+When a module does not need `dataDefaults`, the two-argument form is still valid:
+
+```lua
+local definition = lib.prepareDefinition(internal, {
+    id = "ExampleModule",
+    name = "Example Module",
+    storage = internal.BuildStorage(),
+})
+```
+
+Treat the returned definition as the authoritative module contract and pass it to `createStore(...)` and `createModuleHost(...)`.
+
+`hashGroupPlan` is the preferred author-facing input for complex hash layouts:
+
+```lua
+hashGroupPlan = {
+    {
+        keyPrefix = "global",
+        items = {
+            { "EnabledFlag", "Tier" },
+            "DebugFlag",
+        },
+    },
+}
+```
+
+Rules:
+- `keyPrefix` names a hash-group family
+- `items` is an ordered list of logical bundles
+- each item may be a single alias string or a list of aliases that must stay together
+- Framework may use these hints to pack multiple persisted roots into shorter canonical hash tokens
+
+### `lib.createStore(config, definition)`
 
 Creates the managed store facade around persisted module config.
 
 What it does:
 - warns on malformed top-level definition fields
-- seeds missing storage defaults from `dataDefaults`
 - validates and prepares `definition.storage`
 - returns a separate `session` for staged UI state
 - exposes persisted read helpers
@@ -110,7 +184,7 @@ What it does:
 Typical use:
 
 ```lua
-local store, session = lib.createStore(config, public.definition, dataDefaults)
+local store, session = lib.createStore(config, definition)
 ```
 
 Returned surface:
@@ -157,6 +231,7 @@ When a module is rendered through `lib.createModuleHost(...)`, draw callbacks re
 - `read(alias)`
 - `write(alias, value)`
 - `reset(alias)`
+- `resetToDefaults(opts?)`
 
 Behavior:
 - persisted aliases stage in `session` and only hit config on flush/commit
@@ -222,7 +297,7 @@ function internal.RegisterHooks()
 end
 
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = internal.definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -382,6 +457,10 @@ If `registerHooks` is provided:
 - hook declarations made through `lib.hooks.*` are refreshed as one registration pass for that owner
 
 Returned surface:
+- `host.getIdentity()`
+- `host.getMeta()`
+- `host.affectsRunData()`
+- `host.getHashHints()`
 - `host.getDefinition()`
 - `host.read(aliasOrKey)`
 - `host.writeAndFlush(aliasOrKey, value)`
@@ -389,6 +468,7 @@ Returned surface:
 - `host.flush()`
 - `host.reloadFromConfig()`
 - `host.resync()`
+- `host.resetToDefaults(opts?)`
 - `host.commitIfDirty()`
 - `host.isEnabled()`
 - `host.setEnabled(enabled)`

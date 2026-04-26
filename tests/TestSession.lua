@@ -1,7 +1,11 @@
 local lu = require('luaunit')
 
+local function prepareDefinition(definition)
+    return lib.prepareDefinition({}, definition)
+end
+
 local function makeScalarDefinition()
-    return {
+    return prepareDefinition({
         storage = {
             { type = "bool", alias = "Enabled", configKey = "Enabled", default = false },
             { type = "int", alias = "MaxGods", configKey = "MaxGodsPerRun", default = 3, min = 1, max = 9 },
@@ -10,11 +14,11 @@ local function makeScalarDefinition()
             { type = "checkbox", binds = { value = "Enabled" }, label = "Enabled" },
             { type = "stepper", binds = { value = "MaxGods" }, label = "Max Gods", min = 1, max = 9, step = 1 },
         },
-    }
+    })
 end
 
 local function makePackedDefinition()
-    return {
+    return prepareDefinition({
         storage = {
             {
                 type = "packedInt",
@@ -30,11 +34,11 @@ local function makePackedDefinition()
             { type = "checkbox", binds = { value = "EnabledBit" }, label = "Enabled" },
             { type = "dropdown", binds = { value = "ModeBits" }, label = "Mode", values = { 0, 1, 2, 3 } },
         },
-    }
+    })
 end
 
 local function makeTransientDefinition()
-    return {
+    return prepareDefinition({
         storage = {
             { type = "bool", alias = "Enabled", configKey = "Enabled", default = false },
             { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
@@ -45,7 +49,7 @@ local function makeTransientDefinition()
             { type = "checkbox", binds = { value = "Enabled" }, label = "Enabled" },
             { type = "text", text = "Filter" },
         },
-    }
+    })
 end
 
 TestStore = {}

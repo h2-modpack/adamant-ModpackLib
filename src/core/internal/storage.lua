@@ -68,6 +68,40 @@ local function DeepValueEqual(a, b)
     return true
 end
 
+local function ReadNestedPath(source, path)
+    if type(source) ~= "table" then
+        return nil
+    end
+    if type(path) == "table" then
+        local current = source
+        for _, key in ipairs(path) do
+            if type(current) ~= "table" then
+                return nil
+            end
+            current = current[key]
+        end
+        return current
+    end
+    return source[path]
+end
+
+function storageInternal.hydrateDefaults(storage, dataDefaults)
+    if type(storage) ~= "table" or type(dataDefaults) ~= "table" then
+        return storage
+    end
+
+    for _, node in ipairs(storage) do
+        if type(node) == "table"
+            and node.lifetime ~= "transient"
+            and node.default == nil
+            and node.configKey ~= nil then
+            node.default = ReadNestedPath(dataDefaults, node.configKey)
+        end
+    end
+
+    return storage
+end
+
 local function PrepareRootNodeMetadata(node)
     node._storageKey = node.configKey ~= nil and StorageKey(node.configKey) or nil
     if not node.alias and node._storageKey ~= nil then

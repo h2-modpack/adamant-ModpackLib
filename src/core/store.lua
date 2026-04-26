@@ -47,28 +47,6 @@ local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 ---@class ManagedStore
 ---@field read fun(keyOrAlias: ConfigPath): any
 
----@param definition ModuleDefinition|StorageSchema|nil
----@return StorageSchema|nil
-local function BuildManagedStorage(definition)
-    if type(definition) ~= "table" then
-        return nil
-    end
-
-    if definition.storage ~= nil
-        or definition.id ~= nil
-    then
-        if type(definition.storage) == "table" then
-            return definition.storage
-        end
-        return nil
-    end
-
-    if #definition > 0 then
-        error("createStore expects a module definition table; raw storage arrays are not supported", 2)
-    end
-    return nil
-end
-
 local ConfigBackendCache = setmetatable({}, { __mode = "k" })
 
 local function GetChalkSectionAndKey(configKey)
@@ -159,87 +137,18 @@ local function GetConfigBackend(config)
     return backend
 end
 
-local KnownDefinitionKeys = {
-    modpack = true, id = true, name = true, shortName = true,
-    tooltip = true, default = true, affectsRunData = true,
-    storage = true, hashGroups = true,
-    patchPlan = true, apply = true, revert = true,
-}
-
-local function IsLikelyDefinitionTable(def)
-    if type(def) ~= "table" then return false end
-    for key in pairs(def) do
-        if type(key) == "string" and KnownDefinitionKeys[key] then return true end
-    end
-    return false
-end
-
-local function ValidateDefinition(def, label)
-    if not IsLikelyDefinitionTable(def) then return end
-    local warn = internal.logging.warn
-    local prefix = tostring(label or def.name or def.id or _PLUGIN.guid or "module")
-
-    for key in pairs(def) do
-        if type(key) == "string" and not KnownDefinitionKeys[key] then
-            warn("%s: unknown definition key '%s'", prefix, tostring(key))
-        end
-    end
-
-    local function warnType(key, expected)
-        if def[key] ~= nil and type(def[key]) ~= expected then
-            warn("%s: definition.%s should be %s, got %s", prefix, key, expected, type(def[key]))
-        end
-    end
-
-    for _, key in ipairs({ "modpack", "id", "name", "shortName", "tooltip" }) do
-        warnType(key, "string")
-    end
-    warnType("affectsRunData", "boolean")
-    warnType("storage", "table")
-    warnType("hashGroups", "table")
-    for _, key in ipairs({ "patchPlan", "apply", "revert" }) do warnType(key, "function") end
-
-    if def.modpack ~= nil and def.id == nil then
-        warn("%s: coordinated modules should declare definition.id", prefix)
-    end
-
-    local inferred, info = internal.mutation.inferMutation(def)
-    if info.hasApply ~= info.hasRevert then
-        warn("%s: manual lifecycle requires both definition.apply and definition.revert", prefix)
-    end
-    if internal.mutation.mutatesRunData(def) and not inferred then
-        warn("%s: affectsRunData=true but module exposes neither patchPlan nor apply/revert", prefix)
-    end
-end
-
---- Creates a managed store wrapper around a module definition and its persisted config table.
+--- Creates a managed store wrapper around a prepared module definition and its persisted config table.
 ---@param modConfig table Module config table used for persisted reads and writes.
----@param definition ModuleDefinition Module definition declaring storage and mutation behavior.
----@param dataDefaults table|nil Optional defaults table used to seed missing storage defaults.
+---@param definition ModuleDefinition Prepared module definition declaring storage and mutation behavior.
 ---@return ManagedStore store Managed store instance for config and mutation lifecycle.
 ---@return Session session Staged UI/session state for storage-backed controls.
-function public.createStore(modConfig, definition, dataDefaults)
+function public.createStore(modConfig, definition)
+    assert(type(definition) == "table" and definition._preparedDefinition == true,
+        "createStore expects a prepared definition; call lib.prepareDefinition(...) first")
     local backend = GetConfigBackend(modConfig)
     local store = {}
-    local storage = BuildManagedStorage(definition)
-
-    if storage and type(dataDefaults) == "table" then
-        for _, node in ipairs(storage) do
-            if node.lifetime ~= "transient" and node.default == nil then
-                local key = node.configKey or node.alias
-                if key ~= nil then
-                    node.default = readNestedPath(dataDefaults, key)
-                end
-            end
-        end
-    end
-    local label = type(definition) == "table"
-        and tostring(definition.name or definition.id or _PLUGIN.guid or "module")
-        or tostring(_PLUGIN.guid or "module")
-
-    if type(definition) == "table" and internal.libConfig.DebugMode == true then
-        ValidateDefinition(definition, label)
-    end
+    local storage = type(definition.storage) == "table" and definition.storage or nil
+    local label = tostring(definition.name or definition.id or _PLUGIN.guid or "module")
 
     if storage then
         storageInternal.validate(storage, label)

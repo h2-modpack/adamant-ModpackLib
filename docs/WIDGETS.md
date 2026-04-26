@@ -9,7 +9,7 @@ This document covers:
 
 ## Storage Schema
 
-Module storage is declared on `definition.storage` and prepared automatically by `lib.createStore(...)`.
+Module storage is declared on `definition.storage`, prepared by `lib.prepareDefinition(...)`, and then consumed by `lib.createStore(...)`.
 
 Built-in root types:
 - `bool`

@@ -46,7 +46,7 @@ A module is built from four main pieces:
 
 Typical module flow:
 
-1. `main.lua` builds `public.definition`.
+1. `main.lua` prepares `local definition = lib.prepareDefinition(...)`.
 2. `main.lua` creates `store, session = lib.createStore(...)`.
 3. `main.lua` creates `public.host = lib.createModuleHost(...)`.
 4. UI code edits staged values through `session`.
@@ -71,7 +71,7 @@ The template is split into four files on purpose.
 Owns module wiring:
 
 - imports Lib and stack dependencies
-- creates `public.definition`
+- prepares `definition`
 - imports `data.lua`, `logic.lua`, and `ui.lua`
 - creates `store` and `session`
 - copies `store` to `internal.store` if logic needs it
@@ -85,7 +85,7 @@ Keep store/session/host creation here even if the module grows.
 Owns static module data:
 
 - `definition.storage`
-- `definition.hashGroups`
+- `definition.hashGroupPlan`
 - option lists
 - lookup tables derived after game import
 
@@ -119,13 +119,12 @@ Start with the template, then fill in these pieces in order.
 At minimum:
 
 ```lua
-public.definition = {
+local definition = lib.prepareDefinition(internal, {
     modpack = PACK_ID,
     id = "ExampleModule",
     name = "Example Module",
-    default = dataDefaults.Enabled,
     affectsRunData = false,
-}
+})
 ```
 
 For coordinated modules, `modpack`, `id`, `name`, and `storage` are the important discovery fields.
@@ -135,11 +134,17 @@ For coordinated modules, `modpack`, `id`, `name`, and `storage` are the importan
 Example:
 
 ```lua
-public.definition.storage = {
+local definition = lib.prepareDefinition(internal, dataDefaults, {
+    modpack = PACK_ID,
+    id = "ExampleModule",
+    name = "Example Module",
+    affectsRunData = false,
+    storage = {
     { type = "bool", alias = "FeatureEnabled", configKey = "FeatureEnabled" },
     { type = "string", alias = "Mode", configKey = "Mode", maxLen = 32 },
     { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
-}
+    },
+})
 ```
 
 Rules:
@@ -152,7 +157,7 @@ Rules:
 ### 3. Create the managed state in `main.lua`
 
 ```lua
-local store, session = lib.createStore(config, public.definition, dataDefaults)
+local store, session = lib.createStore(config, definition)
 internal.store = store
 ```
 
@@ -192,12 +197,18 @@ If the module only changes configuration/UI, `logic.lua` can stay minimal.
 If the module changes live run data:
 
 ```lua
-public.definition.affectsRunData = true
-public.definition.patchPlan = function(plan, activeStore)
+local definition = lib.prepareDefinition(internal, dataDefaults, {
+    modpack = PACK_ID,
+    id = "ExampleModule",
+    name = "Example Module",
+    affectsRunData = true,
+    storage = internal.BuildStorage(dataDefaults),
+    patchPlan = function(plan, activeStore)
     if activeStore.read("FeatureEnabled") then
         plan:set(SomeGameTable, "SomeKey", true)
     end
-end
+    end,
+})
 ```
 
 Use `patchPlan` when possible. Reach for manual `apply/revert` only when the mutation is not naturally expressed as reversible table edits.
@@ -222,7 +233,7 @@ end
 
 ```lua
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -244,7 +255,7 @@ If the module has no runtime hooks, `hookOwner` and `registerHooks` may be omitt
 
 If the module belongs to a Framework-managed pack:
 
-- Framework discovers the module through `public.definition` and `public.host`
+- Framework discovers the module through `public.host`
 - Framework calls `host.drawTab(...)`
 - optional quick setup uses `host.drawQuickContent(...)`
 

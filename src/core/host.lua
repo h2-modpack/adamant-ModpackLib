@@ -12,6 +12,7 @@ local internal = AdamantModpackLib_Internal
 ---@field read fun(alias: string): any
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
+---@field resetToDefaults fun(opts: table|nil): boolean, number
 
 ---@class ModuleHostOpts
 ---@field definition ModuleDefinition
@@ -23,6 +24,10 @@ local internal = AdamantModpackLib_Internal
 ---@field drawQuickContent fun(imgui: table, session: AuthorSession)|nil
 
 ---@class ModuleHost
+---@field getIdentity fun(): table
+---@field getMeta fun(): table
+---@field affectsRunData fun(): boolean
+---@field getHashHints fun(): table|nil
 ---@field getDefinition fun(): ModuleDefinition
 ---@field read fun(aliasOrKey: ConfigPath): any
 ---@field writeAndFlush fun(aliasOrKey: ConfigPath, value: any): boolean
@@ -30,6 +35,7 @@ local internal = AdamantModpackLib_Internal
 ---@field flush fun(): boolean
 ---@field reloadFromConfig fun()
 ---@field resync fun(): string[]
+---@field resetToDefaults fun(opts: table|nil): boolean, number
 ---@field commitIfDirty fun(): boolean, string|nil, boolean
 ---@field isEnabled fun(): boolean
 ---@field setEnabled fun(enabled: boolean): boolean, string|nil
@@ -73,10 +79,36 @@ function public.createModuleHost(opts)
         read = session.read,
         write = session.write,
         reset = session.reset,
+        resetToDefaults = function(resetOpts)
+            return public.resetStorageToDefaults(def.storage, session, resetOpts)
+        end,
     }
 
     ---@type ModuleHost
     local host = {}
+
+    function host.getIdentity()
+        return {
+            id = def.id,
+            modpack = def.modpack,
+        }
+    end
+
+    function host.getMeta()
+        return {
+            name = def.name,
+            shortName = def.shortName,
+            tooltip = def.tooltip,
+        }
+    end
+
+    function host.affectsRunData()
+        return public.lifecycle.mutatesRunData(def)
+    end
+
+    function host.getHashHints()
+        return def.hashGroupPlan
+    end
 
     function host.getDefinition()
         return def
@@ -110,6 +142,10 @@ function public.createModuleHost(opts)
         return public.lifecycle.resyncSession(def, session)
     end
 
+    function host.resetToDefaults(resetOpts)
+        return public.resetStorageToDefaults(def.storage, session, resetOpts)
+    end
+
     function host.commitIfDirty()
         if not session.isDirty() then
             return true, nil, false
@@ -119,7 +155,7 @@ function public.createModuleHost(opts)
     end
 
     function host.isEnabled()
-        return public.isModuleEnabled(store, def.modpack)
+        return public.isModuleEnabled(store, host.getIdentity().modpack)
     end
 
     function host.setEnabled(enabled)
@@ -162,12 +198,14 @@ function public.createModuleHost(opts)
         end
     end
 
-    local packId = def.modpack
+    local identity = host.getIdentity()
+    local meta = host.getMeta()
+    local packId = identity.modpack
     if type(packId) == "string" and packId ~= "" and public.isModuleCoordinated(packId) then
         local ok, err = host.applyOnLoad()
         if not ok then
             internal.logging.warn("%s coordinated runtime sync failed: %s",
-                tostring(def.name or def.id or "module"),
+                tostring(meta.name or identity.id or "module"),
                 tostring(err))
         end
     end
@@ -183,16 +221,24 @@ function public.standaloneHost(moduleHost, opts)
     assert(type(moduleHost) == "table", "standaloneHost: moduleHost is required")
 
     opts = opts or {}
-    local def = moduleHost.getDefinition()
-    assert(type(def) == "table", "standaloneHost: moduleHost definition is required")
+    assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function",
+        "standaloneHost: moduleHost metadata accessors are required")
     local DEFAULT_WINDOW_WIDTH = 960
     local DEFAULT_WINDOW_HEIGHT = 720
 
-    if not (def.modpack and internal.coordinators[def.modpack]) then
+    local function getIdentity()
+        return moduleHost.getIdentity() or {}
+    end
+
+    local function getMeta()
+        return moduleHost.getMeta() or {}
+    end
+
+    if not (getIdentity().modpack and internal.coordinators[getIdentity().modpack]) then
         local ok, err = moduleHost.applyOnLoad()
         if not ok then
             internal.logging.warn("%s startup lifecycle failed: %s",
-                tostring(def.name or def.id or "module"),
+                tostring(getMeta().name or getIdentity().id or "module"),
                 tostring(err))
         end
     end
@@ -202,7 +248,7 @@ function public.standaloneHost(moduleHost, opts)
     local runDataDirty = false
 
     local function markRunDataDirty()
-        if public.lifecycle.mutatesRunData(def) then
+        if moduleHost.affectsRunData() then
             runDataDirty = true
         end
     end
@@ -224,11 +270,13 @@ function public.standaloneHost(moduleHost, opts)
     end
 
     local function renderWindow()
-        if def.modpack and internal.coordinators[def.modpack] then return end
+        local identity = getIdentity()
+        local meta = getMeta()
+        if identity.modpack and internal.coordinators[identity.modpack] then return end
         if not showWindow then return end
 
         local imgui = rom.ImGui
-        local title = (opts.windowTitle or def.name) .. "###" .. tostring(def.id)
+        local title = (opts.windowTitle or meta.name) .. "###" .. tostring(identity.id)
         seedWindowSize(imgui)
         local open, shouldDraw = imgui.Begin(title, showWindow)
         if shouldDraw then
@@ -240,7 +288,7 @@ function public.standaloneHost(moduleHost, opts)
                     markRunDataDirty()
                 else
                     internal.logging.warn("%s %s failed: %s",
-                        tostring(def.name or def.id or "module"),
+                        tostring(meta.name or identity.id or "module"),
                         enabledValue and "enable" or "disable",
                         tostring(err))
                 end
@@ -264,7 +312,7 @@ function public.standaloneHost(moduleHost, opts)
                     markRunDataDirty()
                 elseif ok == false then
                     internal.logging.warn("%s session commit failed; restored previous config where possible: %s",
-                        tostring(def.name or def.id or "module"),
+                        tostring(meta.name or identity.id or "module"),
                         tostring(err))
                 end
             end
@@ -277,9 +325,11 @@ function public.standaloneHost(moduleHost, opts)
     end
 
     local function addMenuBar()
-        if def.modpack and internal.coordinators[def.modpack] then return end
-        if rom.ImGui.BeginMenu(def.name) then
-            if rom.ImGui.MenuItem(def.name) then
+        local identity = getIdentity()
+        local meta = getMeta()
+        if identity.modpack and internal.coordinators[identity.modpack] then return end
+        if rom.ImGui.BeginMenu(meta.name) then
+            if rom.ImGui.MenuItem(meta.name) then
                 if showWindow then
                     flushPendingRunData()
                 end

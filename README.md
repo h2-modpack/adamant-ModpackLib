@@ -17,8 +17,12 @@ The library is designed around immediate-mode UI. Module authors write normal
 draw functions, then expose them through a module host:
 
 ```lua
+local definition = lib.prepareDefinition(internal, dataDefaults, {
+    ...
+})
+
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -64,6 +68,7 @@ public.host = lib.createModuleHost({
 - `lib.nav`
 
 Common top-level helpers:
+- `lib.prepareDefinition(...)`
 - `lib.createStore(...)`
 - `lib.createModuleHost(...)`
 - `lib.standaloneHost(...)`
@@ -73,6 +78,9 @@ Common top-level helpers:
 
 Most authors start with `lib.createStore(...)` and `lib.createModuleHost(...)`.
 See [docs/GETTING_STARTED.md](docs/GETTING_STARTED.md) for the recommended project shape.
+
+For structural module contracts, author raw definitions through `lib.prepareDefinition(...)`.
+That includes optional `hashGroupPlan` declarations for complex grouped hash layouts; Lib preserves those hints as part of the prepared contract and Framework compiles them when building canonical config hashes.
 
 ## Validation
 

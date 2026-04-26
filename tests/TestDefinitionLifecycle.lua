@@ -2,6 +2,10 @@ local lu = require('luaunit')
 
 TestDefinitionLifecycle = {}
 
+local function makeStore(enabled)
+    return lib.createStore({ Enabled = enabled }, lib.prepareDefinition({}, { storage = {} }))
+end
+
 function TestDefinitionLifecycle:testSetApplyAndRevert()
     local plan = lib.mutation.createPlan()
     local tbl = { HP = 100 }
@@ -248,7 +252,7 @@ function TestDefinitionLifecycle:testAffectsRunDataIgnoresDeprecatedFlag()
 end
 
 function TestDefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local target = { Value = 1 }
     local def = {
         patchPlan = function(plan)
@@ -269,7 +273,7 @@ end
 
 function TestDefinitionLifecycle:testPatchRuntimeSurvivesRecreatedStoreByModuleId()
     local target = { Value = 1 }
-    local storeA = lib.createStore({ Enabled = true }, { storage = {} })
+    local storeA = makeStore(true)
     local defA = {
         modpack = "test-pack",
         id = "StablePatchRuntime",
@@ -283,7 +287,7 @@ function TestDefinitionLifecycle:testPatchRuntimeSurvivesRecreatedStoreByModuleI
     lu.assertNil(err)
     lu.assertEquals(target.Value, 7)
 
-    local storeB = lib.createStore({ Enabled = true }, { storage = {} })
+    local storeB = makeStore(true)
     local defB = {
         modpack = "test-pack",
         id = "StablePatchRuntime",
@@ -305,7 +309,7 @@ end
 
 function TestDefinitionLifecycle:testApplyOnLoadRevertsStablePatchWhenReloadedDisabled()
     local target = { Value = 1 }
-    local storeA = lib.createStore({ Enabled = true }, { storage = {} })
+    local storeA = makeStore(true)
     local def = {
         modpack = "test-pack",
         id = "DisabledReloadPatchRuntime",
@@ -320,7 +324,7 @@ function TestDefinitionLifecycle:testApplyOnLoadRevertsStablePatchWhenReloadedDi
     lu.assertNil(err)
     lu.assertEquals(target.Value, 7)
 
-    local storeB = lib.createStore({ Enabled = false }, { storage = {} })
+    local storeB = makeStore(false)
 
     ok, err = lib.lifecycle.applyOnLoad(def, storeB)
     lu.assertTrue(ok)
@@ -330,7 +334,7 @@ end
 
 function TestDefinitionLifecycle:testManualRuntimeSurvivesRecreatedStoreByModuleId()
     local target = { Value = 0 }
-    local storeA = lib.createStore({ Enabled = true }, { storage = {} })
+    local storeA = makeStore(true)
     local defA = {
         modpack = "test-pack",
         id = "StableManualRuntime",
@@ -347,7 +351,7 @@ function TestDefinitionLifecycle:testManualRuntimeSurvivesRecreatedStoreByModule
     lu.assertNil(err)
     lu.assertEquals(target.Value, 1)
 
-    local storeB = lib.createStore({ Enabled = true }, { storage = {} })
+    local storeB = makeStore(true)
     local defB = {
         modpack = "test-pack",
         id = "StableManualRuntime",
@@ -371,7 +375,7 @@ function TestDefinitionLifecycle:testManualRuntimeSurvivesRecreatedStoreByModule
 end
 
 function TestDefinitionLifecycle:testApplyOnLoadDisabledDoesNotCallInactiveManualRevert()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local revertCalls = 0
     local def = {
         modpack = "test-pack",
@@ -391,7 +395,7 @@ function TestDefinitionLifecycle:testApplyOnLoadDisabledDoesNotCallInactiveManua
 end
 
 function TestDefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleMissingAndRunDataUnaffected()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local def = {
         affectsRunData = false,
     }
@@ -406,7 +410,7 @@ function TestDefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleMissingAnd
 end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccessfulEnable()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local applied = false
     local def = {
         apply = function()
@@ -424,7 +428,7 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccess
 end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnable()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local def = {
         apply = function()
             error("enable boom")
@@ -440,7 +444,7 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnab
 end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedDisable()
-    local store = lib.createStore({ Enabled = true }, { storage = {} })
+    local store = makeStore(true)
     local def = {
         apply = function() end,
         revert = function()
@@ -456,7 +460,7 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedDisa
 end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEnabled()
-    local store = lib.createStore({ Enabled = true }, { storage = {} })
+    local store = makeStore(true)
     local calls = {}
     local def = {
         apply = function()
@@ -476,7 +480,7 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEna
 end
 
 function TestDefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisabled()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local revertCalls = 0
     local def = {
         apply = function() end,
@@ -494,7 +498,7 @@ function TestDefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisable
 end
 
 function TestDefinitionLifecycle:testReapplyDefinitionStopsWhenRevertFails()
-    local store = lib.createStore({ Enabled = true }, { storage = {} })
+    local store = makeStore(true)
     local applyCalls = 0
     local def = {
         apply = function()
@@ -513,7 +517,7 @@ function TestDefinitionLifecycle:testReapplyDefinitionStopsWhenRevertFails()
 end
 
 function TestDefinitionLifecycle:testHybridOrderingIsPatchThenManualOnApplyAndManualThenPatchOnRevert()
-    local store = lib.createStore({ Enabled = false }, { storage = {} })
+    local store = makeStore(false)
     local target = { Value = 0 }
     local order = {}
     local def = {

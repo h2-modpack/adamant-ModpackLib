@@ -9,7 +9,8 @@ Initial public release of the adamant Modpack Lib surface.
 
 ### Added
 
-- managed module storage through `lib.createStore(config, definition, dataDefaults?)`
+- prepared module definitions through `lib.prepareDefinition(owner, dataDefaults?, definition)`
+- managed module storage through `lib.createStore(config, definition)`
 - explicit staged UI state through the returned `session`
 - host-based module wiring through `lib.createModuleHost(...)`
 - standalone window/menu hosting through `lib.standaloneHost(...)`
@@ -27,7 +28,7 @@ Initial public release of the adamant Modpack Lib surface.
 - transactional session commit/resync support for host and framework flows
 - coordinated-pack enable-state support through `lib.isModuleCoordinated(...)` and `lib.isModuleEnabled(...)`
 - standalone and framework-friendly module authoring contract based on:
-  - `public.definition`
+  - `lib.prepareDefinition(...)`
   - `public.host`
   - direct draw functions such as `DrawTab(imgui, session)`
 - reload-stable ModUtil hook registration through:

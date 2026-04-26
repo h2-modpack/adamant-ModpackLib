@@ -32,21 +32,20 @@ Typical coordinated module:
 ```lua
 local dataDefaults = import("config.lua")
 
-public.definition = {
+local definition = lib.prepareDefinition(internal, dataDefaults, {
     modpack = PACK_ID,
     id = "ExampleModule",
     name = "Example Module",
     tooltip = "What this module does.",
-    default = false,
     affectsRunData = false,
     storage = {
         { type = "bool", alias = "EnabledFlag", configKey = "EnabledFlag", default = false },
         { type = "string", alias = "Mode", configKey = "Mode", default = "Vanilla", maxLen = 32 },
         { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
     },
-}
+})
 
-local store, session = lib.createStore(config, public.definition, dataDefaults)
+local store, session = lib.createStore(config, definition)
 internal.store = store
 
 function internal.DrawTab(ui, session)
@@ -70,7 +69,7 @@ function internal.DrawQuickContent(ui, session)
 end
 
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -86,15 +85,14 @@ If the module does not register runtime hooks, omit `hookOwner` and `registerHoo
 
 ## Definition Rules
 
-Meaningful module definition fields:
+Meaningful prepared definition fields:
 - `modpack`
 - `id`
 - `name`
 - `shortName`
 - `tooltip`
-- `default`
 - `storage`
-- `hashGroups`
+- `hashGroupPlan`
 - `affectsRunData`
 - `patchPlan`
 - `apply`
@@ -225,7 +223,7 @@ function internal.RegisterHooks()
 end
 
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -253,10 +251,17 @@ Supported lifecycle shapes:
 Patch-plan example:
 
 ```lua
-public.definition.patchPlan = function(plan, store)
+local definition = lib.prepareDefinition(internal, {
+    modpack = PACK_ID,
+    id = "ExampleModule",
+    name = "Example Module",
+    affectsRunData = true,
+    storage = internal.BuildStorage(),
+    patchPlan = function(plan, store)
     plan:set(SomeTable, "Enabled", true)
     plan:appendUnique(SomeTable, "Pool", "NewEntry")
-end
+    end,
+})
 ```
 
 Lib helpers:
@@ -268,15 +273,13 @@ Lib helpers:
 ## Coordinated Modules
 
 Framework-hosted modules should export:
-- `public.definition`
 - `public.host`
 
 Framework discovery requires:
-- `definition.modpack`
-- `definition.id`
-- `definition.name`
-- `definition.storage`
 - public `host`
+- `host.getIdentity()`
+- `host.getMeta()`
+- a prepared definition with `storage`
 
 Framework behavior:
 - each coordinated module gets its own top-level tab
@@ -288,10 +291,17 @@ Framework behavior:
 For non-framework hosting, use:
 
 ```lua
-local store, session = lib.createStore(config, public.definition, dataDefaults)
+local definition = lib.prepareDefinition(internal, {
+    modpack = PACK_ID,
+    id = "ExampleModule",
+    name = "Example Module",
+    storage = internal.BuildStorage(),
+})
+
+local store, session = lib.createStore(config, definition)
 
 public.host = lib.createModuleHost({
-    definition = public.definition,
+    definition = definition,
     store = store,
     session = session,
     hookOwner = internal,
@@ -354,35 +364,53 @@ ExampleModule_Internal = ExampleModule_Internal or {}
 ---@type ExampleModuleInternal
 local internal = ExampleModule_Internal
 
-public.definition = {
-    modpack = PACK_ID,
-    id = "ExampleModule",
-    name = "Example Module",
-    shortName = "Example",
-    tooltip = "Demonstrates the Lib module contract.",
-    default = dataDefaults.Enabled,
-    affectsRunData = false,
-    storage = {
-        { type = "bool", alias = "FeatureEnabled", configKey = "FeatureEnabled", default = false },
-        { type = "string", alias = "Mode", configKey = "Mode", default = "Vanilla", maxLen = 32 },
-        { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
-        {
-            type = "packedInt",
-            alias = "PackedFlags",
-            configKey = "PackedFlags",
-            default = 0,
-            bits = {
-                { alias = "PackedFlags_Attack", label = "Attack", type = "bool", offset = 0, width = 1, default = false },
-                { alias = "PackedFlags_Special", label = "Special", type = "bool", offset = 1, width = 1, default = false },
-            },
-        },
-    },
-}
-
 public.host = nil
 local store = nil
 local session = nil
 internal.standaloneUi = nil
+
+local function init()
+    import_as_fallback(rom.game)
+
+    local definition = lib.prepareDefinition(internal, dataDefaults, {
+        modpack = PACK_ID,
+        id = "ExampleModule",
+        name = "Example Module",
+        shortName = "Example",
+        tooltip = "Demonstrates the Lib module contract.",
+        affectsRunData = false,
+        storage = {
+            { type = "bool", alias = "FeatureEnabled", configKey = "FeatureEnabled", default = false },
+            { type = "string", alias = "Mode", configKey = "Mode", default = "Vanilla", maxLen = 32 },
+            { type = "string", alias = "FilterText", lifetime = "transient", default = "", maxLen = 64 },
+            {
+                type = "packedInt",
+                alias = "PackedFlags",
+                configKey = "PackedFlags",
+                default = 0,
+                bits = {
+                    { alias = "PackedFlags_Attack", label = "Attack", type = "bool", offset = 0, width = 1, default = false },
+                    { alias = "PackedFlags_Special", label = "Special", type = "bool", offset = 1, width = 1, default = false },
+                },
+            },
+        },
+    })
+
+    store, session = lib.createStore(config, definition)
+    internal.store = store
+
+    public.host = lib.createModuleHost({
+        definition = definition,
+        store = store,
+        session = session,
+        hookOwner = internal,
+        registerHooks = internal.RegisterHooks,
+        drawTab = internal.DrawTab,
+        drawQuickContent = internal.DrawQuickContent,
+    })
+
+    internal.standaloneUi = lib.standaloneHost(public.host)
+end
 
 function internal.DrawTab(ui, session)
     lib.widgets.checkbox(ui, session, "FeatureEnabled", {
@@ -418,25 +446,6 @@ end
 
 function internal.RegisterHooks()
     -- Optional: register runtime hooks here through lib.hooks.*
-end
-
-local function init()
-    import_as_fallback(rom.game)
-
-    store, session = lib.createStore(config, public.definition, dataDefaults)
-    internal.store = store
-
-    public.host = lib.createModuleHost({
-        definition = public.definition,
-        store = store,
-        session = session,
-        hookOwner = internal,
-        registerHooks = internal.RegisterHooks,
-        drawTab = internal.DrawTab,
-        drawQuickContent = internal.DrawQuickContent,
-    })
-
-    internal.standaloneUi = lib.standaloneHost(public.host)
 end
 
 local loader = reload.auto_single()

@@ -5,17 +5,6 @@ local StorageTypes = storageInternal.types
 public.hashing = public.hashing or {}
 local hashingApi = public.hashing
 
--- Lib owns storage-schema interpretation and primitive hash packing helpers.
--- Framework owns pack-level hash serialization, profile import/export, and
--- definition.hashGroups orchestration. Modules may declare hash groups but
--- should not encode/decode full pack hashes directly.
---
--- Module-facing (used when declaring storage / hashGroups): getAliases, getPackWidth.
--- Framework-facing (hash encode/decode): getRoots, valuesEqual, toHash, fromHash,
--- readPackedBits, writePackedBits.
-
-
-
 --- Returns the prepared persistent root nodes for a validated storage schema.
 ---@param storage StorageSchema Validated storage schema.
 ---@return StorageNode[] roots Prepared list of persistent root storage nodes.

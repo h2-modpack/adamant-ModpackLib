@@ -7,7 +7,7 @@ local lu = require('luaunit')
 TestIsEnabled = {}
 
 local function makeStore(enabled)
-    return lib.createStore({ Enabled = enabled }, { storage = {} })
+    return lib.createStore({ Enabled = enabled }, lib.prepareDefinition({}, { storage = {} }))
 end
 
 -- Reset the "test-pack" coordinator slot before each test.
