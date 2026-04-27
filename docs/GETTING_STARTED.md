@@ -48,7 +48,7 @@ Typical module flow:
 
 1. `main.lua` prepares `local definition = lib.prepareDefinition(...)`.
 2. `main.lua` creates `store, session = lib.createStore(...)`.
-3. `main.lua` creates `public.host = lib.createModuleHost(...)`.
+3. `main.lua` creates the live module host through `lib.createModuleHost(...)`.
 4. UI code edits staged values through `session`.
 5. Host/framework plumbing commits staged persistent values when appropriate.
 6. Gameplay logic reads persisted state through `store.read(...)`.
@@ -75,7 +75,7 @@ Owns module wiring:
 - imports `data.lua`, `logic.lua`, and `ui.lua`
 - creates `store` and `session`
 - copies `store` to `internal.store` if logic needs it
-- creates `public.host`
+- creates the live host through `lib.createModuleHost(...)`
 - wires optional standalone UI
 
 Keep store/session/host creation here even if the module grows.
@@ -161,7 +161,7 @@ local store, session = lib.createStore(config, definition)
 internal.store = store
 ```
 
-Keep `session` local to `main.lua`. The draw path will receive the restricted author-facing session through `public.host`.
+Keep `session` local to `main.lua`. The draw path will receive the restricted author-facing session through the live host.
 
 ### 4. Build the UI in `ui.lua`
 
@@ -232,7 +232,7 @@ end
 ### 6. Expose the module host in `main.lua`
 
 ```lua
-public.host = lib.createModuleHost({
+lib.createModuleHost({
     definition = definition,
     store = store,
     session = session,
@@ -256,7 +256,6 @@ If the module has no runtime hooks, `hookOwner` and `registerHooks` may be omitt
 If the module belongs to a Framework-managed pack:
 
 - `lib.createModuleHost(...)` registers the module in Lib's live-host registry
-- keep `public.host` assigned as the normal module export and standalone entry point
 - Framework calls `host.drawTab(...)`
 - optional quick setup uses `host.drawQuickContent(...)`
 
@@ -265,7 +264,7 @@ If the module belongs to a Framework-managed pack:
 If the module is not coordinated:
 
 ```lua
-internal.standaloneUi = lib.standaloneHost(public.host)
+internal.standaloneUi = lib.standaloneHost()
 ```
 
 Then wire:

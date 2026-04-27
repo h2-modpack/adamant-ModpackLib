@@ -68,7 +68,7 @@ function internal.DrawQuickContent(ui, session)
     })
 end
 
-public.host = lib.createModuleHost({
+lib.createModuleHost({
     definition = definition,
     store = store,
     session = session,
@@ -222,7 +222,7 @@ function internal.RegisterHooks()
     end)
 end
 
-public.host = lib.createModuleHost({
+lib.createModuleHost({
     definition = definition,
     store = store,
     session = session,
@@ -272,9 +272,6 @@ Lib helpers:
 
 ## Coordinated Modules
 
-Framework-hosted modules should export:
-- `public.host`
-
 Framework discovery requires:
 - a live host registered by `lib.createModuleHost(...)`
 - `host.getIdentity()`
@@ -300,7 +297,7 @@ local definition = lib.prepareDefinition(internal, {
 
 local store, session = lib.createStore(config, definition)
 
-public.host = lib.createModuleHost({
+lib.createModuleHost({
     definition = definition,
     store = store,
     session = session,
@@ -310,7 +307,7 @@ public.host = lib.createModuleHost({
     drawQuickContent = internal.DrawQuickContent,
 })
 
-local runtime = lib.standaloneHost(public.host)
+local runtime = lib.standaloneHost()
 
 local function registerGui()
     rom.gui.add_imgui(runtime.renderWindow)
@@ -364,7 +361,6 @@ ExampleModule_Internal = ExampleModule_Internal or {}
 ---@type ExampleModuleInternal
 local internal = ExampleModule_Internal
 
-public.host = nil
 local store = nil
 local session = nil
 internal.standaloneUi = nil
@@ -399,7 +395,7 @@ local function init()
     store, session = lib.createStore(config, definition)
     internal.store = store
 
-    public.host = lib.createModuleHost({
+    lib.createModuleHost({
         definition = definition,
         store = store,
         session = session,
@@ -409,7 +405,7 @@ local function init()
         drawQuickContent = internal.DrawQuickContent,
     })
 
-    internal.standaloneUi = lib.standaloneHost(public.host)
+    internal.standaloneUi = lib.standaloneHost()
 end
 
 function internal.DrawTab(ui, session)
@@ -472,9 +468,8 @@ end)
 Notes on the example:
 - `config` and `reload` stay local to `main.lua`
 - `store` is recreated on every reload
-- `session` stays local to `main.lua`; draw callbacks receive the restricted author session through `public.host`
+- `session` stays local to `main.lua`; draw callbacks receive the restricted author session through the live host
 - `lib.createModuleHost(...)` owns the live coordinated host registration
-- `public.host` remains the normal exported reference used by standalone hosting and local module code
 - `internal.RegisterHooks()` is the normal place for `lib.hooks.*` declarations
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional

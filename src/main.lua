@@ -18,12 +18,14 @@ public.config = libConfig
 local _coordinators = {}
 local _coordinatorRebuilds = {}
 local _liveModuleHosts = {}
+local _liveModuleHostsByPack = {}
 AdamantModpackLib_Internal = AdamantModpackLib_Internal or {}
 local internal = AdamantModpackLib_Internal
 internal.libConfig = libConfig
 internal.coordinators = _coordinators
 internal.coordinatorRebuilds = _coordinatorRebuilds
 internal.liveModuleHosts = internal.liveModuleHosts or _liveModuleHosts
+internal.liveModuleHostsByPack = internal.liveModuleHostsByPack or _liveModuleHostsByPack
 internal.pendingCoordinatorRebuilds = internal.pendingCoordinatorRebuilds
     or setmetatable({}, { __mode = "k" })
 internal.logging = internal.logging or {}
@@ -34,8 +36,9 @@ local fallbackHud = import 'core/private/fallback_hud.lua'
 ---@field createStore fun(modConfig: table, definition: ModuleDefinition, dataDefaults: table|nil): ManagedStore, Session
 ---@field resetStorageToDefaults fun(storage: StorageSchema, session: Session, opts: table|nil)
 ---@field createModuleHost fun(opts: ModuleHostOpts): ModuleHost
----@field standaloneHost fun(moduleHost: ModuleHost, opts: StandaloneOpts|nil): StandaloneRuntime
+---@field standaloneHost fun(packId: string|nil, moduleIdOrOpts: string|StandaloneOpts|nil, opts: StandaloneOpts|nil): StandaloneRuntime
 ---@field getLiveModuleHost fun(moduleName: string|nil): ModuleHost|nil
+---@field getLiveModuleHostById fun(packId: string|nil, moduleId: string|nil): ModuleHost|nil
 ---@field isModuleCoordinated fun(packId: string|nil): boolean
 ---@field isModuleEnabled fun(store: ManagedStore, packId: string|nil): boolean
 ---@field lifecycle table

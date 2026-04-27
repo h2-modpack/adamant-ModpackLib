@@ -54,6 +54,17 @@ function public.getLiveModuleHost(moduleName)
     return internal.liveModuleHosts[moduleName]
 end
 
+function public.getLiveModuleHostById(packId, moduleId)
+    if type(packId) ~= "string" or packId == "" then
+        return nil
+    end
+    if type(moduleId) ~= "string" or moduleId == "" then
+        return nil
+    end
+    local packHosts = internal.liveModuleHostsByPack[packId]
+    return type(packHosts) == "table" and packHosts[moduleId] or nil
+end
+
 --- Creates a behavior-only host object for Framework and standalone hosting.
 --- Registers the created host into Lib's live-host registry under `opts.moduleName`
 --- (or the current `_PLUGIN.guid`) so coordinated discovery can resolve it immediately.
@@ -207,9 +218,18 @@ function public.createModuleHost(opts)
     local identity = host.getIdentity()
     local meta = host.getMeta()
     local packId = identity.modpack
+    local moduleId = identity.id
     local pendingCoordinatorRebuild = internal.pendingCoordinatorRebuilds[def]
     local hasPendingCoordinatorRebuild = type(pendingCoordinatorRebuild) == "table"
     internal.liveModuleHosts[moduleName] = host
+    if type(packId) == "string" and packId ~= "" and type(moduleId) == "string" and moduleId ~= "" then
+        local packHosts = internal.liveModuleHostsByPack[packId]
+        if type(packHosts) ~= "table" then
+            packHosts = {}
+            internal.liveModuleHostsByPack[packId] = packHosts
+        end
+        packHosts[moduleId] = host
+    end
     if not hasPendingCoordinatorRebuild
         and type(packId) == "string"
         and packId ~= ""
@@ -234,11 +254,33 @@ function public.createModuleHost(opts)
 end
 
 --- Initializes standalone module hosting and returns window/menu-bar renderers.
----@param moduleHost table Behavior host returned by `lib.createModuleHost`.
+---@param packId string|nil Explicit pack id, or nil to resolve the current module by `_PLUGIN.guid`.
+---@param moduleIdOrOpts string|StandaloneOpts|nil Explicit module id, or opts when using the zero-arg current-module form.
 ---@param opts StandaloneOpts|nil Optional standalone rendering hooks and window settings.
 ---@return StandaloneRuntime runtime Standalone runtime with `renderWindow` and `addMenuBar` callbacks.
-function public.standaloneHost(moduleHost, opts)
-    assert(type(moduleHost) == "table", "standaloneHost: moduleHost is required")
+function public.standaloneHost(packId, moduleIdOrOpts, opts)
+    local moduleHost
+    if type(packId) == "string" and packId ~= "" then
+        assert(type(moduleIdOrOpts) == "string" and moduleIdOrOpts ~= "",
+            "standaloneHost: moduleId is required when packId is provided")
+        moduleHost = public.getLiveModuleHostById(packId, moduleIdOrOpts)
+        assert(type(moduleHost) == "table",
+            string.format("standaloneHost: no live module host is registered for '%s/%s'",
+                tostring(packId), tostring(moduleIdOrOpts)))
+    else
+        if packId ~= nil then
+            opts = packId
+        elseif moduleIdOrOpts ~= nil then
+            opts = moduleIdOrOpts
+        end
+        local moduleName = type(_PLUGIN) == "table" and _PLUGIN.guid or nil
+        assert(type(moduleName) == "string" and moduleName ~= "",
+            "standaloneHost: current module guid is unavailable")
+        moduleHost = public.getLiveModuleHost(moduleName)
+        assert(type(moduleHost) == "table",
+            string.format("standaloneHost: no live module host is registered for current module '%s'",
+                tostring(moduleName)))
+    end
 
     opts = opts or {}
     assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function",

@@ -34,15 +34,15 @@ Modules declare:
   - `apply`
   - `revert`
 
-Modules expose a behavior host:
-- `public.host = lib.createModuleHost(...)`
+Modules create a behavior host:
+- `lib.createModuleHost(...)`
 
 That host owns:
 - `drawTab`
 - optional `drawQuickContent`
 - built-in lifecycle/state helpers for Framework and standalone hosting
 
-Module behavior is hosted through `public.host`.
+Module behavior is hosted through Lib's live host registry.
 
 ## `lib.config`
 
@@ -296,7 +296,7 @@ function internal.RegisterHooks()
     end)
 end
 
-public.host = lib.createModuleHost({
+lib.createModuleHost({
     definition = internal.definition,
     store = store,
     session = session,
@@ -415,7 +415,7 @@ Reverts and reapplies the module's mutation lifecycle.
 
 ### `lib.lifecycle.applyOnLoad(def, store)`
 
-Syncs live mutation state to the module's effective enabled state on load. Framework calls this for coordinated modules; `lib.standaloneHost(moduleHost, ...)` calls it for standalone modules.
+Syncs live mutation state to the module's effective enabled state on load. Framework calls this for coordinated modules; `lib.standaloneHost(...)` calls it for standalone modules.
 
 ### `lib.lifecycle.resyncSession(def, session)`
 
@@ -487,7 +487,7 @@ Behavior:
 - when a coordinator is already registered for `definition.modpack`, host creation immediately syncs the module's live mutation state through `host.applyOnLoad()`
 - otherwise startup sync is owned by Framework or standalone hosting
 
-### `lib.standaloneHost(moduleHost, opts?)`
+### `lib.standaloneHost(packId?, moduleIdOrOpts?, opts?)`
 
 Initializes standalone module hosting and returns window/menu-bar renderers.
 
@@ -498,7 +498,8 @@ Returned surface:
 - `runtime.addMenuBar()`
 
 Behavior:
-- reads definition/state through `moduleHost`
+- with `packId, moduleId`, resolves the live host from Lib using author-facing module identity
+- with no identity args, resolves the current module through `_PLUGIN.guid`
 - applies on-load lifecycle state for non-coordinated modules
 - suppresses the standalone window/menu when the module is coordinated
 - renders built-in controls for:

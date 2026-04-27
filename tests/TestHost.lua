@@ -16,6 +16,16 @@ end
 
 function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     local drawCalls = 0
+    local definition = lib.prepareDefinition({}, {
+        modpack = "standalone-pack",
+        id = "StandaloneTest",
+        name = "Standalone Test",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
 
     local function noop() end
 
@@ -33,51 +43,20 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
         Spacing = noop,
     }
 
-    local moduleHost = {
-        getIdentity = function()
-            return {
-                id = "StandaloneTest",
-                modpack = nil,
-            }
-        end,
-        getMeta = function()
-            return {
-                name = "Standalone Test",
-                shortName = nil,
-                tooltip = nil,
-            }
-        end,
-        affectsRunData = function()
-            return false
-        end,
-        getStorage = function()
-            return nil
-        end,
-        applyOnLoad = function()
-            return true, nil
-        end,
-        read = function(alias)
-            if alias == "Enabled" then
-                return true
-            end
-            if alias == "DebugMode" then
-                return false
-            end
-            return nil
-        end,
-        setEnabled = function()
-            return true, nil
-        end,
-        setDebugMode = noop,
+    local moduleHost = lib.createModuleHost({
+        moduleName = "standalone-test-host",
+        definition = definition,
+        store = store,
+        session = session,
         drawTab = function()
             drawCalls = drawCalls + 1
         end,
-        commitIfDirty = function()
-            return false, "commit boom", false
-        end,
-    }
+    })
+    moduleHost.commitIfDirty = function()
+        return false, "commit boom", false
+    end
 
-    local runtime = lib.standaloneHost(moduleHost)
+    local runtime = lib.standaloneHost("standalone-pack", "StandaloneTest")
     runtime.addMenuBar()
     runtime.renderWindow()
 
@@ -85,6 +64,31 @@ function TestHost:testStandaloneHostWarnsWhenSessionCommitFails()
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "Standalone Test session commit failed")
     lu.assertStrContains(Warnings[1], "commit boom")
+    lu.assertEquals(lib.getLiveModuleHostById("standalone-pack", "StandaloneTest"), moduleHost)
+end
+
+function TestHost:testStandaloneHostCanResolveCurrentModuleHostFromLibRegistry()
+    local definition = lib.prepareDefinition({}, {
+        id = "StandaloneRegistryHost",
+        name = "Standalone Registry Host",
+        storage = {},
+    })
+    local store, session = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local host = lib.createModuleHost({
+        definition = definition,
+        store = store,
+        session = session,
+        drawTab = function() end,
+    })
+
+    local runtime = lib.standaloneHost()
+
+    lu.assertEquals(type(runtime.renderWindow), "function")
+    lu.assertEquals(type(runtime.addMenuBar), "function")
+    lu.assertEquals(lib.getLiveModuleHost(_PLUGIN.guid), host)
 end
 
 function TestHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
