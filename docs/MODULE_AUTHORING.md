@@ -276,7 +276,7 @@ Framework-hosted modules should export:
 - `public.host`
 
 Framework discovery requires:
-- public `host`
+- a live host registered by `lib.createModuleHost(...)`
 - `host.getIdentity()`
 - `host.getMeta()`
 - a prepared definition with `storage`
@@ -473,7 +473,8 @@ Notes on the example:
 - `config` and `reload` stay local to `main.lua`
 - `store` is recreated on every reload
 - `session` stays local to `main.lua`; draw callbacks receive the restricted author session through `public.host`
-- `public.host` owns the behavior contract used by framework or standalone hosting
+- `lib.createModuleHost(...)` owns the live coordinated host registration
+- `public.host` remains the normal exported reference used by standalone hosting and local module code
 - `internal.RegisterHooks()` is the normal place for `lib.hooks.*` declarations
 - `DrawTab` uses raw ImGui for structure and `lib.widgets.*` for controls
 - `DrawQuickContent` is optional

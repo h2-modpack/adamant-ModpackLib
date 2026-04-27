@@ -255,7 +255,8 @@ If the module has no runtime hooks, `hookOwner` and `registerHooks` may be omitt
 
 If the module belongs to a Framework-managed pack:
 
-- Framework discovers the module through `public.host`
+- `lib.createModuleHost(...)` registers the module in Lib's live-host registry
+- keep `public.host` assigned as the normal module export and standalone entry point
 - Framework calls `host.drawTab(...)`
 - optional quick setup uses `host.drawQuickContent(...)`
 

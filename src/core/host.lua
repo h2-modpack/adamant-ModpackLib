@@ -16,6 +16,7 @@ local internal = AdamantModpackLib_Internal
 
 ---@class ModuleHostOpts
 ---@field definition ModuleDefinition
+---@field moduleName string|nil
 ---@field store ManagedStore
 ---@field session Session
 ---@field hookOwner table|nil
@@ -46,7 +47,16 @@ local internal = AdamantModpackLib_Internal
 ---@field drawTab fun(imgui: table)
 ---@field drawQuickContent fun(imgui: table)|nil
 
+function public.getLiveModuleHost(moduleName)
+    if type(moduleName) ~= "string" or moduleName == "" then
+        return nil
+    end
+    return internal.liveModuleHosts[moduleName]
+end
+
 --- Creates a behavior-only host object for Framework and standalone hosting.
+--- Registers the created host into Lib's live-host registry under `opts.moduleName`
+--- (or the current `_PLUGIN.guid`) so coordinated discovery can resolve it immediately.
 --- The host closes over store/session without exposing those state handles publicly.
 ---@param opts ModuleHostOpts
 ---@return ModuleHost host Module host behavior contract.
@@ -64,8 +74,14 @@ function public.createModuleHost(opts)
     local drawQuickContent = opts.drawQuickContent
     local registerHooks = opts.registerHooks
     local hookOwner = opts.hookOwner
+    local moduleName = opts.moduleName
 
     assert(type(drawTab) == "function", "createModuleHost: drawTab is required")
+    if moduleName == nil and type(_PLUGIN) == "table" then
+        moduleName = _PLUGIN.guid
+    end
+    assert(type(moduleName) == "string" and moduleName ~= "",
+        "createModuleHost: moduleName is required (or _PLUGIN.guid must be available)")
 
     if registerHooks ~= nil then
         assert(type(registerHooks) == "function", "createModuleHost: registerHooks must be a function")
@@ -192,10 +208,8 @@ function public.createModuleHost(opts)
     local meta = host.getMeta()
     local packId = identity.modpack
     local pendingCoordinatorRebuild = internal.pendingCoordinatorRebuilds[def]
-    if type(pendingCoordinatorRebuild) == "table" then
-        internal.pendingCoordinatorRebuildHosts[host] = pendingCoordinatorRebuild
-    end
     local hasPendingCoordinatorRebuild = type(pendingCoordinatorRebuild) == "table"
+    internal.liveModuleHosts[moduleName] = host
     if not hasPendingCoordinatorRebuild
         and type(packId) == "string"
         and packId ~= ""
@@ -206,37 +220,17 @@ function public.createModuleHost(opts)
                 tostring(meta.name or identity.id or "module"),
                 tostring(err))
         end
+    elseif hasPendingCoordinatorRebuild then
+        local requested = public.lifecycle.requestCoordinatorRebuild(packId, pendingCoordinatorRebuild)
+        if requested then
+            internal.pendingCoordinatorRebuilds[def] = nil
+        else
+            internal.logging.warn("%s structural definition changed during hot reload; full reload required",
+                tostring(meta.name or identity.id or "module"))
+        end
     end
 
     return host
-end
-
---- Finalizes a freshly published module host after assignment to `public.host`.
---- Emits any queued coordinated rebuild request carried forward from prepareDefinition().
----@param moduleHost ModuleHost
----@return boolean requested True when a coordinated rebuild callback was invoked.
-function public.finalizeModuleHost(moduleHost)
-    assert(type(moduleHost) == "table", "finalizeModuleHost: moduleHost is required")
-    assert(type(moduleHost.getIdentity) == "function" and type(moduleHost.getMeta) == "function"
-        and type(moduleHost.getStorage) == "function",
-        "finalizeModuleHost: moduleHost metadata accessors are required")
-
-    local reason = internal.pendingCoordinatorRebuildHosts[moduleHost]
-    if type(reason) ~= "table" then
-        return false
-    end
-
-    local identity = moduleHost.getIdentity() or {}
-    local meta = moduleHost.getMeta() or {}
-    local requested = public.lifecycle.requestCoordinatorRebuild(identity.modpack, reason)
-    if requested then
-        internal.pendingCoordinatorRebuildHosts[moduleHost] = nil
-    else
-        internal.logging.warn("%s structural definition changed during hot reload; full reload required",
-            tostring(meta.name or identity.id or "module"))
-    end
-
-    return requested
 end
 
 --- Initializes standalone module hosting and returns window/menu-bar renderers.

@@ -132,8 +132,13 @@ end
 function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFrameworkRebuildIsPending()
     local applyCalls = 0
     local packId = "reload-pack"
+    local rebuildReason = nil
 
     lib.lifecycle.registerCoordinator(packId, { ModEnabled = true })
+    lib.lifecycle.registerCoordinatorRebuild(packId, function(reason)
+        rebuildReason = reason
+        return true
+    end)
     local definition = lib.prepareDefinition({}, {
         modpack = packId,
         id = "ReloadHost",
@@ -148,16 +153,12 @@ function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFramework
         EnabledFlag = false,
     }, definition)
     local host = lib.createModuleHost({
+        moduleName = "reload-pack.ReloadHost",
         definition = definition,
         store = store,
         session = session,
         drawTab = function() end,
     })
-    AdamantModpackLib_Internal.pendingCoordinatorRebuildHosts[host] = {
-        kind = "structural_definition_changed",
-        moduleId = "ReloadHost",
-        modpack = packId,
-    }
 
     local originalApplyOnLoad = lib.lifecycle.applyOnLoad
     lib.lifecycle.applyOnLoad = function(...)
@@ -165,10 +166,34 @@ function TestHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFramework
         return originalApplyOnLoad(...)
     end
 
-    lib.finalizeModuleHost(host)
+    local owner = {
+        _definitionStructuralFingerprint = definition._structuralFingerprint,
+    }
+    local prepared = lib.prepareDefinition(owner, {
+        modpack = packId,
+        id = "ReloadHost",
+        name = "Reload Host",
+        storage = {
+            { type = "bool", alias = "OtherFlag", configKey = "OtherFlag", default = false },
+        },
+    })
+    local reloadStore, reloadSession = lib.createStore({
+        Enabled = true,
+        DebugMode = false,
+        OtherFlag = false,
+    }, prepared)
+    local reloadedHost = lib.createModuleHost({
+        moduleName = "reload-pack.ReloadHost",
+        definition = prepared,
+        store = reloadStore,
+        session = reloadSession,
+        drawTab = function() end,
+    })
 
     lib.lifecycle.applyOnLoad = originalApplyOnLoad
     lib.lifecycle.registerCoordinator(packId, nil)
-    AdamantModpackLib_Internal.pendingCoordinatorRebuildHosts[host] = nil
+    lib.lifecycle.registerCoordinatorRebuild(packId, nil)
     lu.assertEquals(applyCalls, 0)
+    lu.assertNotNil(rebuildReason)
+    lu.assertEquals(lib.getLiveModuleHost("reload-pack.ReloadHost"), reloadedHost)
 end

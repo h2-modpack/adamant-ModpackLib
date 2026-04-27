@@ -74,7 +74,7 @@ function TestPrepareDefinition:testPrepareDefinitionMarksStructuralReloadMismatc
     lu.assertEquals(prepared.storage[1].alias, "OtherFlag")
 end
 
-function TestPrepareDefinition:testFinalizeModuleHostRequestsCoordinatorRebuildOnStructuralMismatch()
+function TestPrepareDefinition:testCreateModuleHostRequestsCoordinatorRebuildOnStructuralMismatch()
     local owner = {}
     local rebuildReason = nil
 
@@ -108,16 +108,15 @@ function TestPrepareDefinition:testFinalizeModuleHostRequestsCoordinatorRebuildO
         OtherFlag = false,
     }, prepared)
     local host = lib.createModuleHost({
+        moduleName = "test-module",
         definition = prepared,
         store = store,
         session = session,
         drawTab = function() end,
     })
 
-    local requested = lib.finalizeModuleHost(host)
-
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertTrue(requested)
+    lu.assertEquals(lib.getLiveModuleHost("test-module"), host)
     lu.assertNotNil(rebuildReason)
     lu.assertEquals(rebuildReason.kind, "structural_definition_changed")
     lu.assertEquals(rebuildReason.moduleId, "Example")
@@ -125,7 +124,7 @@ function TestPrepareDefinition:testFinalizeModuleHostRequestsCoordinatorRebuildO
     lu.assertEquals(#Warnings, 0)
 end
 
-function TestPrepareDefinition:testFinalizeModuleHostWarnsWhenCoordinatedRebuildCallbackIsMissing()
+function TestPrepareDefinition:testCreateModuleHostWarnsWhenCoordinatedRebuildCallbackIsMissing()
     local owner = {}
 
     lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
@@ -153,23 +152,21 @@ function TestPrepareDefinition:testFinalizeModuleHostWarnsWhenCoordinatedRebuild
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local host = lib.createModuleHost({
+    lib.createModuleHost({
+        moduleName = "test-module",
         definition = prepared,
         store = store,
         session = session,
         drawTab = function() end,
     })
 
-    local requested = lib.finalizeModuleHost(host)
-
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertFalse(requested)
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")
     lu.assertNotNil(AdamantModpackLib_Internal.pendingCoordinatorRebuilds[prepared])
 end
 
-function TestPrepareDefinition:testFinalizeModuleHostKeepsPendingReasonWhenRebuildRequestIsRejected()
+function TestPrepareDefinition:testCreateModuleHostKeepsPendingReasonWhenRebuildRequestIsRejected()
     local owner = {}
 
     lib.lifecycle.registerCoordinator("test-pack", { ModEnabled = true })
@@ -200,17 +197,15 @@ function TestPrepareDefinition:testFinalizeModuleHostKeepsPendingReasonWhenRebui
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local host = lib.createModuleHost({
+    lib.createModuleHost({
+        moduleName = "test-module",
         definition = prepared,
         store = store,
         session = session,
         drawTab = function() end,
     })
 
-    local requested = lib.finalizeModuleHost(host)
-
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertFalse(requested)
     lu.assertNotNil(AdamantModpackLib_Internal.pendingCoordinatorRebuilds[prepared])
     lu.assertEquals(#Warnings, 1)
     lu.assertStrContains(Warnings[1], "structural definition changed during hot reload")

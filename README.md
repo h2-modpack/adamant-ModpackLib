@@ -33,6 +33,7 @@ public.host = lib.createModuleHost({
 ```
 
 `hookOwner` and `registerHooks` are the standard way to declare a module's runtime hooks when it uses `lib.hooks.*`.
+`lib.createModuleHost(...)` also registers the live host for coordinated discovery; `public.host` remains the normal module export.
 
 ## Docs
 
