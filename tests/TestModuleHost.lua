@@ -257,8 +257,6 @@ end
 
 function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     local callbackHost = nil
-    local drawHost = nil
-    local quickHost = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         modpack = "author-pack",
         id = "AuthorHostModule",
@@ -273,12 +271,8 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
         definition = definition,
         store = store,
         session = session,
-        drawTab = function(draw)
-            drawHost = draw.host
-        end,
-        drawQuickContent = function(draw)
-            quickHost = draw.host
-        end,
+        drawTab = function() end,
+        drawQuickContent = function() end,
         configureHost = function(authorHost)
             callbackHost = authorHost
         end,
@@ -289,8 +283,6 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     host.drawQuickContent({})
 
     lu.assertEquals(returnedHost, callbackHost)
-    lu.assertEquals(callbackHost, drawHost)
-    lu.assertEquals(callbackHost, quickHost)
     lu.assertEquals(callbackHost.getHostId(), "test-author-host")
     lu.assertEquals(callbackHost.getModuleId(), "AuthorHostModule")
     lu.assertEquals(callbackHost.getPackId(), "author-pack")
@@ -311,6 +303,68 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     callbackHost.logIf("debug %d", 7)
     lu.assertEquals(self.h.warnings[warningCount + 1], "[AuthorHostModule] plain message")
     lu.assertEquals(self.h.warnings[warningCount + 2], "[AuthorHostModule] debug 7")
+    lu.assertEquals(#self.h.warnings, warningCount + 2)
+end
+
+function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
+    local services = nil
+    local enabled = nil
+    local integrationValue = nil
+    local integrationProvider = nil
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        modpack = "services-pack",
+        id = "DrawServicesModule",
+        name = "Draw Services Module",
+        storage = {},
+    })
+    local store, session = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = true,
+    }, definition)
+    createActivatedHost(self.h, "test-draw-services", {
+        definition = definition,
+        store = store,
+        session = session,
+        drawTab = function(draw)
+            services = draw.services
+            enabled = services.isHostEnabled()
+            integrationValue, integrationProvider = services.invokeIntegration("test.draw-services", "value",
+                "fallback", "ok")
+            services.log("service %s", "log")
+            services.logIf("service %s", "debug")
+        end,
+        configureHost = function(authorHost)
+            authorHost.integrations.register("test.draw-services", {
+                providerId = "DrawServicesProvider",
+                api = {
+                    value = function(suffix)
+                        return "service:" .. tostring(suffix)
+                    end,
+                },
+            })
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-draw-services")
+    local warningCount = #self.h.warnings
+
+    host.drawTab({})
+
+    lu.assertEquals(type(services), "table")
+    lu.assertEquals(type(services.log), "function")
+    lu.assertEquals(type(services.logIf), "function")
+    lu.assertEquals(type(services.isHostEnabled), "function")
+    lu.assertEquals(type(services.invokeIntegration), "function")
+    lu.assertNil(services.integrations)
+    lu.assertNil(services.hooks)
+    lu.assertNil(services.overlays)
+    lu.assertNil(services.mutation)
+    lu.assertNil(services.activate)
+    lu.assertNil(services.setEnabled)
+    lu.assertTrue(enabled)
+    lu.assertEquals(integrationValue, "service:ok")
+    lu.assertEquals(integrationProvider, "DrawServicesProvider")
+    lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawServicesModule] service log")
+    lu.assertEquals(self.h.warnings[warningCount + 2], "[DrawServicesModule] service debug")
     lu.assertEquals(#self.h.warnings, warningCount + 2)
 end
 

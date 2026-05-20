@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Removed old `configKey`, `lifetime`, and `runtime` storage declaration compatibility in favor of explicit `persist`, `stage`, and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
-- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw)` and `drawQuickContent(draw)`, where `draw` contains `imgui`, author `session`, author `host`, and bound `widgets` / `nav`.
+- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw)` and `drawQuickContent(draw)`, where `draw` contains `imgui`, author `session`, draw-safe `services`, and bound `widgets` / `nav`.
 - Runtime hooks are now declared through `host.hooks.*` before activation; the old ownerless `lib.hooks.*` registration surface and `createModule({ registerHooks = ... })` path have been removed.
 - Integration providers are now declared with `host.integrations.register(...)` before activation, and consumers call through `host.integrations.invoke(...)`; the old global integration surface has been removed.
 - Retained module overlays are now declared with `host.overlays.*` before activation; the old `createModule({ registerOverlays = ... })` path has been removed.

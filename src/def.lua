@@ -155,6 +155,12 @@ local lib = {}
 ---@field mutation AdamantModpackLib.AuthorMutation
 ---@field overlays AdamantModpackLib.RetainedOverlayRegistrar
 
+---@class AdamantModpackLib.DrawServices
+---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
+---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
+---@field isHostEnabled fun(): boolean Return whether the current module host is enabled.
+---@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Invoke a registered integration method.
+
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
 ---@field coordinator AdamantModpackLib.FrameworkCoordinatorRuntime
@@ -267,7 +273,7 @@ local lib = {}
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
 ---@field session AdamantModpackLib.AuthorSession
----@field host AdamantModpackLib.AuthorHost
+---@field services AdamantModpackLib.DrawServices
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field widgets AdamantModpackLib.BoundWidgetsApi
 ---@field nav AdamantModpackLib.BoundNavApi

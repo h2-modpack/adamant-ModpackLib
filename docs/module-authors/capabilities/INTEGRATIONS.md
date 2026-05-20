@@ -48,8 +48,9 @@ return true
 ```
 
 `invoke(...)` resolves the current preferred provider at call time and returns the fallback when the provider or method is absent.
-Consumer code should use the author host passed into draw, hook, overlay, and
-module helper paths.
+Runtime consumer code should use the author host passed into hook, overlay,
+mutation, and module helper paths. Draw code should use
+`draw.services.invokeIntegration(...)`.
 
 ## Public Surface
 
@@ -57,6 +58,7 @@ Use:
 
 - `host.integrations.register(id, { providerId = providerId, api = api })`
 - `host.integrations.invoke(id, methodName, fallback, ...)`
+- `draw.services.invokeIntegration(id, methodName, fallback, ...)`
 
 Hosted provider registrations should use `host.integrations.register(...)`.
 They are owned by the module lifecycle owner and are retired when that owner is

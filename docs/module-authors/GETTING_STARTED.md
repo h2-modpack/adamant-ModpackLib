@@ -456,8 +456,9 @@ local drawTab
 local drawQuickContent
 ```
 
-That lets LuaLS infer `draw.imgui`, the author `draw.session`, the author
-`draw.host`, and bound `draw.widgets` through `local function drawTab(draw)`.
+That lets LuaLS infer `draw.imgui`, the author `draw.session`, the draw-safe
+`draw.services`, and bound `draw.widgets` through
+`local function drawTab(draw)`.
 
 ## Recommended Next Reads
 

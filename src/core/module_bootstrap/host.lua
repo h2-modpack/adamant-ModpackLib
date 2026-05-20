@@ -65,10 +65,16 @@ end
 ---@class DrawContext
 ---@field imgui table
 ---@field session AuthorSession
----@field host AuthorHost
+---@field services DrawServices
 ---@field field fun(alias: string): StorageField
 ---@field widgets BoundWidgets
 ---@field nav BoundNav
+
+---@class DrawServices
+---@field log fun(fmt: string, ...): nil
+---@field logIf fun(fmt: string, ...): nil
+---@field isHostEnabled fun(): boolean
+---@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
 
 ---@class ModuleHost
 ---@field getHostId fun(): string
@@ -130,11 +136,28 @@ local function ValidateSettingsObserver(opts)
     return opts.onSettingsCommitted
 end
 
+local function CreateDrawServices(authorHost)
+    return {
+        log = function(fmt, ...)
+            return authorHost.log(fmt, ...)
+        end,
+        logIf = function(fmt, ...)
+            return authorHost.logIf(fmt, ...)
+        end,
+        isHostEnabled = function()
+            return authorHost.isEnabled()
+        end,
+        invokeIntegration = function(id, methodName, fallback, ...)
+            return authorHost.integrations.invoke(id, methodName, fallback, ...)
+        end,
+    }
+end
+
 local function CreateDraw(imgui, authorSession, authorHost)
     return {
         imgui = imgui,
         session = authorSession,
-        host = authorHost,
+        services = CreateDrawServices(authorHost),
         field = function(alias)
             return storage.field.create(authorSession, alias, "draw.field")
         end,

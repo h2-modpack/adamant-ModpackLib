@@ -13,8 +13,8 @@ function TestModuleHost_CreateModule:tearDown()
 end
 
 function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
-    local drawHost = nil
     local drawImgui = nil
+    local drawServices = nil
     local drawWidgets = nil
     local drawNav = nil
     local authorSchemaNode = nil
@@ -42,7 +42,7 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
         },
         drawTab = function(draw)
             drawImgui = draw.imgui
-            drawHost = draw.host
+            drawServices = draw.services
             drawWidgets = draw.widgets
             drawNav = draw.nav
             authorSchemaNode = draw.session.getAliasSchema("Flag")
@@ -59,8 +59,11 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local liveHost = self.h:liveHost("test-create-module")
     liveHost.drawTab({})
 
-    lu.assertEquals(host, drawHost)
     lu.assertNotNil(drawImgui)
+    lu.assertEquals(type(drawServices.log), "function")
+    lu.assertEquals(type(drawServices.logIf), "function")
+    lu.assertEquals(type(drawServices.isHostEnabled), "function")
+    lu.assertEquals(type(drawServices.invokeIntegration), "function")
     lu.assertEquals(type(drawWidgets.checkbox), "function")
     lu.assertNil(drawWidgets.forSession)
     lu.assertEquals(type(drawNav.verticalTabs), "function")

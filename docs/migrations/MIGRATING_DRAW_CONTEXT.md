@@ -49,7 +49,7 @@ Lib creates the context at the host draw boundary for each render call.
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
 ---@field session AdamantModpackLib.AuthorSession
----@field host AdamantModpackLib.AuthorHost
+---@field services AdamantModpackLib.DrawServices
 ---@field widgets AdamantModpackLib.BoundWidgets
 ---@field nav AdamantModpackLib.BoundNav
 ```
@@ -289,8 +289,8 @@ hot reloads, or module activation boundaries.
 - Use `draw.imgui` for raw ImGui layout calls.
 - Use `draw.session` only when direct staged-state access is clearer than a
   widget helper.
-- Use `draw.host` for host capabilities such as metadata, logging, enabled
-  checks, or activation.
+- Use `draw.services` for draw-safe module services such as logging, enabled
+  checks, or integration queries. `draw.host` is no longer available.
 - Keep static module data, catalogs, and action services in `ui.bind(...)`.
 - Framework `drawPackQuickContent(ctx)` still uses its own coordinator/framework
   context object and is intentionally not part of this draw-object rename. Audit

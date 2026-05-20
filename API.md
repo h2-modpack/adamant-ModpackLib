@@ -768,6 +768,23 @@ This is infrastructure API for Framework discovery. Normal module code should
 keep the author host returned by `lib.createModule(...)` and use
 `store`/callback sessions for state access.
 
+## Draw Services
+
+Draw-safe module services are available on the module draw object as
+`draw.services`.
+
+Built-ins:
+- `draw.services.log(fmt, ...)`
+- `draw.services.logIf(fmt, ...)`
+- `draw.services.isHostEnabled()`
+- `draw.services.invokeIntegration(id, methodName, fallback, ...)`
+
+These helpers are the sanctioned draw-time access path for narrow module
+services. `draw.host` is not available in module UI. `draw.services` is
+intentionally not a full host facade: it does not expose registration,
+activation, lifecycle mutation, storage mutation, hook declaration, overlay
+declaration, or mutation declaration APIs.
+
 ## Draw Widgets
 
 Immediate-mode widget helpers are available on the module draw object as
