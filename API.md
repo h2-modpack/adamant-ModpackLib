@@ -376,6 +376,9 @@ When a module is rendered through a Lib host, draw callbacks receive a restricte
 - `getAliasSchema(alias)`
 - `resetToDefaults(opts?)`
 
+The session action methods are compatibility helpers for the draw action
+service. New draw code should prefer `draw.actions.get(actionKey)`.
+
 `session.getAliasSchema(alias)` exposes prepared storage schema metadata for UI
 and widget plumbing. Treat the returned nodes as read-only metadata owned by Lib
 storage preparation. Widgets use this metadata for composite storage such as
@@ -784,6 +787,34 @@ services. `draw.host` is not available in module UI. `draw.services` is
 intentionally not a full host facade: it does not expose registration,
 activation, lifecycle mutation, storage mutation, hook declaration, overlay
 declaration, or mutation declaration APIs.
+
+## Draw Actions
+
+Draw callbacks expose `draw.actions` for transient UI intent:
+
+- `draw.actions.get(actionKey)`
+- `draw.actions.hasAny()`
+
+`draw.actions.get(actionKey)` returns a ref:
+
+- `action:stage(value)`
+- `action:read()`
+- `action:clear()`
+- `action:has()`
+
+Runtime commit callbacks receive the same action snapshot through
+`commit.actions`:
+
+- `commit.actions.get(actionKey)`
+- `commit.actions.hasAny()`
+
+`commit.actions.get(actionKey)` returns a read-only ref with:
+
+- `action:read()`
+- `action:has()`
+
+The old `session.stageAction(...)` and `commit.readAction(...)` forms remain as
+compatibility helpers during the migration. Prefer action refs in new code.
 
 ## Draw Widgets
 

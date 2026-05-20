@@ -3,7 +3,7 @@ local helpers = ...
 ---@class ButtonOpts
 ---@field id string|number|nil
 ---@field tooltip string|nil
----@field action string|nil Staged session action key to replace when clicked.
+---@field action string|DrawActionRef|nil Staged action ref, or legacy session action key, to replace when clicked.
 ---@field value any Staged session action payload.
 ---@field onClick fun(imgui: table)|nil
 
@@ -11,14 +11,27 @@ local helpers = ...
 ---@field tooltip string|nil
 ---@field confirmLabel string|nil
 ---@field cancelLabel string|nil
----@field action string|nil Staged session action key to replace when confirmed.
+---@field action string|DrawActionRef|nil Staged action ref, or legacy session action key, to replace when confirmed.
 ---@field value any Staged session action payload.
 ---@field onConfirm fun(imgui: table)|nil
 
 local function StageAction(session, opts)
-    if opts.action ~= nil then
-        session.stageAction(opts.action, opts.value)
+    local action = opts.action
+    if action == nil then
+        return
     end
+    if helpers.actions.isDrawActionRef(action) then
+        action:stage(opts.value)
+        return
+    end
+    if type(action) == "string" then
+        session.stageAction(action, opts.value)
+        return
+    end
+    helpers.logging.violate(
+        "widgets.invalid_action",
+        "draw.widgets.button: opts.action must be a draw action ref or legacy action key string"
+    )
 end
 
 ---@param imgui table

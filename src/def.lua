@@ -131,7 +131,26 @@ local lib = {}
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
+---@class AdamantModpackLib.DrawActions
+---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
+---@field hasAny fun(): boolean
+
+---@class AdamantModpackLib.DrawActionRef
+---@field stage fun(self: AdamantModpackLib.DrawActionRef, value: any)
+---@field read fun(self: AdamantModpackLib.DrawActionRef): any
+---@field clear fun(self: AdamantModpackLib.DrawActionRef)
+---@field has fun(self: AdamantModpackLib.DrawActionRef): boolean
+
+---@class AdamantModpackLib.CommitActions
+---@field get fun(actionKey: string): AdamantModpackLib.CommitActionRef
+---@field hasAny fun(): boolean
+
+---@class AdamantModpackLib.CommitActionRef
+---@field read fun(self: AdamantModpackLib.CommitActionRef): any
+---@field has fun(self: AdamantModpackLib.CommitActionRef): boolean
+
 ---@class AdamantModpackLib.CommitContext
+---@field actions AdamantModpackLib.CommitActions
 ---@field readAction fun(actionKey: string): any
 ---@field hasAction fun(actionKey: string): boolean
 ---@field hasActions fun(): boolean
@@ -273,6 +292,7 @@ local lib = {}
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
 ---@field session AdamantModpackLib.AuthorSession
+---@field actions AdamantModpackLib.DrawActions
 ---@field services AdamantModpackLib.DrawServices
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field widgets AdamantModpackLib.BoundWidgetsApi
@@ -359,7 +379,7 @@ local lib = {}
 ---@class AdamantModpackLib.ButtonOpts
 ---@field id? string|number
 ---@field tooltip? string
----@field action? string Staged session action key to replace when clicked.
+---@field action? AdamantModpackLib.DrawActionRef|string Staged action ref, or legacy session action key, to replace when clicked.
 ---@field value? any Staged session action payload.
 ---@field onClick? fun(imgui: table)
 
@@ -367,7 +387,7 @@ local lib = {}
 ---@field tooltip? string
 ---@field confirmLabel? string
 ---@field cancelLabel? string
----@field action? string Staged session action key to replace when confirmed.
+---@field action? AdamantModpackLib.DrawActionRef|string Staged action ref, or legacy session action key, to replace when confirmed.
 ---@field value? any Staged session action payload.
 ---@field onConfirm? fun(imgui: table)
 

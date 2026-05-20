@@ -65,10 +65,21 @@ end
 ---@class DrawContext
 ---@field imgui table
 ---@field session AuthorSession
+---@field actions DrawActions
 ---@field services DrawServices
 ---@field field fun(alias: string): StorageField
 ---@field widgets BoundWidgets
 ---@field nav BoundNav
+
+---@class DrawActions
+---@field get fun(actionKey: string): DrawActionRef
+---@field hasAny fun(): boolean
+
+---@class DrawActionRef
+---@field stage fun(self: DrawActionRef, value: any)
+---@field read fun(self: DrawActionRef): any
+---@field clear fun(self: DrawActionRef)
+---@field has fun(self: DrawActionRef): boolean
 
 ---@class DrawServices
 ---@field log fun(fmt: string, ...): nil
@@ -153,10 +164,11 @@ local function CreateDrawServices(authorHost)
     }
 end
 
-local function CreateDraw(imgui, authorSession, authorHost)
+local function CreateDraw(imgui, session, authorSession, authorHost)
     return {
         imgui = imgui,
         session = authorSession,
+        actions = moduleState.createDrawActions(session),
         services = CreateDrawServices(authorHost),
         field = function(alias)
             return storage.field.create(authorSession, alias, "draw.field")
@@ -376,13 +388,13 @@ function moduleHost.create(opts)
 
     function host.drawTab(imgui)
         requireActivated("drawTab")
-        return drawTab(CreateDraw(imgui, authorSession, authorHost))
+        return drawTab(CreateDraw(imgui, session, authorSession, authorHost))
     end
 
     if type(drawQuickContent) == "function" then
         function host.drawQuickContent(imgui)
             requireActivated("drawQuickContent")
-            return drawQuickContent(CreateDraw(imgui, authorSession, authorHost))
+            return drawQuickContent(CreateDraw(imgui, session, authorSession, authorHost))
         end
     end
 

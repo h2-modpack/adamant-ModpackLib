@@ -150,23 +150,32 @@ Use `packedInt` when one numeric root should expose named child aliases:
 
 Packed widgets can write child aliases through the same session. Lib handles repacking the root.
 
-## Session Actions
+## Draw Actions
 
-Author sessions also expose action staging:
+Draw callbacks expose action staging through `draw.actions`:
 
-- `session.stageAction(actionKey, value)`
-- `session.readAction(actionKey)`
-- `session.clearAction(actionKey)`
-- `session.hasActions()`
+- `draw.actions.get(actionKey)`
+- `draw.actions.hasAny()`
 
-Use actions for one-shot UI intent that should be observed by host/framework commit plumbing, not for ordinary persistent settings.
+`draw.actions.get(actionKey)` returns an action ref:
+
+- `action:stage(value)`
+- `action:read()`
+- `action:clear()`
+- `action:has()`
+
+Use actions for one-shot UI intent that should be observed by runtime commit
+plumbing, not for ordinary persistent settings. Author sessions still expose
+the older `stageAction/readAction/clearAction/hasActions` methods during
+migration, but new draw code should prefer action refs.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`:
 
 ```lua
 local function onSettingsCommitted(host, store, commit)
-    if commit.hasAction("ClearCache") then
-        local scope = commit.readAction("ClearCache")
+    local clearCache = commit.actions.get("ClearCache")
+    if clearCache:has() then
+        local scope = clearCache:read()
         host.logIf("Clearing cache for %s", tostring(scope))
     end
 
@@ -189,13 +198,16 @@ host.activate()
 
 `commit` exposes:
 
+- `commit.actions.get(actionKey)`
+- `commit.actions.hasAny()`
 - `commit.readAction(actionKey)`
 - `commit.hasAction(actionKey)`
 - `commit.hasActions()`
 - `commit.hadConfigChanges()`
 
-Buttons can stage actions for this path through their `action` and `value`
-options. Actions are cleared after the commit pass.
+The `readAction/hasAction/hasActions` methods are compatibility helpers for the
+same snapshot. Buttons can stage actions for this path through their `action`
+and `value` options. Actions are cleared after the commit pass.
 
 ## Common Mistakes
 

@@ -13,17 +13,19 @@ local function hasAnyAction(actions)
     return next(actions) ~= nil
 end
 
-local function makeCommitContext(actions, hadConfigChanges)
-    actions = actions or {}
+local function makeCommitContext(actionSnapshot, hadConfigChanges)
+    actionSnapshot = actionSnapshot or {}
+    local commitActions = moduleState.createCommitActions(actionSnapshot)
     return {
+        actions = commitActions,
         readAction = function(actionKey)
-            return clone(actions[actionKey])
+            return clone(actionSnapshot[actionKey])
         end,
         hasAction = function(actionKey)
-            return hasAction(actions, actionKey)
+            return hasAction(actionSnapshot, actionKey)
         end,
         hasActions = function()
-            return hasAnyAction(actions)
+            return hasAnyAction(actionSnapshot)
         end,
         hadConfigChanges = function()
             return hadConfigChanges == true

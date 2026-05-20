@@ -3,7 +3,9 @@ local deps = ...
 local logging = deps.logging
 local storageService = deps.storage
 local widgetHelpers = {
+    actions = deps.actions,
     imguiHelpers = deps.imguiHelpers,
+    logging = logging,
     widgets = deps.widgets,
 }
 

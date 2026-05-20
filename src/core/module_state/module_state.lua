@@ -17,10 +17,17 @@ local managedStore = import('core/module_state/store.lua', nil, {
     values = values,
 })
 
+local actionsModule = import('core/module_state/actions.lua', nil, {
+    logging = logging,
+    values = values,
+})
+moduleState.actions = actionsModule
+
 local sessionModule = import('core/module_state/session.lua', nil, {
     logging = logging,
     storage = storageService,
     values = values,
+    actions = actionsModule,
 })
 
 ---@class ConfigBackendEntry
@@ -102,6 +109,14 @@ end
 -- Internal API: narrows a full staged session to the author-facing UI surface.
 function moduleState.createAuthorSession(session, opts)
     return sessionModule.createAuthorSession(session, opts)
+end
+
+function moduleState.createDrawActions(session)
+    return sessionModule.createDrawActions(session)
+end
+
+function moduleState.createCommitActions(actions)
+    return actionsModule.createCommitActions(actions)
 end
 
 --- Resets persistent storage roots to defaults in a staged session.

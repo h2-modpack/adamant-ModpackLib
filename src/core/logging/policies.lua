@@ -195,6 +195,11 @@ return {
         description = "Overlay registration requires valid ids, draw functions, and column descriptors.",
     },
 
+    ["actions.invalid_key"] = {
+        severity = "error",
+        description = "Action refs require a non-empty string action key.",
+    },
+
     ["widgets.invalid_packed_session"] = {
         severity = "error",
         description = "Packed widgets require a session exposing prepared storage schema metadata.",
@@ -202,6 +207,10 @@ return {
     ["widgets.invalid_field_target"] = {
         severity = "error",
         description = "Bound widgets require a root alias string or Lib-created StorageField target.",
+    },
+    ["widgets.invalid_action"] = {
+        severity = "error",
+        description = "Widget action options must be a draw action ref or legacy string action key.",
     },
     ["widgets.mismatched_field_owners"] = {
         severity = "error",
@@ -244,11 +253,6 @@ return {
         severity = "error",
         description = "Session view is read-only; writes must go through session.write.",
     },
-    ["session.invalid_action_key"] = {
-        severity = "error",
-        description = "Session staged actions require a non-empty string action key.",
-    },
-
     ["storage.invalid_field_alias"] = {
         severity = "error",
         description = "Storage fields require a non-empty storage alias.",

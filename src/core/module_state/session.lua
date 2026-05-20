@@ -3,6 +3,7 @@ local deps = ...
 local logging = deps.logging
 local storageInternal = deps.storage
 local values = deps.values
+local actionsModule = deps.actions
 local ClonePersistedValue = values.deepCopy
 local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 local DecodePackedChild = storageInternal.packed.DecodePackedChild
@@ -28,7 +29,7 @@ local function createSession(modConfig, configBackend, storage)
     local stageRootNodes = storageInternal.getStageRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
-    local actions = {}
+    local actionState = actionsModule.createState()
     local dirty = false
     local dirtyRoots = {}
     local configEntries = {}
@@ -138,25 +139,6 @@ local function createSession(modConfig, configBackend, storage)
     local function clearDirty()
         dirty = false
         dirtyRoots = {}
-    end
-
-    local function validateActionKey(methodName, actionKey)
-        if type(actionKey) ~= "string" or actionKey == "" then
-            logging.violate("session.invalid_action_key", "session.%s: actionKey must be a non-empty string",
-                tostring(methodName))
-        end
-    end
-
-    local function hasActions()
-        return next(actions) ~= nil
-    end
-
-    local function captureActionSnapshot()
-        return ClonePersistedValue(actions)
-    end
-
-    local function clearActions()
-        actions = {}
     end
 
     local sessionReadBackend = {
@@ -309,29 +291,24 @@ local function createSession(modConfig, configBackend, storage)
             writeStagingValue(alias, value)
         end,
         stageAction = function(actionKey, value)
-            validateActionKey("stageAction", actionKey)
-            if value == nil then
-                actions[actionKey] = nil
-                return
-            end
-            actions[actionKey] = ClonePersistedValue(value)
+            actionState.stage(actionKey, value)
         end,
         readAction = function(actionKey)
-            validateActionKey("readAction", actionKey)
-            return ClonePersistedValue(actions[actionKey])
+            return actionState.read(actionKey)
         end,
         clearAction = function(actionKey)
-            validateActionKey("clearAction", actionKey)
-            actions[actionKey] = nil
+            actionState.clear(actionKey)
         end,
-        hasActions = hasActions,
+        hasActions = function()
+            return actionState.hasAny()
+        end,
         reset = function(alias)
             resetAliasValue(alias)
         end,
         _reloadFromConfig = function()
             copyConfigToStaging()
             clearDirty()
-            clearActions()
+            actionState.clearAll()
         end,
         _flushToConfig = function()
             copyStagingToConfig()
@@ -340,12 +317,17 @@ local function createSession(modConfig, configBackend, storage)
         _hasConfigChanges = function()
             return dirty
         end,
-        _captureActionSnapshot = captureActionSnapshot,
-        _clearActions = clearActions,
+        _captureActionSnapshot = function()
+            return actionState.captureSnapshot()
+        end,
+        _clearActions = function()
+            actionState.clearAll()
+        end,
+        _actionState = actionState,
         _captureDirtyConfigSnapshot = captureDirtyConfigSnapshot,
         _restoreConfigSnapshot = restoreConfigSnapshot,
         isDirty = function()
-            return dirty or hasActions()
+            return dirty or actionState.hasAny()
         end,
         auditMismatches = function()
             local mismatches = {}
@@ -400,7 +382,12 @@ local function createAuthorSession(session, opts)
     }
 end
 
+local function createDrawActions(session)
+    return actionsModule.createDrawActions(session._actionState)
+end
+
 return {
     createSession = createSession,
     createAuthorSession = createAuthorSession,
+    createDrawActions = createDrawActions,
 }

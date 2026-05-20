@@ -106,6 +106,7 @@ function TestLogging.testViolationPolicyMatchesSourceCallSites()
         "src/core/mutations/lifecycle.lua",
         "src/core/fallback/fallback_ui.lua",
         "src/core/module_state/module_state.lua",
+        "src/core/module_state/actions.lua",
         "src/core/logging/logging.lua",
         "src/core/helpers/values.lua",
         "src/core/module_state/session.lua",
@@ -117,6 +118,7 @@ function TestLogging.testViolationPolicyMatchesSourceCallSites()
         "src/core/module_state/store.lua",
         "src/core/widgets/init.lua",
         "src/core/widgets/widget_helpers.lua",
+        "src/core/widgets/buttons.lua",
     }
 
     for _, path in ipairs(files) do
@@ -168,6 +170,7 @@ function TestLogging.testViolationPolicyHasNoOrphanIds()
         "src/core/mutations/lifecycle.lua",
         "src/core/fallback/fallback_ui.lua",
         "src/core/module_state/module_state.lua",
+        "src/core/module_state/actions.lua",
         "src/core/logging/logging.lua",
         "src/core/helpers/values.lua",
         "src/core/module_state/session.lua",
@@ -179,6 +182,7 @@ function TestLogging.testViolationPolicyHasNoOrphanIds()
         "src/core/module_state/store.lua",
         "src/core/widgets/init.lua",
         "src/core/widgets/widget_helpers.lua",
+        "src/core/widgets/buttons.lua",
     }
     local referenced = {}
 

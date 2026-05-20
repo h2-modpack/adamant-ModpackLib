@@ -5,6 +5,7 @@ local imguiHelpers = import 'core/widgets/imgui_helpers.lua'
 local widgetHelpers = import('core/widgets/widget_helpers.lua', nil, {
     logging = deps.logging,
     storage = deps.storage,
+    actions = deps.actions,
     imguiHelpers = imguiHelpers,
     widgets = widgets,
 })

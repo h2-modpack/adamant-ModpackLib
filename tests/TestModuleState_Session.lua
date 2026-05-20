@@ -469,3 +469,31 @@ function TestModuleState_Session:testSessionActionsAreDirtyAndLastWriteWins()
     lu.assertFalse(session.isDirty())
 end
 
+function TestModuleState_Session:testDrawActionsShareSessionActionState()
+    local definition = prepareDefinition(self.harness, {
+        id = "DrawActionTest",
+        name = "Draw Action Test",
+        storage = {},
+    })
+    local _, session = createModuleState(self.harness, {}, definition)
+    local actions = self.harness.moduleState.createDrawActions(session)
+    local recording = actions.get("recording")
+
+    lu.assertFalse(actions.hasAny())
+    lu.assertFalse(recording:has())
+
+    recording:stage({ kind = "start" })
+
+    lu.assertTrue(actions.hasAny())
+    lu.assertTrue(session.hasActions())
+    lu.assertTrue(session.isDirty())
+    lu.assertTrue(recording:has())
+    lu.assertEquals(recording:read(), { kind = "start" })
+    lu.assertEquals(session.readAction("recording"), { kind = "start" })
+
+    recording:clear()
+
+    lu.assertFalse(actions.hasAny())
+    lu.assertFalse(session.hasActions())
+    lu.assertFalse(session.isDirty())
+end

@@ -355,6 +355,9 @@ end
 function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
     local calls = 0
     local observedAction = nil
+    local observedLegacyAction = nil
+    local observedHasAction = nil
+    local observedHasAnyAction = nil
     local observedConfigChange = nil
     local config = {
         Enabled = true,
@@ -367,7 +370,11 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
     local store, session = createModuleState(self.harness, config, definition)
     local settingsObserver = function(_, _, commit)
         calls = calls + 1
-        observedAction = commit.readAction("recording")
+        local recording = commit.actions.get("recording")
+        observedAction = recording:read()
+        observedLegacyAction = commit.readAction("recording")
+        observedHasAction = recording:has()
+        observedHasAnyAction = commit.actions.hasAny()
         observedConfigChange = commit.hadConfigChanges()
     end
 
@@ -378,6 +385,9 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
     lu.assertEquals(observedAction, { kind = "start" })
+    lu.assertEquals(observedLegacyAction, { kind = "start" })
+    lu.assertTrue(observedHasAction)
+    lu.assertTrue(observedHasAnyAction)
     lu.assertFalse(observedConfigChange)
     lu.assertFalse(session.hasActions())
     lu.assertFalse(session.isDirty())

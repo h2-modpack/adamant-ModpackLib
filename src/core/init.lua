@@ -114,6 +114,7 @@ public.mutation = nil
 local widgetsBundle = import('core/widgets/init.lua', nil, {
     logging = logging,
     storage = storage,
+    actions = moduleState.actions,
 })
 public.widgets = nil
 public.nav = nil
