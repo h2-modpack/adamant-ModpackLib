@@ -8,6 +8,8 @@ local widgetHelpers = {
     logging = logging,
     widgets = deps.widgets,
 }
+widgetHelpers.EMPTY_OPTS = {}
+widgetHelpers.EMPTY_LIST = {}
 
 ---@alias Color number[]
 ---@alias ChoiceValue any
@@ -17,10 +19,11 @@ local widgetHelpers = {
 
 local PACKED_CHOICE_NONE_VALUE = false
 
-function widgetHelpers.NormalizeColor(value)
+local function ReadColorComponents(value)
     if type(value) ~= "table" then
         return nil
     end
+
     local r = tonumber(value[1])
     local g = tonumber(value[2])
     local b = tonumber(value[3])
@@ -28,7 +31,7 @@ function widgetHelpers.NormalizeColor(value)
     if r == nil or g == nil or b == nil or a == nil then
         return nil
     end
-    return { r, g, b, a }
+    return r, g, b, a
 end
 
 function widgetHelpers.NormalizeChoiceValue(node, value)
@@ -121,16 +124,51 @@ function widgetHelpers.DrawInlineLabel(imgui, label, tooltip, labelWidth, contro
     end
 end
 
-function widgetHelpers.DrawWithValueColor(imgui, color, drawFn)
-    if type(color) ~= "table" then
-        return drawFn()
+function widgetHelpers.PushValueColor(imgui, color)
+    local r, g, b, a = ReadColorComponents(color)
+    if r == nil then
+        return false
     end
 
     local textEnum = imgui.ImGuiCol and imgui.ImGuiCol.Text or 0
-    imgui.PushStyleColor(textEnum, color[1], color[2], color[3], color[4])
-    local a, b, c, d = drawFn()
-    imgui.PopStyleColor()
-    return a, b, c, d
+    imgui.PushStyleColor(textEnum, r, g, b, a)
+    return true
+end
+
+function widgetHelpers.PopValueColor(imgui, pushed)
+    if pushed then
+        imgui.PopStyleColor()
+    end
+end
+
+function widgetHelpers.SelectableWithValueColor(imgui, label, selected, color)
+    local pushed = widgetHelpers.PushValueColor(imgui, color)
+    local clicked = imgui.Selectable(label, selected)
+    widgetHelpers.PopValueColor(imgui, pushed)
+    return clicked
+end
+
+function widgetHelpers.CheckboxWithValueColor(imgui, label, current, color)
+    local pushed = widgetHelpers.PushValueColor(imgui, color)
+    local nextValue, changed = imgui.Checkbox(label, current)
+    widgetHelpers.PopValueColor(imgui, pushed)
+    return nextValue, changed
+end
+
+function widgetHelpers.RadioButtonWithValueColor(imgui, label, selected, color)
+    local pushed = widgetHelpers.PushValueColor(imgui, color)
+    local clicked = imgui.RadioButton(label, selected)
+    widgetHelpers.PopValueColor(imgui, pushed)
+    return clicked
+end
+
+function widgetHelpers.TextWithValueColor(imgui, color, text)
+    local r, g, b, a = ReadColorComponents(color)
+    if r == nil then
+        return false
+    end
+    imgui.TextColored(r, g, b, a, text)
+    return true
 end
 
 function widgetHelpers.MakeSelectableId(label, uniqueId)
@@ -200,7 +238,7 @@ function widgetHelpers.ClassifyPackedChoice(node, field, children)
     local totalCount = 0
     local lastActiveChild = nil
 
-    for _, child in ipairs(children or {}) do
+    for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
         totalCount = totalCount + 1
         local value = owner.read(child.alias)
         if value == nil then
@@ -232,7 +270,7 @@ end
 function widgetHelpers.ApplyPackedChoiceSelection(field, children, selectedAlias, selection)
     local owner = widgetHelpers.GetFieldOwner(field)
     local changed = false
-    for _, child in ipairs(children or {}) do
+    for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
         local shouldBeActive = child.alias == selectedAlias
         local nextValue = GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
         local currentValue = owner.read(child.alias)
@@ -250,7 +288,7 @@ end
 function widgetHelpers.ClearPackedChoiceSelection(field, children, selection)
     local owner = widgetHelpers.GetFieldOwner(field)
     local changed = false
-    for _, child in ipairs(children or {}) do
+    for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
         local currentValue = owner.read(child.alias)
         if currentValue == nil then
             currentValue = selection.noneValue

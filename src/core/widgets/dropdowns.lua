@@ -67,10 +67,8 @@ end
 
 ---@param imgui table
 ---@param opts DropdownOpts|PackedDropdownOpts
----@param previewColor Color|nil
----@param drawControl fun(controlWidth: number|nil, previewColor: Color|nil): boolean
----@return boolean
-local function DrawLabeledDropdownControl(imgui, opts, previewColor, drawControl)
+---@return boolean pushedWidth
+local function BeginLabeledDropdownControl(imgui, opts)
     local labelText = tostring(opts.label or "")
     local controlWidth = tonumber(opts.controlWidth) or 0
 
@@ -81,12 +79,34 @@ local function DrawLabeledDropdownControl(imgui, opts, previewColor, drawControl
     if controlWidth > 0 then
         imgui.PushItemWidth(controlWidth)
     end
-    local changed = drawControl(controlWidth, previewColor) == true
-    if controlWidth > 0 then
+    return controlWidth > 0
+end
+
+---@param imgui table
+---@param opts DropdownOpts|PackedDropdownOpts
+---@param pushedWidth boolean
+local function EndLabeledDropdownControl(imgui, opts, pushedWidth)
+    if pushedWidth then
         imgui.PopItemWidth()
     end
     helpers.ShowTooltip(imgui, opts.tooltip)
-    return changed
+end
+
+local function GetDropdownPreview(opts, values, current, valueColors)
+    local previewText = ""
+    local previewColor = nil
+    for _, value in ipairs(values) do
+        local label = helpers.ChoiceDisplay(opts, value)
+        local color = valueColors and valueColors[value] or nil
+        if previewText == "" then
+            previewText = label
+            previewColor = color
+        end
+        if value == current then
+            return label, color
+        end
+    end
+    return previewText, previewColor
 end
 
 ---@param imgui table
@@ -94,57 +114,43 @@ end
 ---@param opts DropdownOpts|nil
 ---@return boolean
 function helpers.widgets.dropdown(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local current = helpers.NormalizeChoiceValue(opts, field:read())
-    local optionEntries = {}
+    local values = opts.values or helpers.EMPTY_LIST
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
-    for index, value in ipairs(opts.values or {}) do
-        optionEntries[#optionEntries + 1] = {
-            value = value,
-            label = helpers.ChoiceDisplay(opts, value),
-            color = valueColors and valueColors[value] or nil,
-            uniqueId = index,
-        }
+    local previewText, previewColor = GetDropdownPreview(opts, values, current, valueColors)
+    local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
+    local opened = imgui.BeginCombo(
+        "##" .. tostring(controlId),
+        previewColor and "" or previewText,
+        COMBO_FLAG_NONE
+    )
+    if previewColor then
+        DrawComboPreviewText(imgui, previewText, previewColor)
     end
-
-    local currentOption = optionEntries[1]
-    for _, option in ipairs(optionEntries) do
-        if option.value == current then
-            currentOption = option
-            break
-        end
-    end
-    local previewText = currentOption and currentOption.label or ""
-    local previewColor = currentOption and currentOption.color or nil
-
-    return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = imgui.BeginCombo(
-            "##" .. tostring(controlId),
-            previewColor and "" or previewText,
-            COMBO_FLAG_NONE
-        )
-        if previewColor then
-            DrawComboPreviewText(imgui, previewText, previewColor)
-        end
-        if not opened then
-            return false
-        end
-        local changed = false
-        for _, option in ipairs(optionEntries) do
-            local clicked = helpers.DrawWithValueColor(imgui, option.color, function()
-                return imgui.Selectable(helpers.MakeSelectableId(option.label, option.uniqueId), option.value == current)
-            end)
-            if clicked and option.value ~= current then
-                field:write(option.value)
-                current = option.value
-                helpers.StageAction("draw.widgets.dropdown", opts, option.value)
+    local changed = false
+    if opened then
+        for index, value in ipairs(values) do
+            local label = helpers.ChoiceDisplay(opts, value)
+            local color = valueColors and valueColors[value] or nil
+            local clicked = helpers.SelectableWithValueColor(
+                imgui,
+                helpers.MakeSelectableId(label, index),
+                value == current,
+                color
+            )
+            if clicked and value ~= current then
+                field:write(value)
+                current = value
+                helpers.StageAction("draw.widgets.dropdown", opts, value)
                 changed = true
             end
         end
         imgui.EndCombo()
-        return changed
-    end)
+    end
+    EndLabeledDropdownControl(imgui, opts, pushedWidth)
+    return changed
 end
 
 ---@param imgui table
@@ -152,7 +158,7 @@ end
 ---@param opts PackedDropdownOpts|nil
 ---@return boolean
 function helpers.widgets.packedDropdown(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local children = helpers.ResolvePackedChildren(field)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
@@ -166,66 +172,56 @@ function helpers.widgets.packedDropdown(imgui, field, opts)
         preview = tostring(opts.multipleLabel or "Multiple")
     end
 
-    return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = imgui.BeginCombo(
-            "##" .. tostring(controlId),
-            "",
-            COMBO_FLAG_NONE
-        )
-        DrawComboPreviewText(imgui, preview, previewColor)
-        if not opened then
-            return false
-        end
-        local changed = false
-        local currentSelection = selection
+    local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
+    local opened = imgui.BeginCombo(
+        "##" .. tostring(controlId),
+        "",
+        COMBO_FLAG_NONE
+    )
+    DrawComboPreviewText(imgui, preview, previewColor)
+    local changed = false
+    if opened then
+        local selectedChild = selection.selectedChild
         if imgui.Selectable(
             helpers.MakeSelectableId(tostring(opts.noneLabel or "None"), "none"),
-            currentSelection.state == "none"
+            selection.state == "none"
         ) then
-            local cleared = helpers.ClearPackedChoiceSelection(field, children, currentSelection)
+            local cleared = helpers.ClearPackedChoiceSelection(field, children, selection)
             if cleared then
                 helpers.StageAction("draw.widgets.packedDropdown", opts, false)
             end
             changed = cleared or changed
-            currentSelection = {
-                state = "none",
-                selectedChild = nil,
-                mode = currentSelection.mode,
-                noneValue = currentSelection.noneValue,
-            }
+            selectedChild = nil
         end
         for _, child in ipairs(children) do
             local childLabel = helpers.GetPackedChoiceLabel(opts, child)
             local childColor = valueColors and valueColors[child.alias] or nil
-            local clicked = helpers.DrawWithValueColor(imgui, childColor, function()
-                local isSelected = currentSelection.selectedChild ~= nil
-                    and currentSelection.selectedChild.alias == child.alias
-                return imgui.Selectable(helpers.MakeSelectableId(childLabel, child.alias), isSelected)
-            end)
+            local clicked = helpers.SelectableWithValueColor(
+                imgui,
+                helpers.MakeSelectableId(childLabel, child.alias),
+                selectedChild ~= nil and selectedChild.alias == child.alias,
+                childColor
+            )
             if clicked then
-                local selected = helpers.ApplyPackedChoiceSelection(field, children, child.alias, currentSelection)
+                local selected = helpers.ApplyPackedChoiceSelection(field, children, child.alias, selection)
                 if selected then
                     helpers.StageAction("draw.widgets.packedDropdown", opts, child.alias)
                 end
                 changed = selected or changed
-                currentSelection = {
-                    state = "single",
-                    selectedChild = child,
-                    mode = currentSelection.mode,
-                    noneValue = currentSelection.noneValue,
-                }
+                selectedChild = child
             end
         end
         imgui.EndCombo()
-        return changed
-    end)
+    end
+    EndLabeledDropdownControl(imgui, opts, pushedWidth)
+    return changed
 end
 
 ---@param field StorageField
 ---@param opts PackedDropdownOpts|PackedRadioOpts|nil
 ---@return string|nil selectedAlias
 function helpers.widgets.getPackedChoiceAlias(field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
     return selection.selectedChild and selection.selectedChild.alias or nil

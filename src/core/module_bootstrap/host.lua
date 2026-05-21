@@ -159,14 +159,13 @@ local function CreateDrawServices(authorHost)
     }
 end
 
-local function CreateDraw(imgui, actions, authorSession, authorHost)
-    local drawActions = moduleState.createDrawActions(actions)
-    local drawServices = CreateDrawServices(authorHost)
-    return {
-        imgui = imgui,
-        widgets = widgets.bind(imgui),
-        nav = nav.bind(imgui),
-    }, authorSession, drawActions, drawServices
+local function BindDrawImgui(draw, imgui)
+    if draw.imgui ~= imgui then
+        draw.imgui = imgui
+        draw.widgets = widgets.bind(imgui)
+        draw.nav = nav.bind(imgui)
+    end
+    return draw
 end
 
 local function CreatePluginInfo(pluginGuid, def)
@@ -382,18 +381,19 @@ function moduleHost.create(opts)
     end
 
     authorHost = authorHostService.create(host)
+    local draw = {}
+    local drawActions = moduleState.createDrawActions(actions)
+    local drawServices = CreateDrawServices(authorHost)
 
     function host.drawTab(imgui)
         requireActivated("drawTab")
-        local draw, data, drawActions, services = CreateDraw(imgui, actions, authorSession, authorHost)
-        return drawTab(draw, data, drawActions, services)
+        return drawTab(BindDrawImgui(draw, imgui), authorSession, drawActions, drawServices)
     end
 
     if type(drawQuickContent) == "function" then
         function host.drawQuickContent(imgui)
             requireActivated("drawQuickContent")
-            local draw, data, drawActions, services = CreateDraw(imgui, actions, authorSession, authorHost)
-            return drawQuickContent(draw, data, drawActions, services)
+            return drawQuickContent(BindDrawImgui(draw, imgui), authorSession, drawActions, drawServices)
         end
     end
 
@@ -405,7 +405,6 @@ function moduleHost.create(opts)
         actions = actions,
         cacheStore = cacheStore,
         authorStore = authorStore,
-        authorSession = authorSession,
         authorHost = authorHost,
         effectReceipts = {},
         fallbackUiRequested = false,

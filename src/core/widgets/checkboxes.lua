@@ -24,15 +24,17 @@ local DEFAULT_PACKED_SLOT_COUNT = 32
 ---@param opts CheckboxOpts|nil
 ---@return boolean
 function helpers.widgets.checkbox(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local fieldAlias = field:alias()
     local fieldControlId = field:controlId()
     local label = tostring(opts.label or fieldAlias or "")
     local current = field:read() == true
-    local color = helpers.NormalizeColor(opts.color)
-    local nextValue, changed = helpers.DrawWithValueColor(imgui, color, function()
-        return imgui.Checkbox(label .. "##" .. tostring(fieldControlId), current)
-    end)
+    local nextValue, changed = helpers.CheckboxWithValueColor(
+        imgui,
+        label .. "##" .. tostring(fieldControlId),
+        current,
+        opts.color
+    )
     helpers.ShowTooltip(imgui, opts.tooltip)
     if changed then
         field:write(nextValue)
@@ -47,7 +49,7 @@ end
 ---@param opts PackedCheckboxListOpts|nil
 ---@return boolean
 function helpers.widgets.packedCheckboxList(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local owner = helpers.GetFieldOwner(field)
     local fieldControlId = field:controlId()
     local children = helpers.ResolvePackedChildren(field)
@@ -84,9 +86,12 @@ function helpers.widgets.packedCheckboxList(imgui, field, opts)
             end
             local color = valueColors and valueColors[child.alias] or nil
             local childControlId = tostring(fieldControlId) .. ":" .. tostring(child.alias)
-            local nextValue, clicked = helpers.DrawWithValueColor(imgui, color, function()
-                return imgui.Checkbox(tostring(child.label) .. "##" .. childControlId, current)
-            end)
+            local nextValue, clicked = helpers.CheckboxWithValueColor(
+                imgui,
+                tostring(child.label) .. "##" .. childControlId,
+                current,
+                color
+            )
             if clicked then
                 owner.write(child.alias, nextValue)
                 helpers.StageAction("draw.widgets.packedCheckboxList", opts, {

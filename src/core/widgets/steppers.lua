@@ -17,62 +17,29 @@ local helpers = ...
 ---@field defaultMax number|nil
 ---@field rangeGap number|nil
 
-local function MakeStepperConfig(opts)
-    return {
-        id = tostring(opts.id or ""),
-        label = tostring(opts.label or ""),
-        default = opts.default,
-        min = opts.min,
-        max = opts.max,
-        step = math.floor(tonumber(opts.step) or 1),
-        displayValues = opts.displayValues,
-        valueWidth = tonumber(opts.valueWidth),
-        buttonSpacing = opts.buttonSpacing,
-    }
-end
-
-local function PrepareStepperDrawContext(node, boundValue, limits)
-    local ctx = node._stepperCtx or {}
-    ctx.boundValue = boundValue
-    ctx.renderedValue = helpers.NormalizeInteger(node, boundValue:get())
-    ctx.min = limits and limits.min or node.min
-    ctx.max = limits and limits.max or node.max
-    node._stepperCtx = ctx
-    return ctx
-end
-
-local function GetStepperLimits(node)
-    local ctx = node._stepperCtx
-    local minValue = ctx and ctx.min ~= nil and ctx.min or node.min
-    local maxValue = ctx and ctx.max ~= nil and ctx.max or node.max
-    return minValue, maxValue
-end
-
-local function CommitStepperValue(node, nextValue)
-    local ctx = node._stepperCtx
-    local minValue, maxValue = GetStepperLimits(node)
-    local normalized = helpers.NormalizeInteger(node, nextValue)
-    if minValue ~= nil and normalized < minValue then normalized = minValue end
-    if maxValue ~= nil and normalized > maxValue then normalized = maxValue end
-    if normalized ~= ctx.renderedValue then
-        ctx.renderedValue = normalized
-        ctx.boundValue.set(normalized)
-        return true
+local function NormalizeStepperValue(value, defaultValue, minValue, maxValue)
+    local num = tonumber(value)
+    if num == nil then
+        num = tonumber(defaultValue) or 0
     end
-    return false
+    num = math.floor(num)
+    if minValue ~= nil and num < minValue then num = minValue end
+    if maxValue ~= nil and num > maxValue then num = maxValue end
+    return num
 end
 
-local function GetValueText(node)
-    local ctx = node._stepperCtx
-    local renderedValue = ctx and ctx.renderedValue or helpers.NormalizeInteger(node, node.default)
-    local displayValue = node.displayValues and node.displayValues[renderedValue]
-    return tostring(displayValue ~= nil and displayValue or renderedValue), renderedValue
+local function NormalizeStep(step)
+    return math.floor(tonumber(step) or 1)
 end
 
-local function DrawCenteredValue(imgui, node)
-    local valueText = GetValueText(node)
-    local valueWidth = tonumber(node.valueWidth)
-    local measuredWidth = imgui.CalcTextSize(tostring(valueText or ""))
+local function GetValueText(value, displayValues)
+    local displayValue = displayValues and displayValues[value]
+    return tostring(displayValue ~= nil and displayValue or value)
+end
+
+local function DrawCenteredValue(imgui, value, displayValues, valueWidth)
+    local valueText = GetValueText(value, displayValues)
+    local measuredWidth = imgui.CalcTextSize(valueText)
     local textWidth = type(measuredWidth) == "table" and measuredWidth.x or measuredWidth
 
     imgui.AlignTextToFramePadding()
@@ -90,25 +57,39 @@ local function DrawCenteredValue(imgui, node)
     end
 end
 
-local function DrawStepperControl(imgui, node)
+local function CommitStepperValue(field, currentValue, nextValue, defaultValue, minValue, maxValue)
+    local normalized = NormalizeStepperValue(nextValue, defaultValue, minValue, maxValue)
+    if normalized ~= currentValue then
+        field:write(normalized)
+        return true, normalized
+    end
+    return false, currentValue
+end
+
+local function DrawStepperControl(imgui, field, id, renderedValue, opts, minValue, maxValue)
     local changed = false
-    local gap = helpers.ResolveGap(imgui, node.buttonSpacing)
-    local renderedValue = node._stepperCtx.renderedValue
-    local minValue, maxValue = GetStepperLimits(node)
+    local currentValue = renderedValue
+    local step = NormalizeStep(opts.step)
+    local gap = helpers.ResolveGap(imgui, opts.buttonSpacing)
+    local valueWidth = tonumber(opts.valueWidth)
 
-    if imgui.Button("-##" .. tostring(node.id) .. "_dec") and (minValue == nil or renderedValue > minValue) then
-        changed = CommitStepperValue(node, renderedValue - (node.step or 1)) or changed
+    if imgui.Button("-##" .. tostring(id) .. "_dec") and (minValue == nil or currentValue > minValue) then
+        local wrote
+        wrote, currentValue = CommitStepperValue(field, currentValue, currentValue - step, opts.default, minValue, maxValue)
+        changed = wrote or changed
     end
 
     helpers.SameLineWithGap(imgui, gap)
-    DrawCenteredValue(imgui, node)
+    DrawCenteredValue(imgui, currentValue, opts.displayValues, valueWidth)
 
     helpers.SameLineWithGap(imgui, gap)
-    if imgui.Button("+##" .. tostring(node.id) .. "_inc") and (maxValue == nil or renderedValue < maxValue) then
-        changed = CommitStepperValue(node, renderedValue + (node.step or 1)) or changed
+    if imgui.Button("+##" .. tostring(id) .. "_inc") and (maxValue == nil or currentValue < maxValue) then
+        local wrote
+        wrote, currentValue = CommitStepperValue(field, currentValue, currentValue + step, opts.default, minValue, maxValue)
+        changed = wrote or changed
     end
 
-    return changed
+    return changed, currentValue
 end
 
 ---@param imgui table
@@ -116,23 +97,20 @@ end
 ---@param opts StepperOpts|nil
 ---@return boolean
 function helpers.widgets.stepper(imgui, field, opts)
-    opts = opts or {}
-    local cfg = MakeStepperConfig(opts)
-    cfg.id = cfg.id ~= "" and cfg.id or field:controlId()
-    local boundValue = {
-        get = function() return field:read() end,
-        set = function(value) field:write(value) end,
-    }
-    PrepareStepperDrawContext(cfg, boundValue)
+    opts = opts or helpers.EMPTY_OPTS
+    local id = opts.id ~= nil and tostring(opts.id) or field:controlId()
+    local minValue = opts.min
+    local maxValue = opts.max
+    local renderedValue = NormalizeStepperValue(field:read(), opts.default, minValue, maxValue)
 
-    local changed = false
-    if cfg.label ~= "" then
+    local label = tostring(opts.label or "")
+    if label ~= "" then
         imgui.AlignTextToFramePadding()
-        imgui.Text(cfg.label)
-        local gap = helpers.ResolveGap(imgui, cfg.buttonSpacing)
-        helpers.SameLineWithGap(imgui, gap)
+        imgui.Text(label)
+        helpers.SameLineWithGap(imgui, helpers.ResolveGap(imgui, opts.buttonSpacing))
     end
-    changed = DrawStepperControl(imgui, cfg) or changed
+
+    local changed = DrawStepperControl(imgui, field, id, renderedValue, opts, minValue, maxValue)
     if changed then
         helpers.StageAction("draw.widgets.stepper", opts, field:read())
     end
@@ -145,43 +123,11 @@ end
 ---@param opts SteppedRangeOpts|nil
 ---@return boolean
 function helpers.widgets.steppedRange(imgui, minField, maxField, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local minFieldControlId = minField:controlId()
     local maxFieldControlId = maxField:controlId()
-    local minStepper = MakeStepperConfig({
-        id = tostring(minFieldControlId) .. "_min",
-        label = "",
-        default = opts.default,
-        min = opts.min,
-        max = opts.max,
-        step = opts.step,
-        valueWidth = opts.valueWidth,
-        buttonSpacing = opts.buttonSpacing,
-    })
-    local maxStepper = MakeStepperConfig({
-        id = tostring(maxFieldControlId) .. "_max",
-        label = "",
-        default = opts.defaultMax or opts.default,
-        min = opts.min,
-        max = opts.max,
-        step = opts.step,
-        valueWidth = opts.valueWidth,
-        buttonSpacing = opts.buttonSpacing,
-    })
-    local minBound = {
-        get = function() return minField:read() end,
-        set = function(value) minField:write(value) end,
-    }
-    local maxBound = {
-        get = function() return maxField:read() end,
-        set = function(value) maxField:write(value) end,
-    }
-
-    local minValue = minBound.get()
-    local maxValue = maxBound.get()
-    PrepareStepperDrawContext(minStepper, minBound, { min = minStepper.min, max = maxValue })
-    PrepareStepperDrawContext(maxStepper, maxBound, { min = minValue, max = maxStepper.max })
-
+    local minValue = NormalizeStepperValue(minField:read(), opts.default, opts.min, opts.max)
+    local maxValue = NormalizeStepperValue(maxField:read(), opts.defaultMax or opts.default, opts.min, opts.max)
     local changed = false
     local rangeGap = helpers.ResolveGap(imgui, opts.rangeGap)
 
@@ -191,14 +137,34 @@ function helpers.widgets.steppedRange(imgui, minField, maxField, opts)
         helpers.SameLineWithGap(imgui, rangeGap)
     end
 
-    changed = DrawStepperControl(imgui, minStepper) or changed
+    local minChanged
+    minChanged, minValue = DrawStepperControl(
+        imgui,
+        minField,
+        tostring(minFieldControlId) .. "_min",
+        minValue,
+        opts,
+        opts.min,
+        maxValue
+    )
+    changed = minChanged or changed
 
     helpers.SameLineWithGap(imgui, rangeGap)
     imgui.AlignTextToFramePadding()
     imgui.Text("to")
 
     helpers.SameLineWithGap(imgui, rangeGap)
-    changed = DrawStepperControl(imgui, maxStepper) or changed
+    local maxChanged
+    maxChanged = DrawStepperControl(
+        imgui,
+        maxField,
+        tostring(maxFieldControlId) .. "_max",
+        maxValue,
+        opts,
+        minValue,
+        opts.max
+    )
+    changed = maxChanged or changed
 
     if changed then
         helpers.StageAction("draw.widgets.steppedRange", opts, {

@@ -15,7 +15,7 @@ local helpers = ...
 ---@param opts InputTextOpts|nil
 ---@return boolean
 function helpers.widgets.inputText(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local fieldControlId = field:controlId()
     local current = tostring(field:read() or "")
     local maxLen = math.max(math.floor(tonumber(opts.maxLen) or 256), 1)

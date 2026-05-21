@@ -96,6 +96,47 @@ function TestWidgets:testColoredDropdownUsesCustomPreview()
     lu.assertEquals(state.customPreviewCalls, 1)
 end
 
+function TestWidgets:testTextColorUsesDefaultAlphaWithoutAllocatingNormalizedColor()
+    local imgui, state = self.h.makeDropdownImgui()
+    imgui.Text = function(text)
+        state.plainText = text
+    end
+    imgui.TextColored = function(r, g, b, a, text)
+        state.coloredText = { r = r, g = g, b = b, a = a, text = text }
+    end
+
+    self.h.widgets.bind(imgui).text("Warning", {
+        color = { 0.8, 0.2, 0.1 },
+    })
+
+    lu.assertNil(state.plainText)
+    lu.assertEquals(state.coloredText, { r = 0.8, g = 0.2, b = 0.1, a = 1, text = "Warning" })
+end
+
+function TestWidgets:testCheckboxColorUsesDefaultAlphaWithoutDrawClosure()
+    local imgui, state = self.h.makeDropdownImgui()
+    imgui.ImGuiCol = { Text = 7 }
+    imgui.PushStyleColor = function(...)
+        state.pushedColor = { ... }
+    end
+    imgui.PopStyleColor = function()
+        state.popCount = (state.popCount or 0) + 1
+    end
+    imgui.Checkbox = function(label, current)
+        state.checkboxLabel = label
+        return current, false
+    end
+    local session = self.h.createValueSession(true)
+
+    self.h.widgets.bind(imgui).checkbox(Field(self.h, session, "Enabled"), {
+        color = { 0.1, 0.2, 0.3 },
+    })
+
+    lu.assertEquals(state.checkboxLabel, "Enabled##Enabled")
+    lu.assertEquals(state.pushedColor, { 7, 0.1, 0.2, 0.3, 1 })
+    lu.assertEquals(state.popCount, 1)
+end
+
 function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
     local imgui = self.h.makeDropdownImgui()
     local session = self.h.createValueSession(3)
@@ -253,7 +294,7 @@ end
 
 function TestWidgets:testButtonRejectsRawActionKey()
     local imgui = self.h.makeDropdownImgui()
-    imgui.Button = function(label)
+    imgui.Button = function()
         return true
     end
 

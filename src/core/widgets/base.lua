@@ -16,15 +16,12 @@ end
 ---@param opts TextOpts|nil
 ---@return nil
 function helpers.widgets.text(imgui, text, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local renderedText = tostring(text or "")
-    local color = helpers.NormalizeColor(opts.color)
     if opts.alignToFramePadding == true then
         imgui.AlignTextToFramePadding()
     end
-    if type(color) == "table" then
-        imgui.TextColored(color[1], color[2], color[3], color[4], renderedText)
-    else
+    if not helpers.TextWithValueColor(imgui, opts.color, renderedText) then
         imgui.Text(renderedText)
     end
     helpers.ShowTooltip(imgui, opts.tooltip)

@@ -57,24 +57,20 @@ local function unknownRowAlias(node, rowAlias)
     )
 end
 
-local function createRowReadBackend(node, rowProvider, normalizedRoot)
+local function createRowBackend(node, normalizedRoot)
+    local currentRow
     return {
+        bindRow = function(row)
+            currentRow = row
+        end,
         readRoot = function(root)
-            return readRowRootValue(root, rowProvider(), normalizedRoot)
+            return readRowRootValue(root, currentRow, normalizedRoot)
+        end,
+        writeRoot = function(root, rootValue)
+            return writeRowRootValue(root, currentRow, rootValue)
         end,
         onUnknownRead = function(rowAlias)
             unknownRowAlias(node, rowAlias)
-        end,
-    }
-end
-
-local function createRowWriteBackend(node, rowProvider, normalizedRoot)
-    return {
-        readRoot = function(root)
-            return readRowRootValue(root, rowProvider(), normalizedRoot)
-        end,
-        writeRoot = function(root, rootValue)
-            return writeRowRootValue(root, rowProvider(), rootValue)
         end,
         onUnknownWrite = function(rowAlias)
             unknownRowAlias(node, rowAlias)
@@ -172,9 +168,8 @@ NormalizeTableRow = function(node, rowValue)
         end
     end
 
-    local rowBackend = createRowWriteBackend(node, function()
-        return row
-    end, false)
+    local rowBackend = createRowBackend(node, false)
+    rowBackend.bindRow(row)
 
     for alias, value in pairs(rowValue) do
         if aliasNodes[alias] ~= nil then
@@ -331,17 +326,15 @@ local function CreateTableHandle(node, opts)
         return rows[rowIndex], rowIndex
     end
 
+    local rowBackend = createRowBackend(node, opts.normalizedRoot == true)
+
     local function readRowAlias(row, alias)
-        local rowBackend = createRowReadBackend(node, function()
-            return row
-        end, opts.normalizedRoot == true)
+        rowBackend.bindRow(row)
         return storageInternal.readAlias(aliasNodes, rowBackend, alias)
     end
 
     local function writeRowAlias(row, alias, value)
-        local rowBackend = createRowWriteBackend(node, function()
-            return row
-        end, opts.normalizedRoot == true)
+        rowBackend.bindRow(row)
         return storageInternal.writeAlias(aliasNodes, rowBackend, alias, value)
     end
 

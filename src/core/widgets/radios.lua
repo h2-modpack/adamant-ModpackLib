@@ -22,42 +22,65 @@ local helpers = ...
 ---@field action DrawActionRef|nil
 ---@field value any
 
----@class RadioOptionEntry
----@field label string
----@field color Color|nil
----@field selected boolean
----@field onSelect fun(): boolean
-
 ---@param imgui table
----@param radioId string
 ---@param labelText string
----@param optionEntries RadioOptionEntry[]
----@param optionsPerLine number|nil
----@param optionGap number|nil
----@return boolean
-local function DrawRadioOptions(imgui, radioId, labelText, optionEntries, optionsPerLine, optionGap)
-    local changed = false
-    local normalizedPerLine = math.floor(tonumber(optionsPerLine) or 0)
-    if normalizedPerLine < 1 then
-        normalizedPerLine = #optionEntries
-    end
-    local normalizedGap = helpers.ResolveGap(imgui, optionGap)
-
+local function DrawRadioLabel(imgui, labelText)
     if labelText ~= "" then
         imgui.AlignTextToFramePadding()
         imgui.Text(labelText)
     end
+end
 
-    for index, option in ipairs(optionEntries) do
-        local positionInLine = (index - 1) % normalizedPerLine
-        if positionInLine ~= 0 then
-            helpers.SameLineWithGap(imgui, normalizedGap)
-        end
+---@param imgui table
+---@param optionCount number
+---@param optionsPerLine number|nil
+---@param optionGap number|nil
+---@return number optionsPerLine
+---@return number optionGap
+local function ResolveRadioLayout(imgui, optionCount, optionsPerLine, optionGap)
+    local normalizedPerLine = math.floor(tonumber(optionsPerLine) or 0)
+    if normalizedPerLine < 1 then
+        normalizedPerLine = optionCount > 0 and optionCount or 1
+    end
+    local normalizedGap = helpers.ResolveGap(imgui, optionGap)
+    return normalizedPerLine, normalizedGap
+end
 
-        local clicked = helpers.DrawWithValueColor(imgui, option.color, function()
-            return imgui.RadioButton(option.label .. "##" .. tostring(radioId) .. "_" .. tostring(index), option.selected == true)
-        end)
-        if clicked and type(option.onSelect) == "function" and option.onSelect() == true then
+local function AdvanceRadioOption(imgui, index, optionsPerLine, optionGap)
+    local positionInLine = (index - 1) % optionsPerLine
+    if positionInLine ~= 0 then
+        helpers.SameLineWithGap(imgui, optionGap)
+    end
+end
+
+---@param imgui table
+---@param field StorageField
+---@param opts RadioOpts|nil
+---@return boolean
+function helpers.widgets.radio(imgui, field, opts)
+    opts = opts or helpers.EMPTY_OPTS
+    local current = helpers.NormalizeChoiceValue(opts, field:read())
+    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local values = opts.values or helpers.EMPTY_LIST
+    local radioId = field:controlId()
+    local optionsPerLine, optionGap = ResolveRadioLayout(imgui, #values, opts.optionsPerLine, opts.optionGap)
+    local changed = false
+
+    DrawRadioLabel(imgui, tostring(opts.label or ""))
+    for index, value in ipairs(values) do
+        AdvanceRadioOption(imgui, index, optionsPerLine, optionGap)
+        local label = helpers.ChoiceDisplay(opts, value)
+        local color = valueColors and valueColors[value] or nil
+        local clicked = helpers.RadioButtonWithValueColor(
+            imgui,
+            label .. "##" .. tostring(radioId) .. "_" .. tostring(index),
+            current == value,
+            color
+        )
+        if clicked and current ~= value then
+            field:write(value)
+            current = value
+            helpers.StageAction("draw.widgets.radio", opts, value)
             changed = true
         end
     end
@@ -67,85 +90,52 @@ end
 
 ---@param imgui table
 ---@param field StorageField
----@param opts RadioOpts|nil
----@return boolean
-function helpers.widgets.radio(imgui, field, opts)
-    opts = opts or {}
-    local current = helpers.NormalizeChoiceValue(opts, field:read())
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
-    local optionEntries = {}
-
-    for _, value in ipairs(opts.values or {}) do
-        optionEntries[#optionEntries + 1] = {
-            label = helpers.ChoiceDisplay(opts, value),
-            color = valueColors and valueColors[value] or nil,
-            selected = current == value,
-            onSelect = function()
-                if current ~= value then
-                    field:write(value)
-                    current = value
-                    helpers.StageAction("draw.widgets.radio", opts, value)
-                    return true
-                end
-                return false
-            end,
-        }
-    end
-
-    return DrawRadioOptions(
-        imgui,
-        field:controlId(),
-        tostring(opts.label or ""),
-        optionEntries,
-        opts.optionsPerLine,
-        opts.optionGap
-    )
-end
-
----@param imgui table
----@param field StorageField
 ---@param opts PackedRadioOpts|nil
 ---@return boolean
 function helpers.widgets.packedRadio(imgui, field, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
-    local optionEntries = {
-        {
-            label = tostring(opts.noneLabel or "None"),
-            selected = selection.state == "none",
-            onSelect = function()
-                local changed = helpers.ClearPackedChoiceSelection(field, children, selection) == true
-                if changed then
-                    helpers.StageAction("draw.widgets.packedRadio", opts, false)
-                end
-                return changed
-            end,
-        },
-    }
+    local radioId = field:controlId()
+    local optionCount = #children + 1
+    local optionsPerLine, optionGap = ResolveRadioLayout(imgui, optionCount, opts.optionsPerLine, opts.optionGap)
+    local changed = false
+    local selectedChild = selection.selectedChild
 
-    for _, child in ipairs(children) do
-        optionEntries[#optionEntries + 1] = {
-            label = helpers.GetPackedChoiceLabel(opts, child),
-            color = valueColors and valueColors[child.alias] or nil,
-            selected = selection.selectedChild and selection.selectedChild.alias == child.alias or false,
-            onSelect = function()
-                local changed = helpers.ApplyPackedChoiceSelection(field, children, child.alias, selection) == true
-                if changed then
-                    helpers.StageAction("draw.widgets.packedRadio", opts, child.alias)
-                end
-                return changed
-            end,
-        }
+    DrawRadioLabel(imgui, tostring(opts.label or ""))
+    AdvanceRadioOption(imgui, 1, optionsPerLine, optionGap)
+    if imgui.RadioButton(
+        tostring(opts.noneLabel or "None") .. "##" .. tostring(radioId) .. "_1",
+        selection.state == "none"
+    ) then
+        local cleared = helpers.ClearPackedChoiceSelection(field, children, selection) == true
+        if cleared then
+            helpers.StageAction("draw.widgets.packedRadio", opts, false)
+        end
+        changed = cleared or changed
+        selectedChild = nil
     end
 
-    return DrawRadioOptions(
-        imgui,
-        field:controlId(),
-        tostring(opts.label or ""),
-        optionEntries,
-        opts.optionsPerLine,
-        opts.optionGap
-    )
+    for childIndex, child in ipairs(children) do
+        local index = childIndex + 1
+        AdvanceRadioOption(imgui, index, optionsPerLine, optionGap)
+        local childColor = valueColors and valueColors[child.alias] or nil
+        local clicked = helpers.RadioButtonWithValueColor(
+            imgui,
+            helpers.GetPackedChoiceLabel(opts, child) .. "##" .. tostring(radioId) .. "_" .. tostring(index),
+            selectedChild ~= nil and selectedChild.alias == child.alias,
+            childColor
+        )
+        if clicked then
+            local selected = helpers.ApplyPackedChoiceSelection(field, children, child.alias, selection) == true
+            if selected then
+                helpers.StageAction("draw.widgets.packedRadio", opts, child.alias)
+            end
+            changed = selected or changed
+            selectedChild = child
+        end
+    end
+
+    return changed
 end

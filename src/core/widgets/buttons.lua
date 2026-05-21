@@ -20,7 +20,7 @@ local helpers = ...
 ---@param opts ButtonOpts|nil
 ---@return boolean
 function helpers.widgets.button(imgui, label, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local id = tostring(opts.id or label or "")
     local clicked = imgui.Button(tostring(label or "") .. "##" .. id)
     helpers.ShowTooltip(imgui, opts.tooltip)
@@ -39,7 +39,7 @@ end
 ---@param opts ConfirmButtonOpts|nil
 ---@return boolean
 function helpers.widgets.confirmButton(imgui, id, label, opts)
-    opts = opts or {}
+    opts = opts or helpers.EMPTY_OPTS
     local popupId = tostring(id) .. "##popup"
     local changed = false
     if imgui.Button(tostring(label or "") .. "##" .. tostring(id)) then

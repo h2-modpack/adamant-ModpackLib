@@ -1,4 +1,6 @@
 local nav = {}
+local EMPTY_OPTS = {}
+local EMPTY_TABS = {}
 
 ---@class NavTab
 ---@field key string|number
@@ -15,7 +17,7 @@ local nav = {}
 
 local function NormalizeTabs(tabs)
     if type(tabs) ~= "table" then
-        return {}
+        return EMPTY_TABS
     end
     return tabs
 end
@@ -24,7 +26,7 @@ end
 ---@param opts VerticalTabsOpts|nil
 ---@return string|number|nil
 function nav.verticalTabs(imgui, opts)
-    opts = opts or {}
+    opts = opts or EMPTY_OPTS
     local id = tostring(opts.id or "verticalTabs")
     local navWidth = tonumber(opts.navWidth) or 180
     local height = tonumber(opts.height) or 0

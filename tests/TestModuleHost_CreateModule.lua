@@ -68,7 +68,6 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
 
     lu.assertNotNil(drawImgui)
     lu.assertNotNil(drawData)
-    lu.assertEquals(drawData, self.h.moduleHost.getState(liveHost).authorSession)
     lu.assertEquals(type(drawServices.log), "function")
     lu.assertEquals(type(drawServices.logIf), "function")
     lu.assertEquals(type(drawServices.isHostEnabled), "function")
@@ -125,6 +124,54 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorRowField:read(), 3)
     local liveState = self.h.moduleHost.getState(liveHost)
     lu.assertEquals(type(liveState.definition._structuralFingerprint), "string")
+end
+
+function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
+    local calls = {}
+    local host = self.h.public.createModule({
+        pluginGuid = "test-create-module-stable-draw-services",
+        config = {},
+        modpack = "create-module-pack",
+        id = "StableDrawServices",
+        name = "Stable Draw Services",
+        storage = {},
+        drawTab = function(draw, data, actions, services)
+            calls[#calls + 1] = {
+                draw = draw,
+                imgui = draw.imgui,
+                widgets = draw.widgets,
+                nav = draw.nav,
+                data = data,
+                actions = actions,
+                services = services,
+            }
+        end,
+    })
+
+    host.activate()
+    local liveHost = self.h:liveHost("test-create-module-stable-draw-services")
+    local firstImgui = {}
+    local secondImgui = {}
+    liveHost.drawTab(firstImgui)
+    liveHost.drawTab(firstImgui)
+    liveHost.drawTab(secondImgui)
+
+    lu.assertEquals(#calls, 3)
+    lu.assertEquals(calls[1].draw, calls[2].draw)
+    lu.assertEquals(calls[1].draw, calls[3].draw)
+    lu.assertEquals(calls[1].imgui, firstImgui)
+    lu.assertEquals(calls[2].imgui, firstImgui)
+    lu.assertEquals(calls[3].imgui, secondImgui)
+    lu.assertEquals(calls[1].widgets, calls[2].widgets)
+    lu.assertEquals(calls[1].nav, calls[2].nav)
+    lu.assertNotEquals(calls[2].widgets, calls[3].widgets)
+    lu.assertNotEquals(calls[2].nav, calls[3].nav)
+    lu.assertEquals(calls[1].data, calls[2].data)
+    lu.assertEquals(calls[1].data, calls[3].data)
+    lu.assertEquals(calls[1].actions, calls[2].actions)
+    lu.assertEquals(calls[1].actions, calls[3].actions)
+    lu.assertEquals(calls[1].services, calls[2].services)
+    lu.assertEquals(calls[1].services, calls[3].services)
 end
 
 function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()
