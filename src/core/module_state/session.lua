@@ -9,6 +9,7 @@ local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
 ---@class AuthorSession
 ---@field view table<string, any>
+---@field get fun(alias: string): StorageField|StorageTableSession|nil
 ---@field read fun(alias: string): any
 ---@field field fun(alias: string): StorageField
 ---@field write fun(alias: string, value: any)
@@ -187,21 +188,12 @@ local function createSession(storageConfig, storage)
         storageInternal.writeAlias(aliasNodes, sessionWriteBackend, alias, value)
     end
 
-    local function getTableHandle(alias)
+    local function getTableHandleForNode(alias, node)
         local cached = tableHandles[alias]
         if cached then
             return cached
         end
 
-        local node = type(alias) == "string" and aliasNodes[alias] or nil
-        if not node then
-            logging.violate("session.unknown_alias", "session.table: unknown alias '%s'", tostring(alias))
-            return nil
-        end
-        if node.type ~= "table" or node._isBitAlias then
-            logging.violate("session.invalid_table_alias", "session.table: alias '%s' is not table storage", tostring(alias))
-            return nil
-        end
         local handle = storageInternal.table.CreateTableHandle(node, {
             readRoot = function(root)
                 if staging[root.alias] == nil then
@@ -214,6 +206,19 @@ local function createSession(storageConfig, storage)
         })
         tableHandles[alias] = handle
         return handle
+    end
+
+    local function getTableHandle(alias)
+        local node = type(alias) == "string" and aliasNodes[alias] or nil
+        if not node then
+            logging.violate("session.unknown_alias", "session.table: unknown alias '%s'", tostring(alias))
+            return nil
+        end
+        if node.type ~= "table" or node._isBitAlias then
+            logging.violate("session.invalid_table_alias", "session.table: alias '%s' is not table storage", tostring(alias))
+            return nil
+        end
+        return getTableHandleForNode(alias, node)
     end
 
     local function resetAliasValue(alias)
@@ -231,8 +236,23 @@ local function createSession(storageConfig, storage)
     clearDirty()
 
     local session
+    local function getDataObject(alias)
+        local node = type(alias) == "string" and aliasNodes[alias] or nil
+        if not node then
+            logging.violate("session.unknown_alias", "session.get: unknown alias '%s'", tostring(alias))
+            return nil
+        end
+        if node.type == "table" and not node._isBitAlias then
+            return getTableHandleForNode(alias, node)
+        end
+        return storageInternal.field.createKnown(session, alias, node, "session.get")
+    end
+
     session = {
         view = readonlyProxy,
+        get = function(alias)
+            return getDataObject(alias)
+        end,
         read = function(alias)
             return readStagingValue(alias)
         end,
@@ -306,6 +326,7 @@ end
 local function createAuthorSession(session, opts)
     return {
         view = session.view,
+        get = session.get,
         read = session.read,
         table = session.table,
         field = session.field,

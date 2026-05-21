@@ -2,10 +2,10 @@
 
 This document covers `draw.widgets.*` and `draw.nav.*` from a module draw-code point of view.
 
-Draw callbacks receive a `draw` object. Widget authoring normally uses
-`draw.widgets`, which binds the current `imgui` and root storage field scope for
-the render call. Navigation helpers use `draw.nav`, which binds the current
-`imgui` and session for the same draw call.
+Draw callbacks receive `draw, data, actions, services`. Widget authoring
+normally uses `draw.widgets`, which binds the current `imgui` and root staged
+data scope for the render call. Navigation helpers use `draw.nav`, which binds
+the current `imgui` and staged data for the same draw call.
 
 For storage schema, table handles, packed roots, and session/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
 
@@ -20,10 +20,8 @@ Built-ins:
 - `confirmButton`
 - `inputText`
 - `dropdown`
-- `mappedDropdown`
 - `packedDropdown`
 - `radio`
-- `mappedRadio`
 - `packedRadio`
 - `stepper`
 - `steppedRange`
@@ -55,15 +53,13 @@ Most widgets target one storage field:
 - `checkbox`
 - `inputText`
 - `dropdown`
-- `mappedDropdown`
 - `radio`
-- `mappedRadio`
 - `packedDropdown`
 - `packedRadio`
 - `packedCheckboxList`
 - `stepper`
 
-String targets are shorthand for root fields on `draw.session`:
+String targets are shorthand for root fields on `data`:
 
 ```lua
 draw.widgets.checkbox("Enabled", {
@@ -72,10 +68,10 @@ draw.widgets.checkbox("Enabled", {
 ```
 
 The explicit root-field form is available when a helper needs to pass a target
-around:
+around or make the data dependency more visible:
 
 ```lua
-local enabled = draw.field("Enabled")
+local enabled = data.get("Enabled")
 draw.widgets.checkbox(enabled, {
     label = "Enabled",
 })
@@ -84,11 +80,15 @@ draw.widgets.checkbox(enabled, {
 Table rows produce `StorageField` targets through the table API:
 
 ```lua
-local row = draw.session.table("Rows"):rowHandle(1)
-draw.widgets.checkbox(row:field("Enabled"), {
+local rows = data.get("Rows")
+draw.widgets.checkbox(rows:get(1, "Enabled"), {
     label = "Enabled",
 })
 ```
+
+Widgets use `field:controlId()` for default ImGui control identity. Root fields
+use their alias as the control id; table cells include table alias, row index,
+and cell alias, so row-local widgets are unique without manual `id` options.
 
 Packed widgets resolve packed child metadata through the `StorageField` schema.
 
@@ -99,12 +99,30 @@ Widgets do not traverse table storage. Table/path APIs should resolve to a
 final `StorageField`, then widgets render that field.
 
 ```lua
-local row = draw.session.table("Rows"):rowHandle(1)
-draw.widgets.packedDropdown(row:field("PackedChoices"), opts)
+local rows = data.get("Rows")
+draw.widgets.packedDropdown(rows:get(1, "PackedChoices"), opts)
 ```
 
-Author draw code can read staged values through `draw.session.view.SomeAlias`
-for readability. Widget internals use storage fields to read and write values.
+Author draw code can read staged values through `data.get(alias):read()`
+or `data.view.SomeAlias` for simple root aliases. Widget internals use
+storage fields to read and write values.
+
+### Optional widget actions
+
+Interactive widgets may also stage one draw action by passing:
+- `action = actions.get("ActionName")`
+- `value = payload`
+
+The widget still performs its normal data edit. The optional action is for
+side effects or commit observers that need to know an interaction happened.
+When `value` is omitted, value widgets stage their edited value by default:
+- text, dropdown, radio, checkbox, and stepper widgets stage the new field value
+- packed single-choice widgets stage the selected child alias, or `false` for none
+- `packedCheckboxList` stages `{ alias = childAlias, value = editedBoolean }`
+- buttons stage `true`
+
+Use explicit `value` when the commit observer needs a stable command payload
+instead of the edited value.
 
 ### Labels and tooltips
 
@@ -122,9 +140,7 @@ Some widgets support value coloring:
 - `text.color`
 - `checkbox.color`
 - `dropdown.valueColors`
-- `mappedDropdown` option colors
 - `radio.valueColors`
-- `mappedRadio` option colors
 - packed widget `valueColors`
 
 Colors are RGBA tables:
@@ -172,7 +188,7 @@ Options:
 
 Notes:
 - returns whether the button was clicked
-- when `action` is a `draw.actions.get(...)` ref, stages `value` on that action
+- when `action` is an `actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
 - `onClick` is optional convenience only; you can ignore it and use the boolean return directly
 
 ### `draw.widgets.confirmButton(id, label, opts?)`
@@ -189,7 +205,7 @@ Options:
 
 Notes:
 - returns `true` only when the confirm action is taken
-- when `action` is a `draw.actions.get(...)` ref, stages `value` on that action
+- when `action` is an `actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
 - this is good for destructive or global reset actions
 
 ## Input widget
@@ -204,6 +220,8 @@ Options:
 - `labelWidth`
 - `controlWidth`
 - `controlGap`
+- `action`
+- `value`
 
 Behavior:
 - reads current text from the storage field
@@ -228,6 +246,8 @@ Options:
 - `labelWidth`
 - `controlWidth`
 - `controlGap`
+- `action`
+- `value`
 
 Behavior:
 - binds one storage field to one value from `values`
@@ -238,62 +258,6 @@ Behavior:
 
 Use when:
 - the widget owns a fixed explicit choice list
-
-### `draw.widgets.mappedDropdown(target, opts?)`
-
-Options:
-- `id`
-- `label`
-- `tooltip`
-- `labelWidth`
-- `controlWidth`
-- `controlGap`
-- `getPreview(view)`
-- `getPreviewColor(view)`
-- `getOptions(view)`
-
-Each returned option may include:
-- `id`
-- `label`
-- `value`
-- `color`
-- `onSelect(option, owner)`
-
-Behavior:
-- the option list is computed from live staged state
-- `getPreview`, `getPreviewColor`, and `getOptions` receive the target owner's view
-- if an option provides `onSelect`, that callback owns the write behavior
-- otherwise the widget writes `option.value` to the storage field
-
-Use when:
-- the choice list is dynamic
-- preview text depends on derived state
-- selecting an option needs custom logic
-
-Example:
-
-```lua
-draw.widgets.mappedDropdown("SelectedRoot", {
-    label = "Root",
-    controlWidth = 220,
-    getPreview = function(view)
-        return view.SelectedRoot ~= "" and view.SelectedRoot or "Choose Root"
-    end,
-    getOptions = function(view)
-        return {
-            { label = "Aphrodite", value = "Aphrodite" },
-            { label = "Apollo", value = "Apollo" },
-            {
-                label = "Clear",
-                onSelect = function(_, state)
-                    state.write("SelectedRoot", "")
-                    return true
-                end,
-            },
-        }
-    end,
-})
-```
 
 ### `draw.widgets.packedDropdown(target, opts?)`
 
@@ -311,6 +275,8 @@ Options:
 - `noneLabel`
 - `multipleLabel`
 - `selectionMode`
+- `action`
+- `value`
 
 `selectionMode`:
 - `singleEnabled`
@@ -354,31 +320,11 @@ Options:
 - `valueColors`
 - `optionsPerLine`
 - `optionGap`
+- `action`
+- `value`
 
 Use when:
 - the choice list is small and visible all at once is better than a combo
-
-### `draw.widgets.mappedRadio(target, opts?)`
-
-Options:
-- `label`
-- `optionsPerLine`
-- `optionGap`
-- `getOptions(view)`
-
-Each returned option may include:
-- `label`
-- `value`
-- `color`
-- `selected`
-- `onSelect(option, owner)`
-
-Use when:
-- the visible options are dynamic
-- you need custom selection behavior
-
-Note:
-- `getOptions` receives the target owner's view
 
 ### `draw.widgets.packedRadio(target, opts?)`
 
@@ -392,6 +338,8 @@ Options:
 - `selectionMode`
 - `optionsPerLine`
 - `optionGap`
+- `action`
+- `value`
 
 Use when:
 - the packed root is better represented as always-visible choices rather than a combo
@@ -412,6 +360,8 @@ Options:
 - `displayValues`
 - `valueWidth`
 - `buttonSpacing`
+- `action`
+- `value`
 
 Behavior:
 - normalizes through integer storage rules
@@ -439,6 +389,8 @@ Options:
 - `valueWidth`
 - `buttonSpacing`
 - `rangeGap`
+- `action`
+- `value`
 
 Behavior:
 - min stepper is limited by current max
@@ -456,6 +408,8 @@ Options:
 - `label`
 - `tooltip`
 - `color`
+- `action`
+- `value`
 
 Behavior:
 - binds one boolean storage field
@@ -474,6 +428,8 @@ Options:
 - `slotCount`
 - `optionsPerLine`
 - `optionGap`
+- `action`
+- `value`
 
 `filterMode`:
 - `all`
@@ -494,7 +450,7 @@ Example:
 
 ```lua
 draw.widgets.packedCheckboxList("PackedBannedAphrodite", {
-    filterText = draw.session.view.BanFilterText,
+    filterText = data.get("BanFilterText"):read(),
     optionsPerLine = 2,
     valueColors = {
         PackedBannedAphrodite_Attack = { 1, 0.8, 0.8, 1 },
@@ -507,10 +463,8 @@ draw.widgets.packedCheckboxList("PackedBannedAphrodite", {
 
 Use:
 - `dropdown` when the choices are static
-- `mappedDropdown` when the choices or preview are dynamic
 - `packedDropdown` when one packed child is effectively selected
 - `radio` when the static choices should stay visible
-- `mappedRadio` when visible choices are dynamic
 - `packedRadio` when packed single-choice state should stay visible
 - `checkbox` for one bool
 - `packedCheckboxList` for many packed bool flags
@@ -557,5 +511,5 @@ end
 Widgets are direct immediate-mode helpers. Bound controls return a boolean
 changed or clicked flag; display-only helpers such as `separator` and `text`
 draw and return nothing. Composition is ordinary Lua control flow: authors call
-the helpers they want, in the order they want, inside their own `drawTab(draw)`
+the helpers they want, in the order they want, inside their own draw callback
 function.

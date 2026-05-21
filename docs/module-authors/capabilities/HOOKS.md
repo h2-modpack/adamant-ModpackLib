@@ -16,7 +16,7 @@ Create the host, declare hooks on `host.hooks`, then activate:
 local function registerHooks(host, store)
     host.hooks.wrap("GetEligibleLootNames", function(base, ...)
         local result = base(...)
-        if host.isEnabled() and store.read("FeatureEnabled") then
+        if host.isEnabled() and store.get("FeatureEnabled"):read() then
             -- inspect or transform result here
         end
         return result
@@ -74,7 +74,7 @@ a fresh host and declare the complete current hook set before activation.
 Hook callbacks should read committed state from `store`:
 
 ```lua
-if host.isEnabled() and store.read("FeatureEnabled") then
+if host.isEnabled() and store.get("FeatureEnabled"):read() then
     -- enabled committed behavior
 end
 ```

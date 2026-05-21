@@ -8,19 +8,8 @@ local helpers = ...
 ---@field valueColors ValueColorMap|nil
 ---@field optionsPerLine number|nil
 ---@field optionGap number|nil
-
----@class MappedRadioOption
----@field label string|nil
+---@field action DrawActionRef|nil
 ---@field value any
----@field color Color|nil
----@field selected boolean|nil
----@field onSelect fun(option: MappedRadioOption, session: Session): boolean|nil
-
----@class MappedRadioOpts
----@field label string|nil
----@field optionsPerLine number|nil
----@field optionGap number|nil
----@field getOptions fun(view: table<string, any>): MappedRadioOption[]|any[]
 
 ---@class PackedRadioOpts
 ---@field label string|nil
@@ -30,6 +19,8 @@ local helpers = ...
 ---@field selectionMode PackedSelectionMode|nil
 ---@field optionsPerLine number|nil
 ---@field optionGap number|nil
+---@field action DrawActionRef|nil
+---@field value any
 
 ---@class RadioOptionEntry
 ---@field label string
@@ -75,13 +66,11 @@ local function DrawRadioOptions(imgui, radioId, labelText, optionEntries, option
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts RadioOpts|nil
 ---@return boolean
-function helpers.widgets.radio(imgui, session, alias, opts)
+function helpers.widgets.radio(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.radio")
     local current = helpers.NormalizeChoiceValue(opts, field:read())
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local optionEntries = {}
@@ -95,6 +84,7 @@ function helpers.widgets.radio(imgui, session, alias, opts)
                 if current ~= value then
                     field:write(value)
                     current = value
+                    helpers.StageAction("draw.widgets.radio", opts, value)
                     return true
                 end
                 return false
@@ -104,7 +94,7 @@ function helpers.widgets.radio(imgui, session, alias, opts)
 
     return DrawRadioOptions(
         imgui,
-        field:alias(),
+        field:controlId(),
         tostring(opts.label or ""),
         optionEntries,
         opts.optionsPerLine,
@@ -113,58 +103,11 @@ function helpers.widgets.radio(imgui, session, alias, opts)
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
----@param opts MappedRadioOpts|nil
----@return boolean
-function helpers.widgets.mappedRadio(imgui, session, alias, opts)
-    opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.mappedRadio")
-    local owner = helpers.GetFieldOwner(field)
-    local current = field:read()
-    local optionEntries = {}
-
-    for _, option in ipairs(type(opts.getOptions) == "function" and (opts.getOptions(field:view()) or {}) or {}) do
-        local label = type(option) == "table" and tostring(option.label or option.value or "") or tostring(option)
-        local color = type(option) == "table" and option.color or nil
-        local selected = type(option) == "table" and option.selected == true or current == option
-        optionEntries[#optionEntries + 1] = {
-            label = label,
-            color = color,
-            selected = selected,
-            onSelect = function()
-                if type(option) == "table" and type(option.onSelect) == "function" then
-                    return option.onSelect(option, owner) == true
-                end
-                local nextValue = type(option) == "table" and option.value or option
-                if nextValue ~= current then
-                    field:write(nextValue)
-                    current = nextValue
-                    return true
-                end
-                return false
-            end,
-        }
-    end
-
-    return DrawRadioOptions(
-        imgui,
-        field:alias(),
-        tostring(opts.label or ""),
-        optionEntries,
-        opts.optionsPerLine,
-        opts.optionGap
-    )
-end
-
----@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts PackedRadioOpts|nil
 ---@return boolean
-function helpers.widgets.packedRadio(imgui, session, alias, opts)
+function helpers.widgets.packedRadio(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.packedRadio")
     local children = helpers.ResolvePackedChildren(field)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
@@ -173,7 +116,11 @@ function helpers.widgets.packedRadio(imgui, session, alias, opts)
             label = tostring(opts.noneLabel or "None"),
             selected = selection.state == "none",
             onSelect = function()
-                return helpers.ClearPackedChoiceSelection(field, children, selection) == true
+                local changed = helpers.ClearPackedChoiceSelection(field, children, selection) == true
+                if changed then
+                    helpers.StageAction("draw.widgets.packedRadio", opts, false)
+                end
+                return changed
             end,
         },
     }
@@ -184,14 +131,18 @@ function helpers.widgets.packedRadio(imgui, session, alias, opts)
             color = valueColors and valueColors[child.alias] or nil,
             selected = selection.selectedChild and selection.selectedChild.alias == child.alias or false,
             onSelect = function()
-                return helpers.ApplyPackedChoiceSelection(field, children, child.alias, selection) == true
+                local changed = helpers.ApplyPackedChoiceSelection(field, children, child.alias, selection) == true
+                if changed then
+                    helpers.StageAction("draw.widgets.packedRadio", opts, child.alias)
+                end
+                return changed
             end,
         }
     end
 
     return DrawRadioOptions(
         imgui,
-        field:alias(),
+        field:controlId(),
         tostring(opts.label or ""),
         optionEntries,
         opts.optionsPerLine,

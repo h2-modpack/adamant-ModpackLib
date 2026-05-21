@@ -18,13 +18,16 @@ Use each state surface for one job:
 | Surface | Use it for | Where it appears |
 | --- | --- | --- |
 | `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
-| `session` | staged UI reads/writes | `drawTab`, `drawQuickContent` |
+| `data` | staged UI reads/writes | `drawTab(draw, data, actions, services)`, `drawQuickContent(...)` |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
-Draw code should stage changes through `session`. Gameplay, hooks, overlays, integrations, and mutations should read committed values through `store`.
+Draw code should stage changes through `data`. Gameplay, hooks, overlays,
+integrations, and mutations should read committed values through `store`.
+The legacy `draw.session` alias remains available during migration, but new
+code should use the explicit `data` callback argument.
 
 ```lua
-function ui.drawTab(draw)
+function ui.drawTab(draw, data, actions, services)
     draw.widgets.checkbox("FeatureEnabled", {
         label = "Enable Feature",
     })
@@ -32,7 +35,7 @@ end
 
 function logic.registerHooks(host, store)
     host.hooks.wrap("SomeGameFunction", function(base, ...)
-        if host.isEnabled() and store.read("FeatureEnabled") then
+        if host.isEnabled() and store.get("FeatureEnabled"):read() then
             -- Runtime behavior reads committed state.
         end
         return base(...)
@@ -40,7 +43,7 @@ function logic.registerHooks(host, store)
 end
 ```
 
-Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive a draw context with the author-facing session, not the private full session.
+Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive a draw context with author-facing staged data, not the private full session.
 
 ## Storage Roots
 
@@ -103,16 +106,25 @@ Table rules:
 - Rows are compact ordered arrays with no row ids or holes.
 - `defaultRows` creates the default row count.
 
-Use `session.table(alias)` for staged UI edits:
+Use `data.get(alias)` for staged UI edits. For table roots, `get(...)`
+returns the staged table handle:
 
 ```lua
-local tiers = session.table("Tiers")
+local tiers = data.get("Tiers")
 tiers:append({ Enabled = true, Limit = 3 })
 tiers:write(1, "Limit", 4)
 local limit = tiers:read(1, "Limit")
+local limitField = tiers:get(1, "Limit")
 ```
 
-Use `store.table(alias)` for read-only runtime access. Table handles use colon method syntax.
+Storage fields expose both schema identity and draw/control identity:
+
+- `field:alias()` returns the storage schema alias, such as `"Limit"`.
+- `field:controlId()` returns the identity widgets use for ImGui controls. Root fields use their alias; table cells use the table owner's cached path, such as `"Tiers:1:Limit"`.
+
+Use `store.get(alias)` for read-only runtime access. For table roots,
+`get(...)` returns the read-only table handle. Table handles use colon method
+syntax.
 
 ## Packed Values
 
@@ -133,12 +145,12 @@ Packed widgets can write child aliases through the same session. Lib handles rep
 
 ## Draw Actions
 
-Draw callbacks expose action staging through `draw.actions`:
+Draw callbacks expose action staging through the `actions` argument:
 
-- `draw.actions.get(actionKey)`
-- `draw.actions.hasAny()`
+- `actions.get(actionKey)`
+- `actions.hasAny()`
 
-`draw.actions.get(actionKey)` returns an action ref:
+`actions.get(actionKey)` returns an action ref:
 
 - `action:stage(value)`
 - `action:read()`
@@ -149,7 +161,7 @@ Action refs are object handles; call their methods with colon syntax.
 
 Use actions for one-shot UI intent that should be observed by runtime commit
 plumbing, not for ordinary persistent settings. Stage actions through
-`draw.actions`, not through `session`.
+`actions`, not through `session`.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`:
 
@@ -185,7 +197,7 @@ host.activate()
 - `commit.hadConfigChanges()`
 
 Read action payloads through `commit.actions.get(actionKey)`. Buttons can stage
-actions for this path through a `draw.actions.get(...)` ref passed in their
+actions for this path through an `actions.get(...)` ref passed in their
 `action` option. Actions are cleared after the commit pass.
 
 ## Common Mistakes

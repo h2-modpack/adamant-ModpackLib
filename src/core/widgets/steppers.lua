@@ -1,6 +1,7 @@
 local helpers = ...
 
 ---@class StepperOpts
+---@field id string|number|nil
 ---@field label string|nil
 ---@field default number|nil
 ---@field min number|nil
@@ -9,6 +10,8 @@ local helpers = ...
 ---@field displayValues table<number, string>|nil
 ---@field valueWidth number|nil
 ---@field buttonSpacing number|nil
+---@field action DrawActionRef|nil
+---@field value any
 
 ---@class SteppedRangeOpts: StepperOpts
 ---@field defaultMax number|nil
@@ -109,16 +112,13 @@ local function DrawStepperControl(imgui, node)
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts StepperOpts|nil
 ---@return boolean
-function helpers.widgets.stepper(imgui, session, alias, opts)
+function helpers.widgets.stepper(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.stepper")
-    local fieldAlias = field:alias()
     local cfg = MakeStepperConfig(opts)
-    cfg.id = cfg.id ~= "" and cfg.id or fieldAlias
+    cfg.id = cfg.id ~= "" and cfg.id or field:controlId()
     local boundValue = {
         get = function() return field:read() end,
         set = function(value) field:write(value) end,
@@ -133,23 +133,23 @@ function helpers.widgets.stepper(imgui, session, alias, opts)
         helpers.SameLineWithGap(imgui, gap)
     end
     changed = DrawStepperControl(imgui, cfg) or changed
+    if changed then
+        helpers.StageAction("draw.widgets.stepper", opts, field:read())
+    end
     return changed
 end
 
 ---@param imgui table
----@param session Session
----@param minAlias string
----@param maxAlias string
+---@param minField StorageField
+---@param maxField StorageField
 ---@param opts SteppedRangeOpts|nil
 ---@return boolean
-function helpers.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts)
+function helpers.widgets.steppedRange(imgui, minField, maxField, opts)
     opts = opts or {}
-    local minField = helpers.ResolveStorageField(session, minAlias, "widgets.steppedRange")
-    local maxField = helpers.ResolveStorageField(session, maxAlias, "widgets.steppedRange")
-    local minFieldAlias = minField:alias()
-    local maxFieldAlias = maxField:alias()
+    local minFieldControlId = minField:controlId()
+    local maxFieldControlId = maxField:controlId()
     local minStepper = MakeStepperConfig({
-        id = tostring(minFieldAlias) .. "_min",
+        id = tostring(minFieldControlId) .. "_min",
         label = "",
         default = opts.default,
         min = opts.min,
@@ -159,7 +159,7 @@ function helpers.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts)
         buttonSpacing = opts.buttonSpacing,
     })
     local maxStepper = MakeStepperConfig({
-        id = tostring(maxFieldAlias) .. "_max",
+        id = tostring(maxFieldControlId) .. "_max",
         label = "",
         default = opts.defaultMax or opts.default,
         min = opts.min,
@@ -200,5 +200,11 @@ function helpers.widgets.steppedRange(imgui, session, minAlias, maxAlias, opts)
     helpers.SameLineWithGap(imgui, rangeGap)
     changed = DrawStepperControl(imgui, maxStepper) or changed
 
+    if changed then
+        helpers.StageAction("draw.widgets.steppedRange", opts, {
+            min = minField:read(),
+            max = maxField:read(),
+        })
+    end
     return changed
 end

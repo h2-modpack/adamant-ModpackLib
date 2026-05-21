@@ -52,30 +52,19 @@ local lib = {}
 ---Table handles are object handles; call methods with colon syntax (`rows:read(...)`).
 ---@class AdamantModpackLib.StorageTableReadOnly
 ---@field count fun(self: AdamantModpackLib.StorageTableReadOnly): integer
+---@field get fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): AdamantModpackLib.StorageField
 ---@field read fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): any
----@field row fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer): table?
----@field rows fun(self: AdamantModpackLib.StorageTableReadOnly): table[]
----@field rowHandle fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer): AdamantModpackLib.StorageTableRowReadOnly
+---@field snapshot fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer): table?
+---@field snapshots fun(self: AdamantModpackLib.StorageTableReadOnly): table[]
 
 ---Writable table handles are object handles; call methods with colon syntax (`rows:write(...)`).
 ---@class AdamantModpackLib.StorageTableSession: AdamantModpackLib.StorageTableReadOnly
----@field rowHandle fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer): AdamantModpackLib.StorageTableRowSession
 ---@field write fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string, value: any): boolean
 ---@field reset fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string): boolean
----@field resetRow fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer): boolean
 ---@field append fun(self: AdamantModpackLib.StorageTableSession, rowValues?: table): boolean
 ---@field insert fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, rowValues?: table): boolean
 ---@field remove fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer): boolean
 ---@field clear fun(self: AdamantModpackLib.StorageTableSession): boolean
-
----@class AdamantModpackLib.StorageTableRowReadOnly
----@field read fun(alias: string): any
----@field field fun(self: AdamantModpackLib.StorageTableRowReadOnly, alias: string): AdamantModpackLib.StorageField
----@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil
-
----@class AdamantModpackLib.StorageTableRowSession: AdamantModpackLib.StorageTableRowReadOnly
----@field write fun(alias: string, value: any): boolean
----@field reset fun(alias: string): boolean
 
 ---@class AdamantModpackLib.StorageField
 ---@field read fun(self: AdamantModpackLib.StorageField): any
@@ -83,18 +72,23 @@ local lib = {}
 ---@field reset fun(self: AdamantModpackLib.StorageField): boolean?
 ---@field schema fun(self: AdamantModpackLib.StorageField): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
 ---@field alias fun(self: AdamantModpackLib.StorageField): string
+---@field controlId fun(self: AdamantModpackLib.StorageField): string Draw/control identity from the current owner structure.
 ---@field owner fun(self: AdamantModpackLib.StorageField): table
----@field view fun(self: AdamantModpackLib.StorageField): table<string, any>
 
+---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableReadOnly
+---@alias AdamantModpackLib.DrawDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableSession
 ---@alias AdamantModpackLib.WidgetTarget string|AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
 ---@class AdamantModpackLib.ManagedStore
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a storage object for a persisted alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
+---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
 ---@class AdamantModpackLib.Session
 ---@field view table<string, any>
+---@field get fun(alias: string): AdamantModpackLib.DrawDataRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
@@ -111,6 +105,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.AuthorSession
 ---@field view table<string, any>
+---@field get fun(alias: string): AdamantModpackLib.DrawDataRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
@@ -278,17 +273,28 @@ local lib = {}
 ---    store: AdamantModpackLib.ManagedStore,
 ---    commit: AdamantModpackLib.CommitContext
 ---)
----@field drawTab fun(draw: AdamantModpackLib.DrawContext)
----@field drawQuickContent? fun(draw: AdamantModpackLib.DrawContext)
+---@field drawTab fun(
+---    draw: AdamantModpackLib.DrawContext,
+---    data: AdamantModpackLib.AuthorSession,
+---    actions: AdamantModpackLib.DrawActions,
+---    services: AdamantModpackLib.DrawServices
+---)
+---@field drawQuickContent? fun(
+---    draw: AdamantModpackLib.DrawContext,
+---    data: AdamantModpackLib.AuthorSession,
+---    actions: AdamantModpackLib.DrawActions,
+---    services: AdamantModpackLib.DrawServices
+---)
 
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
----@field session AdamantModpackLib.AuthorSession
----@field actions AdamantModpackLib.DrawActions
----@field services AdamantModpackLib.DrawServices
----@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field widgets AdamantModpackLib.BoundWidgetsApi
 ---@field nav AdamantModpackLib.BoundNavApi
+---@field data AdamantModpackLib.AuthorSession Legacy migration alias for the draw `data` argument.
+---@field session AdamantModpackLib.AuthorSession Legacy migration alias for the draw `data` argument.
+---@field actions AdamantModpackLib.DrawActions Legacy migration alias for the draw `actions` argument.
+---@field services AdamantModpackLib.DrawServices Legacy migration alias for the draw `services` argument.
+---@field field fun(alias: string): AdamantModpackLib.StorageField Legacy migration helper; prefer `data.get(alias)`.
 
 ---@class AdamantModpackLib.ModuleHost
 ---@field getHostId fun(): string
@@ -389,6 +395,8 @@ local lib = {}
 ---@field maxLen? number
 ---@field controlWidth? number
 ---@field controlGap? number
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when edited.
+---@field value? any Staged action payload. Defaults to the edited text.
 
 ---@class AdamantModpackLib.DropdownOpts
 ---@field id? string|number
@@ -400,23 +408,8 @@ local lib = {}
 ---@field valueColors? AdamantModpackLib.ValueColorMap
 ---@field controlWidth? number
 ---@field controlGap? number
-
----@class AdamantModpackLib.MappedDropdownOption
----@field id? string|number
----@field label? string
----@field value any
----@field color? AdamantModpackLib.Color
----@field onSelect? fun(option: AdamantModpackLib.MappedDropdownOption, session: AdamantModpackLib.Session): boolean?
-
----@class AdamantModpackLib.MappedDropdownOpts
----@field id? string|number
----@field label? string
----@field tooltip? string
----@field controlWidth? number
----@field controlGap? number
----@field getPreview? fun(view: table<string, any>): string|number|boolean?
----@field getPreviewColor? fun(view: table<string, any>): AdamantModpackLib.Color?
----@field getOptions? fun(view: table<string, any>): AdamantModpackLib.MappedDropdownOption[]|any[]
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.
+---@field value? any Staged action payload. Defaults to the selected value.
 
 ---@class AdamantModpackLib.PackedDropdownOpts
 ---@field id? string|number
@@ -429,6 +422,8 @@ local lib = {}
 ---@field noneLabel? string
 ---@field multipleLabel? string
 ---@field selectionMode? AdamantModpackLib.PackedSelectionMode
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.
+---@field value? any Staged action payload. Defaults to selected child alias or false for none.
 
 ---@class AdamantModpackLib.RadioOpts
 ---@field label? string
@@ -438,19 +433,8 @@ local lib = {}
 ---@field valueColors? AdamantModpackLib.ValueColorMap
 ---@field optionsPerLine? number
 ---@field optionGap? number
-
----@class AdamantModpackLib.MappedRadioOption
----@field label? string
----@field value any
----@field color? AdamantModpackLib.Color
----@field selected? boolean
----@field onSelect? fun(option: AdamantModpackLib.MappedRadioOption, session: AdamantModpackLib.Session): boolean?
-
----@class AdamantModpackLib.MappedRadioOpts
----@field label? string
----@field optionsPerLine? number
----@field optionGap? number
----@field getOptions? fun(view: table<string, any>): AdamantModpackLib.MappedRadioOption[]|any[]
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.
+---@field value? any Staged action payload. Defaults to the selected value.
 
 ---@class AdamantModpackLib.PackedRadioOpts
 ---@field label? string
@@ -460,8 +444,11 @@ local lib = {}
 ---@field selectionMode? AdamantModpackLib.PackedSelectionMode
 ---@field optionsPerLine? number
 ---@field optionGap? number
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.
+---@field value? any Staged action payload. Defaults to selected child alias or false for none.
 
 ---@class AdamantModpackLib.StepperOpts
+---@field id? string|number
 ---@field label? string
 ---@field default? number
 ---@field min? number
@@ -470,6 +457,8 @@ local lib = {}
 ---@field displayValues? table<number, string>
 ---@field valueWidth? number
 ---@field buttonSpacing? number
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when value changes.
+---@field value? any Staged action payload. Defaults to the edited number.
 
 ---@class AdamantModpackLib.SteppedRangeOpts: AdamantModpackLib.StepperOpts
 ---@field defaultMax? number
@@ -479,6 +468,8 @@ local lib = {}
 ---@field label? string
 ---@field tooltip? string
 ---@field color? AdamantModpackLib.Color
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when toggled.
+---@field value? any Staged action payload. Defaults to the edited boolean.
 
 ---@class AdamantModpackLib.PackedCheckboxListOpts
 ---@field filterText? string
@@ -487,6 +478,8 @@ local lib = {}
 ---@field slotCount? number
 ---@field optionsPerLine? number
 ---@field optionGap? number
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when a child toggles.
+---@field value? any Staged action payload. Defaults to `{ alias = childAlias, value = editedBoolean }`.
 
 ---@class AdamantModpackLib.RetainedOverlayColumn
 ---@field key? string Stable column key used by retained values.
@@ -564,11 +557,9 @@ local lib = {}
 ---@field confirmButton fun(id: string|number, label: any, opts?: AdamantModpackLib.ConfirmButtonOpts): boolean
 ---@field inputText fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.InputTextOpts): boolean
 ---@field dropdown fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.DropdownOpts): boolean
----@field mappedDropdown fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.MappedDropdownOpts): boolean
 ---@field packedDropdown fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedDropdownOpts): boolean
 ---@field getPackedChoiceAlias fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedChoiceOpts): string?
 ---@field radio fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.RadioOpts): boolean
----@field mappedRadio fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.MappedRadioOpts): boolean
 ---@field packedRadio fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedRadioOpts): boolean
 ---@field stepper fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.StepperOpts): boolean
 ---@field steppedRange fun(

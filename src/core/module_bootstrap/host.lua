@@ -58,17 +58,18 @@ end
 ---@field session Session
 ---@field cacheStore PersistentCacheStore|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
----@field drawTab fun(draw: DrawContext)
----@field drawQuickContent fun(draw: DrawContext)|nil
+---@field drawTab fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)
+---@field drawQuickContent fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)|nil
 
 ---@class DrawContext
 ---@field imgui table
----@field session AuthorSession
----@field actions DrawActions
----@field services DrawServices
----@field field fun(alias: string): StorageField
 ---@field widgets BoundWidgets
 ---@field nav BoundNav
+---@field data AuthorSession Legacy migration alias for the draw `data` argument.
+---@field session AuthorSession Legacy migration alias for the draw `data` argument.
+---@field actions DrawActions Legacy migration alias for the draw `actions` argument.
+---@field services DrawServices Legacy migration alias for the draw `services` argument.
+---@field field fun(alias: string): StorageField Legacy migration helper; prefer `data.get(alias)`.
 
 ---@class DrawActions
 ---@field get fun(actionKey: string): DrawActionRef
@@ -165,17 +166,20 @@ local function CreateDrawServices(authorHost)
 end
 
 local function CreateDraw(imgui, actions, authorSession, authorHost)
+    local drawActions = moduleState.createDrawActions(actions)
+    local drawServices = CreateDrawServices(authorHost)
     return {
         imgui = imgui,
+        data = authorSession,
         session = authorSession,
-        actions = moduleState.createDrawActions(actions),
-        services = CreateDrawServices(authorHost),
+        actions = drawActions,
+        services = drawServices,
         field = function(alias)
             return storage.field.create(authorSession, alias, "draw.field")
         end,
         widgets = widgets.bind(imgui, authorSession),
         nav = nav.bind(imgui, authorSession),
-    }
+    }, authorSession, drawActions, drawServices
 end
 
 local function CreatePluginInfo(pluginGuid, def)
@@ -208,10 +212,10 @@ function moduleHost.create(opts)
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: pluginGuid is required")
     end
-    if not (store and type(store.read) == "function") then
+    if not (store and type(store.get) == "function" and type(store.read) == "function") then
         logging.violate("host.invalid_create_opts", "moduleHost.create: store is required")
     end
-    if not (session and type(session.isDirty) == "function" and type(session.write) == "function"
+    if not (session and type(session.get) == "function" and type(session.isDirty) == "function" and type(session.write) == "function"
         and type(session.getAliasSchema) == "function") then
         logging.violate("host.invalid_create_opts", "moduleHost.create: session is required")
     end
@@ -392,13 +396,15 @@ function moduleHost.create(opts)
 
     function host.drawTab(imgui)
         requireActivated("drawTab")
-        return drawTab(CreateDraw(imgui, actions, authorSession, authorHost))
+        local draw, data, drawActions, services = CreateDraw(imgui, actions, authorSession, authorHost)
+        return drawTab(draw, data, drawActions, services)
     end
 
     if type(drawQuickContent) == "function" then
         function host.drawQuickContent(imgui)
             requireActivated("drawQuickContent")
-            return drawQuickContent(CreateDraw(imgui, actions, authorSession, authorHost))
+            local draw, data, drawActions, services = CreateDraw(imgui, actions, authorSession, authorHost)
+            return drawQuickContent(draw, data, drawActions, services)
         end
     end
 

@@ -117,12 +117,25 @@ local function create(storageConfig, storage)
         return storageInternal.readAlias(aliasNodes, storeReadBackend, alias)
     end
 
-    function store.table(alias)
+    function store.getAliasSchema(alias)
+        return aliasNodes[alias]
+    end
+
+    local function getTableHandleForNode(alias, node)
         local cached = tableHandles[alias]
         if cached then
             return cached
         end
 
+        local handle = storageInternal.table.CreateTableHandle(node, {
+            readRoot = readRootNode,
+            normalizedRoot = true,
+        })
+        tableHandles[alias] = handle
+        return handle
+    end
+
+    function store.table(alias)
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
             logging.violate("store.unknown_alias", "store.table: unknown storage alias '%s'", tostring(alias))
@@ -137,12 +150,26 @@ local function create(storageConfig, storage)
                 tostring(alias))
             return nil
         end
-        local handle = storageInternal.table.CreateTableHandle(node, {
-            readRoot = readRootNode,
-            normalizedRoot = true,
-        })
-        tableHandles[alias] = handle
-        return handle
+        return getTableHandleForNode(alias, node)
+    end
+
+    function store.get(alias)
+        local node = type(alias) == "string" and aliasNodes[alias] or nil
+        if not node then
+            logging.violate("store.unknown_alias", "store.get: unknown storage alias '%s'", tostring(alias))
+            return nil
+        end
+        if not node._persist then
+            logging.violate(
+                "store.invalid_surface",
+                "store.get: alias '%s' is session-only; use session for UI-only state",
+                tostring(alias))
+            return nil
+        end
+        if node.type == "table" and not node._isBitAlias then
+            return getTableHandleForNode(alias, node)
+        end
+        return storageInternal.field.createKnown(store, alias, node, "store.get")
     end
 
     local function writeStoreValue(alias, value)

@@ -24,6 +24,28 @@ local function ValidateOwner(owner, methodName)
     end
 end
 
+local function GetControlId(owner, alias)
+    if type(owner.getFieldControlId) == "function" then
+        local id = owner.getFieldControlId(alias)
+        if id ~= nil then
+            return tostring(id)
+        end
+    end
+    return alias
+end
+
+local function CreateField(owner, alias, schema, methodName)
+    return setmetatable({
+        _kind = FIELD_KIND,
+        _owner = owner,
+        _alias = alias,
+        _schema = schema,
+        _source = methodName,
+    }, {
+        __index = StorageFieldMethods,
+    })
+end
+
 function StorageFieldMethods:read()
     return self._owner.read(self._alias)
 end
@@ -60,12 +82,12 @@ function StorageFieldMethods:alias()
     return self._alias
 end
 
-function StorageFieldMethods:owner()
-    return self._owner
+function StorageFieldMethods:controlId()
+    return GetControlId(self._owner, self._alias)
 end
 
-function StorageFieldMethods:view()
-    return self._owner.view or {}
+function StorageFieldMethods:owner()
+    return self._owner
 end
 
 local storageField = {}
@@ -86,17 +108,27 @@ function storageField.create(owner, alias, methodName)
             tostring(methodName),
             tostring(alias)
         )
+        return nil
     end
 
-    return setmetatable({
-        _kind = FIELD_KIND,
-        _owner = owner,
-        _alias = alias,
-        _schema = schema,
-        _source = methodName,
-    }, {
-        __index = StorageFieldMethods,
-    })
+    return CreateField(owner, alias, schema, methodName)
+end
+
+function storageField.createKnown(owner, alias, schema, methodName)
+    methodName = methodName or "StorageField"
+    ValidateOwner(owner, methodName)
+    alias = NormalizeAlias(alias, methodName)
+
+    if not schema then
+        logging.violate("storage.unknown_field_alias",
+            "%s: unknown storage field alias '%s'",
+            tostring(methodName),
+            tostring(alias)
+        )
+        return nil
+    end
+
+    return CreateField(owner, alias, schema, methodName)
 end
 
 function storageField.resolve(defaultOwner, target, methodName)

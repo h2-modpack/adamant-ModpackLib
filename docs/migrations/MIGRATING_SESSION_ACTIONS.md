@@ -10,10 +10,11 @@ Use draw action refs for transient UI intent:
 draw.session.stageAction("ClearCache", { scope = "run" })
 
 -- After
-draw.actions.get("ClearCache"):stage({ scope = "run" })
+actions.get("ClearCache"):stage({ scope = "run" })
 ```
 
-Buttons also require action refs now:
+Widget `action` options require action refs now. The widget still performs its
+normal data edit; the action is an optional staged intent for commit observers.
 
 ```lua
 -- Before
@@ -24,15 +25,18 @@ draw.widgets.button("Clear", {
 
 -- After
 draw.widgets.button("Clear", {
-    action = draw.actions.get("ClearCache"),
+    action = actions.get("ClearCache"),
     value = { scope = "run" },
 })
 ```
 
+This applies to all interactive widgets that expose `action`, not only buttons.
+When `value` is omitted, value widgets stage their edited value by default.
+
 For draw-time action reads:
 
 ```lua
-local clearCache = draw.actions.get("ClearCache")
+local clearCache = actions.get("ClearCache")
 if clearCache:has() then
     local payload = clearCache:read()
 end

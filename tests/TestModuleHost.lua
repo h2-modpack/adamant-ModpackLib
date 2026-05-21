@@ -230,8 +230,8 @@ function TestModuleHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelp
         definition = definition,
         store = store,
         session = session,
-        drawTab = function(draw)
-            capturedAuthorSession = draw.session
+        drawTab = function(_, data)
+            capturedAuthorSession = data
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-reset-host")
@@ -257,6 +257,7 @@ end
 
 function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     local callbackHost = nil
+    local quickArgs = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         modpack = "author-pack",
         id = "AuthorHostModule",
@@ -272,7 +273,9 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
         store = store,
         session = session,
         drawTab = function() end,
-        drawQuickContent = function() end,
+        drawQuickContent = function(draw, data, actions, services)
+            quickArgs = { draw = draw, data = data, actions = actions, services = services }
+        end,
         configureHost = function(authorHost)
             callbackHost = authorHost
         end,
@@ -282,6 +285,10 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     host.drawTab({})
     host.drawQuickContent({})
 
+    lu.assertEquals(type(quickArgs.draw.widgets), "table")
+    lu.assertEquals(type(quickArgs.data.get), "function")
+    lu.assertEquals(type(quickArgs.actions.get), "function")
+    lu.assertEquals(type(quickArgs.services.log), "function")
     lu.assertEquals(returnedHost, callbackHost)
     lu.assertEquals(callbackHost.getHostId(), "test-author-host")
     lu.assertEquals(callbackHost.getModuleId(), "AuthorHostModule")
@@ -325,8 +332,8 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
         definition = definition,
         store = store,
         session = session,
-        drawTab = function(draw)
-            services = draw.services
+        drawTab = function(_, _, _, drawServices)
+            services = drawServices
             enabled = services.isHostEnabled()
             integrationValue, integrationProvider = services.invokeIntegration("test.draw-services", "value",
                 "fallback", "ok")

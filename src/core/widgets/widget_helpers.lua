@@ -145,6 +145,26 @@ function widgetHelpers.GetFieldOwner(field)
     return field:owner()
 end
 
+function widgetHelpers.StageAction(context, opts, defaultValue)
+    local action = opts and opts.action or nil
+    if action == nil then
+        return
+    end
+    if widgetHelpers.actions.isDrawActionRef(action) then
+        local payload = opts.value
+        if payload == nil then
+            payload = defaultValue
+        end
+        action:stage(payload)
+        return
+    end
+    logging.violate(
+        "widgets.invalid_action",
+        "%s: opts.action must be a draw action ref",
+        tostring(context)
+    )
+end
+
 local function GetPackedChoiceMode(node)
     local mode = node.selectionMode
     if mode == nil or mode == "" then

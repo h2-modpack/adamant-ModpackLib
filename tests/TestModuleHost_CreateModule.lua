@@ -14,11 +14,13 @@ end
 
 function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local drawImgui = nil
+    local drawData = nil
     local drawServices = nil
     local drawActions = nil
     local drawWidgets = nil
     local drawNav = nil
     local authorSchemaNode = nil
+    local authorDataField = nil
     local authorRowValue = nil
     local authorRootField = nil
     local authorRowField = nil
@@ -41,18 +43,20 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
                 },
             },
         },
-        drawTab = function(draw)
+        drawTab = function(draw, data, actions, services)
             drawImgui = draw.imgui
-            drawServices = draw.services
-            drawActions = draw.actions
+            drawData = data
+            drawServices = services
+            drawActions = actions
             drawWidgets = draw.widgets
             drawNav = draw.nav
-            authorSchemaNode = draw.session.getAliasSchema("Flag")
+            authorSchemaNode = data.getAliasSchema("Flag")
+            authorDataField = data.get("Flag")
             authorRootField = draw.field("Flag")
-            local row = draw.session.table("Rows"):rowHandle(1)
-            authorRowField = row:field("Limit")
-            authorRowValue = row.read("Limit")
-            draw.session.write("Flag", true)
+            local rows = data.get("Rows")
+            authorRowField = rows:get(1, "Limit")
+            authorRowValue = rows:read(1, "Limit")
+            data.write("Flag", true)
         end,
     })
 
@@ -62,6 +66,8 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     liveHost.drawTab({})
 
     lu.assertNotNil(drawImgui)
+    lu.assertNotNil(drawData)
+    lu.assertEquals(drawData, self.h.moduleHost.getState(liveHost).authorSession)
     lu.assertEquals(type(drawServices.log), "function")
     lu.assertEquals(type(drawServices.logIf), "function")
     lu.assertEquals(type(drawServices.isHostEnabled), "function")
@@ -85,6 +91,8 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNotNil(authorSchemaNode)
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
+    lu.assertEquals(authorDataField:alias(), "Flag")
+    lu.assertEquals(authorDataField:schema().alias, "Flag")
     lu.assertEquals(authorRowValue, 2)
     lu.assertEquals(authorRootField:alias(), "Flag")
     lu.assertEquals(authorRootField:schema().alias, "Flag")

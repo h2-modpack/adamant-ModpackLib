@@ -6,6 +6,8 @@ local DEFAULT_PACKED_SLOT_COUNT = 32
 ---@field label string|nil
 ---@field tooltip string|nil
 ---@field color Color|nil
+---@field action DrawActionRef|nil
+---@field value any
 
 ---@class PackedCheckboxListOpts
 ---@field filterText string|nil
@@ -14,39 +16,40 @@ local DEFAULT_PACKED_SLOT_COUNT = 32
 ---@field slotCount number|nil
 ---@field optionsPerLine number|nil
 ---@field optionGap number|nil
+---@field action DrawActionRef|nil
+---@field value any
 
 ---@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts CheckboxOpts|nil
 ---@return boolean
-function helpers.widgets.checkbox(imgui, session, alias, opts)
+function helpers.widgets.checkbox(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.checkbox")
     local fieldAlias = field:alias()
+    local fieldControlId = field:controlId()
     local label = tostring(opts.label or fieldAlias or "")
     local current = field:read() == true
     local color = helpers.NormalizeColor(opts.color)
     local nextValue, changed = helpers.DrawWithValueColor(imgui, color, function()
-        return imgui.Checkbox(label .. "##" .. tostring(fieldAlias), current)
+        return imgui.Checkbox(label .. "##" .. tostring(fieldControlId), current)
     end)
     helpers.ShowTooltip(imgui, opts.tooltip)
     if changed then
         field:write(nextValue)
+        helpers.StageAction("draw.widgets.checkbox", opts, nextValue)
         return true
     end
     return false
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts PackedCheckboxListOpts|nil
 ---@return boolean
-function helpers.widgets.packedCheckboxList(imgui, session, alias, opts)
+function helpers.widgets.packedCheckboxList(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.packedCheckboxList")
     local owner = helpers.GetFieldOwner(field)
+    local fieldControlId = field:controlId()
     local children = helpers.ResolvePackedChildren(field)
     local lowerFilter = type(opts.filterText) == "string" and opts.filterText:lower() or ""
     local hasFilter = lowerFilter ~= ""
@@ -80,11 +83,16 @@ function helpers.widgets.packedCheckboxList(imgui, session, alias, opts)
                 helpers.SameLineWithGap(imgui, optionGap)
             end
             local color = valueColors and valueColors[child.alias] or nil
+            local childControlId = tostring(fieldControlId) .. ":" .. tostring(child.alias)
             local nextValue, clicked = helpers.DrawWithValueColor(imgui, color, function()
-                return imgui.Checkbox(tostring(child.label) .. "##" .. tostring(child.alias), current)
+                return imgui.Checkbox(tostring(child.label) .. "##" .. childControlId, current)
             end)
             if clicked then
                 owner.write(child.alias, nextValue)
+                helpers.StageAction("draw.widgets.packedCheckboxList", opts, {
+                    alias = child.alias,
+                    value = nextValue,
+                })
                 changed = true
             end
         end

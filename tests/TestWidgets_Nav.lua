@@ -8,7 +8,7 @@ function TestWidgets_Nav:setUp()
 end
 
 function TestWidgets_Nav:testVisibilityConditions()
-    local session = self.h.createMapSession({
+    local session = self.h.createReadOnlySession({
         Enabled = true,
         Region = "Surface",
         Count = 2,
@@ -27,7 +27,7 @@ function TestWidgets_Nav:testVisibilityConditions()
 end
 
 function TestWidgets_Nav:testBoundNavUsesCapturedSessionForVisibility()
-    local session = self.h.createMapSession({
+    local session = self.h.createReadOnlySession({
         Enabled = true,
         Region = "Surface",
     })
@@ -128,7 +128,7 @@ function TestWidgets_Nav:testBoundNavUsesCapturedImguiForVerticalTabs()
             return label == "Second##two"
         end,
     }
-    local bound = self.h.nav.bind(imgui, self.h.createMapSession({}))
+    local bound = self.h.nav.bind(imgui, self.h.createReadOnlySession({}))
 
     local selected = bound.verticalTabs({
         id = "bound",

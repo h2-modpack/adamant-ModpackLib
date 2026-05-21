@@ -71,11 +71,14 @@ local sessionModule = import('core/module_state/session.lua', nil, {
 ---@field clear fun(key: string): boolean
 
 ---@class ManagedStore
+---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): StorageTableReadOnly|nil
+---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 
 ---@class Session
 ---@field view table<string, any>
+---@field get fun(alias: string): StorageField|StorageTableSession|nil
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): StorageTableSession|nil
 ---@field field fun(alias: string): StorageField

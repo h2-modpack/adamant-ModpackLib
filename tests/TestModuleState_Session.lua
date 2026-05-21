@@ -203,30 +203,31 @@ function TestModuleState_Session:testTableStorageStagesRowWritesAndFlushesRoot()
     lu.assertEquals(store.table("Tiers"):read(2, "ChoiceMode"), 3)
 end
 
-function TestModuleState_Session:testTableRowHandleReadsAndWritesThroughParentTable()
+function TestModuleState_Session:testTableHandleReadsWritesAndCreatesCellFields()
     local config = {}
     local store, session = createModuleState(self.harness, config, makeTableDefinition(self.harness))
     local tiers = session.table("Tiers")
 
     tiers:append({ Limit = 3, ChoiceA = true })
-    local row = tiers:rowHandle(2)
 
-    lu.assertEquals(row.read("Limit"), 3)
-    lu.assertTrue(row.read("ChoiceA"))
-    lu.assertEquals(row.getAliasSchema("PackedChoices").alias, "PackedChoices")
+    lu.assertEquals(tiers:read(2, "Limit"), 3)
+    lu.assertTrue(tiers:read(2, "ChoiceA"))
+    lu.assertEquals(tiers:get(2, "PackedChoices"):schema().alias, "PackedChoices")
 
-    lu.assertTrue(row.write("ChoiceMode", 2))
-    lu.assertEquals(row.read("PackedChoices"), 5)
-    lu.assertTrue(row.reset("ChoiceA"))
-    lu.assertFalse(row.read("ChoiceA"))
+    lu.assertTrue(tiers:write(2, "ChoiceMode", 2))
+    lu.assertEquals(tiers:read(2, "PackedChoices"), 5)
+    lu.assertTrue(tiers:reset(2, "ChoiceA"))
+    lu.assertFalse(tiers:read(2, "ChoiceA"))
 
     session._flushToConfig()
-    local storeRow = store.table("Tiers"):rowHandle(2)
+    local storeTiers = store.table("Tiers")
+    local storeChoiceMode = storeTiers:get(2, "ChoiceMode")
 
-    lu.assertEquals(storeRow.read("ChoiceMode"), 2)
-    lu.assertEquals(storeRow.getAliasSchema("ChoiceMode").alias, "ChoiceMode")
-    lu.assertNil(storeRow.write)
-    lu.assertNil(storeRow.reset)
+    lu.assertEquals(storeTiers:read(2, "ChoiceMode"), 2)
+    lu.assertEquals(storeChoiceMode:schema().alias, "ChoiceMode")
+    lu.assertErrorMsgContains("storage.readonly_field", function()
+        storeChoiceMode:write(1)
+    end)
 end
 
 function TestModuleState_Session:testSessionAndRowsCreateStorageFields()
@@ -234,32 +235,97 @@ function TestModuleState_Session:testSessionAndRowsCreateStorageFields()
     local rootField = session.field("MaxGods")
 
     lu.assertEquals(rootField:alias(), "MaxGods")
+    lu.assertEquals(rootField:controlId(), "MaxGods")
     lu.assertEquals(rootField:schema().alias, "MaxGods")
     lu.assertEquals(rootField:read(), 5)
     rootField:write(7)
     lu.assertEquals(session.read("MaxGods"), 7)
 
     local _, tableSession = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
-    local row = tableSession.table("Tiers"):rowHandle(1)
-    local rowField = row:field("Limit")
+    local rows = tableSession.table("Tiers")
+    local rowField = rows:get(1, "Limit")
 
     lu.assertEquals(rowField:alias(), "Limit")
+    lu.assertEquals(rowField:controlId(), "Tiers:1:Limit")
     lu.assertEquals(rowField:schema().alias, "Limit")
     lu.assertEquals(rowField:read(), 2)
     rowField:write(4)
-    lu.assertEquals(row.read("Limit"), 4)
+    lu.assertEquals(rows:read(1, "Limit"), 4)
 end
 
-function TestModuleState_Session:testTableRowHandleIsPositionalAndMissingRowsAreNil()
-    local _, session = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
-    local tiers = session.table("Tiers")
-    local row = tiers:rowHandle(2)
+function TestModuleState_Session:testSessionGetReturnsFieldOrTableHandle()
+    local _, session = createModuleState(self.harness, { Enabled = true, MaxGods = 5 }, makeScalarDefinition(self.harness))
+    local maxGods = session.get("MaxGods")
 
-    lu.assertNil(row.read("Limit"))
-    lu.assertFalse(row.write("Limit", 4))
+    lu.assertEquals(maxGods:alias(), "MaxGods")
+    lu.assertEquals(maxGods:controlId(), "MaxGods")
+    lu.assertEquals(maxGods:schema().alias, "MaxGods")
+    lu.assertEquals(maxGods:read(), 5)
+    maxGods:write(7)
+    lu.assertEquals(session.read("MaxGods"), 7)
+
+    local _, tableSession = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
+    local tiers = tableSession.get("Tiers")
+
+    lu.assertEquals(tiers:count(), 1)
+    lu.assertEquals(tiers:read(1, "Limit"), 2)
+    local limit = tiers:get(1, "Limit")
+    lu.assertEquals(limit:alias(), "Limit")
+    lu.assertEquals(limit:controlId(), "Tiers:1:Limit")
+    lu.assertEquals(limit:schema().alias, "Limit")
+    lu.assertEquals(limit:read(), 2)
+    limit:write(5)
+    lu.assertEquals(tiers:read(1, "Limit"), 5)
+    limit:reset()
+    lu.assertEquals(tiers:read(1, "Limit"), 2)
+    lu.assertTrue(tiers:write(1, "Limit", 4))
+    lu.assertEquals(tableSession.table("Tiers"):read(1, "Limit"), 4)
+end
+
+function TestModuleState_Session:testTableSnapshotsReturnCopiedRows()
+    local _, session = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
+    local tiers = session.get("Tiers")
+
+    local rowSnapshot = tiers:snapshot(1)
+    rowSnapshot.Limit = 5
+    lu.assertEquals(tiers:read(1, "Limit"), 2)
+
+    local allSnapshots = tiers:snapshots()
+    allSnapshots[1].Limit = 6
+    lu.assertEquals(tiers:read(1, "Limit"), 2)
+    lu.assertNil(tiers:snapshot(99))
+end
+
+function TestModuleState_Session:testTableStructuralEditsRefreshControlIdCache()
+    local _, session = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
+    local tiers = session.get("Tiers")
 
     tiers:append({ Limit = 4 })
-    lu.assertEquals(row.read("Limit"), 4)
+    tiers:append({ Limit = 6 })
+    local thirdLimit = tiers:get(3, "Limit")
+    lu.assertEquals(thirdLimit:controlId(), "Tiers:3:Limit")
+
+    lu.assertTrue(tiers:remove(2))
+    lu.assertEquals(tiers:get(2, "Limit"):controlId(), "Tiers:2:Limit")
+
+    lu.assertTrue(tiers:insert(2, { Limit = 5 }))
+    lu.assertEquals(tiers:get(3, "Limit"):controlId(), "Tiers:3:Limit")
+
+    lu.assertTrue(tiers:clear())
+    lu.assertTrue(tiers:append({ Limit = 8 }))
+    lu.assertEquals(tiers:get(1, "Limit"):controlId(), "Tiers:1:Limit")
+end
+
+function TestModuleState_Session:testTableCellFieldsArePositionalAndMissingRowsAreNil()
+    local _, session = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
+    local tiers = session.table("Tiers")
+    local limit = tiers:get(2, "Limit")
+
+    lu.assertNil(limit:read())
+    lu.assertFalse(limit:write(4))
+
+    tiers:append({ Limit = 4 })
+    lu.assertEquals(limit:read(), 4)
 end
 
 function TestModuleState_Session:testTableStorageMutatesRowsAsCompactList()
@@ -275,9 +341,6 @@ function TestModuleState_Session:testTableStorageMutatesRowsAsCompactList()
     tiers:remove(2)
     lu.assertEquals(tiers:count(), 2)
     lu.assertEquals(tiers:read(2, "Limit"), 1)
-
-    tiers:resetRow(2)
-    lu.assertEquals(tiers:read(2, "Limit"), 2)
 
     lu.assertTrue(tiers:clear())
     lu.assertEquals(tiers:count(), 0)
@@ -301,6 +364,9 @@ function TestModuleState_Session:testTableStorageUnknownRowAliasFails()
         tiers:read(1, "MissingRowAlias")
     end)
     lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
+        tiers:get(1, "MissingRowAlias")
+    end)
+    lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
         tiers:write(1, "MissingRowAlias", true)
     end)
     lu.assertErrorMsgContains("storage.unknown_table_row_alias", function()
@@ -314,6 +380,9 @@ function TestModuleState_Session:testTableStorageHandleRequiresColonSyntax()
 
     lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
         tiers.read(1, "Enabled")
+    end)
+    lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
+        tiers.get(1, "Enabled")
     end)
     lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
         tiers.count()
@@ -354,6 +423,14 @@ function TestModuleState_Session:testSessionReadUnknownAliasFails()
 
     lu.assertErrorMsgContains("session.unknown_alias", function()
         session.read("Nope")
+    end)
+end
+
+function TestModuleState_Session:testSessionGetUnknownAliasFails()
+    local _, session = createModuleState(self.harness, {}, makeScalarDefinition(self.harness))
+
+    lu.assertErrorMsgContains("session.unknown_alias", function()
+        session.get("Nope")
     end)
 end
 

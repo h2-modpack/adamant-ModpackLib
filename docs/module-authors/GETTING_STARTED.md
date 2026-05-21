@@ -39,8 +39,8 @@ A module is built from four main pieces:
   Declares required module identity/display metadata, optional storage, and hash layout hints.
 - `store`
   Persisted runtime state. Read this from gameplay and hook code.
-- `session`
-  Staged UI state. Draw code edits this and host/framework plumbing commits it later.
+- `data`
+  Staged UI state passed to draw callbacks. Draw code edits this and host/framework plumbing commits it later.
 - `host`
   The author-facing view returned by `lib.createModule(...)`. Call `host.activate()` after construction so Framework and fallback UI can use the registered live host.
 
@@ -49,20 +49,20 @@ Typical module flow:
 1. `main.lua` calls `lib.createModule(...)`.
 2. The returned author host is kept local in `main.lua`.
 3. `host.activate()` registers hooks, overlays, integrations, and the live host.
-4. UI code edits staged values through the session passed into draw callbacks.
+4. UI code edits staged values through the `data` argument passed into draw callbacks.
 5. Host/framework plumbing commits staged persistent values when appropriate.
-6. Gameplay logic reads persisted state through `store.read(...)`.
+6. Gameplay logic reads persisted state through `store.get(...):read()`.
 
 ## The Most Important Rule
 
 Use the right state object for the right job:
 
-- draw/UI code uses `session`
+- draw/UI code uses `data`
 - gameplay/runtime logic uses `store`
 
 If you ignore that boundary, the module will still often "work", but you will create drift between the UI and the persisted state model.
 
-`lib.createModule(...)` owns the normal construction pipeline so store/session
+`lib.createModule(...)` owns the normal construction pipeline so store/draw-data
 ownership stays paired. Keep custom module setup around this boundary instead
 of bypassing it.
 `pluginGuid` is the stable lifecycle identity. Lib owns the internal per-plugin
@@ -99,11 +99,11 @@ Use this file to declare module data. UI belongs in `ui.lua`; gameplay behavior 
 
 Owns immediate-mode UI:
 
-- `drawTab(draw)`
-- optional `drawQuickContent(draw)`
+- `drawTab(draw, data, actions, services)`
+- optional `drawQuickContent(draw, data, actions, services)`
 
-This code should read and write staged values through `draw.session` or the
-bound helpers on `draw.widgets`.
+This code should read and write staged values through the `data` argument or
+the bound helpers on `draw.widgets`.
 
 ### `src/logic.lua`
 
@@ -205,7 +205,7 @@ Rules:
 - transient values use `persist = false, hash = false`
 - transient values live only in session state
 - table values use one `type = "table"` root with a uniform `row` schema
-- draw code should still access both through `session`
+- draw code should access staged values through the draw `data` argument
 - `Enabled` and `DebugMode` are reserved Lib-owned aliases; do not declare them
 
 For persistent runtime markers that should not appear in UI staging, profiles,
@@ -238,7 +238,7 @@ Example:
 ```lua
 local MODE_VALUES = { "Vanilla", "Chaos" }
 
-local function drawTab(draw)
+local function drawTab(draw, data, actions, services)
     draw.widgets.checkbox("FeatureEnabled", {
         label = "Enable Feature",
     })
@@ -251,12 +251,13 @@ local function drawTab(draw)
 end
 ```
 
-Draw callbacks receive the author-facing session API:
+Draw callbacks receive the author-facing `data` API:
 
-- `session.view`
-- `session.read(alias)`
-- `session.write(alias, value)`
-- `session.reset(alias)`
+- `data.view`
+- `data.get(alias)`
+- `data.read(alias)`
+- `data.write(alias, value)`
+- `data.reset(alias)`
 
 Commit and reload operations are handled by host/framework plumbing.
 
@@ -268,7 +269,7 @@ If the module changes live run data:
 
 ```lua
 local function BuildPatchPlan(plan, host, store)
-    if store.read("FeatureEnabled") then
+    if store.get("FeatureEnabled"):read() then
         plan:set(SomeGameTable, "SomeKey", true)
         host.logIf("Enabled SomeGameTable.SomeKey")
     end
@@ -287,7 +288,7 @@ local function registerHooks(host, store)
     host.hooks.wrap("SomeGameFunction", function(base, ...)
         local result = base(...)
 
-        if host.isEnabled() and store.read("FeatureEnabled") then
+        if host.isEnabled() and store.get("FeatureEnabled"):read() then
             -- apply module-specific logic to the wrapped call here
         end
 
@@ -356,9 +357,9 @@ This is the part most new authors get wrong.
 
 ### Persisted values
 
-Persisted storage roots live in Chalk config and are exposed through `store.read(...)`.
+Persisted storage roots live in Chalk config and are exposed through `store.get(...)`.
 
-The UI stages edits in `session`, then host/framework plumbing commits those edits later.
+The UI stages edits in `data`, then host/framework plumbing commits those edits later.
 
 Lib injects two persisted staged aliases into every prepared module definition:
 
@@ -369,7 +370,7 @@ Module authors should not put these in `definition.storage` or `config.lua`.
 
 ### Transient values
 
-Transient aliases never hit persisted config. They only live in `session`.
+Transient aliases never hit persisted config. They only live in draw `data`.
 
 Examples:
 
@@ -403,19 +404,19 @@ Table storage models compact ordered rows with one shared row schema:
 }
 ```
 
-Use `session.table("Tiers")` for staged UI edits and `store.table("Tiers")` for read-only runtime access.
+Use `data.get("Tiers")` for staged UI edits and `store.get("Tiers")` for read-only runtime access.
 Table handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
-Use `tiers:rowHandle(rowIndex)` when a widget or helper should operate on one row's aliases.
+Use `tiers:get(rowIndex, alias)` when a widget or helper needs a row-cell field.
 
 ## Common Mistakes
 
 ### Reading transient values from `store`
 
-Transient aliases live in `session`. Read them with `session.read(...)` or `session.view`.
+Transient aliases live in draw `data`. Read them with `data.get(...):read()` or `data.view`.
 
 ### Writing persisted config directly from draw code
 
-Normal draw code should stage values through `session` and let the host/framework commit them.
+Normal draw code should stage values through `data` and let the host/framework commit them.
 
 ### Putting gameplay logic in `ui.lua`
 
@@ -423,7 +424,7 @@ Keep UI and game mutation separate. UI edits state; logic applies state.
 
 ### Putting UI outside draw functions
 
-Author UI through draw functions such as `drawTab(draw)`.
+Author UI through draw functions such as `drawTab(draw, data, actions, services)`.
 
 ## LuaLS Setup
 
@@ -437,15 +438,24 @@ lib = mods["adamant-ModpackLib"]
 And for local callback declarations:
 
 ```lua
----@type fun(draw: AdamantModpackLib.DrawContext)
+---@type fun(
+---    draw: AdamantModpackLib.DrawContext,
+---    data: AdamantModpackLib.AuthorSession,
+---    actions: AdamantModpackLib.DrawActions,
+---    services: AdamantModpackLib.DrawServices
+---)
 local drawTab
----@type fun(draw: AdamantModpackLib.DrawContext)|nil
+---@type fun(
+---    draw: AdamantModpackLib.DrawContext,
+---    data: AdamantModpackLib.AuthorSession,
+---    actions: AdamantModpackLib.DrawActions,
+---    services: AdamantModpackLib.DrawServices
+---)|nil
 local drawQuickContent
 ```
 
-That lets LuaLS infer `draw.imgui`, the author `draw.session`, the draw-safe
-`draw.services`, and bound `draw.widgets` through
-`local function drawTab(draw)`.
+That lets LuaLS infer `draw.imgui`, bound `draw.widgets`, staged `data`,
+draw `actions`, and draw-safe `services`.
 
 ## Recommended Next Reads
 

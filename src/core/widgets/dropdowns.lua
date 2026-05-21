@@ -11,24 +11,8 @@ local imguiHelpers = helpers.imguiHelpers
 ---@field labelWidth number|nil
 ---@field controlWidth number|nil
 ---@field controlGap number|nil
-
----@class MappedDropdownOption
----@field id string|number|nil
----@field label string|nil
+---@field action DrawActionRef|nil
 ---@field value any
----@field color Color|nil
----@field onSelect fun(option: MappedDropdownOption, session: Session): boolean|nil
-
----@class MappedDropdownOpts
----@field id string|number|nil
----@field label string|nil
----@field tooltip string|nil
----@field labelWidth number|nil
----@field controlWidth number|nil
----@field controlGap number|nil
----@field getPreview fun(view: table<string, any>): string|number|boolean|nil
----@field getPreviewColor fun(view: table<string, any>): Color|nil
----@field getOptions fun(view: table<string, any>): MappedDropdownOption[]|any[]
 
 ---@class PackedDropdownOpts
 ---@field id string|number|nil
@@ -42,6 +26,8 @@ local imguiHelpers = helpers.imguiHelpers
 ---@field noneLabel string|nil
 ---@field multipleLabel string|nil
 ---@field selectionMode PackedSelectionMode|nil
+---@field action DrawActionRef|nil
+---@field value any
 
 local COMBO_FLAG_NONE = imguiHelpers.ImGuiComboFlags.None
 local IMGUI_COL_TEXT = imguiHelpers.ImGuiCol.Text
@@ -80,7 +66,7 @@ local function DrawComboPreviewText(imgui, previewText, previewColor)
 end
 
 ---@param imgui table
----@param opts DropdownOpts|MappedDropdownOpts|PackedDropdownOpts
+---@param opts DropdownOpts|PackedDropdownOpts
 ---@param previewColor Color|nil
 ---@param drawControl fun(controlWidth: number|nil, previewColor: Color|nil): boolean
 ---@return boolean
@@ -104,15 +90,12 @@ local function DrawLabeledDropdownControl(imgui, opts, previewColor, drawControl
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts DropdownOpts|nil
 ---@return boolean
-function helpers.widgets.dropdown(imgui, session, alias, opts)
+function helpers.widgets.dropdown(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.dropdown")
-    local fieldAlias = field:alias()
-    local controlId = opts.id or fieldAlias
+    local controlId = opts.id or field:controlId()
     local current = helpers.NormalizeChoiceValue(opts, field:read())
     local optionEntries = {}
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
@@ -155,6 +138,7 @@ function helpers.widgets.dropdown(imgui, session, alias, opts)
             if clicked and option.value ~= current then
                 field:write(option.value)
                 current = option.value
+                helpers.StageAction("draw.widgets.dropdown", opts, option.value)
                 changed = true
             end
         end
@@ -164,68 +148,12 @@ function helpers.widgets.dropdown(imgui, session, alias, opts)
 end
 
 ---@param imgui table
----@param session Session
----@param alias string
----@param opts MappedDropdownOpts|nil
----@return boolean
-function helpers.widgets.mappedDropdown(imgui, session, alias, opts)
-    opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.mappedDropdown")
-    local fieldAlias = field:alias()
-    local owner = helpers.GetFieldOwner(field)
-    local view = field:view()
-    local controlId = opts.id or fieldAlias
-    local preview = type(opts.getPreview) == "function"
-        and tostring(opts.getPreview(view) or "")
-        or tostring(field:read() or "")
-    local previewColor = type(opts.getPreviewColor) == "function" and opts.getPreviewColor(view) or nil
-    local options = type(opts.getOptions) == "function"
-        and (opts.getOptions(view) or {})
-        or {}
-
-    return DrawLabeledDropdownControl(imgui, opts, nil, function()
-        local opened = imgui.BeginCombo(
-            "##" .. tostring(controlId),
-            previewColor and "" or preview,
-            COMBO_FLAG_NONE
-        )
-        if previewColor then
-            DrawComboPreviewText(imgui, preview, previewColor)
-        end
-        if not opened then
-            return false
-        end
-        local changed = false
-        for _, option in ipairs(options) do
-            local label = type(option) == "table" and tostring(option.label or option.value or "") or tostring(option)
-            local optionColor = type(option) == "table" and option.color or nil
-            local uniqueId = type(option) == "table" and (option.id or option.value or label) or option
-            local clicked = helpers.DrawWithValueColor(imgui, optionColor, function()
-                return imgui.Selectable(helpers.MakeSelectableId(label, uniqueId), false)
-            end)
-            if clicked then
-                if type(option) == "table" and type(option.onSelect) == "function" then
-                    changed = option.onSelect(option, owner) == true or changed
-                else
-                    field:write(type(option) == "table" and option.value or option)
-                    changed = true
-                end
-            end
-        end
-        imgui.EndCombo()
-        return changed
-    end)
-end
-
----@param imgui table
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts PackedDropdownOpts|nil
 ---@return boolean
-function helpers.widgets.packedDropdown(imgui, session, alias, opts)
+function helpers.widgets.packedDropdown(imgui, field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.packedDropdown")
-    local controlId = opts.id or field:alias()
+    local controlId = opts.id or field:controlId()
     local children = helpers.ResolvePackedChildren(field)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
@@ -254,7 +182,11 @@ function helpers.widgets.packedDropdown(imgui, session, alias, opts)
             helpers.MakeSelectableId(tostring(opts.noneLabel or "None"), "none"),
             currentSelection.state == "none"
         ) then
-            changed = helpers.ClearPackedChoiceSelection(field, children, currentSelection) or changed
+            local cleared = helpers.ClearPackedChoiceSelection(field, children, currentSelection)
+            if cleared then
+                helpers.StageAction("draw.widgets.packedDropdown", opts, false)
+            end
+            changed = cleared or changed
             currentSelection = {
                 state = "none",
                 selectedChild = nil,
@@ -271,7 +203,11 @@ function helpers.widgets.packedDropdown(imgui, session, alias, opts)
                 return imgui.Selectable(helpers.MakeSelectableId(childLabel, child.alias), isSelected)
             end)
             if clicked then
-                changed = helpers.ApplyPackedChoiceSelection(field, children, child.alias, currentSelection) or changed
+                local selected = helpers.ApplyPackedChoiceSelection(field, children, child.alias, currentSelection)
+                if selected then
+                    helpers.StageAction("draw.widgets.packedDropdown", opts, child.alias)
+                end
+                changed = selected or changed
                 currentSelection = {
                     state = "single",
                     selectedChild = child,
@@ -285,13 +221,11 @@ function helpers.widgets.packedDropdown(imgui, session, alias, opts)
     end)
 end
 
----@param session Session
----@param alias string
+---@param field StorageField
 ---@param opts PackedDropdownOpts|PackedRadioOpts|nil
 ---@return string|nil selectedAlias
-function helpers.widgets.getPackedChoiceAlias(session, alias, opts)
+function helpers.widgets.getPackedChoiceAlias(field, opts)
     opts = opts or {}
-    local field = helpers.ResolveStorageField(session, alias, "widgets.getPackedChoiceAlias")
     local children = helpers.ResolvePackedChildren(field)
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
     return selection.selectedChild and selection.selectedChild.alias or nil

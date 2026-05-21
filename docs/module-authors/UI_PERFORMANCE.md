@@ -3,8 +3,8 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to module draw code:
-- `drawTab(draw)`
-- optional `drawQuickContent(draw)`
+- `drawTab(draw, data, actions, services)`
+- optional `drawQuickContent(draw, data, actions, services)`
 - `draw.widgets.*`
 - `draw.nav.*`
 - raw ImGui for structure
@@ -12,8 +12,8 @@ This guidance applies to module draw code:
 ## Why Draw Paths Need Care
 
 Module UI is immediate-mode:
-- `drawTab(draw)`
-- optional `drawQuickContent(draw)`
+- `drawTab(draw, data, actions, services)`
+- optional `drawQuickContent(draw, data, actions, services)`
 
 These run every imgui frame.
 Any unnecessary allocation or repeated C-boundary call inside those paths shows up immediately.
@@ -23,8 +23,8 @@ Any unnecessary allocation or repeated C-boundary call inside those paths shows 
 This document assumes:
 - raw `config` stays local to `main.lua`
 - `lib.createModule(...)` owns the definition and state construction boundary
-- draw code reads staged values from `draw.session.view`
-- runtime/gameplay code reads persisted values through `store.read(...)`
+- draw code reads staged values from `data.view` or `data.get(...)`
+- runtime/gameplay code reads persisted values through `store.get(...)`
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own `session` commit timing
@@ -88,10 +88,10 @@ Do the same for:
 - `GetFrameHeight()`
 - `GetStyle().ItemSpacing.x` if you are already using it repeatedly in one function
 
-### 4. Default to `session.view` for reads
+### 4. Default to `data.view` for simple reads
 
 Use:
-- `session.view.SomeAlias`
+- `data.view.SomeAlias`
 
 Prefer this over raw mutable staging values unless you have a concrete reason not to.
 
@@ -105,8 +105,8 @@ Ownership:
   `host.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 
 The module's job is:
-- render from `session`
-- stage edits into `session`
+- render from `data`
+- stage edits into `data`
 
 Not:
 - custom flush timing
@@ -146,8 +146,8 @@ Do not rebuild the same large option table multiple times in the same frame.
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
 - splitting one draw flow into extra lifecycle phases without a real need
-- calling `store.read(...)` repeatedly inside draw code for values already present in `session.view`
-- doing config writes directly from draw code instead of staging through `session`
+- calling `store.get(...):read()` repeatedly inside draw code for values already present in `data.view`
+- doing config writes directly from draw code instead of staging through `data`
 - bypassing the host/framework flow for normal widget edits
 
 

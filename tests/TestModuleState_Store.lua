@@ -39,6 +39,39 @@ function TestModuleState_Store:testCreateStoreReadsAndWritesScalarAliases()
     lu.assertEquals(store.read("MaxGods"), 9)
 end
 
+function TestModuleState_Store:testStoreGetReturnsReadOnlyFieldOrTableHandle()
+    local config = { Enabled = false, MaxGods = 4 }
+    local store, session = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local maxGods = store.get("MaxGods")
+
+    lu.assertEquals(maxGods:alias(), "MaxGods")
+    lu.assertEquals(maxGods:controlId(), "MaxGods")
+    lu.assertEquals(maxGods:schema().alias, "MaxGods")
+    lu.assertEquals(maxGods:read(), 4)
+    lu.assertErrorMsgContains("storage.readonly_field", function()
+        maxGods:write(6)
+    end)
+
+    session.write("MaxGods", 8)
+    session._flushToConfig()
+    lu.assertEquals(maxGods:read(), 8)
+
+    local tableStore = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
+    local tiers = tableStore.get("Tiers")
+
+    lu.assertEquals(tiers:count(), 1)
+    lu.assertEquals(tiers:read(1, "Limit"), 2)
+    local limit = tiers:get(1, "Limit")
+    lu.assertEquals(limit:alias(), "Limit")
+    lu.assertEquals(limit:controlId(), "Tiers:1:Limit")
+    lu.assertEquals(limit:schema().alias, "Limit")
+    lu.assertEquals(limit:read(), 2)
+    lu.assertErrorMsgContains("storage.readonly_field", function()
+        limit:write(3)
+    end)
+    lu.assertNil(tiers.write)
+end
+
 function TestModuleState_Store:testPackedAliasReadWriteUpdatesOwningRoot()
     local config = { Packed = 0 }
     local store, session = createModuleState(self.harness, config, makePackedDefinition(self.harness))
@@ -68,6 +101,18 @@ function TestModuleState_Store:testTransientAliasesAreNotReadableThroughStore()
     lu.assertEquals(session.view.FilterText, "")
 end
 
+function TestModuleState_Store:testStoreGetRejectsTransientAndUnknownAliases()
+    local config = { Enabled = false }
+    local store = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
+
+    lu.assertErrorMsgContains("store.invalid_surface", function()
+        store.get("FilterText")
+    end)
+    lu.assertErrorMsgContains("store.unknown_alias", function()
+        store.get("Missing")
+    end)
+end
+
 function TestModuleState_Store:testTableReadOnlyHandleClampsRawPersistedRows()
     local config = {
         Tiers = {
@@ -83,8 +128,8 @@ function TestModuleState_Store:testTableReadOnlyHandleClampsRawPersistedRows()
     lu.assertEquals(#config.Tiers, 3)
     lu.assertNil(config.Tiers[4])
     lu.assertEquals(tiers:count(), 3)
-    lu.assertEquals(tiers:rowHandle(3).read("Limit"), 3)
-    lu.assertNil(tiers:rowHandle(4).read("Limit"))
+    lu.assertEquals(tiers:read(3, "Limit"), 3)
+    lu.assertNil(tiers:read(4, "Limit"))
 end
 
 function TestModuleState_Store.testDowngradedTableErrorsReturnNilSafely()

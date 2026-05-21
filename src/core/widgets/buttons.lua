@@ -15,22 +15,6 @@ local helpers = ...
 ---@field value any Staged action payload.
 ---@field onConfirm fun(imgui: table)|nil
 
-local function StageAction(context, opts)
-    local action = opts.action
-    if action == nil then
-        return
-    end
-    if helpers.actions.isDrawActionRef(action) then
-        action:stage(opts.value)
-        return
-    end
-    helpers.logging.violate(
-        "widgets.invalid_action",
-        "%s: opts.action must be a draw action ref",
-        context
-    )
-end
-
 ---@param imgui table
 ---@param label any
 ---@param opts ButtonOpts|nil
@@ -44,7 +28,7 @@ function helpers.widgets.button(imgui, label, opts)
         if type(opts.onClick) == "function" then
             opts.onClick(imgui)
         end
-        StageAction("draw.widgets.button", opts)
+        helpers.StageAction("draw.widgets.button", opts, true)
     end
     return clicked == true
 end
@@ -69,7 +53,7 @@ function helpers.widgets.confirmButton(imgui, id, label, opts)
             if type(opts.onConfirm) == "function" then
                 opts.onConfirm(imgui)
             end
-            StageAction("draw.widgets.confirmButton", opts)
+            helpers.StageAction("draw.widgets.confirmButton", opts, true)
             imgui.CloseCurrentPopup()
             changed = true
         end

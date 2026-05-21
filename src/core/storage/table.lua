@@ -293,7 +293,8 @@ end
 local function CreateTableHandle(node, opts)
     opts = opts or {}
     local aliasNodes = GetRowAliasNodes(node)
-    local rowHandles = {}
+    local rowOwners = {}
+    local rowControlIds = {}
 
     local function readRows()
         local rows = opts.readRoot(node)
@@ -345,6 +346,105 @@ local function CreateTableHandle(node, opts)
 
     local handle = {}
 
+    local function getRowAliasNodeOrNil(alias)
+        local aliasNode = aliasNodes[alias]
+        if not aliasNode then
+            unknownRowAlias(node, alias)
+            return nil
+        end
+        return aliasNode
+    end
+
+    local function clearRowStructureCaches()
+        rowOwners = {}
+        rowControlIds = {}
+    end
+
+    local function getRowFieldControlId(rowIndex, alias)
+        rowIndex = math.floor(tonumber(rowIndex) or 0)
+        local rowIds = rowControlIds[rowIndex]
+        if not rowIds then
+            rowIds = {}
+            rowControlIds[rowIndex] = rowIds
+        end
+
+        local id = rowIds[alias]
+        if not id then
+            id = tostring(node.alias) .. ":" .. tostring(rowIndex) .. ":" .. tostring(alias)
+            rowIds[alias] = id
+        end
+        return id
+    end
+
+    local function writeStructuralRows(rows)
+        local changed = writeRows(rows) ~= false
+        if changed then
+            clearRowStructureCaches()
+        end
+        return changed
+    end
+
+    local function getRowOwnerForIndex(rowIndex)
+        rowIndex = math.floor(tonumber(rowIndex) or 0)
+        local cached = rowOwners[rowIndex]
+        if cached then
+            return cached
+        end
+
+        local rowOwner = {
+            read = function(alias)
+                validateRowAlias(node, alias, "rowOwner.read")
+                local row = readRow(readRows(), rowIndex)
+                if not row then
+                    return nil
+                end
+                return readRowAlias(row, alias)
+            end,
+            getAliasSchema = function(alias)
+                validateRowAlias(node, alias, "rowOwner.getAliasSchema")
+                return aliasNodes[alias]
+            end,
+            getFieldControlId = function(alias)
+                validateRowAlias(node, alias, "rowOwner.getFieldControlId")
+                return getRowFieldControlId(rowIndex, alias)
+            end,
+        }
+
+        if opts.writeRoot ~= nil then
+            rowOwner.write = function(alias, value)
+                validateRowAlias(node, alias, "rowOwner.write")
+                local rows = copyRows()
+                local row = readRow(rows, rowIndex)
+                if not row then
+                    return false
+                end
+                local changed = writeRowAlias(row, alias, value)
+                if changed then
+                    writeRows(rows)
+                end
+                return changed
+            end
+
+            rowOwner.reset = function(alias)
+                validateRowAlias(node, alias, "rowOwner.reset")
+                local rows = copyRows()
+                local row = readRow(rows, rowIndex)
+                if not row then
+                    return false
+                end
+                local aliasNode = getAliasNodeOrError(node, aliasNodes, alias)
+                local changed = writeRowAlias(row, alias, values.deepCopy(aliasNode.default))
+                if changed then
+                    writeRows(rows)
+                end
+                return changed
+            end
+        end
+
+        rowOwners[rowIndex] = rowOwner
+        return rowOwner
+    end
+
     function handle.count(self)
         validateTableReceiver(node, handle, self, "count")
         return getRowCount(readRows())
@@ -361,81 +461,27 @@ local function CreateTableHandle(node, opts)
         return readRowAlias(row, alias)
     end
 
-    function handle.row(self, rowIndex)
-        validateTableReceiver(node, handle, self, "row")
-        validateRowIndex(node, rowIndex, "row")
+    function handle.snapshot(self, rowIndex)
+        validateTableReceiver(node, handle, self, "snapshot")
+        validateRowIndex(node, rowIndex, "snapshot")
         local row = readRow(readRows(), rowIndex)
         return row and values.deepCopy(row) or nil
     end
 
-    function handle.rows(self)
-        validateTableReceiver(node, handle, self, "rows")
+    function handle.snapshots(self)
+        validateTableReceiver(node, handle, self, "snapshots")
         return values.deepCopy(readRows())
     end
 
-    function handle.rowHandle(self, rowIndex)
-        validateTableReceiver(node, handle, self, "rowHandle")
-        validateRowIndex(node, rowIndex, "rowHandle")
-        rowIndex = math.floor(tonumber(rowIndex) or 0)
-        local cached = rowHandles[rowIndex]
-        if cached then
-            return cached
+    function handle.get(self, rowIndex, alias)
+        validateTableReceiver(node, handle, self, "get")
+        validateRowIndex(node, rowIndex, "get")
+        validateRowAlias(node, alias, "get")
+        local aliasNode = getRowAliasNodeOrNil(alias)
+        if not aliasNode then
+            return nil
         end
-
-        local rowHandle = {
-            read = function(alias)
-                validateRowAlias(node, alias, "rowHandle.read")
-                local row = readRow(readRows(), rowIndex)
-                if not row then
-                    return nil
-                end
-                return readRowAlias(row, alias)
-            end,
-            getAliasSchema = function(alias)
-                validateRowAlias(node, alias, "rowHandle.getAliasSchema")
-                return aliasNodes[alias]
-            end,
-        }
-
-        rowHandle.field = function(selfOrAlias, maybeAlias)
-            local alias = selfOrAlias == rowHandle and maybeAlias or selfOrAlias
-            validateRowAlias(node, alias, "rowHandle.field")
-            return storageInternal.field.create(rowHandle, alias, "rowHandle.field")
-        end
-
-        if opts.writeRoot ~= nil then
-            rowHandle.write = function(alias, value)
-                validateRowAlias(node, alias, "rowHandle.write")
-                local rows = copyRows()
-                local row = readRow(rows, rowIndex)
-                if not row then
-                    return false
-                end
-                local changed = writeRowAlias(row, alias, value)
-                if changed then
-                    writeRows(rows)
-                end
-                return changed
-            end
-
-            rowHandle.reset = function(alias)
-                validateRowAlias(node, alias, "rowHandle.reset")
-                local rows = copyRows()
-                local row = readRow(rows, rowIndex)
-                if not row then
-                    return false
-                end
-                local aliasNode = getAliasNodeOrError(node, aliasNodes, alias)
-                local changed = writeRowAlias(row, alias, values.deepCopy(aliasNode.default))
-                if changed then
-                    writeRows(rows)
-                end
-                return changed
-            end
-        end
-
-        rowHandles[rowIndex] = rowHandle
-        return rowHandle
+        return storageInternal.field.createKnown(getRowOwnerForIndex(rowIndex), alias, aliasNode, "table.get")
     end
 
     if opts.writeRoot ~= nil then
@@ -472,18 +518,6 @@ local function CreateTableHandle(node, opts)
             return changed
         end
 
-        function handle.resetRow(self, rowIndex)
-            validateTableReceiver(node, handle, self, "resetRow")
-            validateRowIndex(node, rowIndex, "resetRow")
-            local rows = copyRows()
-            local _, normalizedIndex = readRow(rows, rowIndex)
-            if normalizedIndex < 1 or normalizedIndex > #rows then
-                return false
-            end
-            rows[normalizedIndex] = CreateDefaultTableRow(node)
-            return writeRows(rows) ~= false
-        end
-
         function handle.append(self, rowValues)
             validateTableReceiver(node, handle, self, "append")
             local rows = copyRows()
@@ -491,7 +525,7 @@ local function CreateTableHandle(node, opts)
                 return false
             end
             rows[#rows + 1] = NormalizeTableRow(node, rowValues)
-            return writeRows(rows) ~= false
+            return writeStructuralRows(rows)
         end
 
         function handle.insert(self, rowIndex, rowValues)
@@ -505,7 +539,7 @@ local function CreateTableHandle(node, opts)
             if rowIndex < 1 then rowIndex = 1 end
             if rowIndex > #rows + 1 then rowIndex = #rows + 1 end
             table.insert(rows, rowIndex, NormalizeTableRow(node, rowValues))
-            return writeRows(rows) ~= false
+            return writeStructuralRows(rows)
         end
 
         function handle.remove(self, rowIndex)
@@ -517,12 +551,12 @@ local function CreateTableHandle(node, opts)
                 return false
             end
             table.remove(rows, rowIndex)
-            return writeRows(rows) ~= false
+            return writeStructuralRows(rows)
         end
 
         function handle.clear(self)
             validateTableReceiver(node, handle, self, "clear")
-            return writeRows({}) ~= false
+            return writeStructuralRows({})
         end
     end
 

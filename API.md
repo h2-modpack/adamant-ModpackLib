@@ -212,14 +212,15 @@ Returns:
 - `nil, nil, err` when construction fails
 
 `createModule(...)` intentionally does not return the prepared definition or
-raw session. Draw callbacks receive a render-scoped context with `imgui`,
-author `session`, draw `actions`, draw-safe `services`, and bound
-`widgets` / `nav`.
+raw session. Draw callbacks receive four draw-phase arguments:
+`draw`, staged `data`, draw `actions`, and draw-safe `services`.
+`draw` owns `imgui`, `widgets`, and `nav`; the other arguments own data,
+deferred UI intent, and narrow draw-safe services.
 
 Declare hooks on `host.hooks.*` before `host.activate()`. Runtime helper
 files should receive the needed `store` or narrowed read/access closures from
-the module's hook-declaration code; draw/UI paths should continue using the
-session passed to draw callbacks.
+the module's hook-declaration code; draw/UI paths should use the `data`,
+`actions`, and `services` arguments passed to draw callbacks.
 
 The failure path logs `host.create_failed` and does not activate or publish a
 host. Use this at pack orchestration boundaries when one invalid module should
@@ -236,6 +237,7 @@ end
 `host.activate()`.
 
 The runtime store surface provides:
+- `store.get(alias)`
 - `store.read(alias)`
 - `store.table(alias)`
 
@@ -256,8 +258,8 @@ Do not declare them in module storage or module `config.lua`.
 module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 
 Rules:
-- widgets and draw code should usually read staged values from `session.view`
-- runtime/gameplay code should read persisted values through `store.read(...)`
+- widgets and draw code should usually read staged values through `data.get(...)`
+- runtime/gameplay code should read persisted values through `store.get(...):read()`
 - new flat runtime markers should prefer `host.cache.persistent.*`
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
@@ -293,28 +295,37 @@ The table root owns `persist` and `hash`. Row fields are row-scoped
 storage aliases and do not declare storage axes. Table rows are compact ordered
 arrays with no row ids or holes.
 
-Read table state through:
+Read table state through `get(...)` when using the object-factory path:
+
+```lua
+local tiers = data.get("Tiers")
+local enabled = tiers:read(1, "Enabled")
+local enabledField = tiers:get(1, "Enabled")
+
+local runtimeTiers = store.get("Tiers")
+local committedEnabled = runtimeTiers:read(1, "Enabled")
+```
+
+The older table helpers remain available during migration:
 
 ```lua
 local tiers = session.table("Tiers")
 tiers:append({ Enabled = true, ChoiceA = true })
 tiers:write(1, "ChoiceMode", 2)
 local enabled = tiers:read(1, "Enabled")
-
-local row = tiers:rowHandle(1)
-row.write("ChoiceMode", 2)
-local selected = row.read("ChoiceMode")
-local field = row:field("ChoiceMode")
+local field = tiers:get(1, "ChoiceMode")
 ```
 
 Table handles:
+- `store.get(alias)` returns a read-only field or table handle for persisted aliases
+- `data.get(alias)` returns a writable staged field or table handle
+- `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - `store.table(alias)` returns a read-only table handle
 - `session.table(alias)` returns a staged writable table handle
 - table handles are object methods; call them with colon syntax such as `tiers:read(rowIndex, alias)`
 - row aliases can address scalar row roots, packed row roots, or packed child aliases
-- `rowHandle(rowIndex)` returns a positional row cursor with `read(alias)`, `field(alias)`, and `getAliasSchema(alias)`
-- writable session row handles also expose `write(alias, value)` and `reset(alias)`
-- read-only store row handles do not expose write methods
+- `snapshot(rowIndex)` returns a copied row table
+- `snapshots()` returns copied rows
 - table storage participates in hash/profile serialization when `hash` is true
 
 Aliases are direct flat storage identifiers. Managed storage reads and writes the
@@ -342,6 +353,7 @@ Managed staged UI state for the module.
 
 Useful surface:
 - `session.view`
+- `session.get(alias)`
 - `session.read(alias)`
 - `session.table(alias)`
 - `session.field(alias)`
@@ -357,8 +369,10 @@ Host/framework plumbing methods:
 - `session._captureDirtyConfigSnapshot()`
 - `session._restoreConfigSnapshot(snapshot)`
 
-When a module is rendered through a Lib host, draw callbacks receive a restricted author-facing session view with:
+When a module is rendered through a Lib host, draw callbacks receive a
+restricted author-facing `data` view with:
 - `view`
+- `get(alias)`
 - `read(alias)`
 - `table(alias)`
 - `field(alias)`
@@ -368,16 +382,22 @@ When a module is rendered through a Lib host, draw callbacks receive a restricte
 - `resetToDefaults(opts?)`
 
 Draw action staging is no longer exposed on `session`; use
-`draw.actions.get(actionKey)` instead.
+`actions.get(actionKey)` instead.
 
 `session.getAliasSchema(alias)` exposes prepared storage schema metadata for UI
 and widget plumbing. Treat the returned nodes as read-only metadata owned by Lib
 storage preparation. Widgets use this metadata for composite storage such as
 packed roots.
 
-`session.field(alias)` and `row:field(alias)` return `StorageField` targets for
+`session.get(alias)` returns a storage object: scalar and packed aliases return
+`StorageField`; table roots return staged table handles. `session.field(alias)`
+and `tableHandle:get(rowIndex, alias)` return `StorageField` targets for
 widgets and UI helpers. A storage field is a resolved leaf value target; storage
 and table APIs own traversal, while widgets render the final field.
+Storage fields expose `field:alias()` for schema identity and
+`field:controlId()` for draw/control identity. Root control ids equal their
+alias; table cell control ids are cached by the table owner and include table
+alias, row index, and cell alias.
 
 Behavior:
 - persisted aliases stage in `session` and only hit config on flush/commit
@@ -402,8 +422,7 @@ Returns:
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
 
-Draw callbacks receive the same reset behavior through
-`draw.session.resetToDefaults(opts?)`.
+Draw callbacks receive the same reset behavior through `data.resetToDefaults(opts?)`.
 
 ## `host.hooks`
 
@@ -449,7 +468,7 @@ dispatchers are private infrastructure, not a public owner-token surface.
 local function registerHooks(host, store)
     host.hooks.wrap("GetEligibleLootNames", function(base, ...)
         local result = base(...)
-        if host.isEnabled() and store.read("FeatureEnabled") then
+        if host.isEnabled() and store.get("FeatureEnabled"):read() then
             -- inspect or transform the wrapped call here
         end
         return result
@@ -764,29 +783,29 @@ keep the author host returned by `lib.createModule(...)` and use
 
 ## Draw Services
 
-Draw-safe module services are available on the module draw object as
-`draw.services`.
+Draw-safe module services are available through the draw callback `services`
+argument.
 
 Built-ins:
-- `draw.services.log(fmt, ...)`
-- `draw.services.logIf(fmt, ...)`
-- `draw.services.isHostEnabled()`
-- `draw.services.invokeIntegration(id, methodName, fallback, ...)`
+- `services.log(fmt, ...)`
+- `services.logIf(fmt, ...)`
+- `services.isHostEnabled()`
+- `services.invokeIntegration(id, methodName, fallback, ...)`
 
 These helpers are the sanctioned draw-time access path for narrow module
-services. `draw.host` is not available in module UI. `draw.services` is
+services. `draw.host` is not available in module UI. `services` is
 intentionally not a full host facade: it does not expose registration,
 activation, lifecycle mutation, storage mutation, hook declaration, overlay
 declaration, or mutation declaration APIs.
 
 ## Draw Actions
 
-Draw callbacks expose `draw.actions` for transient UI intent:
+Draw callbacks expose the `actions` argument for transient UI intent:
 
-- `draw.actions.get(actionKey)`
-- `draw.actions.hasAny()`
+- `actions.get(actionKey)`
+- `actions.hasAny()`
 
-`draw.actions.get(actionKey)` returns a ref:
+`actions.get(actionKey)` returns a ref:
 
 - `action:stage(value)`
 - `action:read()`
@@ -807,7 +826,7 @@ Runtime commit callbacks receive the same action snapshot through
 - `action:has()`
 
 The old `session.stageAction(...)` form has been removed. Use
-`draw.actions.get(actionKey):stage(value)` in draw code.
+`actions.get(actionKey):stage(value)` in draw code.
 
 ## Draw Widgets
 
@@ -821,11 +840,9 @@ Built-ins:
 - `draw.widgets.confirmButton(id, label, opts?)`
 - `draw.widgets.inputText(target, opts?)`
 - `draw.widgets.dropdown(target, opts?)`
-- `draw.widgets.mappedDropdown(target, opts?)`
 - `draw.widgets.packedDropdown(target, opts?)`
 - `draw.widgets.getPackedChoiceAlias(target, opts?)`
 - `draw.widgets.radio(target, opts?)`
-- `draw.widgets.mappedRadio(target, opts?)`
 - `draw.widgets.packedRadio(target, opts?)`
 - `draw.widgets.stepper(target, opts?)`
 - `draw.widgets.steppedRange(minTarget, maxTarget, opts?)`
@@ -833,11 +850,11 @@ Built-ins:
 - `draw.widgets.packedCheckboxList(target, opts?)`
 
 These are direct immediate-mode helpers. `draw.widgets` is bound to the current
-`imgui` and author session for the render call. Value widgets accept either a
+`imgui` and draw data scope for the render call. Value widgets accept either a
 root alias string or a `StorageField`:
 
 ```lua
-function ui.drawTab(draw)
+function ui.drawTab(draw, data, actions, services)
     draw.widgets.checkbox("FeatureEnabled", {
         label = "Enable Feature",
     })
@@ -850,21 +867,26 @@ function ui.drawTab(draw)
 end
 ```
 
-Use `draw.field(alias)` for an explicit root storage field, and
-`row:field(alias)` for table-backed fields:
+Use `data.get(alias)` for an explicit root storage field, and
+`tableHandle:get(rowIndex, alias)` for table-backed fields:
 
 ```lua
-local mode = draw.field("Mode")
+local mode = data.get("Mode")
 draw.widgets.dropdown(mode, opts)
 
-local row = draw.session.table("Rows"):rowHandle(1)
-draw.widgets.packedDropdown(row:field("PackedChoices"), opts)
+local rows = data.get("Rows")
+draw.widgets.packedDropdown(rows:get(1, "PackedChoices"), opts)
 ```
 
 `getPackedChoiceAlias(...)` returns the selected child alias for packed
 dropdown/radio use cases, or `nil` when the selected choice is none or
 multiple. It uses the same `selectionMode` option as `packedDropdown(...)` and
 `packedRadio(...)`.
+
+Interactive widgets may optionally stage a draw action with
+`action = actions.get("ActionName")`. Buttons stage `value` or `true` when
+`value` is omitted. Value widgets keep their normal data edit and stage the
+edited value by default unless `value` is provided.
 
 ## Draw Navigation
 

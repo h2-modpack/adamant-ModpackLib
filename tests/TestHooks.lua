@@ -68,8 +68,16 @@ local function createPathMock(target)
 end
 
 local function createSession()
-    return {
+    local session
+    session = {
         view = {},
+        get = function(alias)
+            return {
+                read = function()
+                    return session.read(alias)
+                end,
+            }
+        end,
         read = function() end,
         write = function() end,
         reset = function() end,
@@ -83,17 +91,28 @@ local function createSession()
             return {}
         end,
     }
+    return session
 end
 
 local function createStore(enabled)
-    return {
+    local store
+    store = {
+        get = function(alias)
+            return {
+                read = function()
+                    return store.read(alias)
+                end,
+            }
+        end,
         read = function(key)
             if key == "Enabled" then
                 return enabled == true
             end
             return false
         end,
+        getAliasSchema = function() end,
     }
+    return store
 end
 
 function TestHooks:setUp()

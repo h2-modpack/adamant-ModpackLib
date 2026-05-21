@@ -14,7 +14,7 @@ local function createValueSession(value)
     }
 end
 
-local function createMapSession(values)
+local function createReadOnlySession(values)
     return {
         read = function(alias)
             return values[alias]
@@ -132,7 +132,7 @@ local function createWidgetHarness(opts)
         moduleState = base.moduleState,
 
         createValueSession = createValueSession,
-        createMapSession = createMapSession,
+        createReadOnlySession = createReadOnlySession,
         makeDropdownImgui = makeDropdownImgui,
         makeStepperImgui = makeStepperImgui,
     }

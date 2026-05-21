@@ -1,7 +1,7 @@
-# Migrating Draw Callbacks To Draw Context
+# Migrating Draw Callbacks To Draw/Data/Actions/Services
 
-This note covers the planned draw-callback API change from three live draw
-arguments to one render-scoped context object.
+This note covers the draw-callback API migration from earlier live draw
+surfaces to four render-scoped draw-phase objects.
 
 ## What Changed
 
@@ -15,13 +15,24 @@ function ui.drawQuickContent(imgui, session, host)
 end
 ```
 
-New draw callbacks receive one render-scoped context:
+Intermediate draw callbacks received one render-scoped context:
 
 ```lua
 function ui.drawTab(draw)
 end
 
 function ui.drawQuickContent(draw)
+end
+```
+
+The current target callback shape separates rendering, staged data, transient
+actions, and draw-safe services:
+
+```lua
+function ui.drawTab(draw, data, actions, services)
+end
+
+function ui.drawQuickContent(draw, data, actions, services)
 end
 ```
 
@@ -48,17 +59,15 @@ Lib creates the context at the host draw boundary for each render call.
 ```lua
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
----@field session AdamantModpackLib.AuthorSession
----@field services AdamantModpackLib.DrawServices
 ---@field widgets AdamantModpackLib.BoundWidgets
 ---@field nav AdamantModpackLib.BoundNav
 ```
 
 `draw.widgets` is the bound widget surface. Widget calls no longer repeat
-`imgui` and `session`:
+`imgui` and the staged data surface:
 
 ```lua
-function ui.drawTab(draw)
+function ui.drawTab(draw, data, actions, services)
     draw.widgets.dropdown("Mode", {
         label = "Mode",
         values = { "Default", "Custom" },
@@ -73,7 +82,7 @@ end
 ```
 
 `draw.nav` is the bound navigation surface. Navigation calls no longer repeat
-`imgui` or `session`:
+`imgui` or the staged data surface:
 
 ```lua
 activeKey = draw.nav.verticalTabs({
@@ -105,8 +114,8 @@ subPanel.draw(draw)
 draw.widgets.checkbox("FeatureEnabled", opts)
 ```
 
-This intentionally differs from a `createDraw(...)` factory. `imgui`,
-`session`, and `host` are live render/session surfaces, not static module
+This intentionally differs from a `createDraw(...)` factory. `imgui`, staged
+data, actions, and services are live draw-phase surfaces, not static module
 dependencies. They should enter the module at draw time, not be captured during
 module construction.
 
@@ -177,19 +186,18 @@ draw.widgets.packedCheckboxList("GodPool", opts)
 ```
 
 The string target is shorthand for a root storage field on the draw context's
-author session. The full root form is available when a helper wants to pass a
-resolved target around:
+staged data surface. The full root form is available when a helper wants to
+pass a resolved target around:
 
 ```lua
-local mode = draw.field("Mode")
+local mode = data.get("Mode")
 draw.widgets.dropdown(mode, opts)
 ```
 
 Table-backed widgets use a `StorageField` produced by the table API:
 
 ```lua
-local row = draw.session.table("ConfigurableBanPools"):rowHandle(index)
-local bans = row:field("BanPool")
+local bans = data.get("ConfigurableBanPools"):get(index, "BanPool")
 
 draw.widgets.packedCheckboxList(bans, opts)
 draw.widgets.packedDropdown(bans, opts)
@@ -200,11 +208,16 @@ local selected = draw.widgets.getPackedChoiceAlias(bans, opts)
 not a scoped alias string, and not a row handle pretending to be a session.
 Storage and table APIs are responsible for traversal and validation; widgets
 are leaf renderers that read schema/value data from the final field target.
+Fields expose `field:alias()` for storage-schema identity and
+`field:controlId()` for ImGui/control identity. Root control ids equal their
+alias; table-cell control ids are cached by the table owner and include the
+table alias, positional row index, and cell alias.
 
 Bound widgets accept only these target forms:
 
-- `string`: root field alias, resolved through `draw.field(alias)`.
-- `StorageField`: explicit resolved storage field.
+- `string`: root field alias, resolved through the draw data surface.
+- `StorageField`: explicit resolved storage field, usually from
+  `data.get(alias)` or `data.get(tableAlias):get(rowIndex, cellAlias)`.
 
 They do not accept arbitrary table-shaped targets, parse scoped path strings,
 or expose a public `draw.widgets.forSession(...)` rebinding API. Future path
@@ -213,8 +226,8 @@ see it.
 
 Implementation audit checklist:
 
-- Add `draw.field(alias)` for explicit root storage fields.
-- Add `rowHandle:field(alias)` for table row storage fields.
+- Add `data.get(alias)` for explicit root storage fields.
+- Add `tableHandle:get(rowIndex, alias)` for table row storage fields.
 - Route bound widget targets through one `StorageField` normalization path.
 - Remove `draw.widgets.forSession(...)` from the public bound widget surface.
 - Replace loose `(handle, alias)` widget call sites with named domain helpers
@@ -238,14 +251,14 @@ end
 After:
 
 ```lua
-function ui.drawTab(draw)
+function ui.drawTab(draw, data, actions, services)
     draw.widgets.checkbox("FeatureEnabled", {
         label = "Enable Feature",
     })
 end
 ```
 
-2. Pass one context object to inner UI files.
+2. Pass the draw-phase objects to inner UI files.
 
 Before:
 
@@ -256,7 +269,7 @@ components.draw(imgui, session, host)
 After:
 
 ```lua
-components.draw(draw)
+components.draw(draw, data, actions, services)
 ```
 
 3. Keep static module dependencies in normal module binding.
@@ -283,13 +296,13 @@ hot reloads, or module activation boundaries.
 - Keep `drawTab = ui.drawTab` and `drawQuickContent = ui.drawQuickContent` in
   module creation.
 - Do not introduce `createDraw(...)` for normal module authoring.
-- Use `draw.widgets.*` for Lib widgets that bind to `imgui` and `session`.
+- Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `data`.
 - Use `draw.nav.*` for Lib navigation helpers that bind to `imgui` and
-  `session`.
+  staged `data`.
 - Use `draw.imgui` for raw ImGui layout calls.
-- Use `draw.session` only when direct staged-state access is clearer than a
-  widget helper.
-- Use `draw.services` for draw-safe module services such as logging, enabled
+- Use `data` for direct staged-state access.
+- Use `actions` for transient draw intent.
+- Use `services` for draw-safe module services such as logging, enabled
   checks, or integration queries. `draw.host` is no longer available.
 - Keep static module data, catalogs, and action services in `ui.bind(...)`.
 - Framework `drawPackQuickContent(ctx)` still uses its own coordinator/framework

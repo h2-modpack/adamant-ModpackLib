@@ -124,8 +124,7 @@ They are not logging and they are not a replacement for ordinary data writes.
 ```lua
 local reset = actions.get("Reset")
 
-draw.widgets.button({
-    label = "Reset",
+draw.widgets.button("Reset", {
     action = reset,
 })
 ```
@@ -183,6 +182,7 @@ enabled:read()
 enabled:write(true)
 enabled:reset()
 enabled:schema()
+enabled:controlId()
 ```
 
 Row-list storage returns a row-list object:
@@ -200,14 +200,16 @@ bans:write(false)
 The row-list object owns table-wide operations:
 
 - `count()`
-- `row(index)`
-- `rows()`
+- `read(index, cellAlias)`
+- `write(index, cellAlias, value)`
+- `reset(index, cellAlias)`
 - `get(index, cellAlias)`
 - `append(rowValues)`
 - `insert(index, rowValues)`
 - `remove(index)`
-- `resetRow(index)`
 - `clear()`
+- `snapshot(index)`
+- `snapshots()`
 
 Runtime `store` may expose only the subset that is valid for committed data and
 runtime-read policy. Draw `data` exposes the editable staged subset.
@@ -216,6 +218,11 @@ Table cells are path refs, not root aliases. Cell aliases stay scoped to the
 row schema; they do not become globally unique root aliases. If stable row
 identity becomes necessary later, add an explicit row-id concept instead of
 overloading positional row indexes.
+
+Table owners cache row-cell control ids and refresh those caches after
+structural row edits such as append, insert, remove, and clear. Root refs use
+the root alias; row-cell refs include the table alias, positional row index,
+and cell alias. Widgets read `field:controlId()` when building ImGui ids.
 
 ## Widgets
 
@@ -232,8 +239,7 @@ draw.widgets.dropdown(data.get("Mode"), {
     action = actions.get("ModeChanged"),
 })
 
-draw.widgets.button({
-    label = "Reset",
+draw.widgets.button("Reset", {
     action = actions.get("Reset"),
 })
 ```

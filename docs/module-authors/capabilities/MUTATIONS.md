@@ -10,7 +10,7 @@ Declare `host.mutation.patch(function(plan, host, store) ... end)` before activa
 
 ```lua
 local function buildPatchPlan(plan, host, store)
-    if store.read("FeatureEnabled") then
+    if store.get("FeatureEnabled"):read() then
         plan:set(SomeGameTable, "Enabled", true)
         plan:appendUnique(SomeGameTable, "Pool", "NewEntry")
     end
