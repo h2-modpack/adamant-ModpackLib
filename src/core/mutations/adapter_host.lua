@@ -23,12 +23,12 @@ end
 
 function hostAdapter.applyForHost(host)
     local state = getHostState(host, "mutation.applyForHost")
-    return lifecycle.apply(host.getHostId(), state.mutationBundle, state.authorHost, state.store)
+    return lifecycle.apply(host.getHostId(), state.mutationBundle, state.authorHost, state.authorStore)
 end
 
 function hostAdapter.syncForHost(host)
     local state = getHostState(host, "mutation.syncForHost")
-    return lifecycle.sync(host.getHostId(), state.definition, state.mutationBundle, state.authorHost, state.store)
+    return lifecycle.sync(host.getHostId(), state.definition, state.mutationBundle, state.authorHost, state.authorStore)
 end
 
 function hostAdapter.revertForHost(host)

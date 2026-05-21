@@ -137,10 +137,6 @@ function widgetHelpers.MakeSelectableId(label, uniqueId)
     return tostring(label or "") .. "##" .. tostring(uniqueId or "")
 end
 
-function widgetHelpers.ResolveStorageField(owner, target, methodName)
-    return storageService.field.resolve(owner, target, methodName)
-end
-
 function widgetHelpers.GetFieldOwner(field)
     return field:owner()
 end

@@ -20,8 +20,9 @@ behind that facade.
 This note remains useful for the host-owned capability direction. Its older
 host-shaped draw examples are superseded by
 [`DRAW_STORE_ACTION_DESIGN.md`](DRAW_STORE_ACTION_DESIGN.md): live module UI
-uses `drawTab(draw)`, `draw.session`, `draw.actions`, `draw.services`,
-`draw.widgets`, and `draw.nav`; it does not receive the author host.
+uses `drawTab(draw, data, actions, services)`, where `draw` owns rendering
+helpers and the other draw-phase objects are explicit callback arguments. It
+does not receive the author host.
 
 ## Current Pressure
 
@@ -336,10 +337,10 @@ Potential future author surfaces:
   runtime/event/mutation callbacks.
 
 Current implementation deliberately stops short of this phase-gated state
-facade. Draw still receives `draw.session`, mutation callbacks still receive
-`store` explicitly, and hook/integration/overlay callbacks may close over the
-raw store returned by module creation. Revisit `host.store` together with the
-draw/session API decision.
+facade. Draw receives explicit `draw`, `data`, `actions`, and `services`
+objects; mutation callbacks still receive `store` explicitly, and
+hook/integration/overlay callbacks may close over the raw store returned by
+module creation. Revisit `host.store` together with the draw/data API decision.
 
 Typical use:
 

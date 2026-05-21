@@ -19,11 +19,27 @@ local function writePersisted(store, alias, value)
     return state.write(alias, value)
 end
 
+---@param store ManagedStore
+---@return AuthorStore
+local function createAuthorStore(store)
+    return {
+        get = store.get,
+        read = function(alias, ...)
+            local ref = store.get(alias)
+            if ref == nil then
+                return nil
+            end
+            return ref:read(...)
+        end,
+    }
+end
+
 local function create(storageConfig, storage)
     local store = {}
 
     local aliasNodes = storageInternal.getAliases(storage)
     local tableHandles = {}
+    local fieldHandles = {}
 
     local function readRaw(alias)
         return storageConfig.readValue(alias)
@@ -135,6 +151,17 @@ local function create(storageConfig, storage)
         return handle
     end
 
+    local function getFieldHandleForNode(alias, node)
+        local cached = fieldHandles[alias]
+        if cached then
+            return cached
+        end
+
+        local field = storageInternal.field.createKnown(store, alias, node, "store.get")
+        fieldHandles[alias] = field
+        return field
+    end
+
     function store.table(alias)
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
@@ -169,7 +196,7 @@ local function create(storageConfig, storage)
         if node.type == "table" and not node._isBitAlias then
             return getTableHandleForNode(alias, node)
         end
-        return storageInternal.field.createKnown(store, alias, node, "store.get")
+        return getFieldHandleForNode(alias, node)
     end
 
     local function writeStoreValue(alias, value)
@@ -185,5 +212,6 @@ end
 
 return {
     create = create,
+    createAuthorStore = createAuthorStore,
     writePersisted = writePersisted,
 }

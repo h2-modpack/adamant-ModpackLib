@@ -76,6 +76,10 @@ local sessionModule = import('core/module_state/session.lua', nil, {
 ---@field table fun(alias: string): StorageTableReadOnly|nil
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 
+---@class AuthorStore
+---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
+---@field read fun(alias: string, ...): any
+
 ---@class Session
 ---@field view table<string, any>
 ---@field get fun(alias: string): StorageField|StorageTableSession|nil
@@ -134,6 +138,11 @@ end
 -- Internal API: writes storage through a Lib-created managed store.
 function moduleState.writePersisted(store, alias, value)
     return managedStore.writePersisted(store, alias, value)
+end
+
+-- Internal API: narrows a full managed store to the author-facing runtime surface.
+function moduleState.createAuthorStore(store)
+    return managedStore.createAuthorStore(store)
 end
 
 -- Internal API: narrows a full staged session to the author-facing UI surface.

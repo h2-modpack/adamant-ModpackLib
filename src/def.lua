@@ -25,7 +25,6 @@ local lib = {}
 ---@field default? any Default value for this storage node.
 ---@field persist? boolean Whether the alias persists through config; defaults true.
 ---@field hash? boolean Whether the alias participates in hash/profile surfaces; defaults true.
----@field visibleIf? string|AdamantModpackLib.VisibilityCondition Visibility condition used by UI helpers.
 ---@field min? number Integer lower bound.
 ---@field max? number Integer upper bound.
 ---@field width? number Packed/hash bit width for integer-like nodes.
@@ -77,7 +76,7 @@ local lib = {}
 
 ---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableReadOnly
 ---@alias AdamantModpackLib.DrawDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableSession
----@alias AdamantModpackLib.WidgetTarget string|AdamantModpackLib.StorageField
+---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
 ---@class AdamantModpackLib.ManagedStore
@@ -85,6 +84,10 @@ local lib = {}
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
+
+---@class AdamantModpackLib.AuthorStore
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
+---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
 ---@class AdamantModpackLib.Session
 ---@field view table<string, any>
@@ -104,14 +107,9 @@ local lib = {}
 ---@field auditMismatches fun(): string[]
 
 ---@class AdamantModpackLib.AuthorSession
----@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawDataRef? Return a storage object for a staged alias.
----@field read fun(alias: string): any
----@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
----@field field fun(alias: string): AdamantModpackLib.StorageField
----@field write fun(alias: string, value: any)
----@field reset fun(alias: string)
----@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
+---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
+---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
 ---@class AdamantModpackLib.DrawActions
@@ -221,7 +219,7 @@ local lib = {}
 ---@field patch fun(callback: fun(
 ---    plan: AdamantModpackLib.MutationPlan,
 ---    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.ManagedStore
+---    store: AdamantModpackLib.AuthorStore
 ---))
 
 ---@class AdamantModpackLib.AuthorCache
@@ -254,7 +252,7 @@ local lib = {}
 ---@field patchMutation? fun(
 ---    plan: AdamantModpackLib.MutationPlan,
 ---    host: AdamantModpackLib.AuthorHost?,
----    store: AdamantModpackLib.ManagedStore
+---    store: AdamantModpackLib.AuthorStore
 ---)
 
 ---@class AdamantModpackLib.ModuleCreateOpts
@@ -270,7 +268,7 @@ local lib = {}
 --- Post-commit observer for rebuilding derived runtime/UI structures.
 ---@field onSettingsCommitted? fun(
 ---    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.ManagedStore,
+---    store: AdamantModpackLib.AuthorStore,
 ---    commit: AdamantModpackLib.CommitContext
 ---)
 ---@field drawTab fun(
@@ -290,11 +288,6 @@ local lib = {}
 ---@field imgui table
 ---@field widgets AdamantModpackLib.BoundWidgetsApi
 ---@field nav AdamantModpackLib.BoundNavApi
----@field data AdamantModpackLib.AuthorSession Legacy migration alias for the draw `data` argument.
----@field session AdamantModpackLib.AuthorSession Legacy migration alias for the draw `data` argument.
----@field actions AdamantModpackLib.DrawActions Legacy migration alias for the draw `actions` argument.
----@field services AdamantModpackLib.DrawServices Legacy migration alias for the draw `services` argument.
----@field field fun(alias: string): AdamantModpackLib.StorageField Legacy migration helper; prefer `data.get(alias)`.
 
 ---@class AdamantModpackLib.ModuleHost
 ---@field getHostId fun(): string
@@ -350,11 +343,6 @@ local lib = {}
 ---@field appendUnique AdamantModpackLib.MutationPlanFn
 ---@field removeElement AdamantModpackLib.MutationPlanFn
 ---@field setElement AdamantModpackLib.MutationPlanFn
-
----@class AdamantModpackLib.VisibilityCondition
----@field alias string
----@field value? any
----@field anyOf? any[]
 
 ---@class AdamantModpackLib.NavTab
 ---@field key string|number
@@ -572,7 +560,6 @@ local lib = {}
 
 ---@class AdamantModpackLib.BoundNavApi
 ---@field verticalTabs fun(opts?: AdamantModpackLib.VerticalTabsOpts): string|number?
----@field isVisible fun(condition?: string|AdamantModpackLib.VisibilityCondition): boolean
 
 ---@class AdamantModpackLib.ModuleState
 ---@field store AdamantModpackLib.ManagedStore
@@ -580,7 +567,7 @@ local lib = {}
 
 ---@param opts AdamantModpackLib.ModuleCreateOpts
 ---@return AdamantModpackLib.AuthorHost? host
----@return AdamantModpackLib.ManagedStore? store
+---@return AdamantModpackLib.AuthorStore? store
 ---@return string? err
 function lib.createModule(opts)
 end

@@ -3,9 +3,9 @@
 This document covers `draw.widgets.*` and `draw.nav.*` from a module draw-code point of view.
 
 Draw callbacks receive `draw, data, actions, services`. Widget authoring
-normally uses `draw.widgets`, which binds the current `imgui` and root staged
-data scope for the render call. Navigation helpers use `draw.nav`, which binds
-the current `imgui` and staged data for the same draw call.
+normally uses `draw.widgets`, which binds the current `imgui` for the render
+call. Navigation helpers use `draw.nav`, which binds
+the current `imgui` for the same draw call.
 
 For storage schema, table handles, packed roots, and session/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
 
@@ -33,14 +33,14 @@ These are direct immediate-mode helpers. Call them inside module draw functions 
 Typical call shape:
 
 ```lua
-draw.widgets.dropdown("Mode", {
+draw.widgets.dropdown(data.get("Mode"), {
     label = "Mode",
     values = { "Vanilla", "Chaos" },
     controlWidth = 180,
 })
 ```
 
-Value-bound widgets return `true` when they changed staged `session` and
+Value-bound widgets return `true` when they changed staged `data` and
 `false` otherwise. Button-style widgets return whether they were clicked or
 confirmed. Display-only helpers such as `separator` and `text` draw and return
 nothing.
@@ -59,20 +59,10 @@ Most widgets target one storage field:
 - `packedCheckboxList`
 - `stepper`
 
-String targets are shorthand for root fields on `data`:
+Use `data.get(alias)` to pass root storage fields to widgets:
 
 ```lua
-draw.widgets.checkbox("Enabled", {
-    label = "Enabled",
-})
-```
-
-The explicit root-field form is available when a helper needs to pass a target
-around or make the data dependency more visible:
-
-```lua
-local enabled = data.get("Enabled")
-draw.widgets.checkbox(enabled, {
+draw.widgets.checkbox(data.get("Enabled"), {
     label = "Enabled",
 })
 ```
@@ -103,9 +93,8 @@ local rows = data.get("Rows")
 draw.widgets.packedDropdown(rows:get(1, "PackedChoices"), opts)
 ```
 
-Author draw code can read staged values through `data.get(alias):read()`
-or `data.view.SomeAlias` for simple root aliases. Widget internals use
-storage fields to read and write values.
+Author draw code can read staged values through `data.get(alias):read()`.
+Widget internals use storage fields to read and write values.
 
 ### Optional widget actions
 
@@ -297,7 +286,7 @@ Use when:
 Example:
 
 ```lua
-draw.widgets.packedDropdown("PackedForcedBoon", {
+draw.widgets.packedDropdown(data.get("PackedForcedBoon"), {
     label = "Force 1",
     noneLabel = "None",
     selectionMode = "singleEnabled",
@@ -449,7 +438,7 @@ Use when:
 Example:
 
 ```lua
-draw.widgets.packedCheckboxList("PackedBannedAphrodite", {
+draw.widgets.packedCheckboxList(data.get("PackedBannedAphrodite"), {
     filterText = data.get("BanFilterText"):read(),
     optionsPerLine = 2,
     valueColors = {
@@ -477,7 +466,6 @@ Navigation helpers live under the bound draw surface at `draw.nav`.
 
 Surface:
 - `draw.nav.verticalTabs(opts)`
-- `draw.nav.isVisible(condition)`
 
 `verticalTabs(...)` renders a simple immediate-mode vertical tab rail.
 
@@ -493,17 +481,6 @@ activeKey = draw.nav.verticalTabs({
         { key = "advanced", label = "Advanced", color = { 1, 0.8, 0, 1 } },
     },
 })
-```
-
-`isVisible(...)` evaluates a storage-backed visibility condition against the
-draw session:
-
-```lua
-if draw.nav.isVisible({ alias = "ShowAdvanced", value = true }) then
-    draw.widgets.checkbox("AdvancedFlag", {
-        label = "Advanced Flag",
-    })
-end
 ```
 
 ## Scope

@@ -23,12 +23,15 @@ Use each state surface for one job:
 
 Draw code should stage changes through `data`. Gameplay, hooks, overlays,
 integrations, and mutations should read committed values through `store`.
-The legacy `draw.session` alias remains available during migration, but new
-code should use the explicit `data` callback argument.
+The runtime store exposes `store.get(alias)` for read-only storage objects and
+`store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
+Draw `data` exposes the same convenience shape for custom raw ImGui code:
+`data.read(alias, ...)` and `data.write(alias, ...)` forward through the
+staged object returned by `data.get(alias)`.
 
 ```lua
 function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 end
@@ -102,7 +105,7 @@ Use `type = "table"` for compact ordered rows with one shared row schema:
 Table rules:
 
 - The table root owns `persist` and `hash`.
-- Row aliases are scoped to one row and do not leak into `session.read(...)`.
+- Row aliases are scoped to one row and do not leak into root data reads.
 - Rows are compact ordered arrays with no row ids or holes.
 - `defaultRows` creates the default row count.
 
@@ -117,6 +120,16 @@ local limit = tiers:read(1, "Limit")
 local limitField = tiers:get(1, "Limit")
 ```
 
+For raw ImGui controls that do not use Lib widgets, the convenience path is:
+
+```lua
+local limit = data.read("Tiers", rowIndex, "Limit")
+local nextLimit, changed = draw.imgui.SliderInt("Limit", limit, 0, 10)
+if changed then
+    data.write("Tiers", rowIndex, "Limit", nextLimit)
+end
+```
+
 Storage fields expose both schema identity and draw/control identity:
 
 - `field:alias()` returns the storage schema alias, such as `"Limit"`.
@@ -124,7 +137,8 @@ Storage fields expose both schema identity and draw/control identity:
 
 Use `store.get(alias)` for read-only runtime access. For table roots,
 `get(...)` returns the read-only table handle. Table handles use colon method
-syntax.
+syntax. `store.read("Tiers", rowIndex, "Limit")` forwards to
+`store.get("Tiers"):read(rowIndex, "Limit")`.
 
 ## Packed Values
 

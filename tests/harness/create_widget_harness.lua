@@ -128,6 +128,7 @@ local function createWidgetHarness(opts)
         public = base.public,
         widgets = base.widgets,
         nav = base.nav,
+        storage = base.storage,
         moduleHost = base.moduleHost,
         moduleState = base.moduleState,
 
@@ -139,6 +140,10 @@ local function createWidgetHarness(opts)
 
     function h.createModuleState(config, definition)
         return createModuleState(base, config, definition)
+    end
+
+    function h.createField(owner, alias)
+        return base.storage.field.create(owner, alias, "TestWidgets")
     end
 
     function h.prepareDefinition(fields)

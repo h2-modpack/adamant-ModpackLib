@@ -99,7 +99,6 @@ local CommonNodeFields = {
     persist = true,
     tooltip = true,
     type = true,
-    visibleIf = true,
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"

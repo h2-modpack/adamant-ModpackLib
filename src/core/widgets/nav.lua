@@ -13,11 +13,6 @@ local nav = {}
 ---@field tabs NavTab[]|nil
 ---@field activeKey string|number|nil
 
----@class VisibilityCondition
----@field alias string
----@field value any
----@field anyOf any[]|nil
-
 local function NormalizeTabs(tabs)
     if type(tabs) ~= "table" then
         return {}
@@ -70,54 +65,12 @@ function nav.verticalTabs(imgui, opts)
     return activeKey
 end
 
----@param session Session|nil
----@param condition string|VisibilityCondition|nil
----@return boolean
-function nav.isVisible(session, condition)
-    if condition == nil then
-        return true
-    end
-    if type(condition) == "string" then
-        return session and session.read(condition) == true or false
-    end
-    if type(condition) ~= "table" then
-        return true
-    end
-
-    local alias = condition.alias
-    if type(alias) ~= "string" or alias == "" then
-        return false
-    end
-
-    local value = session and session.read(alias) or nil
-    if condition.value ~= nil then
-        return value == condition.value
-    end
-    if condition.anyOf ~= nil then
-        if type(condition.anyOf) ~= "table" then
-            return false
-        end
-        for _, candidate in ipairs(condition.anyOf) do
-            if value == candidate then
-                return true
-            end
-        end
-        return false
-    end
-
-    return value == true
-end
-
 ---@param imgui table
----@param session Session
 ---@return BoundNav
-function nav.bind(imgui, session)
+function nav.bind(imgui)
     return {
         verticalTabs = function(opts)
             return nav.verticalTabs(imgui, opts)
-        end,
-        isVisible = function(condition)
-            return nav.isVisible(session, condition)
         end,
     }
 end

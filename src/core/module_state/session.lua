@@ -8,13 +8,9 @@ local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
 ---@class AuthorSession
----@field view table<string, any>
 ---@field get fun(alias: string): StorageField|StorageTableSession|nil
----@field read fun(alias: string): any
----@field field fun(alias: string): StorageField
----@field write fun(alias: string, value: any)
----@field reset fun(alias: string)
----@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
+---@field read fun(alias: string, ...): any
+---@field write fun(alias: string, ...): boolean|nil
 ---@field resetToDefaults fun(opts: table|nil): boolean, number
 
 ---@param storageConfig StorageConfigAdapter
@@ -28,6 +24,7 @@ local function createSession(storageConfig, storage)
     local dirtyRoots = {}
     local configEntries = {}
     local tableHandles = {}
+    local fieldHandles = {}
 
     for _, root in ipairs(sessionRootNodes) do
         if root._persist then
@@ -236,6 +233,17 @@ local function createSession(storageConfig, storage)
     clearDirty()
 
     local session
+    local function getFieldHandleForNode(alias, node)
+        local cached = fieldHandles[alias]
+        if cached then
+            return cached
+        end
+
+        local field = storageInternal.field.createKnown(session, alias, node, "session.get")
+        fieldHandles[alias] = field
+        return field
+    end
+
     local function getDataObject(alias)
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
@@ -245,7 +253,7 @@ local function createSession(storageConfig, storage)
         if node.type == "table" and not node._isBitAlias then
             return getTableHandleForNode(alias, node)
         end
-        return storageInternal.field.createKnown(session, alias, node, "session.get")
+        return getFieldHandleForNode(alias, node)
     end
 
     session = {
@@ -325,14 +333,21 @@ end
 ---@return AuthorSession
 local function createAuthorSession(session, opts)
     return {
-        view = session.view,
         get = session.get,
-        read = session.read,
-        table = session.table,
-        field = session.field,
-        write = session.write,
-        reset = session.reset,
-        getAliasSchema = session.getAliasSchema,
+        read = function(alias, ...)
+            local ref = session.get(alias)
+            if ref == nil then
+                return nil
+            end
+            return ref:read(...)
+        end,
+        write = function(alias, ...)
+            local ref = session.get(alias)
+            if ref == nil then
+                return nil
+            end
+            return ref:write(...)
+        end,
         resetToDefaults = opts.resetToDefaults,
     }
 end

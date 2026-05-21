@@ -64,16 +64,16 @@ Lib creates the context at the host draw boundary for each render call.
 ```
 
 `draw.widgets` is the bound widget surface. Widget calls no longer repeat
-`imgui` and the staged data surface:
+`imgui`, while value widgets receive explicit storage refs from `data`:
 
 ```lua
 function ui.drawTab(draw, data, actions, services)
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Default", "Custom" },
     })
 
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
@@ -82,7 +82,7 @@ end
 ```
 
 `draw.nav` is the bound navigation surface. Navigation calls no longer repeat
-`imgui` or the staged data surface:
+`imgui`:
 
 ```lua
 activeKey = draw.nav.verticalTabs({
@@ -90,10 +90,6 @@ activeKey = draw.nav.verticalTabs({
     activeKey = activeKey,
     tabs = tabs,
 })
-
-if draw.nav.isVisible("ShowAdvanced") then
-    draw.widgets.checkbox("AdvancedFlag", opts)
-end
 ```
 
 ## Why
@@ -111,7 +107,7 @@ plumbing:
 
 ```lua
 subPanel.draw(draw)
-draw.widgets.checkbox("FeatureEnabled", opts)
+draw.widgets.checkbox(data.get("FeatureEnabled"), opts)
 ```
 
 This intentionally differs from a `createDraw(...)` factory. `imgui`, staged
@@ -177,21 +173,12 @@ cleaner:
 The draw-context widget surface uses storage fields, not session-like table
 handles.
 
-Normal root widgets should stay concise:
+Root widgets use refs from the draw `data` object:
 
 ```lua
-draw.widgets.checkbox("FeatureEnabled", opts)
-draw.widgets.dropdown("Mode", opts)
-draw.widgets.packedCheckboxList("GodPool", opts)
-```
-
-The string target is shorthand for a root storage field on the draw context's
-staged data surface. The full root form is available when a helper wants to
-pass a resolved target around:
-
-```lua
-local mode = data.get("Mode")
-draw.widgets.dropdown(mode, opts)
+draw.widgets.checkbox(data.get("FeatureEnabled"), opts)
+draw.widgets.dropdown(data.get("Mode"), opts)
+draw.widgets.packedCheckboxList(data.get("GodPool"), opts)
 ```
 
 Table-backed widgets use a `StorageField` produced by the table API:
@@ -215,24 +202,22 @@ table alias, positional row index, and cell alias.
 
 Bound widgets accept only these target forms:
 
-- `string`: root field alias, resolved through the draw data surface.
-- `StorageField`: explicit resolved storage field, usually from
+- `StorageField`: explicit resolved storage field from
   `data.get(alias)` or `data.get(tableAlias):get(rowIndex, cellAlias)`.
 
 They do not accept arbitrary table-shaped targets, parse scoped path strings,
-or expose a public `draw.widgets.forSession(...)` rebinding API. Future path
-support can live in storage APIs and resolve to `StorageField` before widgets
-see it.
+root alias strings, or expose a public rebinding API. Future path support can
+live in storage APIs and resolve to `StorageField` before widgets see it.
 
 Implementation audit checklist:
 
 - Add `data.get(alias)` for explicit root storage fields.
 - Add `tableHandle:get(rowIndex, alias)` for table row storage fields.
 - Route bound widget targets through one `StorageField` normalization path.
-- Remove `draw.widgets.forSession(...)` from the public bound widget surface.
+- Keep widget binding scoped to the current `imgui` only.
 - Replace loose `(handle, alias)` widget call sites with named domain helpers
   that return `StorageField` values.
-- Keep normal root widget calls using string aliases as the ergonomic shorthand.
+- Root widget calls should pass `data.get(alias)` refs.
 
 ## Migration Steps
 
@@ -252,7 +237,7 @@ After:
 
 ```lua
 function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 end
@@ -297,8 +282,7 @@ hot reloads, or module activation boundaries.
   module creation.
 - Do not introduce `createDraw(...)` for normal module authoring.
 - Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `data`.
-- Use `draw.nav.*` for Lib navigation helpers that bind to `imgui` and
-  staged `data`.
+- Use `draw.nav.*` for Lib navigation helpers that bind to `imgui`.
 - Use `draw.imgui` for raw ImGui layout calls.
 - Use `data` for direct staged-state access.
 - Use `actions` for transient draw intent.

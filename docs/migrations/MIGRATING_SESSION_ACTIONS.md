@@ -7,7 +7,7 @@ Use draw action refs for transient UI intent:
 
 ```lua
 -- Before
-draw.session.stageAction("ClearCache", { scope = "run" })
+session.stageAction("ClearCache", { scope = "run" })
 
 -- After
 actions.get("ClearCache"):stage({ scope = "run" })

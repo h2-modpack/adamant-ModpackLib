@@ -24,23 +24,28 @@ local nav = import 'core/widgets/nav.lua'
 ---@field text fun(text: any, opts: TextOpts|nil)
 ---@field button fun(label: any, opts: ButtonOpts|nil): boolean
 ---@field confirmButton fun(id: string|number, label: any, opts: ConfirmButtonOpts|nil): boolean
----@field inputText fun(target: string|StorageField, opts: InputTextOpts|nil): boolean
----@field dropdown fun(target: string|StorageField, opts: DropdownOpts|nil): boolean
----@field packedDropdown fun(target: string|StorageField, opts: PackedDropdownOpts|nil): boolean
----@field getPackedChoiceAlias fun(target: string|StorageField, opts: PackedDropdownOpts|PackedRadioOpts|nil): string|nil
----@field radio fun(target: string|StorageField, opts: RadioOpts|nil): boolean
----@field packedRadio fun(target: string|StorageField, opts: PackedRadioOpts|nil): boolean
----@field stepper fun(target: string|StorageField, opts: StepperOpts|nil): boolean
----@field steppedRange fun(minTarget: string|StorageField, maxTarget: string|StorageField, opts: SteppedRangeOpts|nil): boolean
----@field checkbox fun(target: string|StorageField, opts: CheckboxOpts|nil): boolean
----@field packedCheckboxList fun(target: string|StorageField, opts: PackedCheckboxListOpts|nil): boolean
+---@field inputText fun(target: StorageField, opts: InputTextOpts|nil): boolean
+---@field dropdown fun(target: StorageField, opts: DropdownOpts|nil): boolean
+---@field packedDropdown fun(target: StorageField, opts: PackedDropdownOpts|nil): boolean
+---@field getPackedChoiceAlias fun(target: StorageField, opts: PackedDropdownOpts|PackedRadioOpts|nil): string|nil
+---@field radio fun(target: StorageField, opts: RadioOpts|nil): boolean
+---@field packedRadio fun(target: StorageField, opts: PackedRadioOpts|nil): boolean
+---@field stepper fun(target: StorageField, opts: StepperOpts|nil): boolean
+---@field steppedRange fun(minTarget: StorageField, maxTarget: StorageField, opts: SteppedRangeOpts|nil): boolean
+---@field checkbox fun(target: StorageField, opts: CheckboxOpts|nil): boolean
+---@field packedCheckboxList fun(target: StorageField, opts: PackedCheckboxListOpts|nil): boolean
 
 ---@param imgui table
----@param session Session
 ---@return BoundWidgets
-function widgets.bind(imgui, session)
+function widgets.bind(imgui)
     local function resolveField(target, methodName)
-        return deps.storage.field.resolve(session, target, "draw.widgets." .. methodName)
+        if deps.storage.field.is(target) then
+            return target
+        end
+        deps.logging.violate("widgets.invalid_field_target",
+            "draw.widgets.%s: expected StorageField",
+            tostring(methodName)
+        )
     end
 
     local function callFieldWidget(methodName, target, opts)

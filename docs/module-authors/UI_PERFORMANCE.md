@@ -23,7 +23,7 @@ Any unnecessary allocation or repeated C-boundary call inside those paths shows 
 This document assumes:
 - raw `config` stays local to `main.lua`
 - `lib.createModule(...)` owns the definition and state construction boundary
-- draw code reads staged values from `data.view` or `data.get(...)`
+- draw code reads staged values through `data.get(...)`
 - runtime/gameplay code reads persisted values through `store.get(...)`
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
@@ -88,12 +88,14 @@ Do the same for:
 - `GetFrameHeight()`
 - `GetStyle().ItemSpacing.x` if you are already using it repeatedly in one function
 
-### 4. Default to `data.view` for simple reads
+### 4. Reuse `data.get(...)` refs for repeated reads
 
 Use:
-- `data.view.SomeAlias`
+- `local enabled = data.get("Enabled")`
+- `enabled:read()`
 
-Prefer this over raw mutable staging values unless you have a concrete reason not to.
+When a draw helper reads the same value multiple times, cache the field handle
+inside that draw function and read through it.
 
 ### 5. Let host/framework own commit timing
 
@@ -146,7 +148,7 @@ Do not rebuild the same large option table multiple times in the same frame.
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
 - splitting one draw flow into extra lifecycle phases without a real need
-- calling `store.get(...):read()` repeatedly inside draw code for values already present in `data.view`
+- calling `store.get(...):read()` from draw code instead of reading staged values through `data.get(...)`
 - doing config writes directly from draw code instead of staging through `data`
 - bypassing the host/framework flow for normal widget edits
 

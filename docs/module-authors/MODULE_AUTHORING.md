@@ -45,11 +45,11 @@ Typical coordinated module:
 
 ```lua
 local function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("EnabledFlag", {
+    draw.widgets.checkbox(data.get("EnabledFlag"), {
         label = "Enabled",
     })
 
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 180,
@@ -57,7 +57,7 @@ local function drawTab(draw, data, actions, services)
 end
 
 local function drawQuickContent(draw, data, actions, services)
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 140,
@@ -368,31 +368,31 @@ local function init()
 end
 
 function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
         tooltip = "Turns the feature logic on for this module.",
     })
 
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 180,
     })
 
-    draw.widgets.inputText("FilterText", {
+    draw.widgets.inputText(data.get("FilterText"), {
         label = "Filter",
         controlWidth = 180,
     })
 
     draw.imgui.Separator()
     draw.widgets.text("Packed Flags")
-    draw.widgets.packedCheckboxList("PackedFlags", {
+    draw.widgets.packedCheckboxList(data.get("PackedFlags"), {
         optionsPerLine = 2,
     })
 end
 
 function drawQuickContent(draw, data, actions, services)
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 140,
@@ -427,5 +427,5 @@ Notes on the example:
 - `host.fallbackUi.attachGuiOnce(...)` keeps ROM GUI registration in module context without stacking across reloads
 - `drawTab` uses raw ImGui for structure and `draw.widgets.*` / `draw.nav.*` for Lib draw helpers
 - `drawQuickContent` is optional
-- packed widgets use string root aliases or `StorageField` values produced by
-  the draw `data` argument
+- packed widgets use `StorageField` values produced by the draw `data`
+  argument

@@ -11,7 +11,6 @@ local coordinator = deps.coordinator
 local definition = deps.definition
 local hostState = deps.hostState
 local moduleRuntimeRegistry = deps.moduleRuntimeRegistry
-local storage = deps.storage
 local widgets = deps.widgets
 local nav = deps.nav
 local authorHostService = deps.authorHost
@@ -57,7 +56,7 @@ end
 ---@field store ManagedStore
 ---@field session Session
 ---@field cacheStore PersistentCacheStore|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: AuthorStore, commit: table)|nil
 ---@field drawTab fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)
 ---@field drawQuickContent fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)|nil
 
@@ -65,11 +64,6 @@ end
 ---@field imgui table
 ---@field widgets BoundWidgets
 ---@field nav BoundNav
----@field data AuthorSession Legacy migration alias for the draw `data` argument.
----@field session AuthorSession Legacy migration alias for the draw `data` argument.
----@field actions DrawActions Legacy migration alias for the draw `actions` argument.
----@field services DrawServices Legacy migration alias for the draw `services` argument.
----@field field fun(alias: string): StorageField Legacy migration helper; prefer `data.get(alias)`.
 
 ---@class DrawActions
 ---@field get fun(actionKey: string): DrawActionRef
@@ -170,15 +164,8 @@ local function CreateDraw(imgui, actions, authorSession, authorHost)
     local drawServices = CreateDrawServices(authorHost)
     return {
         imgui = imgui,
-        data = authorSession,
-        session = authorSession,
-        actions = drawActions,
-        services = drawServices,
-        field = function(alias)
-            return storage.field.create(authorSession, alias, "draw.field")
-        end,
-        widgets = widgets.bind(imgui, authorSession),
-        nav = nav.bind(imgui, authorSession),
+        widgets = widgets.bind(imgui),
+        nav = nav.bind(imgui),
     }, authorSession, drawActions, drawServices
 end
 
@@ -196,6 +183,7 @@ end
 ---@param opts ModuleHostOpts
 ---@return ModuleHost host Full module host.
 ---@return AuthorHost authorHost Module author host view.
+---@return AuthorStore authorStore Module author store view.
 function moduleHost.create(opts)
     if type(opts) ~= "table" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: opts must be a table")
@@ -225,6 +213,7 @@ function moduleHost.create(opts)
     local actions = moduleState.createActionState()
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
+    local authorStore = moduleState.createAuthorStore(store)
 
     if type(drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
@@ -232,11 +221,11 @@ function moduleHost.create(opts)
     ---@type ModuleHost
     local host = {}
 
-    local function notifySettingsCommitted(activeHost, activeStore, commit)
+    local function notifySettingsCommitted(activeHost, _, commit)
         local observerOk = true
         local observerResult = nil
         if settingsObserver ~= nil then
-            observerOk, observerResult = pcall(settingsObserver, activeHost, activeStore, commit)
+            observerOk, observerResult = pcall(settingsObserver, activeHost, authorStore, commit)
         end
 
         local overlayOk, overlayErr = pcall(overlays.dispatchCommit, host, commit)
@@ -415,6 +404,7 @@ function moduleHost.create(opts)
         store = store,
         actions = actions,
         cacheStore = cacheStore,
+        authorStore = authorStore,
         authorSession = authorSession,
         authorHost = authorHost,
         effectReceipts = {},
@@ -422,7 +412,7 @@ function moduleHost.create(opts)
         activated = false,
     })
 
-    return host, authorHost
+    return host, authorHost, authorStore
 end
 
 local function callReceipt(receipt, methodName)
@@ -491,7 +481,7 @@ function moduleHost.activateOrThrow(host)
     end
 
     local pluginGuid = host.getHostId()
-    local store = state.store
+    local authorStore = state.authorStore
     local authorHost = state.authorHost
     local def = state.definition
 
@@ -528,7 +518,7 @@ function moduleHost.activateOrThrow(host)
     local ok, err = pcall(function()
         addReceipt("integrations", integrations.installForHost(host), true)
         addReceipt("hooks", hooks.installForHost(host), true)
-        addReceipt("overlays", overlays.installForHost(host, authorHost, store), true)
+        addReceipt("overlays", overlays.installForHost(host, authorHost, authorStore), true)
 
         if not hasPendingCoordinatorRebuild then
             addReceipt("mutation", mutation.syncForHost(host), false)

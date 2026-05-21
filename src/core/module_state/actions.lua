@@ -39,19 +39,19 @@ local function createDrawActionRef(actionState, actionKey)
     local ref
     ref = markActionRef({
         stage = function(self, value)
-            requireRefSelf("draw.actions.get(...):stage", self, ref)
+            requireRefSelf("actions.get(...):stage", self, ref)
             actionState.stage(actionKey, value)
         end,
         read = function(self)
-            requireRefSelf("draw.actions.get(...):read", self, ref)
+            requireRefSelf("actions.get(...):read", self, ref)
             return actionState.read(actionKey)
         end,
         clear = function(self)
-            requireRefSelf("draw.actions.get(...):clear", self, ref)
+            requireRefSelf("actions.get(...):clear", self, ref)
             actionState.clear(actionKey)
         end,
         has = function(self)
-            requireRefSelf("draw.actions.get(...):has", self, ref)
+            requireRefSelf("actions.get(...):has", self, ref)
             return actionState.has(actionKey)
         end,
     }, DRAW_ACTION_REF)
@@ -79,7 +79,7 @@ local function createState()
     local state = {}
 
     function state.stage(actionKey, value)
-        validateActionKey("draw.actions.stage", actionKey)
+        validateActionKey("actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
             return
@@ -88,12 +88,12 @@ local function createState()
     end
 
     function state.read(actionKey)
-        validateActionKey("draw.actions.read", actionKey)
+        validateActionKey("actions.read", actionKey)
         return CloneValue(slots[actionKey])
     end
 
     function state.clear(actionKey)
-        validateActionKey("draw.actions.clear", actionKey)
+        validateActionKey("actions.clear", actionKey)
         slots[actionKey] = nil
     end
 

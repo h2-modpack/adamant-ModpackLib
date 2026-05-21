@@ -1,5 +1,37 @@
 # Draw, Store, Actions, And Services Redesign
 
+## Current State
+
+This document is now historical migration context, not the exact live API
+contract. Keep it until the draw/store/actions migration is fully finished, then
+retire it in favor of normal author and contributor docs.
+
+The live implementation has completed the major shape changes:
+
+- draw callbacks use `drawTab(draw, data, actions, services)` and
+  `drawQuickContent(draw, data, actions, services)`;
+- `draw` owns `imgui`, `widgets`, and `nav`;
+- `data` owns staged UI data access through `get`, `read`, `write`, and
+  `resetToDefaults`;
+- `actions` is a first-class staged intent surface;
+- `services` is the narrow draw-safe service surface;
+- author-facing `store` is narrowed to `get` and `read`;
+- widgets take `StorageField` refs, not raw aliases, sessions, stores, or table
+  handles;
+- storage refs are cached for hot draw paths.
+
+Two intentional refinements supersede the target text below:
+
+- `store.read(alias, ...)` is accepted as shorthand for
+  `store.get(alias):read(...)`;
+- `data.read(alias, ...)` and `data.write(alias, ...)` are accepted as shorthand
+  for `data.get(alias):read(...)` and `data.get(alias):write(...)`, mainly for
+  custom raw ImGui code that does not use Lib widgets.
+
+The main remaining design item is phase gating. `draw`, `data`, `actions`,
+`services`, author `store`, and raw `draw.imgui` are shaped for future gating,
+but their methods do not yet enforce draw/runtime phase lifetimes.
+
 ## Purpose
 
 This note records the target shape for the next storage and draw API cleanup.
@@ -312,7 +344,7 @@ Use this checklist while migrating:
 
 - No `draw.host` in module UI.
 - The draw context does not expose the author host.
-- No `draw.session` in module UI.
+- No staged data aliases on the `draw` object in module UI.
 - Draw-time logging uses `services.log` or `services.logIf`.
 - Draw-time integration queries use `services.invokeIntegration`.
 - `services` does not expose host registration, lifecycle, or mutation APIs.

@@ -10,7 +10,7 @@ All notable changes to this project will be documented in this file.
 - Removed old `configKey`, `lifetime`, `runtime`, and `stage` storage declaration compatibility in favor of explicit `persist` and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
-- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw)` and `drawQuickContent(draw)`, where `draw` contains `imgui`, author `session`, draw-safe `services`, and bound `widgets` / `nav`.
+- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw, data, actions, services)` and `drawQuickContent(draw, data, actions, services)`, where `draw` contains `imgui` plus bound `widgets` / `nav`.
 - Runtime hooks are now declared through `host.hooks.*` before activation; the old ownerless `lib.hooks.*` registration surface and `createModule({ registerHooks = ... })` path have been removed.
 - Integration providers are now declared with `host.integrations.register(...)` before activation, and consumers call through `host.integrations.invoke(...)`; the old global integration surface has been removed.
 - Retained module overlays are now declared with `host.overlays.*` before activation; the old `createModule({ registerOverlays = ... })` path has been removed.
@@ -22,14 +22,16 @@ All notable changes to this project will be documented in this file.
 - `lib.createFrameworkRuntime(...)` now requires the Framework plugin guid, while Framework overlays take the pack id at definition time to scope retained owners.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
-- The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetToDefaults(...)` or draw-scoped `draw.session.resetToDefaults(...)`.
+- The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetToDefaults(...)` or draw-scoped `data.resetToDefaults(...)`.
 - Cache is now exposed to module authors through `host.cache.currentRun.*`; the old global cache surface has been removed.
 - Added `host.cache.persistent.*` for flat scalar runtime markers that persist outside storage/session/hash/profile flows.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
-- Bound draw widgets now target root alias strings or `StorageField` values; table row widgets use `row:field(alias)` instead of rebinding widgets with `draw.widgets.forSession(...)`.
+- Bound draw value widgets now target `StorageField` values from `data.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
+- Draw `data` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetToDefaults(opts?)`; older session-shaped helpers such as `data.view`, `data.table`, `data.field`, and schema access have been removed.
+- Module authors now receive a narrowed runtime `store` with `get(alias)` and `read(alias, ...)`; direct table/schema helpers remain internal Lib plumbing.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
-- Session and commit action compatibility helpers have been removed; draw code stages transient intent through `draw.actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
+- Session and commit action compatibility helpers have been removed; draw code stages transient intent through `actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
 - Module authors now construct through `lib.createModule(...)` and activate through `host.activate()`; lower-level definition/state/host construction is internal.
 - Author hosts now expose `host.cache.currentRun.*` as a bound cache helper.
 - Cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.

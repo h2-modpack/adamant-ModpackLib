@@ -135,7 +135,7 @@ end
 ---@param ownerId string Stable owner id owning the active mutation slot.
 ---@param mutationBundle table|nil Module mutation callbacks.
 ---@param authorHost AuthorHost|nil Module author host passed to mutation builders.
----@param store ManagedStore|nil Managed module store associated with the definition.
+---@param store AuthorStore|nil Author-facing module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
 function lifecycle.apply(ownerId, mutationBundle, authorHost, store)

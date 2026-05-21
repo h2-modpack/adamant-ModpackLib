@@ -23,7 +23,7 @@ local externals = {
 }
 
 ---@class AdamantModpackLib
----@field createModule fun(opts: ModuleCreateOpts): AuthorHost|nil, ManagedStore|nil, string|nil
+---@field createModule fun(opts: ModuleCreateOpts): AuthorHost|nil, AuthorStore|nil, string|nil
 ---@field createFrameworkRuntime fun(frameworkPluginGuid: string): AdamantModpackLib.FrameworkRuntime
 
 local core = import('core/init.lua', nil, {

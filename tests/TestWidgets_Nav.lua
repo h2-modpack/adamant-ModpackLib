@@ -7,37 +7,6 @@ function TestWidgets_Nav:setUp()
     self.h = createWidgetHarness()
 end
 
-function TestWidgets_Nav:testVisibilityConditions()
-    local session = self.h.createReadOnlySession({
-        Enabled = true,
-        Region = "Surface",
-        Count = 2,
-    })
-
-    lu.assertTrue(self.h.nav.isVisible(session, nil))
-    lu.assertTrue(self.h.nav.isVisible(session, "Enabled"))
-    lu.assertFalse(self.h.nav.isVisible(session, "Missing"))
-    lu.assertTrue(self.h.nav.isVisible(session, { alias = "Region", value = "Surface" }))
-    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Region", value = "Underworld" }))
-    lu.assertTrue(self.h.nav.isVisible(session, { alias = "Count", anyOf = { 1, 2, 3 } }))
-    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Count", anyOf = { 4, 5 } }))
-    lu.assertFalse(self.h.nav.isVisible(session, { alias = "" }))
-    lu.assertFalse(self.h.nav.isVisible(session, { alias = "Count", anyOf = "bad" }))
-    lu.assertTrue(self.h.nav.isVisible(session, 42))
-end
-
-function TestWidgets_Nav:testBoundNavUsesCapturedSessionForVisibility()
-    local session = self.h.createReadOnlySession({
-        Enabled = true,
-        Region = "Surface",
-    })
-    local bound = self.h.nav.bind({}, session)
-
-    lu.assertTrue(bound.isVisible("Enabled"))
-    lu.assertTrue(bound.isVisible({ alias = "Region", value = "Surface" }))
-    lu.assertFalse(bound.isVisible({ alias = "Region", value = "Underworld" }))
-end
-
 function TestWidgets_Nav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
     local calls = {
         beginChild = 0,
@@ -128,7 +97,7 @@ function TestWidgets_Nav:testBoundNavUsesCapturedImguiForVerticalTabs()
             return label == "Second##two"
         end,
     }
-    local bound = self.h.nav.bind(imgui, self.h.createReadOnlySession({}))
+    local bound = self.h.nav.bind(imgui)
 
     local selected = bound.verticalTabs({
         id = "bound",

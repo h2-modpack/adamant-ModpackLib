@@ -238,8 +238,7 @@ end
 
 The runtime store surface provides:
 - `store.get(alias)`
-- `store.read(alias)`
-- `store.table(alias)`
+- `store.read(alias, ...)`
 
 Persisted writes happen through host-owned semantic helpers or session flushes:
 
@@ -257,9 +256,13 @@ Do not declare them in module storage or module `config.lua`.
 `Enabled` is the module behavior toggle. Framework serializes it through the
 module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 
+`store.read(alias, ...)` is syntax sugar for `store.get(alias):read(...)`.
+Scalar fields accept no extra path arguments; table handles accept the same row
+path arguments as `tableHandle:read(...)`.
+
 Rules:
 - widgets and draw code should usually read staged values through `data.get(...)`
-- runtime/gameplay code should read persisted values through `store.get(...):read()`
+- runtime/gameplay code should read persisted values through `store.get(...):read()` or `store.read(...)`
 - new flat runtime markers should prefer `host.cache.persistent.*`
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
@@ -304,9 +307,10 @@ local enabledField = tiers:get(1, "Enabled")
 
 local runtimeTiers = store.get("Tiers")
 local committedEnabled = runtimeTiers:read(1, "Enabled")
+local committedEnabledSugar = store.read("Tiers", 1, "Enabled")
 ```
 
-The older table helpers remain available during migration:
+Lib internals still expose direct table helpers on the full session object:
 
 ```lua
 local tiers = session.table("Tiers")
@@ -320,8 +324,8 @@ Table handles:
 - `store.get(alias)` returns a read-only field or table handle for persisted aliases
 - `data.get(alias)` returns a writable staged field or table handle
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
-- `store.table(alias)` returns a read-only table handle
-- `session.table(alias)` returns a staged writable table handle
+- full internal stores expose `store.table(alias)` for framework plumbing
+- full internal sessions expose `session.table(alias)` for framework plumbing
 - table handles are object methods; call them with colon syntax such as `tiers:read(rowIndex, alias)`
 - row aliases can address scalar row roots, packed row roots, or packed child aliases
 - `snapshot(rowIndex)` returns a copied row table
@@ -349,9 +353,10 @@ Reserved aliases:
 
 ### `session`
 
-Managed staged UI state for the module.
+Managed staged UI state for the module. This is a Lib/Framework plumbing
+object; module draw callbacks receive the narrower `data` adapter below.
 
-Useful surface:
+Internal surface:
 - `session.view`
 - `session.get(alias)`
 - `session.read(alias)`
@@ -371,30 +376,24 @@ Host/framework plumbing methods:
 
 When a module is rendered through a Lib host, draw callbacks receive a
 restricted author-facing `data` view with:
-- `view`
 - `get(alias)`
-- `read(alias)`
-- `table(alias)`
-- `field(alias)`
-- `write(alias, value)`
-- `reset(alias)`
-- `getAliasSchema(alias)`
+- `read(alias, ...)`
+- `write(alias, ...)`
 - `resetToDefaults(opts?)`
 
 Draw action staging is no longer exposed on `session`; use
 `actions.get(actionKey)` instead.
 
-`session.getAliasSchema(alias)` exposes prepared storage schema metadata for UI
-and widget plumbing. Treat the returned nodes as read-only metadata owned by Lib
-storage preparation. Widgets use this metadata for composite storage such as
-packed roots.
-
 `session.get(alias)` returns a storage object: scalar and packed aliases return
-`StorageField`; table roots return staged table handles. `session.field(alias)`
-and `tableHandle:get(rowIndex, alias)` return `StorageField` targets for
-widgets and UI helpers. A storage field is a resolved leaf value target; storage
-and table APIs own traversal, while widgets render the final field.
-Storage fields expose `field:alias()` for schema identity and
+`StorageField`; table roots return staged table handles. `data.get(alias)` is
+the author-facing entrypoint for the same staged storage objects.
+`data.read(alias, ...)` and `data.write(alias, ...)` are convenience forwards
+for custom raw ImGui draw code; they call `data.get(alias):read(...)` and
+`data.get(alias):write(...)`.
+`tableHandle:get(rowIndex, alias)` returns `StorageField` targets for widgets
+and UI helpers. A storage field is a resolved leaf value target; storage and
+table APIs own traversal, while widgets render the final field. Storage fields
+expose `field:alias()` for schema identity and
 `field:controlId()` for draw/control identity. Root control ids equal their
 alias; table cell control ids are cached by the table owner and include table
 alias, row index, and cell alias.
@@ -850,24 +849,23 @@ Built-ins:
 - `draw.widgets.packedCheckboxList(target, opts?)`
 
 These are direct immediate-mode helpers. `draw.widgets` is bound to the current
-`imgui` and draw data scope for the render call. Value widgets accept either a
-root alias string or a `StorageField`:
+`imgui` for the render call. Value widgets accept `StorageField` refs:
 
 ```lua
 function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
     draw.imgui.SameLine()
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = { "Default", "Custom" },
     })
 end
 ```
 
-Use `data.get(alias)` for an explicit root storage field, and
+Use `data.get(alias)` for root storage fields, and
 `tableHandle:get(rowIndex, alias)` for table-backed fields:
 
 ```lua
@@ -911,13 +909,3 @@ Each tab entry may include:
 
 Returns:
 - next `activeKey`
-
-### `draw.nav.isVisible(condition)`
-
-Evaluates a `visibleIf`-style condition against the draw session.
-
-Supported forms:
-- `"AliasName"`
-- `{ alias = "AliasName", value = ... }`
-- `{ alias = "AliasName", anyOf = { ... } }`
-

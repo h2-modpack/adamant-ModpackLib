@@ -13,6 +13,7 @@ function TestModuleHost_CreateModule:tearDown()
 end
 
 function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
+    local drawContext = nil
     local drawImgui = nil
     local drawData = nil
     local drawServices = nil
@@ -22,7 +23,6 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local authorSchemaNode = nil
     local authorDataField = nil
     local authorRowValue = nil
-    local authorRootField = nil
     local authorRowField = nil
     local config = {}
 
@@ -44,19 +44,20 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
             },
         },
         drawTab = function(draw, data, actions, services)
+            drawContext = draw
             drawImgui = draw.imgui
             drawData = data
             drawServices = services
             drawActions = actions
             drawWidgets = draw.widgets
             drawNav = draw.nav
-            authorSchemaNode = data.getAliasSchema("Flag")
             authorDataField = data.get("Flag")
-            authorRootField = draw.field("Flag")
+            authorSchemaNode = authorDataField:schema()
             local rows = data.get("Rows")
             authorRowField = rows:get(1, "Limit")
             authorRowValue = rows:read(1, "Limit")
-            data.write("Flag", true)
+            authorDataField:write(true)
+            data.write("Rows", 1, "Limit", 3)
         end,
     })
 
@@ -77,9 +78,35 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(type(drawWidgets.checkbox), "function")
     lu.assertNil(drawWidgets.forSession)
     lu.assertEquals(type(drawNav.verticalTabs), "function")
-    lu.assertEquals(type(drawNav.isVisible), "function")
+    lu.assertNil(drawNav.isVisible)
+    lu.assertNil(drawContext.data)
+    lu.assertNil(drawContext.session)
+    lu.assertNil(drawContext.actions)
+    lu.assertNil(drawContext.services)
+    lu.assertNil(drawContext.field)
+    lu.assertNil(drawData.view)
+    lu.assertNil(drawData.table)
+    lu.assertNil(drawData.field)
+    lu.assertNil(drawData.reset)
+    lu.assertNil(drawData.getAliasSchema)
+    lu.assertEquals(type(drawData.read), "function")
+    lu.assertEquals(type(drawData.write), "function")
+    lu.assertEquals(drawData.read("Flag"), true)
+    lu.assertEquals(drawData.read("Rows", 1, "Limit"), 3)
+    lu.assertErrorMsgContains("storage.invalid_field_args", function()
+        drawData.read("Flag", 1, "Limit")
+    end)
     lu.assertEquals(type(host.isEnabled), "function")
+    lu.assertEquals(type(store.get), "function")
+    lu.assertEquals(type(store.read), "function")
+    lu.assertNil(store.table)
+    lu.assertNil(store.getAliasSchema)
+    lu.assertNil(store.write)
     lu.assertEquals(store.read("Flag"), false)
+    lu.assertEquals(store.read("Rows", 1, "Limit"), 2)
+    lu.assertErrorMsgContains("storage.invalid_field_args", function()
+        store.read("Flag", 1, "Limit")
+    end)
     liveHost.flush()
     lu.assertEquals(store.read("Flag"), true)
     lu.assertEquals(self.h.moduleRuntimeRegistry.getPluginInfo("test-create-module"), {
@@ -94,10 +121,8 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorDataField:alias(), "Flag")
     lu.assertEquals(authorDataField:schema().alias, "Flag")
     lu.assertEquals(authorRowValue, 2)
-    lu.assertEquals(authorRootField:alias(), "Flag")
-    lu.assertEquals(authorRootField:schema().alias, "Flag")
     lu.assertEquals(authorRowField:alias(), "Limit")
-    lu.assertEquals(authorRowField:read(), 2)
+    lu.assertEquals(authorRowField:read(), 3)
     local liveState = self.h.moduleHost.getState(liveHost)
     lu.assertEquals(type(liveState.definition._structuralFingerprint), "string")
 end
@@ -179,6 +204,8 @@ function TestModuleHost_CreateModule:testHostMutationPatchDeclaresActivationMuta
     lu.assertEquals(target.Value, "patched")
     lu.assertEquals(patchHost, host)
     lu.assertEquals(patchStore, store)
+    lu.assertNil(patchStore.table)
+    lu.assertNil(patchStore.getAliasSchema)
 end
 
 function TestModuleHost_CreateModule:testHostMutationPatchRejectsAfterActivation()

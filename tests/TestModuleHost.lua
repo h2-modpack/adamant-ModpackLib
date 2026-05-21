@@ -17,7 +17,7 @@ function TestModuleHost:tearDown()
 end
 
 local function createActivatedHost(h, pluginGuid, opts)
-    local host, authorHost = h.moduleHost.create({
+    local host, authorHost, authorStore = h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = opts.definition,
         store = opts.store,
@@ -30,10 +30,10 @@ local function createActivatedHost(h, pluginGuid, opts)
         authorHost.mutation.patch(opts.patchMutation)
     end
     if type(opts.configureHost) == "function" then
-        opts.configureHost(authorHost, opts.store)
+        opts.configureHost(authorHost, authorStore)
     end
     authorHost.activate()
-    return host, authorHost
+    return host, authorHost, authorStore
 end
 
 function TestModuleHost:testFallbackUiWarnsWhenSessionCommitFails()
@@ -188,7 +188,8 @@ function TestModuleHost:testPatchMutationReceivesAuthorHost()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(patchHost, authorHost)
-    lu.assertEquals(patchStore, store)
+    lu.assertEquals(patchStore, self.h.moduleHost.getState(host).authorStore)
+    lu.assertNotEquals(patchStore, store)
     lu.assertTrue(target.Value)
 end
 

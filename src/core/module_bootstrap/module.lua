@@ -15,7 +15,7 @@ local modulePublic = {}
 ---@field tooltip string|nil
 ---@field storage StorageSchema|nil
 ---@field hashGroupPlan HashGroupPlan|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: AuthorStore, commit: table)|nil
 ---@field drawTab fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)
 ---@field drawQuickContent fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)|nil
 
@@ -95,7 +95,7 @@ local function createModuleOrThrow(opts)
     local store = state.store
     local session = state.session
     local cacheStore = state.cacheStore
-    local _, authorHost = moduleHost.create({
+    local _, authorHost, authorStore = moduleHost.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
         store = store,
@@ -105,14 +105,14 @@ local function createModuleOrThrow(opts)
         drawTab = opts.drawTab,
         drawQuickContent = opts.drawQuickContent,
     })
-    return authorHost, store
+    return authorHost, authorStore
 end
 
 --- Safely creates a module through the canonical prepare -> store -> host pipeline.
 --- Returns nils plus the construction error instead of throwing.
 ---@param opts ModuleCreateOpts
 ---@return AuthorHost|nil host
----@return ManagedStore|nil store
+---@return AuthorStore|nil store
 ---@return string|nil err
 local function createModule(opts)
     local ok, host, store = pcall(createModuleOrThrow, opts)

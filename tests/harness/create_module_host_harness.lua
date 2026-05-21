@@ -51,7 +51,7 @@ local function createModuleHostHarness(harnessOpts)
 
     function h:createHost(pluginGuid, hostOpts)
         hostOpts = hostOpts or {}
-        local host, authorHost = self.moduleHost.create({
+        local host, authorHost, authorStore = self.moduleHost.create({
             pluginGuid = pluginGuid,
             definition = hostOpts.definition,
             store = hostOpts.store,
@@ -63,13 +63,13 @@ local function createModuleHostHarness(harnessOpts)
         if hostOpts.patchMutation ~= nil then
             authorHost.mutation.patch(hostOpts.patchMutation)
         end
-        return host, authorHost
+        return host, authorHost, authorStore
     end
 
     function h:createActivatedHost(pluginGuid, hostOpts)
-        local host, authorHost = self:createHost(pluginGuid, hostOpts)
+        local host, authorHost, authorStore = self:createHost(pluginGuid, hostOpts)
         local ok, err = authorHost.activate()
-        return host, authorHost, ok, err
+        return host, authorHost, ok, err, authorStore
     end
 
     function h:createPreparedStore(config, rawDefinition)

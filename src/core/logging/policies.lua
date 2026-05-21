@@ -206,7 +206,7 @@ return {
 
     ["widgets.invalid_field_target"] = {
         severity = "error",
-        description = "Bound widgets require valid root alias or Lib-created StorageField targets.",
+        description = "Bound value widgets require Lib-created StorageField targets.",
     },
     ["widgets.invalid_action"] = {
         severity = "error",
@@ -240,6 +240,10 @@ return {
     ["storage.unknown_field_alias"] = {
         severity = "error",
         description = "Storage fields can only target prepared storage aliases.",
+    },
+    ["storage.invalid_field_args"] = {
+        severity = "error",
+        description = "Storage field reads do not accept nested path arguments.",
     },
     ["storage.readonly_field"] = {
         severity = "error",

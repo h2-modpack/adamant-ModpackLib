@@ -295,6 +295,7 @@ local function CreateTableHandle(node, opts)
     local aliasNodes = GetRowAliasNodes(node)
     local rowOwners = {}
     local rowControlIds = {}
+    local rowFields = {}
 
     local function readRows()
         local rows = opts.readRoot(node)
@@ -358,6 +359,7 @@ local function CreateTableHandle(node, opts)
     local function clearRowStructureCaches()
         rowOwners = {}
         rowControlIds = {}
+        rowFields = {}
     end
 
     local function getRowFieldControlId(rowIndex, alias)
@@ -481,7 +483,22 @@ local function CreateTableHandle(node, opts)
         if not aliasNode then
             return nil
         end
-        return storageInternal.field.createKnown(getRowOwnerForIndex(rowIndex), alias, aliasNode, "table.get")
+
+        rowIndex = math.floor(tonumber(rowIndex) or 0)
+        local rowCache = rowFields[rowIndex]
+        if not rowCache then
+            rowCache = {}
+            rowFields[rowIndex] = rowCache
+        end
+
+        local cached = rowCache[alias]
+        if cached then
+            return cached
+        end
+
+        local field = storageInternal.field.createKnown(getRowOwnerForIndex(rowIndex), alias, aliasNode, "table.get")
+        rowCache[alias] = field
+        return field
     end
 
     if opts.writeRoot ~= nil then

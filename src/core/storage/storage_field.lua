@@ -46,7 +46,14 @@ local function CreateField(owner, alias, schema, methodName)
     })
 end
 
-function StorageFieldMethods:read()
+function StorageFieldMethods:read(...)
+    if select("#", ...) ~= 0 then
+        logging.violate("storage.invalid_field_args",
+            "%s: storage field '%s' does not accept read path arguments",
+            tostring(self._source or "StorageField.read"),
+            tostring(self._alias)
+        )
+    end
     return self._owner.read(self._alias)
 end
 
@@ -129,20 +136,6 @@ function storageField.createKnown(owner, alias, schema, methodName)
     end
 
     return CreateField(owner, alias, schema, methodName)
-end
-
-function storageField.resolve(defaultOwner, target, methodName)
-    if type(target) == "string" then
-        return storageField.create(defaultOwner, target, methodName)
-    end
-    if storageField.is(target) then
-        return target
-    end
-
-    logging.violate("widgets.invalid_field_target",
-        "%s: expected root alias string or StorageField",
-        tostring(methodName or "widgets")
-    )
 end
 
 return storageField

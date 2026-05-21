@@ -22,10 +22,15 @@ function TestWidgets:setUp()
     self.h = createWidgetHarness()
 end
 
+local function Field(h, owner, alias)
+    return h.createField(owner, alias)
+end
+
 function TestWidgets:testPlainDropdownUsesNativePreview()
     local imgui, state = self.h.makeDropdownImgui()
+    local session = self.h.createValueSession(2)
 
-    self.h.widgets.bind(imgui, self.h.createValueSession(2)).dropdown("Mode", {
+    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -43,8 +48,9 @@ end
 
 function TestWidgets:testLabeledControlFallsBackToGapWhenLabelWidthIsTooSmall()
     local imgui, state = self.h.makeDropdownImgui()
+    local session = self.h.createValueSession(2)
 
-    self.h.widgets.bind(imgui, self.h.createValueSession(2)).dropdown("Mode", {
+    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
         label = "Long Label",
         values = { 1, 2 },
         labelWidth = 4,
@@ -56,8 +62,9 @@ end
 
 function TestWidgets:testInputTextHonorsLabelWidth()
     local imgui, state = self.h.makeDropdownImgui()
+    local session = self.h.createValueSession("abc")
 
-    self.h.widgets.bind(imgui, self.h.createValueSession("abc")).inputText("Filter", {
+    self.h.widgets.bind(imgui).inputText(Field(self.h, session, "Filter"), {
         label = "Filter",
         labelWidth = 90,
         maxLen = 64,
@@ -69,8 +76,9 @@ end
 
 function TestWidgets:testColoredDropdownUsesCustomPreview()
     local imgui, state = self.h.makeDropdownImgui()
+    local session = self.h.createValueSession(2)
 
-    self.h.widgets.bind(imgui, self.h.createValueSession(2)).dropdown("Mode", {
+    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -90,9 +98,10 @@ end
 
 function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
     local imgui = self.h.makeDropdownImgui()
+    local session = self.h.createValueSession(3)
 
     local ok = pcall(function()
-        self.h.widgets.bind(imgui, self.h.createValueSession(3)).stepper("Runs", {
+        self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
             label = "Runs",
             min = 1,
             max = 10,
@@ -107,7 +116,7 @@ function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
     local imgui, clickedButtons = self.h.makeStepperImgui("+##Runs_inc")
     local session = self.h.createValueSession(3)
 
-    local changed = self.h.widgets.bind(imgui, session).stepper("Runs", {
+    local changed = self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
         label = "Runs",
         min = 1,
         max = 10,
@@ -125,7 +134,7 @@ function TestWidgets:testPackedDropdownResolvesChildrenFromSessionSchema()
     session.write("Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui, session).packedDropdown("Packed", {
+    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -163,7 +172,7 @@ function TestWidgets:testBoundPackedDropdownAcceptsTableRowStorageField()
     rows:write(1, "Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui, session).packedDropdown(rows:get(1, "Packed"), {
+    self.h.widgets.bind(imgui).packedDropdown(rows:get(1, "Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -179,7 +188,7 @@ function TestWidgets:testBoundWidgetsAcceptSessionGetStorageField()
     session.write("Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui, session).packedDropdown(session.get("Packed"), {
+    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -216,17 +225,16 @@ function TestWidgets:testBoundPackedChoiceAliasAcceptsTableRowStorageField()
     rows:write(1, "Second", true)
     local imgui = self.h.makeDropdownImgui()
 
-    local selected = self.h.widgets.bind(imgui, session).getPackedChoiceAlias(rows:get(1, "Packed"))
+    local selected = self.h.widgets.bind(imgui).getPackedChoiceAlias(rows:get(1, "Packed"))
 
     lu.assertEquals(selected, "Second")
 end
 
 function TestWidgets:testBoundWidgetsRejectUnbrandedTableTargets()
-    local session = self.h.createPackedSession()
     local imgui = self.h.makeDropdownImgui()
-    local bound = self.h.widgets.bind(imgui, session)
+    local bound = self.h.widgets.bind(imgui)
 
-    lu.assertErrorMsgContains("expected root alias string or StorageField", function()
+    lu.assertErrorMsgContains("expected StorageField", function()
         bound.dropdown({ alias = "Packed" }, {})
     end)
 end
@@ -235,7 +243,7 @@ function TestWidgets:testPackedDropdownSupportsExplicitControlId()
     local session = self.h.createPackedSession()
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui, session).packedDropdown("Packed", {
+    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
         id = "Packed_Row_2",
         label = "Packed",
     })
@@ -288,7 +296,7 @@ function TestWidgets:testCheckboxStagesDrawActionRef()
         return not current, true
     end
 
-    local changed = self.h.widgets.bind(imgui, session).checkbox("Enabled", {
+    local changed = self.h.widgets.bind(imgui).checkbox(Field(self.h, session, "Enabled"), {
         action = action,
     })
 
@@ -310,7 +318,7 @@ function TestWidgets:testDropdownStagesDrawActionRef()
     end
     imgui.EndCombo = function() end
 
-    local changed = self.h.widgets.bind(imgui, session).dropdown("Mode", {
+    local changed = self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
         values = { 1, 2 },
         displayValues = {
             [1] = "One",
@@ -330,7 +338,7 @@ function TestWidgets:testStepperStagesDrawActionRef()
     local imgui = self.h.makeStepperImgui("+##Runs_inc")
     local session = self.h.createValueSession(3)
 
-    local changed = self.h.widgets.bind(imgui, session).stepper("Runs", {
+    local changed = self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
         min = 1,
         max = 10,
         action = action,
@@ -350,7 +358,7 @@ function TestWidgets:testRadioStagesDrawActionRef()
     end
     local session = self.h.createValueSession(1)
 
-    local changed = self.h.widgets.bind(imgui, session).radio("Mode", {
+    local changed = self.h.widgets.bind(imgui).radio(Field(self.h, session, "Mode"), {
         values = { 1, 2 },
         displayValues = {
             [1] = "One",
@@ -373,7 +381,7 @@ function TestWidgets:testPackedRadioStagesSelectedChildAction()
     end
     local session = self.h.createPackedSession()
 
-    local changed = self.h.widgets.bind(imgui, session).packedRadio("Packed", {
+    local changed = self.h.widgets.bind(imgui).packedRadio(session.get("Packed"), {
         action = action,
     })
 
@@ -395,7 +403,10 @@ function TestWidgets:testSteppedRangeStagesDrawActionRef()
         Max = { alias = "Max", type = "int" },
     })
 
-    local changed = self.h.widgets.bind(imgui, session).steppedRange("Min", "Max", {
+    local changed = self.h.widgets.bind(imgui).steppedRange(
+        Field(self.h, session, "Min"),
+        Field(self.h, session, "Max"),
+        {
         min = 1,
         max = 10,
         action = action,

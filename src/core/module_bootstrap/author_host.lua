@@ -39,7 +39,7 @@ local authorHost = {}
 ---@field invoke fun(id: string, methodName: string, fallback: any, ...): any, string|nil
 
 ---@class AuthorMutation
----@field patch fun(callback: fun(plan: table, host: AuthorHost, store: ManagedStore)): nil
+---@field patch fun(callback: fun(plan: table, host: AuthorHost, store: AuthorStore)): nil
 
 ---@class AuthorOverlays
 ---@field order table<string, integer>

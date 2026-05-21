@@ -239,11 +239,11 @@ Example:
 local MODE_VALUES = { "Vanilla", "Chaos" }
 
 local function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox("FeatureEnabled", {
+    draw.widgets.checkbox(data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
-    draw.widgets.dropdown("Mode", {
+    draw.widgets.dropdown(data.get("Mode"), {
         label = "Mode",
         values = MODE_VALUES,
         controlWidth = 180,
@@ -253,11 +253,10 @@ end
 
 Draw callbacks receive the author-facing `data` API:
 
-- `data.view`
 - `data.get(alias)`
-- `data.read(alias)`
-- `data.write(alias, value)`
-- `data.reset(alias)`
+- `data.read(alias, ...)`
+- `data.write(alias, ...)`
+- `data.resetToDefaults(opts?)`
 
 Commit and reload operations are handled by host/framework plumbing.
 
@@ -357,7 +356,9 @@ This is the part most new authors get wrong.
 
 ### Persisted values
 
-Persisted storage roots live in Chalk config and are exposed through `store.get(...)`.
+Persisted storage roots live in Chalk config and are exposed through
+`store.get(...)`. Use `store.read(alias, ...)` when you only need the committed
+value; it forwards to `store.get(alias):read(...)`.
 
 The UI stages edits in `data`, then host/framework plumbing commits those edits later.
 
@@ -405,6 +406,8 @@ Table storage models compact ordered rows with one shared row schema:
 ```
 
 Use `data.get("Tiers")` for staged UI edits and `store.get("Tiers")` for read-only runtime access.
+When you only need a runtime value, `store.read("Tiers", rowIndex, "Limit")`
+forwards to the table handle read.
 Table handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 Use `tiers:get(rowIndex, alias)` when a widget or helper needs a row-cell field.
 
@@ -412,7 +415,8 @@ Use `tiers:get(rowIndex, alias)` when a widget or helper needs a row-cell field.
 
 ### Reading transient values from `store`
 
-Transient aliases live in draw `data`. Read them with `data.get(...):read()` or `data.view`.
+Transient aliases live in draw `data`. Read them with `data.read(...)` or
+`data.get(...):read()`.
 
 ### Writing persisted config directly from draw code
 
