@@ -38,7 +38,7 @@ local function ValidateKnownOpts(opts)
     for key in pairs(opts) do
         if key == "definition" then
             logging.violate(
-                "host.definition_option_removed",
+                "host.unknown_opt",
                 "createModule: definition table is no longer supported; put definition fields at top level"
             )
         end
@@ -94,11 +94,13 @@ local function createModuleOrThrow(opts)
     local state = moduleState.create(opts.config, definition)
     local store = state.store
     local session = state.session
+    local cacheStore = state.cacheStore
     local _, authorHost = moduleHost.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
         store = store,
         session = session,
+        cacheStore = cacheStore,
         onSettingsCommitted = opts.onSettingsCommitted,
         drawTab = opts.drawTab,
         drawQuickContent = opts.drawQuickContent,

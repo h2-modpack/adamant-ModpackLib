@@ -120,5 +120,5 @@ Use the lifecycle surface that owns the side effect:
 - hooks: `host.hooks.*` declarations before activation
 - overlays: `host.overlays.*` declarations before activation
 - integrations: `host.integrations.register(...)` before activation
-- persistent runtime values: storage plus `store.writeUnstaged(...)`
+- persistent runtime values: `host.cache.persistent.*`
 - unrepresented run-data edits: add a patch-plan operation

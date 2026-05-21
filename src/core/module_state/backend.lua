@@ -3,7 +3,7 @@ local deps = ...
 local chalk = deps.chalk
 local backendCache = setmetatable({}, { __mode = "k" })
 
-local function getConfigBackend(config)
+local function create(config)
     if not chalk then
         return nil
     end
@@ -35,44 +35,51 @@ local function getConfigBackend(config)
     local pathEntryCache = {}
     backend = {}
 
-    function backend.getEntry(alias)
-        local cached = pathEntryCache[alias]
+    local function makeCacheKey(section, key)
+        return tostring(section) .. "\0" .. tostring(key)
+    end
+
+    function backend.getEntry(section, key)
+        local cacheKey = makeCacheKey(section, key)
+        local cached = pathEntryCache[cacheKey]
         if cached ~= nil then
             return cached or nil
         end
 
-        local entry = entryIndex.config and entryIndex.config[alias] or nil
+        local sectionEntries = entryIndex[section]
+        local entry = sectionEntries and sectionEntries[key] or nil
         if entry then
-            pathEntryCache[alias] = entry
+            pathEntryCache[cacheKey] = entry
             return entry
         end
 
-        pathEntryCache[alias] = false
+        pathEntryCache[cacheKey] = false
         return nil
     end
 
-    function backend.ensureValue(alias, value)
-        local entry = backend.getEntry(alias)
+    function backend.ensure(section, key, value)
+        local entry = backend.getEntry(section, key)
         if entry then
             return true
         end
 
-        if type(alias) ~= "string" or alias == "" or type(rawConfig.bind) ~= "function" then
+        if type(section) ~= "string" or section == "" or type(key) ~= "string" or key == ""
+            or type(rawConfig.bind) ~= "function" then
             return false
         end
 
-        entry = rawConfig:bind("config", alias, value, "")
+        entry = rawConfig:bind(section, key, value, "")
         if not entry then
             return false
         end
 
-        local sectionEntries = entryIndex.config
+        local sectionEntries = entryIndex[section]
         if not sectionEntries then
             sectionEntries = {}
-            entryIndex.config = sectionEntries
+            entryIndex[section] = sectionEntries
         end
-        sectionEntries[alias] = entry
-        pathEntryCache[alias] = entry
+        sectionEntries[key] = entry
+        pathEntryCache[makeCacheKey(section, key)] = entry
 
         if type(rawConfig.save) == "function" then
             rawConfig:save()
@@ -80,18 +87,27 @@ local function getConfigBackend(config)
         return true
     end
 
-    function backend.readValue(alias)
-        local entry = backend.getEntry(alias)
+    function backend.read(section, key)
+        local entry = backend.getEntry(section, key)
         if entry then
             return entry:get()
         end
         return nil
     end
 
-    function backend.writeValue(alias, value)
-        local entry = backend.getEntry(alias)
+    function backend.write(section, key, value)
+        local entry = backend.getEntry(section, key)
         if entry then
             entry:set(value)
+            return true
+        end
+        return false
+    end
+
+    function backend.clear(section, key)
+        local entry = backend.getEntry(section, key)
+        if entry then
+            entry:set(nil)
             return true
         end
         return false
@@ -103,5 +119,5 @@ local function getConfigBackend(config)
 end
 
 return {
-    getConfigBackend = getConfigBackend,
+    create = create,
 }

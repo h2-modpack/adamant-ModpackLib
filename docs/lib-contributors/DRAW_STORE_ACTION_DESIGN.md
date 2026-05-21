@@ -61,7 +61,7 @@ namespaces include:
 - integrations
 - overlays
 - mutations
-- game cache
+- cache
 - logging
 - activation and host identity
 
@@ -82,9 +82,8 @@ if enabled:read() then
 end
 ```
 
-Runtime writable state remains policy-controlled by the storage schema and the
-callback phase. Runtime cache writes can stay possible through the runtime data
-adapter, but UI-staged edits belong to draw `data`.
+Runtime `store` should stay read-oriented. Runtime cache writes belong to
+`host.cache.persistent`, while UI-staged edits belong to draw `data`.
 
 ## Draw Objects
 
@@ -211,7 +210,7 @@ The row-list object owns table-wide operations:
 - `clear()`
 
 Runtime `store` may expose only the subset that is valid for committed data and
-runtime cache policy. Draw `data` exposes the editable staged subset.
+runtime-read policy. Draw `data` exposes the editable staged subset.
 
 Table cells are path refs, not root aliases. Cell aliases stay scoped to the
 row schema; they do not become globally unique root aliases. If stable row

@@ -7,7 +7,7 @@ All notable changes to this project will be documented in this file.
 ### Changed
 
 - Storage declarations now use direct flat `alias` identifiers as the canonical managed storage backing keys.
-- Removed old `configKey`, `lifetime`, and `runtime` storage declaration compatibility in favor of explicit `persist`, `stage`, and `hash` axes.
+- Removed old `configKey`, `lifetime`, `runtime`, and `stage` storage declaration compatibility in favor of explicit `persist` and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
 - Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw)` and `drawQuickContent(draw)`, where `draw` contains `imgui`, author `session`, draw-safe `services`, and bound `widgets` / `nav`.
@@ -23,18 +23,20 @@ All notable changes to this project will be documented in this file.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
 - The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetToDefaults(...)` or draw-scoped `draw.session.resetToDefaults(...)`.
-- Game cache is now exposed to module authors through `host.gameCache.currentRun.*`; the old global `lib.gameCache.*` surface has been removed.
+- Cache is now exposed to module authors through `host.cache.currentRun.*`; the old global cache surface has been removed.
+- Added `host.cache.persistent.*` for flat scalar runtime markers that persist outside storage/session/hash/profile flows.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw widgets now target root alias strings or `StorageField` values; table row widgets use `row:field(alias)` instead of rebinding widgets with `draw.widgets.forSession(...)`.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
+- Session and commit action compatibility helpers have been removed; draw code stages transient intent through `draw.actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
 - Module authors now construct through `lib.createModule(...)` and activate through `host.activate()`; lower-level definition/state/host construction is internal.
-- Author hosts now expose `host.gameCache.currentRun.*` as a bound game-cache helper.
-- Game cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.
+- Author hosts now expose `host.cache.currentRun.*` as a bound cache helper.
+- Cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.
 - Host activation now stages and commits hooks, integrations, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
 - `host.hooks.override(...)` accepts function replacements only, matching the host-owned dispatcher model.
 - Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/references/KNOWN_LIMITATIONS.md`.
-- Persistent runtime-cache module state is now declared with `stage = false, hash = false`, read through `store.read(...)`, and written through `store.writeUnstaged(...)`.
+- Removed storage-backed runtime-cache declarations; runtime markers now use `host.cache.persistent.*`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
 - Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 
@@ -51,7 +53,7 @@ All notable changes to this project will be documented in this file.
 - Added `lib.imguiHelpers.*` enum/value helpers for low-level ImGui binding use.
 - Added `lib.overlays.*` retained HUD overlay helpers with managed `middleRightStack` layout, stacked text, stacked rows, and framework/module/debug order bands.
 - Added token-based `lib.overlays.suppressForUi()` overlay suppression for foreground ImGui configuration windows.
-- Added `lib.gameCache.*` helpers for namespaced runtime cache attached to live game tables.
+- Added global helpers for namespaced runtime cache attached to live game tables.
 - Added runtime-only persisted storage aliases through `runtime = true` plus `store.getRuntimeState()`.
 - Added `definition.onSettingsCommitted(host, store, commit)` as a post-commit observer for rebuilding derived runtime/UI structures after staged config commits and staged session actions.
 - Added docs for hot-reload architecture and known limitations under `docs/`.

@@ -15,6 +15,14 @@ host-shaped. Normal module authors should primarily learn:
 Capability implementations can remain isolated, testable, and mostly stateless
 behind that facade.
 
+## Status
+
+This note remains useful for the host-owned capability direction. Its older
+host-shaped draw examples are superseded by
+[`DRAW_STORE_ACTION_DESIGN.md`](DRAW_STORE_ACTION_DESIGN.md): live module UI
+uses `drawTab(draw)`, `draw.session`, `draw.actions`, `draw.services`,
+`draw.widgets`, and `draw.nav`; it does not receive the author host.
+
 ## Current Pressure
 
 The runtime model is already host-centered. Host activation owns:
@@ -50,7 +58,7 @@ That worked, but it created a bifurcated design:
   surfaces.
 
 The accepted design makes the module-facing API match the runtime shape without
-making Lib itself stateful. Hooks, integrations, game cache, and retained module
+making Lib itself stateful. Hooks, integrations, cache, and retained module
 overlays are already host-owned author surfaces; mutation and draw-related
 surfaces remain migration candidates.
 
@@ -206,8 +214,8 @@ The audience split is not ceremony. It answers three different questions:
 
 Two current examples anchor the intended outcomes:
 
-- `gameCache` returns `service` and `author`. It has no public `lib.gameCache`
-  author API because cache access is owner-bound through `host.gameCache`.
+- `cache` returns `service` and `author`. It has no public `lib.cache`
+  author API because cache access is owner-bound through `host.cache`.
 - `integrations` returns `service` and `author`. Provider registration is
   owner-bound through `host.integrations.register(...)`, while consumers invoke
   through `host.integrations.invoke(...)`.
@@ -239,7 +247,7 @@ boundary:
   boundary or delegate to a backend that does.
 - `adapter_framework.lua`: Framework-runtime adapter when Framework needs a
   helper that normal module authors should not receive directly.
-- the subsystem entrypoint, such as `game_cache.lua`: composition only. It
+- the subsystem entrypoint, such as `cache.lua`: composition only. It
   imports the backend and adapter, builds the audience bundle, and wires runtime
   dependencies.
 
@@ -471,7 +479,7 @@ choice that should be evaluated together with the draw/session shape.
 
 ## Integrations
 
-Game cache clarified the rule for host facades: bind the stable lifecycle
+Cache clarified the rule for host facades: bind the stable lifecycle
 owner at the host boundary, but do not move backend ownership or unrelated
 identity concepts into the host.
 
@@ -532,7 +540,7 @@ end
 Do not turn integrations into caller-aware RPC unless a concrete use case needs
 that larger contract.
 
-Validation ownership should follow the game-cache lesson:
+Validation ownership should follow the cache lesson:
 
 - `host.integrations.register(...)` validates the author-facing registration
   shape and binds lifecycle ownership
@@ -549,28 +557,27 @@ Provider APIs also need careful wrapping if strict store-phase enforcement is a
 goal. `invoke(...)` is easy to phase-scope because Lib owns the call boundary;
 direct provider-table access can bypass invocation wrapping.
 
-## Game Cache
+## Cache
 
-Game cache now has an author-host facade, but it is not a capability
-declaration like hooks or overlays.
+Cache has an author-host facade, but it is not a capability declaration like
+hooks or overlays.
 
-The game-cache subsystem owns the stateless backend for namespaced runtime
-cache buckets on `CurrentRun`. It is not staged, persisted, hashed, profiled,
-or reset by Lib. Its lifetime follows the active run rather than the module
-host.
+The cache subsystem owns stateless backends for namespaced runtime cache
+domains. Cache values are not staged, hashed, profiled, or reset by Lib.
 
 The backend is internal service code. The module-author surface is only the
-host-bound facade; there is no global `lib.gameCache.*` author API.
+host-bound facade; there is no global `lib.cache.*` author API.
 
 The host facade receives the managed host, uses private host state only to
 verify that the object is Lib-managed, then reads runtime ownership from
 `host.getHostId()`. The host adapter translates that module runtime identity
 into the `ownerId` passed to the backend. The backend only sees an owner key
-used under the cache root. The facade then exposes concrete lifecycle domains.
-The first domain is the active run:
+used under the cache root. The facade then exposes concrete domains.
+
+The active-run domain stores live mutable table buckets on `CurrentRun`:
 
 ```lua
-local state = host.gameCache.currentRun.get("run", function()
+local state = host.cache.currentRun.get("run", function()
     return {
         ForcedNPCPending = {},
     }
@@ -580,24 +587,46 @@ end)
 Current-run surface:
 
 ```lua
-host.gameCache.currentRun.get(key, factory)
-host.gameCache.currentRun.peek(key)
-host.gameCache.currentRun.clear(key)
+host.cache.currentRun.get(key, factory)
+host.cache.currentRun.peek(key)
+host.cache.currentRun.clear(key)
 ```
 
-This is intentionally more specific than `host.cache` or
-`host.gameCache.get(...)`. It tells authors that the cache is tied to the
-active run, not a general memoization table.
+This is intentionally more specific than `host.cache.get(...)`. It tells
+authors that the bucket is tied to the active run, not a general memoization
+table.
+
+The persistent domain stores flat scalar values outside storage/session/hash
+flows:
+
+```lua
+local ready = host.cache.persistent.read("RecordingReady", false)
+host.cache.persistent.write("RecordingReady", true)
+host.cache.persistent.clear("RecordingReady")
+```
+
+Persistent surface:
+
+```lua
+host.cache.persistent.read(key, default)
+host.cache.persistent.write(key, value)
+host.cache.persistent.clear(key)
+host.cache.persistent.has(key)
+```
+
+Persistent values are limited to boolean, number, and string. Do not accept
+tables here unless a real use case proves that flat scalar cache is too small;
+complex persistent author state should be serialized explicitly by the module.
 
 Future domains can be added when real call sites need them:
 
 ```lua
-host.gameCache.currentRoom.get(key, factory)
-host.gameCache.currentEncounter.get(key, factory)
+host.cache.currentRoom.get(key, factory)
+host.cache.currentEncounter.get(key, factory)
 ```
 
 Do not introduce stringly typed domains such as
-`host.gameCache.get("CurrentRun", key, factory)` unless the runtime grows a real
+`host.cache.get("CurrentRun", key, factory)` unless the runtime grows a real
 domain registry. Concrete domains keep supported lifetimes grep-visible and
 documentable.
 
@@ -656,7 +685,7 @@ host facade over stateless Lib backends.
 - Do not turn `ModuleHost` into the author capability surface.
 - Do not force integration consumer APIs into this design before their call
   sites are audited.
-- Do not make game cache a generic host cache or stringly typed event cache.
+- Do not make current-run cache a stringly typed event cache.
 
 ## Design Summary
 
@@ -679,7 +708,7 @@ capability namespaces:
   host.mutation
   host.widgets
   host.nav
-  host.gameCache
+  host.cache
 
 state:
   host.session during draw

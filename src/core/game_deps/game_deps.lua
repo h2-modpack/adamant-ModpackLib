@@ -44,7 +44,7 @@ local function callRomGameFunction(name, ...)
 end
 
 local gameDeps = {
-    gameCache = {
+    cache = {
         CurrentRun = function()
             return readOptionalGlobal("CurrentRun", "table")
         end,

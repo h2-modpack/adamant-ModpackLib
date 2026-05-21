@@ -250,7 +250,7 @@ end
 function widgetHelpers.ResolvePackedChildren(field)
     if not storageService.field.is(field) then
         logging.violate(
-            "widgets.invalid_packed_session",
+            "widgets.invalid_field_target",
             "packed widgets require a StorageField target"
         )
     end

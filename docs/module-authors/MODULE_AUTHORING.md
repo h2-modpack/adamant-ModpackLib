@@ -11,7 +11,7 @@ This guide describes the supported module contract in Lib:
 Common module author surfaces:
 - `lib.createModule(...)`
 - `host.integrations.*`
-- `host.gameCache.*`
+- `host.cache.*`
 
 Fallback UI modules also use:
 - `host.fallbackUi.attachGuiOnce(...)`
@@ -37,7 +37,7 @@ Use focused capability guides for feature-level authoring details:
 - [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
 - [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
-- [capabilities/GAME_CACHE.md](capabilities/GAME_CACHE.md)
+- [capabilities/CACHE.md](capabilities/CACHE.md)
 
 ## Basic Module Shape
 
@@ -175,16 +175,15 @@ Module construction creates two author-facing state handles:
 Raw Chalk config should stay local to `main.lua`. Host/framework plumbing owns
 commit, reload, hash/profile import, and config flush behavior.
 
-Storage roots live on `definition.storage`. Normal roots persist, stage, and
-hash by default. Use `persist = false, hash = false` for transient session-only
-UI state, and `stage = false, hash = false` for runtime-cache values that are
-read and written through `store`.
+Storage roots live on `definition.storage`. Normal roots persist and hash by
+default. Use `persist = false, hash = false` for transient session-only UI
+state. Runtime markers should prefer `host.cache.persistent.*`.
 
 Lib injects `Enabled` and `DebugMode` into every prepared definition. Do not
 declare them in module storage or `config.lua`.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for storage
-axes, table roots, packed roots, session actions, and commit observers.
+axes, table roots, packed roots, draw actions, and commit observers.
 
 ## Immediate-Mode UI
 

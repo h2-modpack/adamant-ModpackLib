@@ -51,7 +51,7 @@ flowchart TD
 
     subgraph INPUTS["Inputs"]
         direction TB
-        RUNTIME["runtime cache<br/>hot-reload stable"]
+        RUNTIME["runtime anchor<br/>hot-reload stable"]
         EXTERNALS["externals<br/>rom / modutil / chalk / config"]
         GAMEDEPS["game deps<br/>scoped game functions/tables"]
     end
@@ -155,7 +155,7 @@ flowchart TD
     AUTHOR --> CREATE["createModule"]
     AUTHOR --> SESSION["session in draw callbacks"]
     AUTHOR --> STORE["store in runtime callbacks"]
-    AUTHOR --> CAPABILITIES["hooks / mutations / overlays / integrations / widgets / gameCache"]
+    AUTHOR --> CAPABILITIES["hooks / mutations / overlays / integrations / widgets / cache"]
 
     CONTRIBUTOR --> INIT["core/init.lua composition"]
     CONTRIBUTOR --> SERVICES["subsystem services"]

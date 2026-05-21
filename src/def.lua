@@ -24,7 +24,6 @@ local lib = {}
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
 ---@field persist? boolean Whether the alias persists through config; defaults true.
----@field stage? boolean Whether the alias participates in staged session UI; defaults true.
 ---@field hash? boolean Whether the alias participates in hash/profile surfaces; defaults true.
 ---@field visibleIf? string|AdamantModpackLib.VisibilityCondition Visibility condition used by UI helpers.
 ---@field min? number Integer lower bound.
@@ -93,7 +92,6 @@ local lib = {}
 ---@class AdamantModpackLib.ManagedStore
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
----@field writeUnstaged fun(alias: string, value: any): boolean
 
 ---@class AdamantModpackLib.Session
 ---@field view table<string, any>
@@ -103,14 +101,8 @@ local lib = {}
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
----@field stageAction fun(actionKey: string, value: any)
----@field readAction fun(actionKey: string): any
----@field clearAction fun(actionKey: string)
----@field hasActions fun(): boolean
 ---@field _flushToConfig fun()
 ---@field _hasConfigChanges fun(): boolean
----@field _captureActionSnapshot fun(): table
----@field _clearActions fun()
 ---@field _reloadFromConfig fun()
 ---@field _captureDirtyConfigSnapshot fun(): table[]
 ---@field _restoreConfigSnapshot fun(snapshot: table[]?)
@@ -124,10 +116,6 @@ local lib = {}
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
----@field stageAction fun(actionKey: string, value: any)
----@field readAction fun(actionKey: string): any
----@field clearAction fun(actionKey: string)
----@field hasActions fun(): boolean
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
@@ -151,9 +139,6 @@ local lib = {}
 
 ---@class AdamantModpackLib.CommitContext
 ---@field actions AdamantModpackLib.CommitActions
----@field readAction fun(actionKey: string): any
----@field hasAction fun(actionKey: string): boolean
----@field hasActions fun(): boolean
 ---@field hadConfigChanges fun(): boolean
 
 ---@class AdamantModpackLib.AuthorHost
@@ -168,7 +153,7 @@ local lib = {}
 ---@field log fun(fmt: string, ...) Print a module-scoped log line.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line when DebugMode is enabled.
 ---@field fallbackUi AdamantModpackLib.AuthorFallbackUi
----@field gameCache AdamantModpackLib.AuthorGameCache
+---@field cache AdamantModpackLib.AuthorCache
 ---@field hooks AdamantModpackLib.AuthorHooks
 ---@field integrations AdamantModpackLib.AuthorIntegrations
 ---@field mutation AdamantModpackLib.AuthorMutation
@@ -244,13 +229,20 @@ local lib = {}
 ---    store: AdamantModpackLib.ManagedStore
 ---))
 
----@class AdamantModpackLib.AuthorGameCache
----@field currentRun AdamantModpackLib.AuthorCurrentRunGameCache
+---@class AdamantModpackLib.AuthorCache
+---@field currentRun AdamantModpackLib.AuthorCurrentRunCache
+---@field persistent AdamantModpackLib.AuthorPersistentCache
 
----@class AdamantModpackLib.AuthorCurrentRunGameCache
+---@class AdamantModpackLib.AuthorCurrentRunCache
 ---@field get fun(key: string, factory?: fun(): table): table?
 ---@field peek fun(key: string): table?
 ---@field clear fun(key: string): boolean
+
+---@class AdamantModpackLib.AuthorPersistentCache
+---@field read fun(key: string, defaultValue?: boolean|number|string): boolean|number|string?
+---@field write fun(key: string, value: boolean|number|string): boolean
+---@field clear fun(key: string): boolean
+---@field has fun(key: string): boolean
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.
@@ -379,16 +371,16 @@ local lib = {}
 ---@class AdamantModpackLib.ButtonOpts
 ---@field id? string|number
 ---@field tooltip? string
----@field action? AdamantModpackLib.DrawActionRef|string Staged action ref, or legacy session action key, to replace when clicked.
----@field value? any Staged session action payload.
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when clicked.
+---@field value? any Staged action payload.
 ---@field onClick? fun(imgui: table)
 
 ---@class AdamantModpackLib.ConfirmButtonOpts
 ---@field tooltip? string
 ---@field confirmLabel? string
 ---@field cancelLabel? string
----@field action? AdamantModpackLib.DrawActionRef|string Staged action ref, or legacy session action key, to replace when confirmed.
----@field value? any Staged session action payload.
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when confirmed.
+---@field value? any Staged action payload.
 ---@field onConfirm? fun(imgui: table)
 
 ---@class AdamantModpackLib.InputTextOpts

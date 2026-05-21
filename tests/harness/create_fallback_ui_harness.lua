@@ -36,7 +36,7 @@ end
 
 local function createGameDeps(game)
     return {
-        gameCache = {
+        cache = {
             CurrentRun = function()
                 return rawget(_G, "CurrentRun")
             end,

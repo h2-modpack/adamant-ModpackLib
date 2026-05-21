@@ -9,7 +9,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `host.hooks.*`
 - `host.overlays.*`
 - `host.integrations.*`
-- `host.gameCache.*`
+- `host.cache.*`
 - `host.mutation.*`
 
 Framework-owned live-host discovery, hash/profile, overlay, UI suppression, and
@@ -39,7 +39,7 @@ Host-owned capabilities can also be declared on the returned author host before
 activation:
 - `host.hooks.*`
 - `host.integrations.*`
-- `host.gameCache.*`
+- `host.cache.*`
 - `host.mutation.*`
 - `host.overlays.*`
 - `host.fallbackUi.*`
@@ -111,21 +111,21 @@ Rules:
 - consumers should prefer `host.integrations.invoke(...)` so Lib resolves active provider behavior at call time
 - when multiple providers exist, `invoke(...)` uses the most recently activated provider
 
-## `host.gameCache`
+## `host.cache`
 
-Namespaced runtime cache buckets attached to `CurrentRun`.
+Namespaced runtime cache owned by the module host.
 
-Use this for module-owned runtime cache whose lifetime should follow the active
-run. It is not persisted, staged, hashed, profiled, or reset by Lib.
+Use this for module-owned runtime cache that is not staged UI config,
+hashed/profiled config, or mutation state.
 
 The normal author path is the author host returned by `lib.createModule(...)`.
 It binds the module's host id, backed by `pluginGuid`, so module code only
-supplies the cache domain and bucket key.
+supplies the cache domain and key.
 
 Current run cache:
 
 ```lua
-local state = host.gameCache.currentRun.get("run", function()
+local state = host.cache.currentRun.get("run", function()
     return {
         ForcedNPCPending = {},
         NPCEncounterSeen = {},
@@ -136,15 +136,40 @@ end)
 `currentRun.get(...)` returns `nil` when there is no active `CurrentRun`.
 
 Surface:
-- `host.gameCache.currentRun.get(key, factory?)`
-- `host.gameCache.currentRun.peek(key)`
-- `host.gameCache.currentRun.clear(key)`
+- `host.cache.currentRun.get(key, factory?)`
+- `host.cache.currentRun.peek(key)`
+- `host.cache.currentRun.clear(key)`
 
 Rules:
 - `key` must be a non-empty string
 - `factory` runs only when the bucket is missing
 - `factory` must return a table when provided
 - cache is namespaced under one Lib-owned root on `CurrentRun`
+
+Persistent scalar cache:
+
+```lua
+local ready = host.cache.persistent.read("RecordingReady", false)
+
+host.cache.persistent.write("RecordingReady", true)
+
+if host.cache.persistent.has("RecordingReady") then
+    host.cache.persistent.clear("RecordingReady")
+end
+```
+
+Surface:
+- `host.cache.persistent.read(key, default?)`
+- `host.cache.persistent.write(key, value)`
+- `host.cache.persistent.clear(key)`
+- `host.cache.persistent.has(key)`
+
+Rules:
+- `key` must be a non-empty string
+- `value` and `default` must be boolean, number, string, or `nil` for the default only
+- `read(...)` does not create a stored value
+- `write(nil)` is invalid; use `clear(...)`
+- persistent cache is not staged, hashed, profiled, or reset by Lib
 
 ## Store And Session
 
@@ -153,7 +178,7 @@ Rules:
 Canonical safe module-construction helper.
 `pluginGuid` is the stable runtime identity. Lib owns the internal per-plugin
 runtime state used for structural hot-reload tracking, hook refresh ownership,
-overlay ownership, integration refresh, game cache, mutation runtime, and
+overlay ownership, integration refresh, cache, mutation runtime, and
 live-host lookup.
 
 ```lua
@@ -188,7 +213,8 @@ Returns:
 
 `createModule(...)` intentionally does not return the prepared definition or
 raw session. Draw callbacks receive a render-scoped context with `imgui`,
-author `session`, author `host`, and bound `widgets`.
+author `session`, draw `actions`, draw-safe `services`, and bound
+`widgets` / `nav`.
 
 Declare hooks on `host.hooks.*` before `host.activate()`. Runtime helper
 files should receive the needed `store` or narrowed read/access closures from
@@ -212,7 +238,6 @@ end
 The runtime store surface provides:
 - `store.read(alias)`
 - `store.table(alias)`
-- `store.writeUnstaged(alias, value)` returns whether the write was accepted
 
 Persisted writes happen through host-owned semantic helpers or session flushes:
 
@@ -233,36 +258,12 @@ module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 Rules:
 - widgets and draw code should usually read staged values from `session.view`
 - runtime/gameplay code should read persisted values through `store.read(...)`
-- module-owned runtime markers declared with `stage = false, hash = false` should write through `store.writeUnstaged(...)`
+- new flat runtime markers should prefer `host.cache.persistent.*`
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
 - profile/hash plumbing should stage values through `session.write(...)` and flush them through `session._flushToConfig()`
 - transient aliases are read from `session`
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
-- runtime-cache aliases declare `stage = false, hash = false` and are excluded from session, hash, profile, and reset-to-defaults surfaces
-
-Persistent runtime cache storage is declared on ordinary storage nodes:
-
-```lua
-{
-    type = "bool",
-    alias = "BatchRecordingArmed",
-    default = false,
-    stage = false,
-    hash = false,
-}
-```
-
-Use it for module-owned runtime intent or small reload/restart markers that should not affect UI staging, profiles, or config hashes:
-
-```lua
-store.writeUnstaged("BatchRecordingArmed", true)
-local armed = store.read("BatchRecordingArmed") == true
-```
-
-`store.writeUnstaged(alias, value)` only accepts aliases declared with `stage = false`.
-It returns `false` without mutating state if violation policy is downgraded from
-error and the alias is rejected.
 
 Composite table storage is declared as one table root with a uniform row schema:
 
@@ -288,7 +289,7 @@ Composite table storage is declared as one table root with a uniform row schema:
 }
 ```
 
-The table root owns `persist`, `stage`, and `hash`. Row fields are row-scoped
+The table root owns `persist` and `hash`. Row fields are row-scoped
 storage aliases and do not declare storage axes. Table rows are compact ordered
 arrays with no row ids or holes.
 
@@ -326,12 +327,10 @@ Storage axis defaults:
 | --- | --- | --- | --- |
 | omitted flags | yes | yes | yes |
 | `persist = false, hash = false` | no | yes | no |
-| `stage = false, hash = false` | yes | no | no |
 | `hash = false` | yes | yes | no |
 
 Invalid storage combinations fail during storage validation:
 - `hash = true` requires `persist = true`
-- `hash = true` requires `stage = true`
 
 Reserved aliases:
 - `Enabled`
@@ -348,10 +347,6 @@ Useful surface:
 - `session.field(alias)`
 - `session.getAliasSchema(alias)`
 - `session.write(alias, value)`
-- `session.stageAction(actionKey, value)`
-- `session.readAction(actionKey)`
-- `session.clearAction(actionKey)`
-- `session.hasActions()`
 - `session.reset(alias)`
 - `session.isDirty()`
 - `session.auditMismatches()`
@@ -368,16 +363,12 @@ When a module is rendered through a Lib host, draw callbacks receive a restricte
 - `table(alias)`
 - `field(alias)`
 - `write(alias, value)`
-- `stageAction(actionKey, value)`
-- `readAction(actionKey)`
-- `clearAction(actionKey)`
-- `hasActions()`
 - `reset(alias)`
 - `getAliasSchema(alias)`
 - `resetToDefaults(opts?)`
 
-The session action methods are compatibility helpers for the draw action
-service. New draw code should prefer `draw.actions.get(actionKey)`.
+Draw action staging is no longer exposed on `session`; use
+`draw.actions.get(actionKey)` instead.
 
 `session.getAliasSchema(alias)` exposes prepared storage schema metadata for UI
 and widget plumbing. Treat the returned nodes as read-only metadata owned by Lib
@@ -691,7 +682,7 @@ The returned map and nodes are read-only metadata owned by Lib storage preparati
 Includes:
 - hash/profile root aliases
 - non-hash staged aliases
-- runtime-cache aliases
+- transient session aliases
 - packed child aliases
 
 ### `frameworkRuntime.hashing.valuesEqual(node, a, b)`
@@ -802,6 +793,8 @@ Draw callbacks expose `draw.actions` for transient UI intent:
 - `action:clear()`
 - `action:has()`
 
+Action refs are object handles; call their methods with colon syntax.
+
 Runtime commit callbacks receive the same action snapshot through
 `commit.actions`:
 
@@ -813,8 +806,8 @@ Runtime commit callbacks receive the same action snapshot through
 - `action:read()`
 - `action:has()`
 
-The old `session.stageAction(...)` and `commit.readAction(...)` forms remain as
-compatibility helpers during the migration. Prefer action refs in new code.
+The old `session.stageAction(...)` form has been removed. Use
+`draw.actions.get(actionKey):stage(value)` in draw code.
 
 ## Draw Widgets
 

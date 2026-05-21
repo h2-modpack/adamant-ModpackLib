@@ -173,7 +173,6 @@ Options:
 Notes:
 - returns whether the button was clicked
 - when `action` is a `draw.actions.get(...)` ref, stages `value` on that action
-- legacy string action keys are still accepted during migration
 - `onClick` is optional convenience only; you can ignore it and use the boolean return directly
 
 ### `draw.widgets.confirmButton(id, label, opts?)`
@@ -191,7 +190,6 @@ Options:
 Notes:
 - returns `true` only when the confirm action is taken
 - when `action` is a `draw.actions.get(...)` ref, stages `value` on that action
-- legacy string action keys are still accepted during migration
 - this is good for destructive or global reset actions
 
 ## Input widget

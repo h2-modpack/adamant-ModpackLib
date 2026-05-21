@@ -19,45 +19,23 @@ local function writePersisted(store, alias, value)
     return state.write(alias, value)
 end
 
-local function create(modConfig, backend, storage)
+local function create(storageConfig, storage)
     local store = {}
-    local runtimeValues = {}
 
     local aliasNodes = storageInternal.getAliases(storage)
-    local unstagedAliases = {}
     local tableHandles = {}
-    for _, node in ipairs(storageInternal.getRuntimeCacheRoots(storage)) do
-        if type(node.alias) == "string" and node.alias ~= "" then
-            unstagedAliases[node.alias] = node
-        end
-    end
 
     local function readRaw(alias)
-        local raw
-        if backend then
-            raw = backend.readValue(alias)
-        end
-        if raw == nil then
-            raw = modConfig[alias]
-        end
-        return raw
+        return storageConfig.readValue(alias)
     end
 
     local function writeRaw(alias, value)
-        if backend and backend.writeValue(alias, value) then
-            return
-        end
-        modConfig[alias] = value
+        storageConfig.writeValue(alias, value)
     end
 
     local function readRootNode(root)
         if root._persist then
             local raw = readRaw(root._storageKey)
-            if raw ~= nil then
-                return raw
-            end
-        else
-            local raw = runtimeValues[root]
             if raw ~= nil then
                 return raw
             end
@@ -68,8 +46,6 @@ local function create(modConfig, backend, storage)
     local function writeRootNode(root, value)
         if root._persist then
             writeRaw(root._storageKey, NormalizeStorageValue(root, value))
-        else
-            runtimeValues[root] = NormalizeStorageValue(root, value)
         end
     end
 
@@ -88,7 +64,7 @@ local function create(modConfig, backend, storage)
             return
         end
 
-        if raw == nil and backend and backend.ensureValue(root._storageKey, normalized) then
+        if raw == nil and storageConfig.ensureValue(root._storageKey, normalized) then
             return
         end
         writeRaw(root._storageKey, normalized)
@@ -101,17 +77,17 @@ local function create(modConfig, backend, storage)
     local storeReadBackend = {
         readRoot = readRootNode,
         canRead = function(node, alias)
-            if not node._persist and node._stage then
+            if not node._persist then
                 logging.violate(
-                    "store.invalid_read_surface",
-                    "store.read: alias '%s' is staged-only; use session for UI-only state",
+                    "store.invalid_surface",
+                    "store.read: alias '%s' is session-only; use session for UI-only state",
                     tostring(alias))
                 return false
             end
             return true
         end,
         onUnknownRead = function(alias)
-            logging.violate("store.unknown_read_alias", "store.read: unknown storage alias '%s'", tostring(alias))
+            logging.violate("store.unknown_alias", "store.read: unknown storage alias '%s'", tostring(alias))
         end,
     }
 
@@ -122,17 +98,17 @@ local function create(modConfig, backend, storage)
             return true
         end,
         canWrite = function(node, alias)
-            if not node._persist and node._stage then
+            if not node._persist then
                 logging.violate(
-                    "store.invalid_write_surface",
-                    "moduleState.writePersisted: alias '%s' is staged-only; use session for UI-only state",
+                    "store.invalid_surface",
+                    "moduleState.writePersisted: alias '%s' is session-only; use session for UI-only state",
                     tostring(alias))
                 return false
             end
             return true
         end,
         onUnknownWrite = function(alias)
-            logging.violate("store.unknown_write_alias", "moduleState.writePersisted: unknown storage alias '%s'",
+            logging.violate("store.unknown_alias", "moduleState.writePersisted: unknown storage alias '%s'",
                 tostring(alias))
         end,
     }
@@ -149,15 +125,15 @@ local function create(modConfig, backend, storage)
 
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            logging.violate("store.unknown_table_alias", "store.table: unknown storage alias '%s'", tostring(alias))
+            logging.violate("store.unknown_alias", "store.table: unknown storage alias '%s'", tostring(alias))
             return nil
         end
         if node.type ~= "table" or node._isBitAlias then
             logging.violate("store.invalid_table_alias", "store.table: alias '%s' is not table storage", tostring(alias))
             return nil
         end
-        if not node._persist and node._stage then
-            logging.violate("store.invalid_table_surface", "store.table: alias '%s' is staged-only; use session.table()",
+        if not node._persist then
+            logging.violate("store.invalid_surface", "store.table: alias '%s' is session-only; use session.table()",
                 tostring(alias))
             return nil
         end
@@ -171,19 +147,6 @@ local function create(modConfig, backend, storage)
 
     local function writeStoreValue(alias, value)
         storageInternal.writeAlias(aliasNodes, storeWriteBackend, alias, value)
-    end
-
-    function store.writeUnstaged(alias, value)
-        if not unstagedAliases[alias] then
-            logging.violate(
-                "store.invalid_unstaged_write",
-                "store.writeUnstaged: alias '%s' is not declared with stage = false",
-                tostring(alias)
-            )
-            return false
-        end
-        writeStoreValue(alias, value)
-        return true
     end
 
     bindManagedStore(store, {

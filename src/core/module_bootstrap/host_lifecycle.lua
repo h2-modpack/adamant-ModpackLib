@@ -3,30 +3,12 @@ local logging = deps.logging
 local mutation = deps.mutation
 local moduleState = deps.moduleState
 local coordinator = deps.coordinator
-local clone = deps.clone
-
-local function hasAction(actions, actionKey)
-    return actions[actionKey] ~= nil
-end
-
-local function hasAnyAction(actions)
-    return next(actions) ~= nil
-end
 
 local function makeCommitContext(actionSnapshot, hadConfigChanges)
     actionSnapshot = actionSnapshot or {}
     local commitActions = moduleState.createCommitActions(actionSnapshot)
     return {
         actions = commitActions,
-        readAction = function(actionKey)
-            return clone(actionSnapshot[actionKey])
-        end,
-        hasAction = function(actionKey)
-            return hasAction(actionSnapshot, actionKey)
-        end,
-        hasActions = function()
-            return hasAnyAction(actionSnapshot)
-        end,
         hadConfigChanges = function()
             return hadConfigChanges == true
         end,
@@ -70,7 +52,7 @@ local function isEnabled(store, packId)
     return store.read("Enabled") == true
 end
 
-local function resyncSession(def, session)
+local function resyncSession(def, session, actions)
     local mismatches = session.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
@@ -78,23 +60,29 @@ local function resyncSession(def, session)
             tostring(name),
             table.concat(mismatches, ", "))
         session._reloadFromConfig()
+        if actions then
+            actions.clearAll()
+        end
     end
     return mismatches
 end
 
-local function commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session)
-    if not session.isDirty() then
+local function commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session, actions)
+    local hasPendingActions = actions and actions.hasAny()
+    if not session.isDirty() and not hasPendingActions then
         return true, nil
     end
 
     local hadConfigChanges = session._hasConfigChanges()
-    local actions = session._captureActionSnapshot()
-    local commitContext = makeCommitContext(actions, hadConfigChanges)
+    local actionSnapshot = actions and actions.captureSnapshot() or {}
+    local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
     local snapshot = hadConfigChanges and session._captureDirtyConfigSnapshot() or nil
     if hadConfigChanges then
         session._flushToConfig()
     end
-    session._clearActions()
+    if actions then
+        actions.clearAll()
+    end
 
     local shouldReapply = mutation.affectsRunData(mutationBundle)
         and hadConfigChanges

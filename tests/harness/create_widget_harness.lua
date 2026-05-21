@@ -1,7 +1,6 @@
 local createLibHarness = require("tests/harness/create_lib_harness")
 
 local function createValueSession(value)
-    local actions = {}
     return {
         read = function()
             return value
@@ -11,12 +10,6 @@ local function createValueSession(value)
         end,
         getAliasSchema = function(alias)
             return { alias = alias, type = "int" }
-        end,
-        stageAction = function(actionKey, actionValue)
-            actions[actionKey] = actionValue
-        end,
-        readAction = function(actionKey)
-            return actions[actionKey]
         end,
     }
 end

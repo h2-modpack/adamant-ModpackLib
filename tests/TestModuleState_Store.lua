@@ -8,7 +8,6 @@ local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
 local makePackedDefinition = helpers.makePackedDefinition
 local makeTransientDefinition = helpers.makeTransientDefinition
-local makeRuntimeDefinition = helpers.makeRuntimeDefinition
 local makeTableDefinition = helpers.makeTableDefinition
 
 TestModuleState_Store = {}
@@ -27,7 +26,7 @@ function TestModuleState_Store:testCreateStoreReadsAndWritesScalarAliases()
 
     lu.assertFalse(store.read("Enabled"))
     lu.assertEquals(store.read("MaxGods"), 4)
-    lu.assertErrorMsgContains("store.unknown_read_alias", function()
+    lu.assertErrorMsgContains("store.unknown_alias", function()
         store.read("MaxGodsPerRun")
     end)
 
@@ -63,88 +62,10 @@ function TestModuleState_Store:testTransientAliasesAreNotReadableThroughStore()
     local config = { Enabled = false }
     local store, session = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
 
-    lu.assertErrorMsgContains("store.invalid_read_surface", function()
+    lu.assertErrorMsgContains("store.invalid_surface", function()
         store.read("FilterText")
     end)
     lu.assertEquals(session.view.FilterText, "")
-end
-
-function TestModuleState_Store:testRuntimeAliasesUseNarrowStoreAccessor()
-    local config = { Enabled = true, RecordingArmed = false, RunMarker = 2 }
-    local store, session = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
-
-    lu.assertTrue(store.read("Enabled"))
-    lu.assertFalse(store.read("RecordingArmed"))
-    lu.assertEquals(store.read("RunMarker"), 2)
-    lu.assertErrorMsgContains("session.invalid_read_surface", function()
-        session.read("RecordingArmed")
-    end)
-
-    store.writeUnstaged("RecordingArmed", true)
-    store.writeUnstaged("RunMarker", 120)
-
-    lu.assertTrue(config.RecordingArmed)
-    lu.assertEquals(config.RunMarker, 99)
-    lu.assertFalse(session.isDirty())
-
-    local ok, err = pcall(function()
-        store.writeUnstaged("Enabled", false)
-    end)
-
-    lu.assertFalse(ok)
-    lu.assertStrContains(err, "stage = false")
-end
-
-function TestModuleState_Store.testDowngradedUnstagedWriteRejectionDoesNotWrite()
-    withLoggingPolicy({
-        ["store.invalid_unstaged_write"] = {
-            severity = "warn",
-            description = "Test downgraded unstaged write policy.",
-        },
-    }, function(harness)
-        withCapturedPrint(harness, function(lines)
-            local config = { Enabled = true, RecordingArmed = false }
-            local store = createModuleState(harness, config, makeRuntimeDefinition(harness))
-
-            lu.assertFalse(store.writeUnstaged("Enabled", false))
-
-            lu.assertTrue(config.Enabled)
-            lu.assertEquals(#lines, 1)
-        end)
-    end)
-end
-
-function TestModuleState_Store:testSessionRejectsRuntimeWrites()
-    local config = { Enabled = true, RecordingArmed = false }
-    local _, session = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
-
-    local ok, err = pcall(function()
-        session.write("RecordingArmed", true)
-    end)
-
-    lu.assertFalse(ok)
-    lu.assertStrContains(err, "not staged")
-    lu.assertFalse(config.RecordingArmed)
-end
-
-function TestModuleState_Store.testDowngradedSessionRuntimeWriteStillDoesNotStage()
-    withLoggingPolicy({
-        ["session.invalid_write_surface"] = {
-            severity = "warn",
-            description = "Test downgraded session runtime write policy.",
-        },
-    }, function(harness)
-        withCapturedPrint(harness, function(lines)
-            local config = { Enabled = true, RecordingArmed = false }
-            local _, session = createModuleState(harness, config, makeRuntimeDefinition(harness))
-
-            session.write("RecordingArmed", true)
-
-            lu.assertFalse(config.RecordingArmed)
-            lu.assertFalse(session.isDirty())
-            lu.assertEquals(#lines, 1)
-        end)
-    end)
 end
 
 function TestModuleState_Store:testTableReadOnlyHandleClampsRawPersistedRows()
@@ -168,7 +89,7 @@ end
 
 function TestModuleState_Store.testDowngradedTableErrorsReturnNilSafely()
     withLoggingPolicy({
-        ["store.unknown_table_alias"] = {
+        ["store.unknown_alias"] = {
             severity = "warn",
             description = "Test downgraded unknown store table policy.",
         },

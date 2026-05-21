@@ -39,15 +39,11 @@ local NormalizeInteger = storage.NormalizeInteger
 -- fail-fast: the first structural contract violation stops preparation.
 --
 -- Supported root-axis combinations:
---   persist=true,  stage=true,  hash=true   -> config-backed UI/profile/hash state.
---   persist=true,  stage=true,  hash=false  -> config-backed UI state excluded from hashes.
---   persist=false, stage=true,  hash=false  -> transient staged UI state.
---   persist=true,  stage=false, hash=false  -> persistent runtime cache via store.writeUnstaged.
---   persist=false, stage=false, hash=false  -> in-memory runtime cache via store.writeUnstaged.
+--   persist=true,  hash=true   -> config-backed UI/profile/hash state.
+--   persist=true,  hash=false  -> config-backed UI state excluded from hashes.
+--   persist=false, hash=false  -> transient session-only UI state.
 --
--- hash=true requires persist=true and stage=true. Table rows inherit their
--- table root axes. PackedInt roots currently require stage=true so root and
--- child aliases stay synchronized through the session surface.
+-- hash=true requires persist=true. Table rows inherit their table root axes.
 
 ---@alias StorageValueKind "'bool'"|"'int'"|"'string'"|"'table'"
 ---@alias StorageNodeType "'bool'"|"'int'"|"'string'"|"'packedInt'"|"'table'"
@@ -71,7 +67,6 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field label string|nil
 ---@field type StorageNodeType
 ---@field persist boolean|nil
----@field stage boolean|nil
 ---@field hash boolean|nil
 ---@field default any
 ---@field min number|nil
@@ -85,7 +80,6 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field defaultRows number|nil
 ---@field _isRoot boolean|nil
 ---@field _persist boolean|nil
----@field _stage boolean|nil
 ---@field _hash boolean|nil
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
@@ -94,8 +88,7 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@class StorageSchema: StorageNode[]
 ---@field _rootNodes StorageNode[]|nil Hash/profile root nodes.
 ---@field _persistRootNodes StorageNode[]|nil
----@field _stageRootNodes StorageNode[]|nil
----@field _runtimeCacheRootNodes StorageNode[]|nil
+---@field _sessionRootNodes StorageNode[]|nil
 ---@field _aliasNodes table<string, StorageNode|PackedBitNode>|nil
 
 local CommonNodeFields = {
@@ -104,7 +97,6 @@ local CommonNodeFields = {
     hash = true,
     label = true,
     persist = true,
-    stage = true,
     tooltip = true,
     type = true,
     visibleIf = true,
@@ -189,7 +181,6 @@ local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases
         parent = root,
         _isBitAlias = true,
         _persist = root._persist,
-        _stage = root._stage,
         _hash = root._hash,
         _storageKey = root._storageKey .. "." .. bitNode.alias,
         _valueKind = storageType and storageType.valueKind or bitNode.type,
@@ -230,8 +221,7 @@ function storage.validate(storageSchema, label)
 
     storageSchema._rootNodes = {}
     storageSchema._persistRootNodes = {}
-    storageSchema._stageRootNodes = {}
-    storageSchema._runtimeCacheRootNodes = {}
+    storageSchema._sessionRootNodes = {}
     storageSchema._aliasNodes = {}
 
     local seenAliases = {}
@@ -246,24 +236,17 @@ function storage.validate(storageSchema, label)
         else
             local storageType = StorageTypes[node.type]
             local persist = node.persist ~= false
-            local stage = node.stage ~= false
-            local hash = node.hash ~= false
+            local hash = persist and node.hash ~= false or node.hash == true
             if not storageType then
                 logging.violate("storage.invalid_node", "%s: unknown storage type '%s'", prefix, tostring(node.type))
             elseif node.persist ~= nil and type(node.persist) ~= "boolean" then
                 logging.violate("storage.invalid_axis_type", "%s: persist must be boolean when provided", prefix)
-            elseif node.stage ~= nil and type(node.stage) ~= "boolean" then
-                logging.violate("storage.invalid_axis_type", "%s: stage must be boolean when provided", prefix)
             elseif node.hash ~= nil and type(node.hash) ~= "boolean" then
                 logging.violate("storage.invalid_axis_type", "%s: hash must be boolean when provided", prefix)
             elseif type(node.alias) ~= "string" or node.alias == "" then
                 logging.violate("storage.invalid_node", "%s: missing alias", prefix)
             elseif hash and not persist then
                 logging.violate("storage.hash_requires_persist", "%s: hash=true requires persist=true", prefix)
-            elseif hash and not stage then
-                logging.violate("storage.hash_requires_stage", "%s: hash=true requires stage=true", prefix)
-            elseif not stage and node.type == "packedInt" then
-                logging.violate("storage.packed_requires_stage", "%s: stage=false packedInt roots are not supported", prefix)
             else
                 ValidateKnownFields(node, RootNodeFieldsByType[node.type] or {}, prefix)
                 storageType.validate(node, prefix)
@@ -271,7 +254,6 @@ function storage.validate(storageSchema, label)
                 PrepareRootNodeMetadata(node)
                 node._isRoot = true
                 node._persist = persist
-                node._stage = stage
                 node._hash = hash
                 node._valueKind = storageType.valueKind
                 node._bitAliases = {}
@@ -339,11 +321,7 @@ function storage.validate(storageSchema, label)
                 if node._persist then
                     table.insert(storageSchema._persistRootNodes, node)
                 end
-                if node._stage then
-                    table.insert(storageSchema._stageRootNodes, node)
-                else
-                    table.insert(storageSchema._runtimeCacheRootNodes, node)
-                end
+                table.insert(storageSchema._sessionRootNodes, node)
                 if node._hash and aliasValid then
                     table.insert(storageSchema._rootNodes, node)
                 end
@@ -370,20 +348,12 @@ function storage.getPersistRoots(storageSchema)
     return rawget(storageSchema, "_persistRootNodes") or {}
 end
 
---- Returns prepared staged root nodes for session/UI state.
+--- Returns prepared root nodes for session/UI state.
 ---@param storageSchema StorageSchema Validated storage schema.
----@return StorageNode[] roots Prepared list of staged root storage nodes.
-function storage.getStageRoots(storageSchema)
+---@return StorageNode[] roots Prepared list of session root storage nodes.
+function storage.getSessionRoots(storageSchema)
     if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_stageRootNodes") or {}
-end
-
---- Returns prepared runtime-cache root nodes for a validated storage schema.
----@param storageSchema StorageSchema Validated storage schema.
----@return StorageNode[] roots Prepared list of stage=false root storage nodes.
-function storage.getRuntimeCacheRoots(storageSchema)
-    if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_runtimeCacheRootNodes") or {}
+    return rawget(storageSchema, "_sessionRootNodes") or {}
 end
 
 --- Compares two values using storage-type equality when available, falling back to deep equality.

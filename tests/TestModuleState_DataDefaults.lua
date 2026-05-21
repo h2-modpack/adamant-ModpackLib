@@ -203,21 +203,24 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingConfigFromSt
     lu.assertEquals(config.PackedChoices, 2)
 end
 
-function TestModuleState_DataDefaults:testCreateStoreHydratesMissingRuntimeConfigFromStorageDefault()
+function TestModuleState_DataDefaults:testCreateStoreDoesNotHydrateTransientStorageIntoConfig()
     local definition = {
         storage = {
-            { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
-            { type = "int", alias = "RunMarker", default = 3, min = 0, max = 10, stage = false, hash = false },
+            { type = "bool", alias = "RecordingArmed", default = false, persist = false, hash = false },
+            { type = "int", alias = "RunMarker", default = 3, min = 0, max = 10, persist = false, hash = false },
         },
     }
     local store, session, config = makeStore(self.harness, definition, {})
 
     lu.assertFalse(session.read("Enabled"))
-    lu.assertFalse(store.read("RecordingArmed"))
-    lu.assertEquals(store.read("RunMarker"), 3)
+    lu.assertFalse(session.read("RecordingArmed"))
+    lu.assertEquals(session.read("RunMarker"), 3)
+    lu.assertErrorMsgContains("store.invalid_surface", function()
+        store.read("RecordingArmed")
+    end)
     lu.assertEquals(config.Enabled, false)
-    lu.assertEquals(config.RecordingArmed, false)
-    lu.assertEquals(config.RunMarker, 3)
+    lu.assertNil(config.RecordingArmed)
+    lu.assertNil(config.RunMarker)
 end
 
 function TestModuleState_DataDefaults:testCreateStorePreservesExistingConfigValues()

@@ -12,6 +12,6 @@ Recommended order:
 4. [MUTATIONS.md](MUTATIONS.md)
 5. [OVERLAYS.md](OVERLAYS.md)
 6. [INTEGRATIONS.md](INTEGRATIONS.md)
-7. [GAME_CACHE.md](GAME_CACHE.md)
+7. [CACHE.md](CACHE.md)
 
 Use [../../../API.md](../../../API.md) when you need the exact public surface.

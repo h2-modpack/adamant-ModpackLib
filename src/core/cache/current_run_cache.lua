@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local currentRunCache = {}
 
-local ROOT_KEY = "_AdamantModpackLibGameCache"
+local ROOT_KEY = "_AdamantModpackLibCache"
 
 local function tableIsEmpty(value)
     return next(value) == nil
@@ -11,19 +11,19 @@ end
 
 local function validateOwnerId(ownerId)
     if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("game_cache.invalid_args", "gameCache ownerId must be a non-empty string")
+        logging.violate("cache.invalid_args", "cache ownerId must be a non-empty string")
     end
 end
 
 local function validateKey(context, key)
     if type(key) ~= "string" or key == "" then
-        logging.violate("game_cache.invalid_args", "%s key must be a non-empty string", context)
+        logging.violate("cache.invalid_args", "%s key must be a non-empty string", context)
     end
 end
 
 local function validateFactory(context, factory)
     if factory ~= nil and type(factory) ~= "function" then
-        logging.violate("game_cache.invalid_factory", "%s factory must be a function", context)
+        logging.violate("cache.invalid_factory", "%s factory must be a function", context)
     end
 end
 
@@ -35,7 +35,7 @@ local function getOwnerBucket(currentRun, ownerId, create)
     end
     if type(root) ~= "table" then
         if create then
-            logging.violate("game_cache.invalid_bucket", "gameCache.currentRun root bucket is not a table")
+            logging.violate("cache.invalid_bucket", "cache.currentRun root bucket is not a table")
         end
         return nil
     end
@@ -47,7 +47,7 @@ local function getOwnerBucket(currentRun, ownerId, create)
     end
     if type(ownerBucket) ~= "table" then
         if create then
-            logging.violate("game_cache.invalid_bucket", "gameCache.currentRun owner bucket is not a table")
+            logging.violate("cache.invalid_bucket", "cache.currentRun owner bucket is not a table")
         end
         return nil
     end
@@ -66,12 +66,12 @@ local function getFromCurrentRun(currentRun, ownerId, key, factory)
             state = {}
         end
         if type(state) ~= "table" then
-            logging.violate("game_cache.invalid_factory", "gameCache.currentRun.get factory must return a table")
+            logging.violate("cache.invalid_factory", "cache.currentRun.get factory must return a table")
         end
         ownerBucket[key] = state
     end
     if type(state) ~= "table" then
-        logging.violate("game_cache.invalid_bucket", "gameCache.currentRun cache bucket is not a table")
+        logging.violate("cache.invalid_bucket", "cache.currentRun cache bucket is not a table")
     end
     return state
 end
@@ -102,8 +102,8 @@ end
 
 currentRunCache.get = function(currentRun, ownerId, key, factory)
     validateOwnerId(ownerId)
-    validateKey("gameCache.currentRun.get", key)
-    validateFactory("gameCache.currentRun.get", factory)
+    validateKey("cache.currentRun.get", key)
+    validateFactory("cache.currentRun.get", factory)
     if currentRun == nil then
         return nil
     end
@@ -112,7 +112,7 @@ end
 
 currentRunCache.peek = function(currentRun, ownerId, key)
     validateOwnerId(ownerId)
-    validateKey("gameCache.currentRun.peek", key)
+    validateKey("cache.currentRun.peek", key)
     if currentRun == nil then
         return nil
     end
@@ -121,7 +121,7 @@ end
 
 currentRunCache.clear = function(currentRun, ownerId, key)
     validateOwnerId(ownerId)
-    validateKey("gameCache.currentRun.clear", key)
+    validateKey("cache.currentRun.clear", key)
     if currentRun == nil then
         return false
     end

@@ -37,7 +37,7 @@ host.activate()
 ```
 
 `pluginGuid` is the stable runtime identity; Lib owns the internal hot-reload
-state for hooks, overlays, integrations, game cache, mutation runtime, and
+state for hooks, overlays, integrations, cache, mutation runtime, and
 structural reload tracking. Declare runtime hooks on `host.hooks.*` before activation.
 `host.activate()` registers the live host for coordinated discovery and installs requested fallback UI.
 Every module definition must declare a stable `id` and display `name`; `modpack`
@@ -53,7 +53,7 @@ Module authors:
 - [docs/module-authors/MODULE_AUTHORING.md](docs/module-authors/MODULE_AUTHORING.md)
   Full authoring contract for storage, sessions, lifecycle, hooks, overlays, mutations, and hosting.
 - [docs/module-authors/capabilities/README.md](docs/module-authors/capabilities/README.md)
-  Focused guides for managed state, widgets, hooks, mutations, overlays, integrations, and game-object state.
+  Focused guides for managed state, widgets, hooks, mutations, overlays, integrations, and cache.
 - [API.md](API.md)
   Public namespaces, functions, and data contracts.
 
@@ -78,7 +78,7 @@ Reference and historical notes:
 - `host.hooks`
 - `host.overlays`
 - `host.integrations`
-- `host.gameCache`
+- `host.cache`
 - `host.fallbackUi`
 
 Common top-level helpers:

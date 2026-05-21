@@ -18,4 +18,4 @@ Capability guides:
 - [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
 - [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
-- [capabilities/GAME_CACHE.md](capabilities/GAME_CACHE.md)
+- [capabilities/CACHE.md](capabilities/CACHE.md)

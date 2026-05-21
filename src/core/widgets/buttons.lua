@@ -3,19 +3,19 @@ local helpers = ...
 ---@class ButtonOpts
 ---@field id string|number|nil
 ---@field tooltip string|nil
----@field action string|DrawActionRef|nil Staged action ref, or legacy session action key, to replace when clicked.
----@field value any Staged session action payload.
+---@field action DrawActionRef|nil Staged action ref to replace when clicked.
+---@field value any Staged action payload.
 ---@field onClick fun(imgui: table)|nil
 
 ---@class ConfirmButtonOpts
 ---@field tooltip string|nil
 ---@field confirmLabel string|nil
 ---@field cancelLabel string|nil
----@field action string|DrawActionRef|nil Staged action ref, or legacy session action key, to replace when confirmed.
----@field value any Staged session action payload.
+---@field action DrawActionRef|nil Staged action ref to replace when confirmed.
+---@field value any Staged action payload.
 ---@field onConfirm fun(imgui: table)|nil
 
-local function StageAction(session, opts)
+local function StageAction(context, opts)
     local action = opts.action
     if action == nil then
         return
@@ -24,22 +24,18 @@ local function StageAction(session, opts)
         action:stage(opts.value)
         return
     end
-    if type(action) == "string" then
-        session.stageAction(action, opts.value)
-        return
-    end
     helpers.logging.violate(
         "widgets.invalid_action",
-        "draw.widgets.button: opts.action must be a draw action ref or legacy action key string"
+        "%s: opts.action must be a draw action ref",
+        context
     )
 end
 
 ---@param imgui table
----@param session Session
 ---@param label any
 ---@param opts ButtonOpts|nil
 ---@return boolean
-function helpers.widgets.button(imgui, session, label, opts)
+function helpers.widgets.button(imgui, label, opts)
     opts = opts or {}
     local id = tostring(opts.id or label or "")
     local clicked = imgui.Button(tostring(label or "") .. "##" .. id)
@@ -48,18 +44,17 @@ function helpers.widgets.button(imgui, session, label, opts)
         if type(opts.onClick) == "function" then
             opts.onClick(imgui)
         end
-        StageAction(session, opts)
+        StageAction("draw.widgets.button", opts)
     end
     return clicked == true
 end
 
 ---@param imgui table
----@param session Session
 ---@param id string|number
 ---@param label any
 ---@param opts ConfirmButtonOpts|nil
 ---@return boolean
-function helpers.widgets.confirmButton(imgui, session, id, label, opts)
+function helpers.widgets.confirmButton(imgui, id, label, opts)
     opts = opts or {}
     local popupId = tostring(id) .. "##popup"
     local changed = false
@@ -74,7 +69,7 @@ function helpers.widgets.confirmButton(imgui, session, id, label, opts)
             if type(opts.onConfirm) == "function" then
                 opts.onConfirm(imgui)
             end
-            StageAction(session, opts)
+            StageAction("draw.widgets.confirmButton", opts)
             imgui.CloseCurrentPopup()
             changed = true
         end

@@ -10,7 +10,6 @@ local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
 local makePackedDefinition = helpers.makePackedDefinition
 local makeTransientDefinition = helpers.makeTransientDefinition
-local makeRuntimeDefinition = helpers.makeRuntimeDefinition
 local makeTableDefinition = helpers.makeTableDefinition
 local makeMinRowsTableDefinition = helpers.makeMinRowsTableDefinition
 
@@ -334,16 +333,16 @@ end
 function TestModuleState_Session:testTableStorageDoesNotLeakRowAliasesGlobally()
     local _, session = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
 
-    lu.assertErrorMsgContains("session.unknown_read_alias", function()
+    lu.assertErrorMsgContains("session.unknown_alias", function()
         session.read("Limit")
     end)
-    lu.assertErrorMsgContains("session.unknown_read_alias", function()
+    lu.assertErrorMsgContains("session.unknown_alias", function()
         session.read("ChoiceA")
     end)
 end
 
 function TestModuleState_Session:testSessionWriteUnknownAliasFails()
-    local _, session = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local _, session = createModuleState(self.harness, {}, makeScalarDefinition(self.harness))
 
     lu.assertErrorMsgContains("unknown alias 'Nope'", function()
         session.write("Nope", true)
@@ -351,9 +350,9 @@ function TestModuleState_Session:testSessionWriteUnknownAliasFails()
 end
 
 function TestModuleState_Session:testSessionReadUnknownAliasFails()
-    local _, session = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local _, session = createModuleState(self.harness, {}, makeScalarDefinition(self.harness))
 
-    lu.assertErrorMsgContains("session.unknown_read_alias", function()
+    lu.assertErrorMsgContains("session.unknown_alias", function()
         session.read("Nope")
     end)
 end
@@ -368,13 +367,13 @@ end
 
 function TestModuleState_Session.testDowngradedSessionResetUnknownAliasReturnsSafely()
     withLoggingPolicy({
-        ["session.unknown_reset_alias"] = {
+        ["session.unknown_alias"] = {
             severity = "warn",
             description = "Test downgraded session reset policy.",
         },
     }, function(harness)
         withCapturedPrint(harness, function(lines)
-            local _, session = createModuleState(harness, {}, makeRuntimeDefinition(harness))
+            local _, session = createModuleState(harness, {}, makeScalarDefinition(harness))
 
             session.reset("Nope")
 
@@ -394,7 +393,7 @@ end
 
 function TestModuleState_Session.testDowngradedSessionTableErrorsReturnNilSafely()
     withLoggingPolicy({
-        ["session.unknown_table_alias"] = {
+        ["session.unknown_alias"] = {
             severity = "warn",
             description = "Test downgraded unknown session table policy.",
         },
@@ -445,38 +444,15 @@ function TestModuleState_Session:testTableStorageHashRoundTripsRows()
     lu.assertEquals(decoded[2].PackedChoices, 4)
 end
 
-function TestModuleState_Session:testSessionActionsAreDirtyAndLastWriteWins()
-    local definition = prepareDefinition(self.harness, {
-        id = "SessionActionTest",
-        name = "Session Action Test",
-        storage = {},
-    })
-    local _, session = createModuleState(self.harness, {}, definition)
-
-    lu.assertFalse(session.hasActions())
-    lu.assertFalse(session.isDirty())
-
-    session.stageAction("recording", { kind = "start" })
-    session.stageAction("recording", { kind = "stop" })
-
-    lu.assertTrue(session.hasActions())
-    lu.assertTrue(session.isDirty())
-    lu.assertEquals(session.readAction("recording"), { kind = "stop" })
-
-    session.clearAction("recording")
-
-    lu.assertFalse(session.hasActions())
-    lu.assertFalse(session.isDirty())
-end
-
-function TestModuleState_Session:testDrawActionsShareSessionActionState()
+function TestModuleState_Session:testDrawActionsAreSeparateFromSessionDirtyState()
     local definition = prepareDefinition(self.harness, {
         id = "DrawActionTest",
         name = "Draw Action Test",
         storage = {},
     })
     local _, session = createModuleState(self.harness, {}, definition)
-    local actions = self.harness.moduleState.createDrawActions(session)
+    local actionState = self.harness.moduleState.createActionState()
+    local actions = self.harness.moduleState.createDrawActions(actionState)
     local recording = actions.get("recording")
 
     lu.assertFalse(actions.hasAny())
@@ -485,15 +461,27 @@ function TestModuleState_Session:testDrawActionsShareSessionActionState()
     recording:stage({ kind = "start" })
 
     lu.assertTrue(actions.hasAny())
-    lu.assertTrue(session.hasActions())
-    lu.assertTrue(session.isDirty())
+    lu.assertTrue(actionState.hasAny())
+    lu.assertFalse(session.isDirty())
     lu.assertTrue(recording:has())
     lu.assertEquals(recording:read(), { kind = "start" })
-    lu.assertEquals(session.readAction("recording"), { kind = "start" })
 
     recording:clear()
 
     lu.assertFalse(actions.hasAny())
-    lu.assertFalse(session.hasActions())
+    lu.assertFalse(actionState.hasAny())
     lu.assertFalse(session.isDirty())
+end
+
+function TestModuleState_Session:testActionRefsRequireMethodCallSyntax()
+    local actionState = self.harness.moduleState.createActionState()
+    local drawAction = self.harness.moduleState.createDrawActions(actionState).get("recording")
+    local commitAction = self.harness.moduleState.createCommitActions({ recording = true }).get("recording")
+
+    lu.assertErrorMsgContains("api.invalid_method_call", function()
+        drawAction.stage(true)
+    end)
+    lu.assertErrorMsgContains("api.invalid_method_call", function()
+        commitAction.read()
+    end)
 end

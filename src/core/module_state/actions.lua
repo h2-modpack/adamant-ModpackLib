@@ -29,22 +29,29 @@ local function isDrawActionRef(value)
     return actionRefKind(value) == DRAW_ACTION_REF
 end
 
+local function requireRefSelf(context, self, ref)
+    if self ~= ref then
+        logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
+    end
+end
+
 local function createDrawActionRef(actionState, actionKey)
     local ref
     ref = markActionRef({
         stage = function(self, value)
-            if self ~= ref then
-                value = self
-            end
+            requireRefSelf("draw.actions.get(...):stage", self, ref)
             actionState.stage(actionKey, value)
         end,
-        read = function()
+        read = function(self)
+            requireRefSelf("draw.actions.get(...):read", self, ref)
             return actionState.read(actionKey)
         end,
-        clear = function()
+        clear = function(self)
+            requireRefSelf("draw.actions.get(...):clear", self, ref)
             actionState.clear(actionKey)
         end,
-        has = function()
+        has = function(self)
+            requireRefSelf("draw.actions.get(...):has", self, ref)
             return actionState.has(actionKey)
         end,
     }, DRAW_ACTION_REF)
@@ -52,14 +59,18 @@ local function createDrawActionRef(actionState, actionKey)
 end
 
 local function createCommitActionRef(snapshot, actionKey)
-    return markActionRef({
-        read = function()
+    local ref
+    ref = markActionRef({
+        read = function(self)
+            requireRefSelf("commit.actions.get(...):read", self, ref)
             return CloneValue(snapshot[actionKey])
         end,
-        has = function()
+        has = function(self)
+            requireRefSelf("commit.actions.get(...):has", self, ref)
             return snapshot[actionKey] ~= nil
         end,
     }, COMMIT_ACTION_REF)
+    return ref
 end
 
 local function createState()
@@ -68,7 +79,7 @@ local function createState()
     local state = {}
 
     function state.stage(actionKey, value)
-        validateActionKey("session.stageAction", actionKey)
+        validateActionKey("draw.actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
             return
@@ -77,12 +88,12 @@ local function createState()
     end
 
     function state.read(actionKey)
-        validateActionKey("session.readAction", actionKey)
+        validateActionKey("draw.actions.read", actionKey)
         return CloneValue(slots[actionKey])
     end
 
     function state.clear(actionKey)
-        validateActionKey("session.clearAction", actionKey)
+        validateActionKey("draw.actions.clear", actionKey)
         slots[actionKey] = nil
     end
 

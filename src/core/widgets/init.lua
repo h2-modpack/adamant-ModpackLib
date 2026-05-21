@@ -58,10 +58,10 @@ function widgets.bind(imgui, session)
             return widgets.text(imgui, text, opts)
         end,
         button = function(label, opts)
-            return widgets.button(imgui, session, label, opts)
+            return widgets.button(imgui, label, opts)
         end,
         confirmButton = function(id, label, opts)
-            return widgets.confirmButton(imgui, session, id, label, opts)
+            return widgets.confirmButton(imgui, id, label, opts)
         end,
         inputText = function(target, opts)
             return callFieldWidget("inputText", target, opts)

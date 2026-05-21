@@ -112,8 +112,8 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     lu.assertEquals(type(host.getMeta), "function")
     lu.assertEquals(type(host.log), "function")
     lu.assertEquals(type(host.logIf), "function")
-    lu.assertEquals(type(host.gameCache), "table")
-    lu.assertEquals(type(host.gameCache.currentRun.get), "function")
+    lu.assertEquals(type(host.cache), "table")
+    lu.assertEquals(type(host.cache.currentRun.get), "function")
     lu.assertEquals(type(host.hooks), "table")
     lu.assertEquals(type(host.hooks.wrap), "function")
     lu.assertEquals(type(host.hooks.override), "function")
@@ -130,12 +130,12 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     lu.assertEquals(type(host.overlays.onCommit), "function")
     lu.assertEquals(type(host.overlays.onInterval), "function")
     lu.assertEquals(type(host.overlays.afterHook), "function")
-    local gameCacheSurfaceCount = 0
-    for key in pairs(host.gameCache) do
-        gameCacheSurfaceCount = gameCacheSurfaceCount + 1
-        lu.assertEquals(key, "currentRun")
+    local cacheSurfaceCount = 0
+    for key in pairs(host.cache) do
+        cacheSurfaceCount = cacheSurfaceCount + 1
+        lu.assertTrue(key == "currentRun" or key == "persistent", key)
     end
-    lu.assertEquals(gameCacheSurfaceCount, 1)
+    lu.assertEquals(cacheSurfaceCount, 2)
     lu.assertEquals(type(host.activate), "function")
     lu.assertNil(host.tryActivate)
     lu.assertNil(host.read)

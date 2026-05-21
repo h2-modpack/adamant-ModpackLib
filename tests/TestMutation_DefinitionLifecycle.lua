@@ -67,9 +67,9 @@ function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutati
 end
 
 function TestMutation_DefinitionLifecycle:commitSession(def, mutationBundle, settingsObserver, authorHost, store, session,
-        pluginGuid)
+        pluginGuid, actions)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
-    return self.hostLifecycle.commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session)
+    return self.hostLifecycle.commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session, actions)
 end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, authorHost, store, enabled, pluginGuid)
@@ -355,7 +355,6 @@ end
 function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
     local calls = 0
     local observedAction = nil
-    local observedLegacyAction = nil
     local observedHasAction = nil
     local observedHasAnyAction = nil
     local observedConfigChange = nil
@@ -368,31 +367,31 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
         storage = {},
     })
     local store, session = createModuleState(self.harness, config, definition)
+    local actionState = self.harness.moduleState.createActionState()
+    local drawActions = self.harness.moduleState.createDrawActions(actionState)
     local settingsObserver = function(_, _, commit)
         calls = calls + 1
         local recording = commit.actions.get("recording")
         observedAction = recording:read()
-        observedLegacyAction = commit.readAction("recording")
         observedHasAction = recording:has()
         observedHasAnyAction = commit.actions.hasAny()
         observedConfigChange = commit.hadConfigChanges()
     end
 
-    session.stageAction("recording", { kind = "start" })
-    local ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session)
+    drawActions.get("recording"):stage({ kind = "start" })
+    local ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session, nil, actionState)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
     lu.assertEquals(observedAction, { kind = "start" })
-    lu.assertEquals(observedLegacyAction, { kind = "start" })
     lu.assertTrue(observedHasAction)
     lu.assertTrue(observedHasAnyAction)
     lu.assertFalse(observedConfigChange)
-    lu.assertFalse(session.hasActions())
+    lu.assertFalse(actionState.hasAny())
     lu.assertFalse(session.isDirty())
 
-    ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session)
+    ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session, nil, actionState)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)

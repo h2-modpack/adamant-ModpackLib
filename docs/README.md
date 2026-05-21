@@ -34,5 +34,6 @@ Use these when you need platform behavior, accepted constraints, or binding deta
 
 - [migrations/MIGRATING_MUTATIONS.md](migrations/MIGRATING_MUTATIONS.md)
 - [migrations/MIGRATING_PLUGIN_GUID_RUNTIME.md](migrations/MIGRATING_PLUGIN_GUID_RUNTIME.md)
+- [migrations/MIGRATING_SESSION_ACTIONS.md](migrations/MIGRATING_SESSION_ACTIONS.md)
 
 These are historical migration notes for older module code.

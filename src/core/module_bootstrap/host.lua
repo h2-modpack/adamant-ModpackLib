@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local values = deps.values
 local moduleState = deps.moduleState
 local integrations = deps.integrations
 local hooks = deps.hooks
@@ -24,7 +23,6 @@ local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
     mutation = mutation,
     moduleState = moduleState,
     coordinator = coordinator,
-    clone = values.deepCopy,
 })
 
 function moduleHost.getState(host)
@@ -58,6 +56,7 @@ end
 ---@field pluginGuid string
 ---@field store ManagedStore
 ---@field session Session
+---@field cacheStore PersistentCacheStore|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: ManagedStore, commit: table)|nil
 ---@field drawTab fun(draw: DrawContext)
 ---@field drawQuickContent fun(draw: DrawContext)|nil
@@ -121,6 +120,7 @@ local KnownHostOpts = {
     pluginGuid = true,
     store = true,
     session = true,
+    cacheStore = true,
     onSettingsCommitted = true,
     drawTab = true,
     drawQuickContent = true,
@@ -164,11 +164,11 @@ local function CreateDrawServices(authorHost)
     }
 end
 
-local function CreateDraw(imgui, session, authorSession, authorHost)
+local function CreateDraw(imgui, actions, authorSession, authorHost)
     return {
         imgui = imgui,
         session = authorSession,
-        actions = moduleState.createDrawActions(session),
+        actions = moduleState.createDrawActions(actions),
         services = CreateDrawServices(authorHost),
         field = function(alias)
             return storage.field.create(authorSession, alias, "draw.field")
@@ -201,6 +201,7 @@ function moduleHost.create(opts)
     local pluginGuid = opts.pluginGuid
     local store = opts.store
     local session = opts.session
+    local cacheStore = opts.cacheStore
     if type(def) ~= "table" or def._preparedDefinition ~= true then
         logging.violate("host.invalid_create_opts", "moduleHost.create: prepared definition is required")
     end
@@ -217,6 +218,7 @@ function moduleHost.create(opts)
 
     local drawTab = opts.drawTab
     local drawQuickContent = opts.drawQuickContent
+    local actions = moduleState.createActionState()
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
 
@@ -302,7 +304,7 @@ function moduleHost.create(opts)
         requireActivated("writeAndFlush")
         session.write(alias, value)
         local ok, err = hostLifecycle.commitSession(host, def, mutationBundle, notifySettingsCommitted, authorHost, store,
-            session)
+            session, actions)
         return ok, err
     end
 
@@ -313,20 +315,22 @@ function moduleHost.create(opts)
 
     function host.flush()
         requireActivated("flush")
-        if not session.isDirty() then
+        if not session.isDirty() and not actions.hasAny() then
             return true
         end
-        return hostLifecycle.commitSession(host, def, mutationBundle, notifySettingsCommitted, authorHost, store, session)
+        return hostLifecycle.commitSession(host, def, mutationBundle, notifySettingsCommitted, authorHost, store, session,
+            actions)
     end
 
     function host.reloadFromConfig()
         requireActivated("reloadFromConfig")
         session._reloadFromConfig()
+        actions.clearAll()
     end
 
     function host.resync()
         requireActivated("resync")
-        return hostLifecycle.resyncSession(def, session)
+        return hostLifecycle.resyncSession(def, session, actions)
     end
 
     function host.resetToDefaults(resetOpts)
@@ -336,11 +340,11 @@ function moduleHost.create(opts)
 
     function host.commitIfDirty()
         requireActivated("commitIfDirty")
-        if not session.isDirty() then
+        if not session.isDirty() and not actions.hasAny() then
             return true, nil, false
         end
         local ok, err = hostLifecycle.commitSession(host, def, mutationBundle, notifySettingsCommitted, authorHost, store,
-            session)
+            session, actions)
         return ok, err, ok == true
     end
 
@@ -388,13 +392,13 @@ function moduleHost.create(opts)
 
     function host.drawTab(imgui)
         requireActivated("drawTab")
-        return drawTab(CreateDraw(imgui, session, authorSession, authorHost))
+        return drawTab(CreateDraw(imgui, actions, authorSession, authorHost))
     end
 
     if type(drawQuickContent) == "function" then
         function host.drawQuickContent(imgui)
             requireActivated("drawQuickContent")
-            return drawQuickContent(CreateDraw(imgui, session, authorSession, authorHost))
+            return drawQuickContent(CreateDraw(imgui, actions, authorSession, authorHost))
         end
     end
 
@@ -403,6 +407,8 @@ function moduleHost.create(opts)
         mutationBundle = mutationBundle,
         pluginGuid = pluginGuid,
         store = store,
+        actions = actions,
+        cacheStore = cacheStore,
         authorSession = authorSession,
         authorHost = authorHost,
         effectReceipts = {},

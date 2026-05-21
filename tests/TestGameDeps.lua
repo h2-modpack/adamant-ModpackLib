@@ -44,7 +44,7 @@ function TestGameDeps:testGameGlobalsAreLateReadFromHarnessEnvironment()
     local currentRun = {}
     self.harness.env.CurrentRun = currentRun
 
-    lu.assertIs(self.gameDeps.gameCache.CurrentRun(), currentRun)
+    lu.assertIs(self.gameDeps.cache.CurrentRun(), currentRun)
     lu.assertIs(self.gameDeps.overlays.ScreenData(), self.harness.env.ScreenData)
     lu.assertIs(self.gameDeps.overlays.HUDScreen(), self.harness.env.HUDScreen)
     lu.assertEquals(self.gameDeps.overlays.ShowingCombatUI(), true)
@@ -67,7 +67,7 @@ function TestGameDeps:testOptionalGlobalTablesRejectMalformedValues()
     self.harness.env.CurrentRun = true
 
     lu.assertErrorMsgContains("CurrentRun must be nil or a table", function()
-        self.gameDeps.gameCache.CurrentRun()
+        self.gameDeps.cache.CurrentRun()
     end)
 end
 

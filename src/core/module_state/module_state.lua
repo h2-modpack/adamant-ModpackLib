@@ -10,6 +10,8 @@ local moduleState = {}
 local backendModule = import('core/module_state/backend.lua', nil, {
     chalk = chalk,
 })
+local storageAdapter = import('core/module_state/adapter_storage.lua')
+local cacheAdapter = import('core/module_state/adapter_cache.lua')
 
 local managedStore = import('core/module_state/store.lua', nil, {
     logging = logging,
@@ -27,15 +29,21 @@ local sessionModule = import('core/module_state/session.lua', nil, {
     logging = logging,
     storage = storageService,
     values = values,
-    actions = actionsModule,
 })
 
 ---@class ConfigBackendEntry
 ---@field get fun(self: ConfigBackendEntry): any
 ---@field set fun(self: ConfigBackendEntry, value: any)
 
----@class ConfigBackend
+---@class PersistenceBackend
 ---@field rawConfig table
+---@field getEntry fun(section: string, key: string): ConfigBackendEntry|nil
+---@field ensure fun(section: string, key: string, value: any): boolean
+---@field read fun(section: string, key: string): any
+---@field write fun(section: string, key: string, value: any): boolean
+---@field clear fun(section: string, key: string): boolean
+
+---@class StorageConfigAdapter
 ---@field getEntry fun(alias: string): ConfigBackendEntry|nil
 ---@field ensureValue fun(alias: string, value: any): boolean
 ---@field readValue fun(alias: string): any
@@ -44,11 +52,27 @@ local sessionModule = import('core/module_state/session.lua', nil, {
 ---@class ModuleState
 ---@field store ManagedStore
 ---@field session Session
+---@field cacheStore PersistentCacheStore
+
+---@class ActionState
+---@field stage fun(actionKey: string, value: any)
+---@field read fun(actionKey: string): any
+---@field clear fun(actionKey: string)
+---@field has fun(actionKey: string): boolean
+---@field hasAny fun(): boolean
+---@field captureSnapshot fun(): table
+---@field clearAll fun()
+---@field getRef fun(actionKey: string): table
+
+---@class PersistentCacheStore
+---@field read fun(key: string): any
+---@field has fun(key: string): boolean
+---@field write fun(key: string, value: any): boolean
+---@field clear fun(key: string): boolean
 
 ---@class ManagedStore
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): StorageTableReadOnly|nil
----@field writeUnstaged fun(alias: string, value: any)
 
 ---@class Session
 ---@field view table<string, any>
@@ -91,13 +115,16 @@ function moduleState.create(modConfig, definition)
     end
 
     local storage = definition.storage
-    local backend = backendModule.getConfigBackend(modConfig)
-    local store = managedStore.create(modConfig, backend, storage)
-    local session = sessionModule.createSession(modConfig, backend, storage)
+    local persistenceBackend = backendModule.create(modConfig)
+    local storageConfig = storageAdapter.create(modConfig, persistenceBackend)
+    local store = managedStore.create(storageConfig, storage)
+    local session = sessionModule.createSession(storageConfig, storage)
+    local cacheStore = cacheAdapter.create(modConfig, persistenceBackend)
 
     return {
         store = store,
         session = session,
+        cacheStore = cacheStore,
     }
 end
 
@@ -111,8 +138,12 @@ function moduleState.createAuthorSession(session, opts)
     return sessionModule.createAuthorSession(session, opts)
 end
 
-function moduleState.createDrawActions(session)
-    return sessionModule.createDrawActions(session)
+function moduleState.createDrawActions(actions)
+    return actionsModule.createDrawActions(actions)
+end
+
+function moduleState.createActionState()
+    return actionsModule.createState()
 end
 
 function moduleState.createCommitActions(actions)
@@ -129,7 +160,7 @@ function moduleState.resetSessionToDefaults(storage, session, opts)
     local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
     local count = 0
 
-    for _, node in ipairs(storageService.getStageRoots(storage)) do
+    for _, node in ipairs(storageService.getSessionRoots(storage)) do
         local alias = node.alias
         if node._persist and alias ~= nil and not exclude[alias] then
             local current = session.read(alias)

@@ -3,7 +3,6 @@ local deps = ...
 local logging = deps.logging
 local storageInternal = deps.storage
 local values = deps.values
-local actionsModule = deps.actions
 local ClonePersistedValue = values.deepCopy
 local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 local DecodePackedChild = storageInternal.packed.DecodePackedChild
@@ -13,36 +12,26 @@ local DecodePackedChild = storageInternal.packed.DecodePackedChild
 ---@field read fun(alias: string): any
 ---@field field fun(alias: string): StorageField
 ---@field write fun(alias: string, value: any)
----@field stageAction fun(actionKey: string, value: any)
----@field readAction fun(actionKey: string): any
----@field clearAction fun(actionKey: string)
----@field hasActions fun(): boolean
 ---@field reset fun(alias: string)
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 ---@field resetToDefaults fun(opts: table|nil): boolean, number
 
----@param modConfig table
----@param configBackend ConfigBackend|nil
+---@param storageConfig StorageConfigAdapter
 ---@param storage StorageSchema
 ---@return Session
-local function createSession(modConfig, configBackend, storage)
-    local stageRootNodes = storageInternal.getStageRoots(storage)
+local function createSession(storageConfig, storage)
+    local sessionRootNodes = storageInternal.getSessionRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
-    local actionState = actionsModule.createState()
     local dirty = false
     local dirtyRoots = {}
     local configEntries = {}
     local tableHandles = {}
 
-    if configBackend then
-        for _, root in ipairs(stageRootNodes) do
-            if root._persist then
-                configEntries[root.alias] = configBackend.getEntry(root._storageKey)
-            end
+    for _, root in ipairs(sessionRootNodes) do
+        if root._persist then
+            configEntries[root.alias] = storageConfig.getEntry(root._storageKey)
         end
-    else
-        configEntries = nil
     end
 
     local function readConfigValue(root)
@@ -53,7 +42,7 @@ local function createSession(modConfig, configBackend, storage)
         if entry then
             return entry:get()
         end
-        return modConfig[root._storageKey]
+        return storageConfig.readValue(root._storageKey)
     end
 
     local function writeConfigValue(root, value)
@@ -65,7 +54,7 @@ local function createSession(modConfig, configBackend, storage)
             entry:set(value)
             return
         end
-        modConfig[root._storageKey] = value
+        storageConfig.writeValue(root._storageKey, value)
     end
 
     local function syncPackedChildren(root, packedValue)
@@ -91,7 +80,7 @@ local function createSession(modConfig, configBackend, storage)
         return true
     end
 
-    local function loadStageRootIntoStaging(root)
+    local function loadRootIntoStaging(root)
         local value = readConfigValue(root)
         if value == nil then
             value = ClonePersistedValue(root.default)
@@ -104,13 +93,13 @@ local function createSession(modConfig, configBackend, storage)
     end
 
     local function copyConfigToStaging()
-        for _, root in ipairs(stageRootNodes) do
-            loadStageRootIntoStaging(root)
+        for _, root in ipairs(sessionRootNodes) do
+            loadRootIntoStaging(root)
         end
     end
 
     local function copyStagingToConfig()
-        for _, root in ipairs(stageRootNodes) do
+        for _, root in ipairs(sessionRootNodes) do
             if dirtyRoots[root.alias] then
                 writeConfigValue(root, staging[root.alias])
             end
@@ -119,7 +108,7 @@ local function createSession(modConfig, configBackend, storage)
 
     local function captureDirtyConfigSnapshot()
         local snapshot = {}
-        for _, root in ipairs(stageRootNodes) do
+        for _, root in ipairs(sessionRootNodes) do
             if dirtyRoots[root.alias] then
                 table.insert(snapshot, {
                     root = root,
@@ -145,26 +134,15 @@ local function createSession(modConfig, configBackend, storage)
         readRoot = function(root)
             return staging[root.alias]
         end,
-        canRead = function(node, alias)
-            if not node._stage then
-                logging.violate(
-                    "session.invalid_read_surface",
-                    "session.read: alias '%s' is not staged; use store.read()",
-                    tostring(alias)
-                )
-                return false
-            end
-            return true
-        end,
         onUnknownRead = function(alias)
-            logging.violate("session.unknown_read_alias", "session.read: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_alias", "session.read: unknown alias '%s'", tostring(alias))
         end,
     }
 
     local sessionWriteBackend = {
         readRoot = function(root)
             if staging[root.alias] == nil then
-                loadStageRootIntoStaging(root)
+                loadRootIntoStaging(root)
             end
             return staging[root.alias]
         end,
@@ -172,19 +150,8 @@ local function createSession(modConfig, configBackend, storage)
         writeAliasValue = function(node, aliasValue)
             staging[node.alias] = aliasValue
         end,
-        canWrite = function(node, alias)
-            if not node._stage then
-                logging.violate(
-                    "session.invalid_write_surface",
-                    "session.write: alias '%s' is not staged; use store.writeUnstaged()",
-                    tostring(alias)
-                )
-                return false
-            end
-            return true
-        end,
         onUnknownWrite = function(alias)
-            logging.violate("session.unknown_write_alias", "session.write: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_alias", "session.write: unknown alias '%s'", tostring(alias))
         end,
     }
 
@@ -228,26 +195,17 @@ local function createSession(modConfig, configBackend, storage)
 
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            logging.violate("session.unknown_table_alias", "session.table: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_alias", "session.table: unknown alias '%s'", tostring(alias))
             return nil
         end
         if node.type ~= "table" or node._isBitAlias then
             logging.violate("session.invalid_table_alias", "session.table: alias '%s' is not table storage", tostring(alias))
             return nil
         end
-        if not node._stage then
-            logging.violate(
-                "session.invalid_table_surface",
-                "session.table: alias '%s' is not staged; use store.table()",
-                tostring(alias)
-            )
-            return nil
-        end
-
         local handle = storageInternal.table.CreateTableHandle(node, {
             readRoot = function(root)
                 if staging[root.alias] == nil then
-                    loadStageRootIntoStaging(root)
+                    loadRootIntoStaging(root)
                 end
                 return staging[root.alias]
             end,
@@ -261,7 +219,7 @@ local function createSession(modConfig, configBackend, storage)
     local function resetAliasValue(alias)
         local node = aliasNodes[alias]
         if not node then
-            logging.violate("session.unknown_reset_alias", "session.reset: unknown alias '%s'", tostring(alias))
+            logging.violate("session.unknown_alias", "session.reset: unknown alias '%s'", tostring(alias))
             return
         end
 
@@ -290,25 +248,12 @@ local function createSession(modConfig, configBackend, storage)
         write = function(alias, value)
             writeStagingValue(alias, value)
         end,
-        stageAction = function(actionKey, value)
-            actionState.stage(actionKey, value)
-        end,
-        readAction = function(actionKey)
-            return actionState.read(actionKey)
-        end,
-        clearAction = function(actionKey)
-            actionState.clear(actionKey)
-        end,
-        hasActions = function()
-            return actionState.hasAny()
-        end,
         reset = function(alias)
             resetAliasValue(alias)
         end,
         _reloadFromConfig = function()
             copyConfigToStaging()
             clearDirty()
-            actionState.clearAll()
         end,
         _flushToConfig = function()
             copyStagingToConfig()
@@ -317,21 +262,14 @@ local function createSession(modConfig, configBackend, storage)
         _hasConfigChanges = function()
             return dirty
         end,
-        _captureActionSnapshot = function()
-            return actionState.captureSnapshot()
-        end,
-        _clearActions = function()
-            actionState.clearAll()
-        end,
-        _actionState = actionState,
         _captureDirtyConfigSnapshot = captureDirtyConfigSnapshot,
         _restoreConfigSnapshot = restoreConfigSnapshot,
         isDirty = function()
-            return dirty or actionState.hasAny()
+            return dirty
         end,
         auditMismatches = function()
             local mismatches = {}
-            for _, root in ipairs(stageRootNodes) do
+            for _, root in ipairs(sessionRootNodes) do
                 if not root._persist then
                     goto continue_root
                 end
@@ -372,22 +310,13 @@ local function createAuthorSession(session, opts)
         table = session.table,
         field = session.field,
         write = session.write,
-        stageAction = session.stageAction,
-        readAction = session.readAction,
-        clearAction = session.clearAction,
-        hasActions = session.hasActions,
         reset = session.reset,
         getAliasSchema = session.getAliasSchema,
         resetToDefaults = opts.resetToDefaults,
     }
 end
 
-local function createDrawActions(session)
-    return actionsModule.createDrawActions(session._actionState)
-end
-
 return {
     createSession = createSession,
     createAuthorSession = createAuthorSession,
-    createDrawActions = createDrawActions,
 }

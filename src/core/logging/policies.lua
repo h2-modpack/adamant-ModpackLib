@@ -37,17 +37,21 @@ return {
         description = "Built-in storage aliases are owned by Lib and cannot be declared by modules.",
     },
 
-    ["game_cache.invalid_args"] = {
+    ["cache.invalid_args"] = {
         severity = "error",
-        description = "Game cache access requires valid owner id and key arguments.",
+        description = "Cache access requires valid owner id and key arguments.",
     },
-    ["game_cache.invalid_bucket"] = {
+    ["cache.invalid_bucket"] = {
         severity = "error",
-        description = "Game cache buckets must remain tables owned by Lib.",
+        description = "Cache buckets must remain tables owned by Lib.",
     },
-    ["game_cache.invalid_factory"] = {
+    ["cache.invalid_factory"] = {
         severity = "error",
-        description = "Game cache factories must be functions that return tables.",
+        description = "Cache factories must be functions that return tables.",
+    },
+    ["cache.invalid_value"] = {
+        severity = "error",
+        description = "Persistent cache values must be flat scalar values.",
     },
 
     ["game_deps.invalid_boundary"] = {
@@ -78,10 +82,6 @@ return {
     ["host.unknown_opt"] = {
         severity = "error",
         description = "Module host creation only accepts known construction options.",
-    },
-    ["host.definition_option_removed"] = {
-        severity = "error",
-        description = "Module authors must pass definition fields directly to createModule.",
     },
     ["host.enable_transition_failed"] = {
         severity = "warn",
@@ -199,55 +199,31 @@ return {
         severity = "error",
         description = "Action refs require a non-empty string action key.",
     },
-
-    ["widgets.invalid_packed_session"] = {
+    ["api.invalid_method_call"] = {
         severity = "error",
-        description = "Packed widgets require a session exposing prepared storage schema metadata.",
+        description = "Object handle methods must be called with Lua colon method syntax.",
     },
+
     ["widgets.invalid_field_target"] = {
         severity = "error",
-        description = "Bound widgets require a root alias string or Lib-created StorageField target.",
+        description = "Bound widgets require valid root alias or Lib-created StorageField targets.",
     },
     ["widgets.invalid_action"] = {
         severity = "error",
-        description = "Widget action options must be a draw action ref or legacy string action key.",
+        description = "Widget action options must be draw action refs.",
     },
     ["widgets.mismatched_field_owners"] = {
         severity = "error",
         description = "Stepped range widgets require both fields to share one storage owner.",
     },
 
-    ["session.unknown_reset_alias"] = {
+    ["session.unknown_alias"] = {
         severity = "error",
-        description = "Session reset only accepts declared staged storage aliases.",
-    },
-    ["session.unknown_read_alias"] = {
-        severity = "error",
-        description = "Session reads only accept declared staged storage aliases.",
-    },
-    ["session.unknown_table_alias"] = {
-        severity = "error",
-        description = "Session table access only accepts declared table storage aliases.",
-    },
-    ["session.unknown_write_alias"] = {
-        severity = "error",
-        description = "Session writes only accept declared staged storage aliases.",
+        description = "Session operations only accept declared storage aliases.",
     },
     ["session.invalid_table_alias"] = {
         severity = "error",
         description = "Session table access requires a table root alias, not scalar or packed-bit aliases.",
-    },
-    ["session.invalid_table_surface"] = {
-        severity = "error",
-        description = "Session table access is only valid for staged table storage.",
-    },
-    ["session.invalid_read_surface"] = {
-        severity = "error",
-        description = "Session reads cannot access unstaged runtime-cache storage.",
-    },
-    ["session.invalid_write_surface"] = {
-        severity = "error",
-        description = "Session writes cannot mutate unstaged runtime-cache storage.",
     },
     ["session.readonly_view_write"] = {
         severity = "error",
@@ -282,39 +258,18 @@ return {
         severity = "error",
         description = "Internal persisted writes require a Lib-managed store handle.",
     },
-    ["store.invalid_read_surface"] = {
-        severity = "error",
-        description = "Store reads cannot access staged-only transient UI storage.",
-    },
     ["store.invalid_table_alias"] = {
         severity = "error",
         description = "Store table access requires a table root alias, not scalar or packed-bit aliases.",
     },
-    ["store.invalid_table_surface"] = {
+    ["store.invalid_surface"] = {
         severity = "error",
-        description = "Store table access cannot read staged-only transient table storage.",
+        description = "Store operations cannot access session-only transient UI storage.",
     },
-    ["store.invalid_write_surface"] = {
+    ["store.unknown_alias"] = {
         severity = "error",
-        description = "Persisted store writes cannot mutate staged-only transient UI storage.",
+        description = "Store operations only accept declared storage aliases.",
     },
-    ["store.unknown_read_alias"] = {
-        severity = "error",
-        description = "Store reads only accept declared storage aliases.",
-    },
-    ["store.unknown_table_alias"] = {
-        severity = "error",
-        description = "Store table access only accepts declared table storage aliases.",
-    },
-    ["store.unknown_write_alias"] = {
-        severity = "error",
-        description = "Persisted store writes only accept declared storage aliases.",
-    },
-    ["store.invalid_unstaged_write"] = {
-        severity = "error",
-        description = "store.writeUnstaged only accepts root aliases declared with stage=false.",
-    },
-
     ["storage.duplicate_alias"] = {
         severity = "error",
         description = "Storage aliases must be unique across roots and packed child aliases.",
@@ -322,10 +277,6 @@ return {
     ["storage.hash_requires_persist"] = {
         severity = "error",
         description = "Hash/profile storage must be persisted so values can round-trip.",
-    },
-    ["storage.hash_requires_stage"] = {
-        severity = "error",
-        description = "Hash/profile storage must be staged so UI/profile changes use the session path.",
     },
     ["storage.invalid_axis_type"] = {
         severity = "error",
@@ -358,10 +309,6 @@ return {
     ["storage.missing_persisted_default"] = {
         severity = "error",
         description = "Persisted storage roots must declare effective defaults.",
-    },
-    ["storage.packed_requires_stage"] = {
-        severity = "error",
-        description = "PackedInt roots currently require staging so child aliases stay synchronized.",
     },
     ["storage.packed_child_default_mismatch"] = {
         severity = "debug",

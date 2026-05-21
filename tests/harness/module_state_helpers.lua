@@ -77,15 +77,6 @@ function helpers.makeTransientDefinition(harness)
     })
 end
 
-function helpers.makeRuntimeDefinition(harness)
-    return helpers.prepareDefinition(harness, {
-        storage = {
-            { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
-            { type = "int", alias = "RunMarker", default = 0, min = 0, max = 99, stage = false, hash = false },
-        },
-    })
-end
-
 function helpers.makeTableDefinition(harness)
     return helpers.prepareDefinition(harness, {
         storage = {

@@ -212,34 +212,24 @@ function TestWidgets:testPackedDropdownSupportsExplicitControlId()
     lu.assertEquals(state.beginComboId, "##Packed_Row_2")
 end
 
-function TestWidgets:testButtonStagesSessionAction()
-    local session = self.h.createValueSession()
-    local clickedLabels = {}
+function TestWidgets:testButtonRejectsRawActionKey()
     local imgui = self.h.makeDropdownImgui()
     imgui.Button = function(label)
-        clickedLabels[#clickedLabels + 1] = label
         return true
     end
 
-    local clicked = self.h.widgets.button(imgui, session, "Start", {
-        id = "start_recording",
-        action = "recording",
-        value = { kind = "start" },
-    })
-
-    lu.assertTrue(clicked)
-    lu.assertEquals(clickedLabels[1], "Start##start_recording")
-    lu.assertEquals(session.readAction("recording"), { kind = "start" })
+    lu.assertErrorMsgContains("widgets.invalid_action", function()
+        self.h.widgets.button(imgui, "Start", {
+            id = "start_recording",
+            action = "recording",
+            value = { kind = "start" },
+        })
+    end)
 end
 
 function TestWidgets:testButtonStagesDrawActionRef()
-    local definition = self.h.prepareDefinition({
-        id = "ButtonActionRefTest",
-        name = "Button Action Ref Test",
-        storage = {},
-    })
-    local _, session = self.h.createModuleState({}, definition)
-    local action = self.h.moduleState.createDrawActions(session).get("recording")
+    local actionState = self.h.moduleState.createActionState()
+    local action = self.h.moduleState.createDrawActions(actionState).get("recording")
     local clickedLabels = {}
     local imgui = self.h.makeDropdownImgui()
     imgui.Button = function(label)
@@ -247,7 +237,7 @@ function TestWidgets:testButtonStagesDrawActionRef()
         return true
     end
 
-    local clicked = self.h.widgets.button(imgui, session, "Start", {
+    local clicked = self.h.widgets.button(imgui, "Start", {
         id = "start_recording",
         action = action,
         value = { kind = "start" },
@@ -256,5 +246,4 @@ function TestWidgets:testButtonStagesDrawActionRef()
     lu.assertTrue(clicked)
     lu.assertEquals(clickedLabels[1], "Start##start_recording")
     lu.assertEquals(action:read(), { kind = "start" })
-    lu.assertEquals(session.readAction("recording"), { kind = "start" })
 end

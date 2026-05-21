@@ -204,7 +204,7 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertNil(h.public.getLiveModuleHost)
 
     lu.assertNil(h.public.coordinator)
-    lu.assertNil(h.public.gameCache)
+    lu.assertNil(h.public.cache)
     lu.assertNil(h.public.hashing)
     lu.assertNil(h.public.hooks)
     lu.assertNil(h.public.integrations)

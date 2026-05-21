@@ -201,16 +201,15 @@ Rules:
 
 - `alias` is the store/session key and the persisted backing key
 - aliases are direct flat storage identifiers
-- normal values persist, stage, and hash by default
+- normal values persist and hash by default
 - transient values use `persist = false, hash = false`
 - transient values live only in session state
 - table values use one `type = "table"` root with a uniform `row` schema
 - draw code should still access both through `session`
 - `Enabled` and `DebugMode` are reserved Lib-owned aliases; do not declare them
 
-For persistent runtime markers that should not appear in UI staging, profiles, or
-hashes, declare `stage = false, hash = false` and use
-`store.writeUnstaged(...)`.
+For persistent runtime markers that should not appear in UI staging, profiles,
+or hashes, use `host.cache.persistent.*`.
 
 ### 3. Create the module with storage and callbacks in `main.lua`
 
@@ -380,20 +379,8 @@ Examples:
 
 ### Runtime cache values
 
-Runtime cache aliases persist through config but do not enter `session`, profiles,
-or hashes. They are for module-owned intent/state that gameplay code needs across
-reloads:
-
-```lua
-{ type = "bool", alias = "RecordingActive", default = false, stage = false, hash = false }
-```
-
-Read and write them through:
-
-```lua
-store.writeUnstaged("RecordingActive", true)
-local active = store.read("RecordingActive") == true
-```
+Runtime markers that gameplay code needs across reloads should use
+`host.cache.persistent.*`.
 
 ### Packed values
 
@@ -465,6 +452,6 @@ That lets LuaLS infer `draw.imgui`, the author `draw.session`, the draw-safe
 After this guide:
 
 1. Read [MODULE_AUTHORING.md](MODULE_AUTHORING.md) for the fuller authoring contract.
-2. Use [capabilities/README.md](capabilities/README.md) when you need a focused guide for managed state, widgets, hooks, mutations, overlays, integrations, or game cache.
+2. Use [capabilities/README.md](capabilities/README.md) when you need a focused guide for managed state, widgets, hooks, mutations, overlays, integrations, or cache.
 3. Use [API.md](../../API.md) when you need exact function names and behavior.
 4. Use the template source files as the concrete code reference.

@@ -17,7 +17,7 @@ Use each state surface for one job:
 
 | Surface | Use it for | Where it appears |
 | --- | --- | --- |
-| `store` | persisted runtime reads and unstaged runtime-cache writes | host capability declarations, hook/overlay helpers, mutation callbacks |
+| `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
 | `session` | staged UI reads/writes | `drawTab`, `drawQuickContent` |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
@@ -59,11 +59,10 @@ end
 Rules:
 
 - `alias` is the storage, session, widget, and persisted config key.
-- Normal roots persist, stage, and hash by default.
+- Normal roots persist and hash by default.
 - `persist = false, hash = false` creates session-only transient UI state.
-- `stage = false, hash = false` creates persisted runtime-cache state outside the UI/profile/hash surface.
 - `hash = false` keeps a persisted staged value out of hash/profile serialization.
-- `hash = true` requires both `persist = true` and `stage = true`.
+- `hash = true` requires `persist = true`.
 
 Lib injects these aliases into every prepared module:
 
@@ -76,26 +75,8 @@ Do not declare `Enabled` or `DebugMode` yourself.
 
 ## Runtime Cache Values
 
-Use runtime-cache storage for module-owned intent that should survive reloads or restarts but should not appear in UI staging, profiles, or hashes:
-
-```lua
-{
-    type = "bool",
-    alias = "RecordingActive",
-    default = false,
-    stage = false,
-    hash = false,
-}
-```
-
-Read and write it through `store`:
-
-```lua
-store.writeUnstaged("RecordingActive", true)
-local active = store.read("RecordingActive") == true
-```
-
-`store.writeUnstaged(...)` only accepts aliases declared with `stage = false`.
+Runtime markers that should survive reloads or restarts but should not appear
+in UI staging, profiles, or hashes should use `host.cache.persistent.*`.
 
 ## Tables
 
@@ -117,7 +98,7 @@ Use `type = "table"` for compact ordered rows with one shared row schema:
 
 Table rules:
 
-- The table root owns `persist`, `stage`, and `hash`.
+- The table root owns `persist` and `hash`.
 - Row aliases are scoped to one row and do not leak into `session.read(...)`.
 - Rows are compact ordered arrays with no row ids or holes.
 - `defaultRows` creates the default row count.
@@ -164,10 +145,11 @@ Draw callbacks expose action staging through `draw.actions`:
 - `action:clear()`
 - `action:has()`
 
+Action refs are object handles; call their methods with colon syntax.
+
 Use actions for one-shot UI intent that should be observed by runtime commit
-plumbing, not for ordinary persistent settings. Author sessions still expose
-the older `stageAction/readAction/clearAction/hasActions` methods during
-migration, but new draw code should prefer action refs.
+plumbing, not for ordinary persistent settings. Stage actions through
+`draw.actions`, not through `session`.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`:
 
@@ -200,21 +182,18 @@ host.activate()
 
 - `commit.actions.get(actionKey)`
 - `commit.actions.hasAny()`
-- `commit.readAction(actionKey)`
-- `commit.hasAction(actionKey)`
-- `commit.hasActions()`
 - `commit.hadConfigChanges()`
 
-The `readAction/hasAction/hasActions` methods are compatibility helpers for the
-same snapshot. Buttons can stage actions for this path through their `action`
-and `value` options. Actions are cleared after the commit pass.
+Read action payloads through `commit.actions.get(actionKey)`. Buttons can stage
+actions for this path through a `draw.actions.get(...)` ref passed in their
+`action` option. Actions are cleared after the commit pass.
 
 ## Common Mistakes
 
 - Do not read transient aliases from `store`; they only live in `session`.
 - Do not write raw Chalk config from draw code.
 - Do not call private session flush/reload helpers from module UI.
-- Do not use session actions as persistent settings.
+- Do not use draw actions as persistent settings.
 - Do not put gameplay behavior in `ui.lua`; UI stages state, runtime code consumes committed state.
 
 See also:

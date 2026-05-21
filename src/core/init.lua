@@ -43,12 +43,12 @@ local moduleState = import('core/module_state/module_state.lua', nil, {
 })
 public.resetStorageToDefaults = nil
 
-local gameCacheBundle = import('core/game_cache/game_cache.lua', nil, {
+local cacheBundle = import('core/cache/cache.lua', nil, {
     logging = logging,
     gameDeps = gameDeps,
     hostState = hostState,
 })
-public.gameCache = nil
+public.cache = nil
 
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
     logging = logging,
@@ -132,7 +132,7 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
 })
 local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
     fallbackUi = fallbackUiBundle.author,
-    gameCache = gameCacheBundle.author,
+    cache = cacheBundle.author,
     hooks = hooksBundle.author,
     integrations = integrationsBundle.author,
     mutation = mutationBundle.author,
@@ -140,7 +140,6 @@ local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
 })
 local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     logging = logging,
-    values = values,
     definition = definition,
     hostState = hostState,
     moduleRuntimeRegistry = moduleRuntimeRegistry,

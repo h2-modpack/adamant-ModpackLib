@@ -141,9 +141,6 @@ local function PrepareTableNode(node, prefix)
                     rowPrefix
                 )
             end
-            if rowNode.stage ~= nil then
-                logging.violate("storage.invalid_table_row", "%s: row storage cannot declare stage; table root owns staging", rowPrefix)
-            end
             if rowNode.hash ~= nil then
                 logging.violate("storage.invalid_table_row", "%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
             end

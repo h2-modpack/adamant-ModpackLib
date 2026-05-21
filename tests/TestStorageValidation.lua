@@ -132,33 +132,31 @@ function TestStorageValidation:testTransientRootRegistersAliasButNotPersistedRoo
     lu.assertNotNil(self.storage.getAliases(storage).FilterText)
 end
 
-function TestStorageValidation:testRuntimeCacheRootRegistersAliasButNotHashRoot()
+function TestStorageValidation:testPersistFalseRootRegistersSessionAliasButNotHashRoot()
     local storage = {
         { type = "bool", alias = "Enabled", default = false },
-        { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
+        { type = "bool", alias = "FilterEnabled", default = false, persist = false, hash = false },
     }
 
-    self.storage.validate(storage, "RuntimeCacheRoot")
+    self.storage.validate(storage, "TransientRoot")
 
     lu.assertEquals(#self.storage.getRoots(storage), 1)
     lu.assertEquals(self.storage.getRoots(storage)[1].alias, "Enabled")
-    lu.assertNotNil(self.storage.getAliases(storage).RecordingArmed)
-    lu.assertEquals(#self.storage.getRuntimeCacheRoots(storage), 1)
+    lu.assertNotNil(self.storage.getAliases(storage).FilterEnabled)
+    lu.assertEquals(#self.storage.getSessionRoots(storage), 2)
 end
 
-function TestStorageValidation:testRuntimePackedIntFails()
-    lu.assertErrorMsgContains("stage=false packedInt roots are not supported", function()
+function TestStorageValidation:testStageFieldFailsAsUnknownStorageField()
+    lu.assertErrorMsgContains("unknown storage field 'stage'", function()
         self.storage.validate({
             {
-                type = "packedInt",
-                alias = "RuntimePacked",
+                type = "bool",
+                alias = "OldStageAxis",
                 stage = false,
                 hash = false,
-                bits = {
-                    { alias = "Bit", offset = 0, width = 1, type = "bool", default = false },
-                },
+                default = false,
             },
-        }, "RuntimePacked")
+        }, "StageField")
     end)
 end
 

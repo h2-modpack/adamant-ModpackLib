@@ -21,7 +21,6 @@ local function prepareStorage(storageService)
         { type = "int", alias = "Count", default = 1, min = 0, max = 7 },
         { type = "string", alias = "Name", default = "A", maxLen = 32 },
         { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 32 },
-        { type = "bool", alias = "RecordingArmed", default = false, stage = false, hash = false },
         {
             type = "packedInt",
             alias = "Packed",
@@ -55,7 +54,6 @@ function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
     lu.assertEquals(roots[1].alias, "EnabledFlag")
     lu.assertEquals(roots[4].alias, "Packed")
     lu.assertNotNil(aliases.FilterText)
-    lu.assertNotNil(aliases.RecordingArmed)
     lu.assertNotNil(aliases.EnabledBit)
     lu.assertNotNil(aliases.ModeBits)
 end
