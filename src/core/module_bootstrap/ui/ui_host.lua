@@ -5,24 +5,19 @@ local phaseGate = deps.phaseGate
 local uiHost = {}
 
 ---@param authorHost AuthorHost
----@param phaseOwner table
 ---@return DrawServices
-function uiHost.create(authorHost, phaseOwner)
+function uiHost.create(authorHost)
     return {
         log = function(fmt, ...)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             return authorHost.log(fmt, ...)
         end,
         logIf = function(fmt, ...)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             return authorHost.logIf(fmt, ...)
         end,
-        isHostEnabled = function()
-            phaseGate.requireOwnerDraw(phaseOwner)
-            return authorHost.isEnabled()
-        end,
         invokeIntegration = function(id, methodName, fallback, ...)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             return authorHost.integrations.invoke(id, methodName, fallback, ...)
         end,
     }

@@ -86,7 +86,6 @@ end
 ---@class DrawServices
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
----@field isHostEnabled fun(): boolean
 ---@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
 
 ---@class ModuleHost
@@ -194,8 +193,7 @@ function moduleHost.create(opts)
     local actionBuffer = moduleState.createActionBuffer()
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
-    local phaseOwner = {}
-    local store = moduleState.createStore(persistentState, phaseOwner)
+    local store = moduleState.createStore(persistentState)
 
     if type(drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
@@ -364,7 +362,6 @@ function moduleHost.create(opts)
         stagedState = stagedState,
         actionBuffer = actionBuffer,
         authorHost = authorHost,
-        phaseOwner = phaseOwner,
     })
 
     function host.drawTab()
@@ -384,6 +381,7 @@ function moduleHost.create(opts)
         mutationBundle = mutationBundle,
         pluginGuid = pluginGuid,
         persistentState = persistentState,
+        stagedState = stagedState,
         store = store,
         actionBuffer = actionBuffer,
         cacheStore = cacheStore,

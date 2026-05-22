@@ -41,7 +41,7 @@ host.activate()
 ```
 
 `host.overlays` is bound to the module host, so overlay declarations do not need
-an owner token or a construction-time callback.
+a separate owner argument or a construction-time callback.
 
 ## Retained Elements
 

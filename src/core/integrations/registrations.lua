@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local registry = deps.registry
+local readScope = deps.readScope
 local registrations = {}
 
 local function validateIntegrationId(context, id)
@@ -16,9 +17,15 @@ local function validateProviderId(context, providerId)
     end
 end
 
-local function validateApi(context, api)
-    if type(api) ~= "table" then
-        logging.violate("integrations.invalid_args", "%s: api must be a table", context)
+local function validateMethodName(context, methodName)
+    if type(methodName) ~= "string" or methodName == "" then
+        logging.violate("integrations.invalid_args", "%s: method name must be a non-empty string", context)
+    end
+end
+
+local function validateMethods(context, methods)
+    if type(methods) ~= "table" then
+        logging.violate("integrations.invalid_args", "%s: methods must be a table", context)
     end
 end
 
@@ -51,32 +58,110 @@ local function ensureHostRegistrations(state)
     return state.integrationRegistrations
 end
 
-local function recordStagedRegistration(registrationSet, id, providerId, api)
+local function normalizeReads(context, methodName, reads, stagedState)
+    if reads == nil then
+        return {}
+    end
+    if type(reads) ~= "table" then
+        logging.violate("integrations.invalid_args", "%s.%s: reads must be a list of storage aliases", context, methodName)
+    end
+
+    local normalized = {}
+    local seen = {}
+    local count = 0
+    for index, alias in ipairs(reads) do
+        count = index
+        if type(alias) ~= "string" or alias == "" then
+            logging.violate(
+                "integrations.invalid_args",
+                "%s.%s: reads[%s] must be a non-empty storage alias",
+                context,
+                methodName,
+                tostring(index))
+        end
+        if stagedState.getAliasSchema(alias) == nil then
+            logging.violate(
+                "integrations.invalid_args",
+                "%s.%s: reads alias '%s' is not declared storage",
+                context,
+                methodName,
+                alias)
+        end
+        if not seen[alias] then
+            seen[alias] = true
+            normalized[#normalized + 1] = alias
+        end
+    end
+    for key in pairs(reads) do
+        if type(key) ~= "number" or key < 1 or key > count or math.floor(key) ~= key then
+            logging.violate(
+                "integrations.invalid_args",
+                "%s.%s: reads must be an array of storage aliases",
+                context,
+                methodName)
+        end
+    end
+    return normalized
+end
+
+local function createProvider(record, host, id, opts)
+    local context = "host.integrations.register(" .. tostring(id) .. ")"
+    validateMethods(context, opts.methods)
+
+    local provider = {
+        isEnabled = function()
+            return host.isEnabled()
+        end,
+        methods = {},
+    }
+    for methodName, methodOpts in pairs(opts.methods) do
+        validateMethodName(context, methodName)
+        if type(methodOpts) ~= "table" then
+            logging.violate("integrations.invalid_args", "%s.%s: method must be a table", context, methodName)
+        end
+        if type(methodOpts.handler) ~= "function" then
+            logging.violate("integrations.invalid_args", "%s.%s: handler must be a function", context, methodName)
+        end
+
+        local methodContext = context .. "." .. methodName
+        provider.methods[methodName] = {
+            handler = methodOpts.handler,
+            scope = readScope.create({
+                stagedState = record.stagedState,
+                reads = normalizeReads(context, methodName, methodOpts.reads, record.stagedState),
+                context = methodContext,
+            }),
+        }
+    end
+
+    return provider
+end
+
+local function recordStagedRegistration(registrationSet, id, providerId, provider)
     local key = id .. "\0" .. providerId
     local entry = registrationSet.byKey[key]
     if not entry then
         entry = {
             id = id,
             providerId = providerId,
-            api = api,
+            provider = provider,
         }
         registrationSet.byKey[key] = entry
         registrationSet.entries[#registrationSet.entries + 1] = entry
     else
-        entry.api = api
+        entry.provider = provider
     end
-    return api
+    return provider
 end
 
-function registrations.stageAuthorRegistration(state, id, opts)
+function registrations.stageAuthorRegistration(record, host, id, opts)
     local context = "host.integrations.register"
     validateIntegrationId(context, id)
     if type(opts) ~= "table" then
         logging.violate("integrations.invalid_args", "%s: opts must be a table", context)
     end
     validateProviderId(context, opts.providerId)
-    validateApi(context, opts.api)
-    return recordStagedRegistration(ensureHostRegistrations(state), id, opts.providerId, opts.api)
+    return recordStagedRegistration(ensureHostRegistrations(record), id, opts.providerId, createProvider(record, host, id, opts))
 end
 
 function registrations.install(ownerId, hostRegistrations)
@@ -95,7 +180,7 @@ function registrations.install(ownerId, hostRegistrations)
     }
 
     for _, entry in ipairs(hostRegistrations.entries) do
-        recordStagedRegistration(install, entry.id, entry.providerId, entry.api)
+        recordStagedRegistration(install, entry.id, entry.providerId, entry.provider)
     end
 
     return {
@@ -110,12 +195,12 @@ function registrations.install(ownerId, hostRegistrations)
                     id = entry.id,
                     providerId = entry.providerId,
                     existed = bucket and bucket.providers[entry.providerId] ~= nil or false,
-                    api = bucket and bucket.providers[entry.providerId] or nil,
+                    provider = bucket and bucket.providers[entry.providerId] or nil,
                     ownerId = bucket and registry.getProviderOwnerId(entry.id, entry.providerId) or nil,
                     ownerToken = bucket and registry.getProviderOwnerToken(entry.id, entry.providerId) or nil,
                     orderIndex = bucket and registry.getProviderOrderIndex(bucket, entry.providerId) or nil,
                 }
-                registry.setProvider(entry.id, entry.providerId, entry.api, ownerId, install.ownerToken)
+                registry.setProvider(entry.id, entry.providerId, entry.provider, ownerId, install.ownerToken)
             end
             install.committed = true
             return true, nil
@@ -135,7 +220,7 @@ function registrations.install(ownerId, hostRegistrations)
                         and registry.getProviderOwnerToken(entry.id, entry.providerId) == install.ownerToken
                     then
                         if previous and previous.existed then
-                            bucket.providers[entry.providerId] = previous.api
+                            bucket.providers[entry.providerId] = previous.provider
                             bucket.ownerIds[entry.providerId] = previous.ownerId
                             bucket.ownerTokens[entry.providerId] = previous.ownerToken
                             registry.insertProviderOrder(bucket, entry.providerId, previous.orderIndex)

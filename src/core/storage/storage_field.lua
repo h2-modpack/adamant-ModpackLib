@@ -109,10 +109,6 @@ function StorageFieldMethods:controlId()
     return GetControlId(self._owner, self._alias)
 end
 
-function StorageFieldMethods:owner()
-    return self._owner
-end
-
 local storageField = {}
 
 function storageField.is(value)

@@ -108,7 +108,6 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNotNil(capturedState)
     lu.assertEquals(type(drawServices.log), "function")
     lu.assertEquals(type(drawServices.logIf), "function")
-    lu.assertEquals(type(drawServices.isHostEnabled), "function")
     lu.assertEquals(type(drawServices.invokeIntegration), "function")
     lu.assertEquals(type(capturedActions.get), "function")
     lu.assertEquals(type(capturedActions.hasAny), "function")
@@ -245,7 +244,6 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
     local config = { Packed = 0 }
     local checkboxLabels = {}
     local changed = false
-    local ownerReadType = nil
     self.h.rom.ImGui.Checkbox = function(label, current)
         checkboxLabels[#checkboxLabels + 1] = label
         if label == "First##Packed:First" then
@@ -272,7 +270,6 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
         },
         drawTab = function(draw, state)
             local field = state.get("Packed")
-            ownerReadType = type(field:owner().read)
             changed = draw.widgets.packedCheckboxList(field, {
                 slotCount = 2,
             })
@@ -282,7 +279,6 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
     host.activate()
     self.h:liveHost("test-create-module-packed-widget-owner").drawTab()
 
-    lu.assertEquals(ownerReadType, "nil")
     lu.assertTrue(changed)
     lu.assertEquals(checkboxLabels, {
         "First##Packed:First",

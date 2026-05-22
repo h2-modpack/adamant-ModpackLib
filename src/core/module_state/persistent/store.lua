@@ -6,12 +6,10 @@ local storageRefAdapter = deps.storageRefAdapter
 local store = {}
 
 ---@param persistentState PersistentState
----@param phaseOwner table
 ---@return Store
-function store.create(persistentState, phaseOwner)
+function store.create(persistentState)
     local refs = storageRefAdapter.create({
         root = persistentState,
-        phaseOwner = phaseOwner,
         phase = "runtime",
         source = "store.get",
         writable = false,
@@ -20,7 +18,7 @@ function store.create(persistentState, phaseOwner)
     return {
         get = refs.get,
         read = function(alias, ...)
-            phaseGate.requireRuntime(phaseOwner)
+            phaseGate.requireRuntime()
             local ref = persistentState.get(alias)
             if ref == nil then
                 return nil

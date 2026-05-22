@@ -35,34 +35,34 @@ local function requireRefSelf(context, self, ref)
     end
 end
 
-local function createDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
+local function createDrawActionRef(actionBuffer, actionKey, phaseGate)
     local ref
     ref = markActionRef({
         stage = function(self, value)
             requireRefSelf("actions.get(...):stage", self, ref)
             if phaseGate ~= nil then
-                phaseGate.requireOwnerDraw(phaseOwner)
+                phaseGate.requireAnyDraw()
             end
             actionBuffer.stage(actionKey, value)
         end,
         read = function(self)
             requireRefSelf("actions.get(...):read", self, ref)
             if phaseGate ~= nil then
-                phaseGate.requireOwnerDraw(phaseOwner)
+                phaseGate.requireAnyDraw()
             end
             return actionBuffer.read(actionKey)
         end,
         clear = function(self)
             requireRefSelf("actions.get(...):clear", self, ref)
             if phaseGate ~= nil then
-                phaseGate.requireOwnerDraw(phaseOwner)
+                phaseGate.requireAnyDraw()
             end
             actionBuffer.clear(actionKey)
         end,
         has = function(self)
             requireRefSelf("actions.get(...):has", self, ref)
             if phaseGate ~= nil then
-                phaseGate.requireOwnerDraw(phaseOwner)
+                phaseGate.requireAnyDraw()
             end
             return actionBuffer.has(actionKey)
         end,
@@ -70,9 +70,9 @@ local function createDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwne
     return ref
 end
 
-local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
+local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
     validateActionKey("actions.get", actionKey)
-    return createDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
+    return createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
 local function createCommitActionRef(snapshot, actionKey)

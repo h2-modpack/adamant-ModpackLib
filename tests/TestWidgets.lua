@@ -35,10 +35,8 @@ local function UseImgui(h, imgui)
     end
 end
 
-local TestDrawOwner = {}
-
 local function InDraw(h, callback)
-    return h.phaseGate.runDraw(TestDrawOwner, callback)
+    return h.phaseGate.runDraw(callback)
 end
 
 local function DrawSurface(h, surface)
@@ -64,7 +62,7 @@ local function DrawWidgets(h, imgui)
 end
 
 local function DrawAction(h, actionBuffer, key)
-    local actions = h.uiActions.create(actionBuffer, TestDrawOwner)
+    local actions = h.uiActions.create(actionBuffer)
     return InDraw(h, function()
         return actions.get(key)
     end)

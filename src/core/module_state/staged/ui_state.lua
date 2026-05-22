@@ -14,12 +14,10 @@ local uiState = {}
 --- Narrows full staged state to the module author UI surface.
 --- Host internals keep the private commit/reload/snapshot methods.
 ---@param stagedState StagedState
----@param phaseOwner table
 ---@return DrawState
-function uiState.create(stagedState, phaseOwner)
+function uiState.create(stagedState)
     local refs = storageRefAdapter.create({
         root = stagedState,
-        phaseOwner = phaseOwner,
         phase = "draw",
         source = "state.get",
         writable = true,
@@ -28,7 +26,7 @@ function uiState.create(stagedState, phaseOwner)
     return {
         get = refs.get,
         read = function(alias, ...)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             local ref = stagedState.get(alias)
             if ref == nil then
                 return nil
@@ -36,7 +34,7 @@ function uiState.create(stagedState, phaseOwner)
             return ref:read(...)
         end,
         write = function(alias, ...)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             local ref = stagedState.get(alias)
             if ref == nil then
                 return nil
@@ -44,7 +42,7 @@ function uiState.create(stagedState, phaseOwner)
             return ref:write(...)
         end,
         resetAll = function(opts)
-            phaseGate.requireOwnerDraw(phaseOwner)
+            phaseGate.requireAnyDraw()
             return stagedState.resetAll(opts)
         end,
     }

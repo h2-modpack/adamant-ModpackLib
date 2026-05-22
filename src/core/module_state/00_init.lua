@@ -161,8 +161,8 @@ function moduleState.create(modConfig, definition)
 end
 
 -- Internal API: narrows persistent state to the author-facing runtime store.
-function moduleState.createStore(persistentState, phaseOwner)
-    return storeModule.create(persistentState, phaseOwner)
+function moduleState.createStore(persistentState)
+    return storeModule.create(persistentState)
 end
 
 function moduleState.createActionBuffer()

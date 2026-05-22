@@ -75,7 +75,6 @@ local lib = {}
 ---@field schema fun(self: AdamantModpackLib.StorageFieldReadOnly): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
 ---@field alias fun(self: AdamantModpackLib.StorageFieldReadOnly): string
 ---@field controlId fun(self: AdamantModpackLib.StorageFieldReadOnly): string Draw/control identity from the current owner structure.
----@field owner fun(self: AdamantModpackLib.StorageFieldReadOnly): table Opaque owner identity used for same-owner checks.
 
 ---@class AdamantModpackLib.StorageField: AdamantModpackLib.StorageFieldReadOnly
 ---@field write fun(self: AdamantModpackLib.StorageField, value: any): boolean?
@@ -98,7 +97,7 @@ local lib = {}
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
----Committed runtime state facade. Store methods are valid outside the owning module's draw callback and reject during that draw callback.
+---Committed runtime state facade. Store methods are valid outside draw callbacks and reject while any module draw callback is running.
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
@@ -121,19 +120,19 @@ local lib = {}
 ---@field isDirty fun(): boolean
 ---@field auditMismatches fun(): string[]
 
----Draw-phase staged UI state facade. Methods and returned refs are valid only during the owning module's draw callback.
+---Draw-phase staged UI state facade. Methods and returned refs are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
----Draw-phase transient action surface. Methods and returned refs are valid only during the owning module's draw callback.
+---Draw-phase transient action surface. Methods and returned refs are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field hasAny fun(): boolean
 
----Draw-phase action ref. Use colon syntax; methods are valid only during the owning module's draw callback.
+---Draw-phase action ref. Use colon syntax; methods are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawActionRef
 ---@field stage fun(self: AdamantModpackLib.DrawActionRef, value: any)
 ---@field read fun(self: AdamantModpackLib.DrawActionRef): any
@@ -171,11 +170,10 @@ local lib = {}
 ---@field mutation AdamantModpackLib.AuthorMutation
 ---@field overlays AdamantModpackLib.RetainedOverlayRegistrar
 
----Draw-phase service surface. Methods are valid only during the owning module's draw callback.
+---Draw-phase service surface. Methods are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawServices
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
----@field isHostEnabled fun(): boolean Return whether the current module host is enabled.
 ---@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Invoke a registered integration method.
 
 ---@class AdamantModpackLib.FrameworkRuntime
@@ -229,7 +227,16 @@ local lib = {}
 
 ---@class AdamantModpackLib.AuthorIntegrationRegistration
 ---@field providerId string Public provider identity returned to consumers.
----@field api table Provider API table exposed to consumers.
+---@field methods table<string, AdamantModpackLib.AuthorIntegrationMethod> Provider methods exposed to consumers.
+
+---@class AdamantModpackLib.AuthorIntegrationMethod
+---@field reads string[]? Storage aliases this provider method may read from the provider's staged state.
+---@field handler fun(scope: AdamantModpackLib.IntegrationReadScope, ...): any Provider method implementation.
+
+---@class AdamantModpackLib.IntegrationReadScope
+---@field read fun(alias: string, ...): any Read a declared alias from the provider's staged state.
+---@field get fun(alias: string): AdamantModpackLib.StorageFieldReadOnly|AdamantModpackLib.StorageTableReadOnly|nil
+---Get a declared read-only storage ref.
 
 ---@class AdamantModpackLib.AuthorIntegrations
 ---@field register fun(id: string, opts: AdamantModpackLib.AuthorIntegrationRegistration): table

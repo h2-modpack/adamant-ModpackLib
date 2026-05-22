@@ -7,10 +7,8 @@ function TestWidgets_Nav:setUp()
     self.h = createWidgetHarness()
 end
 
-local TestDrawOwner = {}
-
 local function InDraw(h, callback)
-    return h.phaseGate.runDraw(TestDrawOwner, callback)
+    return h.phaseGate.runDraw(callback)
 end
 
 function TestWidgets_Nav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()

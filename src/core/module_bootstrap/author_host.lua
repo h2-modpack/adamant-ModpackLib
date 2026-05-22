@@ -32,7 +32,16 @@ local authorHost = {}
 
 ---@class AuthorIntegrationRegistration
 ---@field providerId string
----@field api table
+---@field methods table<string, AuthorIntegrationMethod>
+
+---@class AuthorIntegrationMethod
+---@field reads string[]|nil
+---@field handler fun(scope: IntegrationReadScope, ...): any
+
+---@class IntegrationReadScope
+---@field read fun(alias: string, ...): any
+---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
+---@field isEnabled fun(): boolean
 
 ---@class AuthorIntegrations
 ---@field register fun(id: string, opts: AuthorIntegrationRegistration): table

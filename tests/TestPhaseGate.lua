@@ -18,87 +18,66 @@ function TestPhaseGate:tearDown()
 end
 
 function TestPhaseGate:testRuntimeIsOpenByDefault()
-    local owner = {}
-
-    self.phase.requireRuntime(owner)
+    self.phase.requireRuntime()
 
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         self.phase.requireAnyDraw()
     end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        self.phase.requireOwnerDraw(owner)
-    end)
 end
 
-function TestPhaseGate:testDrawPhaseOpensOwnerAndClosesOwnerRuntime()
-    local owner = {}
-    local otherOwner = {}
-
-    self.phase.enterDraw(owner)
+function TestPhaseGate:testDrawPhaseOpensDrawAndClosesRuntime()
+    self.phase.enterDraw()
     self.phase.requireAnyDraw()
-    self.phase.requireOwnerDraw(owner)
-    self.phase.requireRuntime(otherOwner)
 
     lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
-        self.phase.requireRuntime(owner)
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        self.phase.requireOwnerDraw(otherOwner)
+        self.phase.requireRuntime()
     end)
 
-    self.phase.leaveDraw(owner)
-    self.phase.requireRuntime(owner)
+    self.phase.leaveDraw()
+    self.phase.requireRuntime()
 end
 
 function TestPhaseGate:testNestedDrawIsRejected()
-    local owner = {}
-    local otherOwner = {}
-
-    self.phase.enterDraw(owner)
+    self.phase.enterDraw()
     lu.assertErrorMsgContains("phase.nested_draw", function()
-        self.phase.enterDraw(otherOwner)
+        self.phase.enterDraw()
     end)
-    self.phase.leaveDraw(owner)
+    self.phase.leaveDraw()
 end
 
-function TestPhaseGate:testLeaveMustMatchActiveOwner()
-    local owner = {}
-    local otherOwner = {}
-
-    self.phase.enterDraw(owner)
+function TestPhaseGate:testLeaveRequiresActiveDraw()
     lu.assertErrorMsgContains("phase.invalid_leave", function()
-        self.phase.leaveDraw(otherOwner)
+        self.phase.leaveDraw()
     end)
-    self.phase.leaveDraw(owner)
+
+    self.phase.enterDraw()
+    self.phase.leaveDraw()
+    lu.assertErrorMsgContains("phase.invalid_leave", function()
+        self.phase.leaveDraw()
+    end)
 end
 
 function TestPhaseGate:testRunDrawClearsPhaseAfterCallbackError()
-    local owner = {}
-
     lu.assertErrorMsgContains("callback boom", function()
-        self.phase.runDraw(owner, function()
+        self.phase.runDraw(function()
             error("callback boom")
         end)
     end)
 
-    self.phase.requireRuntime(owner)
+    self.phase.requireRuntime()
 end
 
 function TestPhaseGate:testRunDrawAddsTracebackToCallbackError()
-    local owner = {}
-
     lu.assertErrorMsgContains("stack traceback", function()
-        self.phase.runDraw(owner, function()
+        self.phase.runDraw(function()
             error("traceback boom")
         end)
     end)
 end
 
 function TestPhaseGate:testRunDrawPassesArgsAndReturnValues()
-    local owner = {}
-
-    local a, b, c = self.phase.runDraw(owner, function(first, second)
-        self.phase.requireOwnerDraw(owner)
+    local a, b, c = self.phase.runDraw(function(first, second)
+        self.phase.requireAnyDraw()
         return first .. second, nil, 9
     end, "a", "b")
 

@@ -28,7 +28,7 @@ end
 function author.create(host)
     return {
         register = function(id, opts)
-            return registrations.stageAuthorRegistration(requireRegistrationOpen(host), id, opts)
+            return registrations.stageAuthorRegistration(requireRegistrationOpen(host), host, id, opts)
         end,
         invoke = function(id, methodName, fallback, ...)
             requireHostRecord(host, "host.integrations.invoke")

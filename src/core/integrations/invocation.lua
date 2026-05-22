@@ -20,13 +20,15 @@ function invocation.invoke(context, id, methodName, fallback, ...)
     validateIntegrationId(context, id)
     validateMethodName(context, methodName)
 
-    local api, providerId = registry.getPreferredProvider(id)
-    local method = api and api[methodName] or nil
-    if type(method) ~= "function" then
+    local provider, providerId = registry.getPreferredProvider(id, function(candidate)
+        return candidate.isEnabled == nil or candidate.isEnabled() ~= false
+    end)
+    local method = provider and provider.methods and provider.methods[methodName] or nil
+    if type(method) ~= "table" or type(method.handler) ~= "function" or not method.scope then
         return fallback, providerId
     end
 
-    local ok, result = pcall(method, ...)
+    local ok, result = pcall(method.scope.call, method.handler, ...)
     if not ok then
         logging.violate(
             "integrations.provider_failed",

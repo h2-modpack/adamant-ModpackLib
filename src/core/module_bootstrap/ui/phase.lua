@@ -24,21 +24,19 @@ local uiPhase = {}
 ---@field stagedState StagedState
 ---@field actionBuffer ActionBuffer
 ---@field authorHost AuthorHost
----@field phaseOwner table
 
 ---@param opts UiPhaseCreateOpts
 ---@return UiPhaseObjects
 function uiPhase.create(opts)
-    local phaseOwner = opts.phaseOwner
     local objects = {
         draw = uiDraw.get(),
-        state = moduleState.uiState.create(opts.stagedState, phaseOwner),
-        actions = moduleState.uiActions.create(opts.actionBuffer, phaseOwner),
-        services = uiHost.create(opts.authorHost, phaseOwner),
+        state = moduleState.uiState.create(opts.stagedState),
+        actions = moduleState.uiActions.create(opts.actionBuffer),
+        services = uiHost.create(opts.authorHost),
     }
 
     function objects.run(callback)
-        return phaseGate.runDraw(phaseOwner, callback, objects.draw, objects.state, objects.actions, objects.services)
+        return phaseGate.runDraw(callback, objects.draw, objects.state, objects.actions, objects.services)
     end
 
     return objects

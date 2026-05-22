@@ -7,7 +7,8 @@ Recommended order:
 1. [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
 2. [LIB_INTERNALS.md](LIB_INTERNALS.md)
 3. [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md)
-4. [TESTING.md](TESTING.md)
+4. [INTEGRATION_PUSH_POLL_SPEC.md](INTEGRATION_PUSH_POLL_SPEC.md)
+5. [TESTING.md](TESTING.md)
 
 For public API behavior, use [../../API.md](../../API.md).
 

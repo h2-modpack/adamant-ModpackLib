@@ -43,6 +43,13 @@ local function resolveField(target, methodName)
     )
 end
 
+local function callTwoFieldWidget(methodName, firstTarget, secondTarget, opts)
+    phaseGate.requireAnyDraw()
+    local firstField = resolveField(firstTarget, methodName)
+    local secondField = resolveField(secondTarget, methodName)
+    return widgets[methodName](draw.imgui, firstField, secondField, opts)
+end
+
 local function callFieldWidget(methodName, target, opts)
     phaseGate.requireAnyDraw()
     local field = resolveField(target, methodName)
@@ -100,15 +107,7 @@ function draw.widgets.stepper(target, opts)
 end
 
 function draw.widgets.steppedRange(minTarget, maxTarget, opts)
-    phaseGate.requireAnyDraw()
-    local minField = resolveField(minTarget, "steppedRange")
-    local maxField = resolveField(maxTarget, "steppedRange")
-    if minField:owner() ~= maxField:owner() then
-        logging.violate("widgets.mismatched_field_owners",
-            "draw.widgets.steppedRange: min and max fields must share one storage owner"
-        )
-    end
-    return widgets.steppedRange(draw.imgui, minField, maxField, opts)
+    return callTwoFieldWidget("steppedRange", minTarget, maxTarget, opts)
 end
 
 function draw.widgets.checkbox(target, opts)

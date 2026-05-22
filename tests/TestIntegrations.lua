@@ -3,13 +3,18 @@ local createLibHarness = require('tests/harness/create_lib_harness')
 
 TestIntegrations = {}
 
-local function createIntegrationHost(harness, pluginGuid)
+local function createIntegrationHost(harness, pluginGuid, opts)
+    opts = opts or {}
+    local config = opts.config or {}
+    if config.Enabled == nil then
+        config.Enabled = true
+    end
     local definition = harness.moduleHost.prepareDefinition({}, {
         id = "IntegrationHost",
         name = "Integration Host",
-        storage = {},
+        storage = opts.storage or {},
     })
-    local state = harness.moduleState.create({}, definition)
+    local state = harness.moduleState.create(config, definition)
     local host, authorHost = harness.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
@@ -17,14 +22,26 @@ local function createIntegrationHost(harness, pluginGuid)
         stagedState = state.stagedState,
         drawTab = function() end,
     })
-    return host, authorHost
+    return host, authorHost, state
+end
+
+local function createMethods(api)
+    local methods = {}
+    for name, handler in pairs(api or {}) do
+        methods[name] = {
+            handler = function(_, ...)
+                return handler(...)
+            end,
+        }
+    end
+    return methods
 end
 
 local function activateProvider(test, pluginGuid, id, providerId, api)
     local _, authorHost = createIntegrationHost(test.harness, pluginGuid)
     authorHost.integrations.register(id, {
         providerId = providerId,
-        api = api,
+        methods = createMethods(api),
     })
     local ok, err = authorHost.activate()
     lu.assertTrue(ok, tostring(err))
@@ -90,19 +107,19 @@ function TestIntegrations:testAuthorHostRegisterReplacesSameProviderBeforeActiva
     local _, authorHost = createIntegrationHost(self.harness, "integration-replace-provider")
     authorHost.integrations.register("test.example", {
         providerId = "ProviderA",
-        api = {
+        methods = createMethods({
             value = function()
                 return "first"
             end,
-        },
+        }),
     })
     authorHost.integrations.register("test.example", {
         providerId = "ProviderA",
-        api = {
+        methods = createMethods({
             value = function()
                 return "second"
             end,
-        },
+        }),
     })
 
     local ok, err = authorHost.activate()
@@ -124,11 +141,11 @@ function TestIntegrations:testHostInstallStagesProvidersUntilCommit()
     local host, authorHost = createIntegrationHost(self.harness, "integration-facade-host")
     authorHost.integrations.register(id, {
         providerId = providerId,
-        api = {
+        methods = createMethods({
             value = function()
                 return "replacement"
             end,
-        },
+        }),
     })
 
     local receipt = self.integrations.installForHost(host)
@@ -151,7 +168,7 @@ function TestIntegrations:testAuthorHostRegisterRejectsAfterActivation()
     lu.assertErrorMsgContains("cannot register after activation begins", function()
         authorHost.integrations.register("test.activated", {
             providerId = "ActivatedProvider",
-            api = {},
+            methods = {},
         })
     end)
 end
@@ -165,12 +182,25 @@ function TestIntegrations:testAuthorHostRegisterValidatesRegistrationShape()
     lu.assertErrorMsgContains("providerId must be a non-empty string", function()
         authorHost.integrations.register("test.invalid", {
             providerId = "",
-            api = {},
+            methods = {},
         })
     end)
-    lu.assertErrorMsgContains("api must be a table", function()
+    lu.assertErrorMsgContains("methods must be a table", function()
         authorHost.integrations.register("test.invalid", {
             providerId = "InvalidProvider",
+        })
+    end)
+    lu.assertErrorMsgContains("reads must be an array", function()
+        authorHost.integrations.register("test.invalid", {
+            providerId = "InvalidProvider",
+            methods = {
+                value = {
+                    reads = {
+                        Flag = true,
+                    },
+                    handler = function() end,
+                },
+            },
         })
     end)
 end
@@ -191,6 +221,114 @@ function TestIntegrations:testInvokeCallsMostRecentProviderMethod()
 
     lu.assertEquals(result, "second:x")
     lu.assertEquals(providerId, "ProviderB")
+end
+
+function TestIntegrations:testInvokeSkipsDisabledProviders()
+    activateProvider(self, "integration-provider-enabled", "test.enabled-provider", "EnabledProvider", {
+        value = function()
+            return "enabled"
+        end,
+    })
+    local _, disabledHost = createIntegrationHost(self.harness, "integration-provider-disabled", {
+        config = {
+            Enabled = false,
+        },
+    })
+    disabledHost.integrations.register("test.enabled-provider", {
+        providerId = "DisabledProvider",
+        methods = createMethods({
+            value = function()
+                return "disabled"
+            end,
+        }),
+    })
+    local ok, err = disabledHost.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    local result, providerId = invoke(self, "test.enabled-provider", "value", "fallback")
+
+    lu.assertEquals(result, "enabled")
+    lu.assertEquals(providerId, "EnabledProvider")
+end
+
+function TestIntegrations:testProviderMethodReceivesScopedStagedReads()
+    local capturedScope = nil
+    local capturedField = nil
+    local host, authorHost = createIntegrationHost(self.harness, "integration-scoped-staged-read", {
+        config = {
+            Enabled = true,
+            Flag = false,
+        },
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+    })
+    authorHost.integrations.register("test.scoped", {
+        providerId = "ScopedProvider",
+        methods = {
+            value = {
+                reads = { "Flag" },
+                handler = function(scope)
+                    capturedScope = scope
+                    capturedField = scope.get("Flag")
+                    return {
+                        direct = scope.read("Flag"),
+                        field = capturedField:read(),
+                    }
+                end,
+            },
+        },
+    })
+    local ok, err = authorHost.activate()
+    lu.assertTrue(ok, tostring(err))
+    host.stage("Flag", true)
+
+    local result = invoke(self, "test.scoped", "value", "fallback")
+
+    lu.assertEquals(result, {
+        direct = true,
+        field = true,
+    })
+    lu.assertErrorMsgContains("integrations.closed_scope", function()
+        capturedScope.read("Flag")
+    end)
+    lu.assertErrorMsgContains("integrations.closed_scope", function()
+        capturedField:read()
+    end)
+end
+
+function TestIntegrations:testProviderMethodRejectsUndeclaredRead()
+    local warnings = {}
+    self.harness.env.print = function(message)
+        warnings[#warnings + 1] = message
+    end
+    local _, authorHost = createIntegrationHost(self.harness, "integration-scoped-undeclared-read", {
+        config = {
+            Enabled = true,
+            Flag = false,
+        },
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+    })
+    authorHost.integrations.register("test.scoped", {
+        providerId = "ScopedProvider",
+        methods = {
+            value = {
+                handler = function(scope)
+                    return scope.read("Flag")
+                end,
+            },
+        },
+    })
+    local ok, err = authorHost.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    local result = invoke(self, "test.scoped", "value", "fallback")
+
+    lu.assertEquals(result, "fallback")
+    lu.assertEquals(#warnings, 1)
+    lu.assertStrContains(warnings[1], "integrations.undeclared_read")
 end
 
 function TestIntegrations:testInvokeUsesCurrentProviderAfterReload()

@@ -7,9 +7,15 @@ local registry = import('core/integrations/registry.lua', nil, {
     integrationRegistry = integrationRegistry,
 })
 
+local readScope = import('core/integrations/read_scope.lua', nil, {
+    logging = deps.logging,
+    storage = deps.storage,
+})
+
 local registrations = import('core/integrations/registrations.lua', nil, {
     logging = deps.logging,
     registry = registry,
+    readScope = readScope,
 })
 
 local invocation = import('core/integrations/invocation.lua', nil, {

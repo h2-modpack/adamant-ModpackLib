@@ -22,7 +22,8 @@ Use each state surface for one job:
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
 Draw code should stage changes through `state`. Gameplay, hooks, overlays,
-integrations, and mutations should read committed values through `store`.
+and mutations should read committed values through `store`. Integration provider
+methods receive their own scoped read object over the provider's staged state.
 The runtime store exposes `store.get(alias)` for read-only storage objects and
 `store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
 draw `state` exposes the same convenience shape for custom raw ImGui code:
@@ -31,7 +32,7 @@ staged object returned by `state.get(alias)`.
 
 These surfaces are phase-gated:
 
-- `store` is for runtime code and rejects access during its owning module's draw callback.
+- `store` is for runtime code and rejects access while any module draw callback is running.
 - `state`, `actions`, `services`, and refs returned from them are for the active draw callback and reject access outside that callback.
 - Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
 
@@ -52,7 +53,7 @@ function logic.registerHooks(host, store)
 end
 ```
 
-Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive a draw context with author-facing staged state, not the private full staged-state object.
+Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive author-facing staged state, not the private full staged-state object.
 
 ## Storage Roots
 

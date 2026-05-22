@@ -8,7 +8,7 @@ backend without making modules thread `imgui` through widget calls. Navigation
 helpers use `draw.nav` the same way.
 
 `draw`, `state`, `actions`, and `services` are draw-phase objects. Their
-methods are valid only while Lib is executing the owning module's draw callback.
+methods are valid only while Lib is executing a module draw callback.
 Do not cache them, storage fields returned by `state.get(...)`, or action refs
 for use after the callback returns.
 

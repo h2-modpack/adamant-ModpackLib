@@ -127,11 +127,23 @@ return {
 
     ["integrations.invalid_args"] = {
         severity = "error",
-        description = "Integration registry calls require non-empty ids and valid provider APIs.",
+        description = "Integration registry calls require non-empty ids and valid scoped provider methods.",
     },
     ["integrations.provider_failed"] = {
         severity = "warn",
         description = "An integration provider method failed; Lib returned the caller fallback.",
+    },
+    ["integrations.closed_scope"] = {
+        severity = "error",
+        description = "Integration read scopes are valid only while their provider method is running.",
+    },
+    ["integrations.undeclared_read"] = {
+        severity = "error",
+        description = "Integration provider methods can only read aliases declared in their read scope.",
+    },
+    ["integrations.nested_scope"] = {
+        severity = "error",
+        description = "Integration provider method scopes cannot be re-entered while active.",
     },
 
     ["system_scope.invalid_owner"] = {
@@ -201,7 +213,7 @@ return {
     },
     ["phase.invalid_runtime_access"] = {
         severity = "error",
-        description = "Runtime store access is closed while the owning module draw callback is running.",
+        description = "Runtime store access is closed while any module draw callback is running.",
     },
     ["phase.nested_draw"] = {
         severity = "error",
@@ -229,11 +241,6 @@ return {
         severity = "error",
         description = "Widget action options must be draw action refs.",
     },
-    ["widgets.mismatched_field_owners"] = {
-        severity = "error",
-        description = "Stepped range widgets require both fields to share one storage owner.",
-    },
-
     ["staged_state.unknown_alias"] = {
         severity = "error",
         description = "Staged state operations only accept declared storage aliases.",

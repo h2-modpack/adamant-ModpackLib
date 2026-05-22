@@ -16,6 +16,7 @@ Use this path when building a module or modpack feature on top of Lib.
 
 - [lib-contributors/LIB_INTERNALS.md](lib-contributors/LIB_INTERNALS.md)
 - [lib-contributors/HOT_RELOAD_ARCHITECTURE.md](lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
+- [lib-contributors/INTEGRATION_PUSH_POLL_SPEC.md](lib-contributors/INTEGRATION_PUSH_POLL_SPEC.md)
 - [lib-contributors/TESTING.md](lib-contributors/TESTING.md)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
@@ -34,5 +35,6 @@ Use these when you need platform behavior, accepted constraints, or binding deta
 - [migrations/MIGRATING_MUTATIONS.md](migrations/MIGRATING_MUTATIONS.md)
 - [migrations/MIGRATING_PLUGIN_GUID_RUNTIME.md](migrations/MIGRATING_PLUGIN_GUID_RUNTIME.md)
 - [migrations/MIGRATING_SESSION_ACTIONS.md](migrations/MIGRATING_SESSION_ACTIONS.md)
+- [migrations/MIGRATING_DRAW_CONTEXT.md](migrations/MIGRATING_DRAW_CONTEXT.md)
 
 These are historical migration notes for older module code.

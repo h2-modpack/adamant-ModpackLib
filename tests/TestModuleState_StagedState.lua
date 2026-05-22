@@ -15,10 +15,8 @@ local makeMinRowsTableDefinition = helpers.makeMinRowsTableDefinition
 
 TestModuleState_StagedState = {}
 
-local TestDrawOwner = {}
-
 local function inDraw(harness, callback)
-    return harness.phaseGate.runDraw(TestDrawOwner, callback)
+    return harness.phaseGate.runDraw(callback)
 end
 
 function TestModuleState_StagedState:setUp()
@@ -573,7 +571,7 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
     })
     local _, stagedState = createModuleState(self.harness, {}, definition)
     local actionBuffer = self.harness.moduleState.createActionBuffer()
-    local actions = self.harness.uiActions.create(actionBuffer, TestDrawOwner)
+    local actions = self.harness.uiActions.create(actionBuffer)
     local recording = inDraw(self.harness, function()
         return actions.get("recording")
     end)
@@ -601,7 +599,7 @@ end
 
 function TestModuleState_StagedState:testActionRefsRequireMethodCallSyntax()
     local actionBuffer = self.harness.moduleState.createActionBuffer()
-    local actions = self.harness.uiActions.create(actionBuffer, TestDrawOwner)
+    local actions = self.harness.uiActions.create(actionBuffer)
     local drawAction = inDraw(self.harness, function()
         return actions.get("recording")
     end)

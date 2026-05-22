@@ -1,6 +1,6 @@
 # Integrations
 
-Integrations are optional cross-module provider APIs. They let one module publish a small domain capability and let other modules consume it without hard dependency coupling.
+Integrations are optional cross-module provider methods. They let one module publish a small domain capability and let other modules consume it without hard dependency coupling.
 
 Use integrations when modules can cooperate but should still work when the provider is absent.
 
@@ -21,13 +21,21 @@ if not host then return end
 
 host.integrations.register("run-director.god-availability", {
     providerId = MODULE_ID,
-    api = {
-        isActive = function()
-            return host.isEnabled()
-        end,
-        isAvailable = function(godKey)
-            return true
-        end,
+    methods = {
+        isActive = {
+            handler = function()
+                return true
+            end,
+        },
+        isAvailable = {
+            reads = { "ZeusEnabled" },
+            handler = function(scope, godKey)
+                if godKey == "Zeus" then
+                    return scope.read("ZeusEnabled") ~= false
+                end
+                return true
+            end,
+        },
     },
 })
 
@@ -35,6 +43,21 @@ host.activate()
 ```
 
 `providerId` is the public provider identity returned to consumers. It does not need to match `pluginGuid`.
+
+Provider methods receive a scoped read object as their first argument. The scope
+is deliberately narrow:
+
+- `scope.read(alias, ...)` reads a declared alias from the provider's staged state.
+- `scope.get(alias)` returns a read-only field or table ref for a declared alias.
+
+Each method must declare the storage aliases it reads with `reads`. The scope is
+valid only while that provider method is running, so do not cache it or refs
+returned by `scope.get(...)`.
+
+`reads` must be an array of aliases. Declaring a table root allows read-only
+access to that table's rows. Packed root and packed child aliases are declared
+independently: if a method reads a packed child through `readAlias(...)`, declare
+that child alias.
 
 ## Consumer Shape
 
@@ -48,7 +71,7 @@ end
 return true
 ```
 
-`invoke(...)` resolves the current preferred provider at call time and returns the fallback when the provider or method is absent.
+`invoke(...)` resolves the current preferred enabled provider at call time and returns the fallback when the provider or method is absent. Disabled provider hosts are skipped before provider code runs.
 Runtime consumer code should use the author host passed into hook, overlay,
 mutation, and module helper paths. Draw code should use
 `services.invokeIntegration(...)`.
@@ -61,7 +84,7 @@ draw-safe cross-module queries without gaining host lifecycle authority.
 
 Use:
 
-- `host.integrations.register(id, { providerId = providerId, api = api })`
+- `host.integrations.register(id, { providerId = providerId, methods = methods })`
 - `host.integrations.invoke(id, methodName, fallback, ...)`
 - `services.invokeIntegration(id, methodName, fallback, ...)`
 
@@ -72,8 +95,8 @@ replaced.
 Provider declarations close when activation begins. Register the complete
 current provider set before calling `host.activate()`.
 
-Provider API tables should be small and reload-safe. Consumers should call
-through `invoke(...)` instead of caching provider tables, because a provider
+Provider method tables should be small and reload-safe. Consumers should call
+through `invoke(...)` instead of caching provider behavior, because a provider
 module reload replaces the current implementation.
 
 ## Naming
@@ -90,8 +113,8 @@ Provider ids should identify the module or provider implementation.
 ## Common Mistakes
 
 - Do not make consumers require a provider to exist unless it is truly mandatory.
-- Do not cache provider API tables across reloads; use `invoke(...)` unless you have a specific reason.
-- Do not expose raw module internals through provider APIs.
+- Do not cache provider method tables or integration read scopes across reloads.
+- Do not close over broad module internals when a scoped read declaration is enough.
 - Do not assume provider id and `pluginGuid` are the same concept.
 
 See also:

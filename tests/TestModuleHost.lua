@@ -410,7 +410,6 @@ end
 
 function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     local services = nil
-    local enabled = nil
     local integrationValue = nil
     local integrationProvider = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
@@ -429,7 +428,6 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
         stagedState = stagedState,
         drawTab = function(_, _, _, drawServices)
             services = drawServices
-            enabled = services.isHostEnabled()
             integrationValue, integrationProvider = services.invokeIntegration("test.draw-services", "value",
                 "fallback", "ok")
             services.log("service %s", "log")
@@ -438,10 +436,12 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
         configureHost = function(authorHost)
             authorHost.integrations.register("test.draw-services", {
                 providerId = "DrawServicesProvider",
-                api = {
-                    value = function(suffix)
-                        return "service:" .. tostring(suffix)
-                    end,
+                methods = {
+                    value = {
+                        handler = function(_, suffix)
+                            return "service:" .. tostring(suffix)
+                        end,
+                    },
                 },
             })
         end,
@@ -454,7 +454,6 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     lu.assertEquals(type(services), "table")
     lu.assertEquals(type(services.log), "function")
     lu.assertEquals(type(services.logIf), "function")
-    lu.assertEquals(type(services.isHostEnabled), "function")
     lu.assertEquals(type(services.invokeIntegration), "function")
     lu.assertNil(services.integrations)
     lu.assertNil(services.hooks)
@@ -462,7 +461,6 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     lu.assertNil(services.mutation)
     lu.assertNil(services.activate)
     lu.assertNil(services.setEnabled)
-    lu.assertTrue(enabled)
     lu.assertEquals(integrationValue, "service:ok")
     lu.assertEquals(integrationProvider, "DrawServicesProvider")
     lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawServicesModule] service log")
@@ -470,7 +468,7 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     lu.assertEquals(#self.h.warnings, warningCount + 2)
 end
 
-function TestModuleHost:testDrawServicesRejectUseOutsideOwningDrawPhase()
+function TestModuleHost:testDrawServicesRejectUseOutsideDrawPhase()
     local services = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "DrawServicesPhase",
@@ -487,16 +485,13 @@ function TestModuleHost:testDrawServicesRejectUseOutsideOwningDrawPhase()
         stagedState = stagedState,
         drawTab = function(_, _, _, drawServices)
             services = drawServices
-            services.isHostEnabled()
+            services.invokeIntegration("missing", "value", nil)
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-draw-services-phase")
 
     host.drawTab()
 
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        services.isHostEnabled()
-    end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         services.log("outside")
     end)
@@ -686,7 +681,11 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         configureHost = function(authorHost)
             authorHost.integrations.register(integrationId, {
                 providerId = providerId,
-                api = previousApi,
+                methods = {
+                    read = {
+                        handler = previousApi.read,
+                    },
+                },
             })
         end,
         drawTab = function() end,
@@ -713,10 +712,12 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
     end)
     secondAuthorHost.integrations.register(integrationId, {
         providerId = providerId,
-        api = {
-            read = function()
-                return "replacement"
-            end,
+        methods = {
+            read = {
+                handler = function()
+                    return "replacement"
+                end,
+            },
         },
     })
 
@@ -764,10 +765,12 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
     end)
     authorHost.integrations.register(integrationId, {
         providerId = providerId,
-        api = {
-            read = function()
-                return "candidate"
-            end,
+        methods = {
+            read = {
+                handler = function()
+                    return "candidate"
+                end,
+            },
         },
     })
 
@@ -927,10 +930,12 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         configureHost = function(authorHost)
             authorHost.integrations.register(integrationId, {
                 providerId = providerId,
-                api = {
-                    read = function()
-                        return "first"
-                    end,
+                methods = {
+                    read = {
+                        handler = function()
+                            return "first"
+                        end,
+                    },
                 },
             })
         end,

@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 
 local phaseGate = {}
-local activeDrawOwner = nil
+local activeDraw = false
 
 local function packResults(...)
     return {
@@ -19,53 +19,44 @@ local function withTraceback(err)
     return tostring(err)
 end
 
-function phaseGate.enterDraw(owner)
-    if owner == nil then
-        logging.violate("phase.invalid_ui_access", "draw phase requires an owner")
-    end
-    if activeDrawOwner ~= nil then
+function phaseGate.enterDraw()
+    if activeDraw then
         logging.violate("phase.nested_draw", "cannot enter draw phase while another draw callback is active")
     end
 
-    activeDrawOwner = owner
+    activeDraw = true
 end
 
-function phaseGate.leaveDraw(owner)
-    if activeDrawOwner ~= owner then
+function phaseGate.leaveDraw()
+    if not activeDraw then
         logging.violate(
             "phase.invalid_leave",
-            "cannot leave draw phase because the owner does not match the active draw callback"
+            "cannot leave draw phase because no draw callback is active"
         )
     end
 
-    activeDrawOwner = nil
+    activeDraw = false
 end
 
 function phaseGate.requireAnyDraw()
-    if activeDrawOwner == nil then
+    if not activeDraw then
         logging.violate("phase.invalid_ui_access", "draw-phase object can only run during a draw callback")
     end
 end
 
-function phaseGate.requireOwnerDraw(owner)
-    if activeDrawOwner ~= owner then
-        logging.violate("phase.invalid_ui_access", "draw-phase object can only run during its owning draw callback")
+function phaseGate.requireRuntime()
+    if activeDraw then
+        logging.violate("phase.invalid_runtime_access", "runtime object cannot run during a draw callback")
     end
 end
 
-function phaseGate.requireRuntime(owner)
-    if activeDrawOwner == owner then
-        logging.violate("phase.invalid_runtime_access", "runtime object cannot run during its owning draw callback")
-    end
-end
-
-function phaseGate.runDraw(owner, callback, ...)
-    phaseGate.enterDraw(owner)
+function phaseGate.runDraw(callback, ...)
+    phaseGate.enterDraw()
     local args = { ... }
     local results = packResults(xpcall(function()
         return callback(table.unpack(args))
     end, withTraceback))
-    local leaveOk, leaveErr = pcall(phaseGate.leaveDraw, owner)
+    local leaveOk, leaveErr = pcall(phaseGate.leaveDraw)
     if not leaveOk then
         error(leaveErr, 0)
     end

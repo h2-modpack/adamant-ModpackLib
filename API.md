@@ -53,8 +53,8 @@ Module behavior is hosted through Lib's live host registry.
 
 ## `host.integrations`
 
-Small registry for optional cross-module cooperation. Modules can publish a
-domain-named integration API, and consumers can use it when present while
+Small registry for optional cross-module cooperation. Modules can publish
+domain-named integration methods, and consumers can use them when present while
 remaining fully functional when absent.
 
 Typical provider declaration before activation:
@@ -72,13 +72,21 @@ if not host then return end
 
 host.integrations.register("run-director.god-availability", {
     providerId = MODULE_ID,
-    api = {
-        isActive = function()
-            return host.isEnabled()
-        end,
-        isAvailable = function(godKey)
-            return true
-        end,
+    methods = {
+        isActive = {
+            handler = function()
+                return true
+            end,
+        },
+        isAvailable = {
+            reads = { "ZeusEnabled" },
+            handler = function(scope, godKey)
+                if godKey == "Zeus" then
+                    return scope.read("ZeusEnabled") ~= false
+                end
+                return true
+            end,
+        },
     },
 })
 
@@ -101,15 +109,18 @@ return true
 ```
 
 Surface:
-- `host.integrations.register(id, { providerId = providerId, api = api })`
+- `host.integrations.register(id, { providerId = providerId, methods = methods })`
 - `host.integrations.invoke(id, methodName, fallback, ...)`
 
 Rules:
 - integration ids should describe domain behavior, not consumer names
 - absence means the optional enhancement is inactive
-- provider APIs should be safe to call when their module is disabled
+- provider methods receive a scoped read object, not the provider host or store
+- provider methods can only read aliases listed in that method's `reads`
+- provider read scopes use the provider module's staged state and close after the method returns
+- `reads` must be an array of aliases; declaring a table root allows read-only table access, while packed child reads must declare the child alias
 - consumers should prefer `host.integrations.invoke(...)` so Lib resolves active provider behavior at call time
-- when multiple providers exist, `invoke(...)` uses the most recently activated provider
+- when multiple providers exist, `invoke(...)` uses the most recently activated enabled provider
 
 ## `host.cache`
 
@@ -789,7 +800,6 @@ argument.
 Built-ins:
 - `services.log(fmt, ...)`
 - `services.logIf(fmt, ...)`
-- `services.isHostEnabled()`
 - `services.invokeIntegration(id, methodName, fallback, ...)`
 
 These helpers are the sanctioned draw-time access path for narrow module

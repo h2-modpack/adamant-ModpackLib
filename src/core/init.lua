@@ -67,6 +67,7 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
 })
 local integrationsBundle = import('core/integrations/00_init.lua', nil, {
     logging = logging,
+    storage = storage,
     integrationRegistry = registry.integrations,
     hostRegistry = hostRegistry,
 })

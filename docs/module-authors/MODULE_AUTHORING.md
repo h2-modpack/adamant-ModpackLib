@@ -109,7 +109,7 @@ Construction stays separate from activation: `createModule(...)` wraps only
 construction, and `host.activate()` wraps only activation.
 Declare hooks and retained overlays on the host after construction and before
 `host.activate()`. These declarations are scoped to the module's
-`pluginGuid`, so helper files do not need to know or manage an owner token.
+`pluginGuid`, so helper files do not need a separate owner argument.
 Modules that use shared runtime helper files should pass the needed store or
 narrower access/read closures into those helpers:
 
@@ -177,8 +177,8 @@ Module construction creates two author-facing state handles:
 
 The public surfaces are phase-gated. `state`, `actions`, `services`,
 `draw.widgets`, and `draw.nav` are valid only inside the active draw callback.
-`store` is valid for runtime/helper code and rejects access during its owning
-module's draw callback.
+`store` is valid for runtime/helper code and rejects access while any module
+draw callback is running.
 
 Raw Chalk config should stay local to `main.lua`. Host/framework plumbing owns
 commit, reload, hash/profile import, and config flush behavior.
@@ -230,7 +230,7 @@ For the focused hooks guide, read [capabilities/HOOKS.md](capabilities/HOOKS.md)
 Modules that register ModUtil path hooks should declare them inside
 local hook helpers by calling `host.hooks.*` before `host.activate()`.
 Declarations are scoped to the activating module's `pluginGuid`, so hook files
-do not need to manage owner tokens.
+do not need a separate owner argument.
 
 Use keyed overloads when one module needs several hooks on the same path.
 

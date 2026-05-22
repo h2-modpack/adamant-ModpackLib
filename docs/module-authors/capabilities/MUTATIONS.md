@@ -80,7 +80,7 @@ Activation and later host operations apply or refresh the plan when needed. If a
 Do not use mutation plans for:
 
 - transient UI state
-- optional cross-module provider APIs
+- optional cross-module provider methods
 - state that belongs in `host.cache.currentRun` or another owned runtime cache
 - arbitrary side effects that cannot be restored
 

@@ -60,7 +60,7 @@ local function pruneBucket(id, bucket)
     end
 end
 
-local function getPreferredProvider(id)
+local function getPreferredProvider(id, predicate)
     local bucket = getBucket(id, false)
     if not bucket then
         return nil, nil
@@ -68,9 +68,9 @@ local function getPreferredProvider(id)
 
     for index = #bucket.order, 1, -1 do
         local providerId = bucket.order[index]
-        local api = bucket.providers[providerId]
-        if api ~= nil then
-            return api, providerId
+        local provider = bucket.providers[providerId]
+        if provider ~= nil and (predicate == nil or predicate(provider, providerId)) then
+            return provider, providerId
         end
     end
 
@@ -97,13 +97,13 @@ local function insertProviderOrder(bucket, providerId, index)
     end
 end
 
-local function setProvider(id, providerId, api, ownerId, ownerToken)
+local function setProvider(id, providerId, provider, ownerId, ownerToken)
     local bucket = getBucket(id, true)
     insertProviderOrder(bucket, providerId)
-    bucket.providers[providerId] = api
+    bucket.providers[providerId] = provider
     bucket.ownerIds[providerId] = ownerId
     bucket.ownerTokens[providerId] = ownerToken
-    return api
+    return provider
 end
 
 local function getProviderOwnerId(id, providerId)

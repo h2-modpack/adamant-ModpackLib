@@ -37,8 +37,8 @@ registerHooks(host, store)
 host.activate()
 ```
 
-`host.hooks` is bound to the module host, so hook declarations do not need an
-owner token and do not rely on an ambient registration context.
+`host.hooks` is bound to the module host, so hook declarations do not need a
+separate owner argument and do not rely on an ambient registration context.
 
 ## Supported Hook Forms
 
@@ -82,7 +82,7 @@ end
 
 Do not read draw-state values inside hook callbacks. Draw state is staged UI state; hooks run against committed runtime behavior.
 Store access is runtime-phase access. It is valid in hook callbacks and normal
-runtime helper code, but not during the owning module's draw callback.
+runtime helper code, but not while any module draw callback is running.
 
 ## Wrap vs Override
 
