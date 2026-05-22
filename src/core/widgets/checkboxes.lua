@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 local DEFAULT_PACKED_SLOT_COUNT = 32
 
@@ -23,7 +24,7 @@ local DEFAULT_PACKED_SLOT_COUNT = 32
 ---@param field StorageField
 ---@param opts CheckboxOpts|nil
 ---@return boolean
-function helpers.widgets.checkbox(imgui, field, opts)
+function widgets.checkbox(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local fieldAlias = field:alias()
     local fieldControlId = field:controlId()
@@ -48,7 +49,7 @@ end
 ---@param field StorageField
 ---@param opts PackedCheckboxListOpts|nil
 ---@return boolean
-function helpers.widgets.packedCheckboxList(imgui, field, opts)
+function widgets.packedCheckboxList(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local owner = helpers.GetFieldOwner(field)
     local fieldControlId = field:controlId()
@@ -105,3 +106,5 @@ function helpers.widgets.packedCheckboxList(imgui, field, opts)
 
     return changed
 end
+
+return widgets

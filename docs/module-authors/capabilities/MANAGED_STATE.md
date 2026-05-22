@@ -4,12 +4,12 @@ Managed state is the core Lib feature most module code builds on. It gives each 
 
 - a validated storage schema
 - a persisted runtime `store`
-- a staged UI `session`
+- a staged UI `state`
 - built-in `Enabled` and `DebugMode` aliases
 - hash/profile participation for stable settings
 - table and packed-value helpers
 
-The normal entrypoint is `lib.createModule(...)`. It prepares the definition, creates the store/session pair, and passes the right handle to each callback.
+The normal entrypoint is `lib.createModule(...)`. It prepares the definition, creates the runtime store and draw state, and passes the right handle to each callback.
 
 ## State Surfaces
 
@@ -18,20 +18,20 @@ Use each state surface for one job:
 | Surface | Use it for | Where it appears |
 | --- | --- | --- |
 | `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
-| `data` | staged UI reads/writes | `drawTab(draw, data, actions, services)`, `drawQuickContent(...)` |
+| `state` | staged UI reads/writes | `drawTab(draw, state, actions, services)`, `drawQuickContent(...)` |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
-Draw code should stage changes through `data`. Gameplay, hooks, overlays,
+Draw code should stage changes through `state`. Gameplay, hooks, overlays,
 integrations, and mutations should read committed values through `store`.
 The runtime store exposes `store.get(alias)` for read-only storage objects and
 `store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
-Draw `data` exposes the same convenience shape for custom raw ImGui code:
-`data.read(alias, ...)` and `data.write(alias, ...)` forward through the
-staged object returned by `data.get(alias)`.
+draw `state` exposes the same convenience shape for custom raw ImGui code:
+`state.read(alias, ...)` and `state.write(alias, ...)` forward through the
+staged object returned by `state.get(alias)`.
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+function ui.drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 end
@@ -46,7 +46,7 @@ function logic.registerHooks(host, store)
 end
 ```
 
-Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive a draw context with author-facing staged data, not the private full session.
+Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive a draw context with author-facing staged state, not the private full staged-state object.
 
 ## Storage Roots
 
@@ -64,9 +64,9 @@ end
 
 Rules:
 
-- `alias` is the storage, session, widget, and persisted config key.
+- `alias` is the storage, state, widget, and persisted config key.
 - Normal roots persist and hash by default.
-- `persist = false, hash = false` creates session-only transient UI state.
+- `persist = false, hash = false` creates staged-only transient UI state.
 - `hash = false` keeps a persisted staged value out of hash/profile serialization.
 - `hash = true` requires `persist = true`.
 
@@ -109,11 +109,11 @@ Table rules:
 - Rows are compact ordered arrays with no row ids or holes.
 - `defaultRows` creates the default row count.
 
-Use `data.get(alias)` for staged UI edits. For table roots, `get(...)`
+Use `state.get(alias)` for staged UI edits. For table roots, `get(...)`
 returns the staged table handle:
 
 ```lua
-local tiers = data.get("Tiers")
+local tiers = state.get("Tiers")
 tiers:append({ Enabled = true, Limit = 3 })
 tiers:write(1, "Limit", 4)
 local limit = tiers:read(1, "Limit")
@@ -123,10 +123,10 @@ local limitField = tiers:get(1, "Limit")
 For raw ImGui controls that do not use Lib widgets, the convenience path is:
 
 ```lua
-local limit = data.read("Tiers", rowIndex, "Limit")
+local limit = state.read("Tiers", rowIndex, "Limit")
 local nextLimit, changed = draw.imgui.SliderInt("Limit", limit, 0, 10)
 if changed then
-    data.write("Tiers", rowIndex, "Limit", nextLimit)
+    state.write("Tiers", rowIndex, "Limit", nextLimit)
 end
 ```
 
@@ -155,7 +155,7 @@ Use `packedInt` when one numeric root should expose named child aliases:
 }
 ```
 
-Packed widgets can write child aliases through the same session. Lib handles repacking the root.
+Packed widgets can write child aliases through the same staged state. Lib handles repacking the root.
 
 ## Draw Actions
 
@@ -175,7 +175,7 @@ Action refs are object handles; call their methods with colon syntax.
 
 Use actions for one-shot UI intent that should be observed by runtime commit
 plumbing, not for ordinary persistent settings. Stage actions through
-`actions`, not through `session`.
+`actions`, not through `state`.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`:
 
@@ -216,9 +216,9 @@ actions for this path through an `actions.get(...)` ref passed in their
 
 ## Common Mistakes
 
-- Do not read transient aliases from `store`; they only live in `session`.
+- Do not read transient aliases from `store`; they only live in draw `state`.
 - Do not write raw Chalk config from draw code.
-- Do not call private session flush/reload helpers from module UI.
+- Do not call private staged-state flush/reload helpers from module UI.
 - Do not use draw actions as persistent settings.
 - Do not put gameplay behavior in `ui.lua`; UI stages state, runtime code consumes committed state.
 

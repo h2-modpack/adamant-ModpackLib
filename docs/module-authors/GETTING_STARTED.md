@@ -39,7 +39,7 @@ A module is built from four main pieces:
   Declares required module identity/display metadata, optional storage, and hash layout hints.
 - `store`
   Persisted runtime state. Read this from gameplay and hook code.
-- `data`
+- `state`
   Staged UI state passed to draw callbacks. Draw code edits this and host/framework plumbing commits it later.
 - `host`
   The author-facing view returned by `lib.createModule(...)`. Call `host.activate()` after construction so Framework and fallback UI can use the registered live host.
@@ -49,7 +49,7 @@ Typical module flow:
 1. `main.lua` calls `lib.createModule(...)`.
 2. The returned author host is kept local in `main.lua`.
 3. `host.activate()` registers hooks, overlays, integrations, and the live host.
-4. UI code edits staged values through the `data` argument passed into draw callbacks.
+4. UI code edits staged values through the `state` argument passed into draw callbacks.
 5. Host/framework plumbing commits staged persistent values when appropriate.
 6. Gameplay logic reads persisted state through `store.get(...):read()`.
 
@@ -57,12 +57,12 @@ Typical module flow:
 
 Use the right state object for the right job:
 
-- draw/UI code uses `data`
+- draw/UI code uses `state`
 - gameplay/runtime logic uses `store`
 
 If you ignore that boundary, the module will still often "work", but you will create drift between the UI and the persisted state model.
 
-`lib.createModule(...)` owns the normal construction pipeline so store/draw-data
+`lib.createModule(...)` owns the normal construction pipeline so store/draw-state
 ownership stays paired. Keep custom module setup around this boundary instead
 of bypassing it.
 `pluginGuid` is the stable lifecycle identity. Lib owns the internal per-plugin
@@ -82,7 +82,7 @@ Owns module wiring:
 - activates the returned host
 - wires optional fallback UI
 
-Keep store/session/host creation here even if the module grows.
+Keep store/state/host creation here even if the module grows.
 
 ### `src/data.lua`
 
@@ -99,10 +99,10 @@ Use this file to declare module data. UI belongs in `ui.lua`; gameplay behavior 
 
 Owns immediate-mode UI:
 
-- `drawTab(draw, data, actions, services)`
-- optional `drawQuickContent(draw, data, actions, services)`
+- `drawTab(draw, state, actions, services)`
+- optional `drawQuickContent(draw, state, actions, services)`
 
-This code should read and write staged values through the `data` argument or
+This code should read and write staged values through the `state` argument or
 the bound helpers on `draw.widgets`.
 
 ### `src/logic.lua`
@@ -199,13 +199,13 @@ host.activate()
 
 Rules:
 
-- `alias` is the store/session key and the persisted backing key
+- `alias` is the store/state key and the persisted backing key
 - aliases are direct flat storage identifiers
 - normal values persist and hash by default
 - transient values use `persist = false, hash = false`
-- transient values live only in session state
+- transient values live only in staged state
 - table values use one `type = "table"` root with a uniform `row` schema
-- draw code should access staged values through the draw `data` argument
+- draw code should access staged values through the draw `state` argument
 - `Enabled` and `DebugMode` are reserved Lib-owned aliases; do not declare them
 
 For persistent runtime markers that should not appear in UI staging, profiles,
@@ -228,7 +228,7 @@ logic.registerHooks(host, store)
 host.activate()
 ```
 
-The draw path receives the restricted author-facing session through the live host.
+The draw path receives the restricted author-facing state through the live host.
 The returned store is kept only when gameplay logic needs runtime reads.
 
 ### 4. Build the UI in `ui.lua`
@@ -238,12 +238,12 @@ Example:
 ```lua
 local MODE_VALUES = { "Vanilla", "Chaos" }
 
-local function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+local function drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
-    draw.widgets.dropdown(data.get("Mode"), {
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = MODE_VALUES,
         controlWidth = 180,
@@ -251,12 +251,12 @@ local function drawTab(draw, data, actions, services)
 end
 ```
 
-Draw callbacks receive the author-facing `data` API:
+Draw callbacks receive the author-facing `state` API:
 
-- `data.get(alias)`
-- `data.read(alias, ...)`
-- `data.write(alias, ...)`
-- `data.resetToDefaults(opts?)`
+- `state.get(alias)`
+- `state.read(alias, ...)`
+- `state.write(alias, ...)`
+- `state.resetAll(opts?)`
 
 Commit and reload operations are handled by host/framework plumbing.
 
@@ -331,8 +331,8 @@ If the module has no runtime hooks, skip the hook declaration call.
 If the module belongs to a Framework-managed pack:
 
 - `host.activate()` registers the module in Lib's live-host registry
-- Framework calls `host.drawTab(...)`
-- optional quick setup uses `host.drawQuickContent(...)`
+- Framework calls `host.drawTab()`
+- optional quick setup uses `host.drawQuickContent()`
 
 ### Fallback UI
 
@@ -360,7 +360,7 @@ Persisted storage roots live in Chalk config and are exposed through
 `store.get(...)`. Use `store.read(alias, ...)` when you only need the committed
 value; it forwards to `store.get(alias):read(...)`.
 
-The UI stages edits in `data`, then host/framework plumbing commits those edits later.
+The UI stages edits in `state`, then host/framework plumbing commits those edits later.
 
 Lib injects two persisted staged aliases into every prepared module definition:
 
@@ -371,7 +371,7 @@ Module authors should not put these in `definition.storage` or `config.lua`.
 
 ### Transient values
 
-Transient aliases never hit persisted config. They only live in draw `data`.
+Transient aliases never hit persisted config. They only live in draw `state`.
 
 Examples:
 
@@ -405,7 +405,7 @@ Table storage models compact ordered rows with one shared row schema:
 }
 ```
 
-Use `data.get("Tiers")` for staged UI edits and `store.get("Tiers")` for read-only runtime access.
+Use `state.get("Tiers")` for staged UI edits and `store.get("Tiers")` for read-only runtime access.
 When you only need a runtime value, `store.read("Tiers", rowIndex, "Limit")`
 forwards to the table handle read.
 Table handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
@@ -415,12 +415,12 @@ Use `tiers:get(rowIndex, alias)` when a widget or helper needs a row-cell field.
 
 ### Reading transient values from `store`
 
-Transient aliases live in draw `data`. Read them with `data.read(...)` or
-`data.get(...):read()`.
+Transient aliases live in draw `state`. Read them with `state.read(...)` or
+`state.get(...):read()`.
 
 ### Writing persisted config directly from draw code
 
-Normal draw code should stage values through `data` and let the host/framework commit them.
+Normal draw code should stage values through `state` and let the host/framework commit them.
 
 ### Putting gameplay logic in `ui.lua`
 
@@ -428,7 +428,7 @@ Keep UI and game mutation separate. UI edits state; logic applies state.
 
 ### Putting UI outside draw functions
 
-Author UI through draw functions such as `drawTab(draw, data, actions, services)`.
+Author UI through draw functions such as `drawTab(draw, state, actions, services)`.
 
 ## LuaLS Setup
 
@@ -444,21 +444,21 @@ And for local callback declarations:
 ```lua
 ---@type fun(
 ---    draw: AdamantModpackLib.DrawContext,
----    data: AdamantModpackLib.AuthorSession,
+---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
 ---    services: AdamantModpackLib.DrawServices
 ---)
 local drawTab
 ---@type fun(
 ---    draw: AdamantModpackLib.DrawContext,
----    data: AdamantModpackLib.AuthorSession,
+---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
 ---    services: AdamantModpackLib.DrawServices
 ---)|nil
 local drawQuickContent
 ```
 
-That lets LuaLS infer `draw.imgui`, bound `draw.widgets`, staged `data`,
+That lets LuaLS infer `draw.imgui`, bound `draw.widgets`, staged `state`,
 draw `actions`, and draw-safe `services`.
 
 ## Recommended Next Reads

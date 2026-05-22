@@ -97,12 +97,12 @@ local function createFallbackUiHarness(opts)
         overlays = base.overlays,
         moduleHost = base.moduleHost,
         moduleState = base.moduleState,
-        moduleRuntimeRegistry = base.moduleRuntimeRegistry,
-        hostState = base.hostState,
+        registry = base.registry,
+        hostRegistry = base.hostRegistry,
         coordinator = base.coordinator,
-        overlayState = base.runtime.overlays,
-        rendererState = base.runtime.overlays.renderer,
-        retainedState = base.runtime.overlays.retained,
+        overlayRegistry = base.registry.overlays,
+        rendererState = base.registry.overlays.renderer,
+        retainedState = base.registry.overlays.retained,
         warnings = {},
     }
 
@@ -124,12 +124,12 @@ local function createFallbackUiHarness(opts)
     end
 
     function h:installHost(host, pluginGuid)
-        self.moduleRuntimeRegistry.setLiveHost(pluginGuid or PLUGIN_GUID, host)
+        self.hostRegistry.setLiveHost(pluginGuid or PLUGIN_GUID, host)
     end
 
     function h:createModuleState(config, definition)
         local state = self.moduleState.create(config, definition)
-        return state.store, state.session
+        return state.persistentState, state.stagedState
     end
 
     function h:createLibHost(pluginGuid, hostOpts)
@@ -140,15 +140,15 @@ local function createFallbackUiHarness(opts)
             name = hostOpts.name or "Fallback UI Test",
             storage = {},
         })
-        local store, session = self:createModuleState({
+        local store, stagedState = self:createModuleState({
             Enabled = hostOpts.enabled ~= false,
             DebugMode = hostOpts.debugMode == true,
         }, definition)
         local host, authorHost = self.moduleHost.create({
             pluginGuid = pluginGuid,
             definition = definition,
-            store = store,
-            session = session,
+            persistentState = store,
+            stagedState = stagedState,
             drawTab = function() end,
         })
         return host, authorHost
@@ -166,7 +166,7 @@ local function createFallbackUiHarness(opts)
     end
 
     function h:getFallbackUiRuntime(pluginGuid)
-        return self.runtime.fallbackUi.runtimes[pluginGuid]
+        return self.registry.fallback.runtimes[pluginGuid]
     end
 
     function h:installFallbackRuntime(host)
@@ -183,7 +183,7 @@ local function createFallbackUiHarness(opts)
 
     function h:countUiSuppressors()
         local count = 0
-        for _ in pairs(self.overlayState.uiSuppressors) do
+        for _ in pairs(self.overlayRegistry.uiSuppressors) do
             count = count + 1
         end
         return count

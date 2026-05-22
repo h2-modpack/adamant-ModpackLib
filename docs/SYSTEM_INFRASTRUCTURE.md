@@ -67,7 +67,7 @@ flowchart TD
     subgraph STATE["Module State"]
         direction TB
         MODULESTATE["module state<br/>store / session"]
-        HOSTSTATE["module host state<br/>live host registry"]
+        HOSTREGISTRY["host registry<br/>live host records"]
         COORD["coordinator"]
     end
 
@@ -137,7 +137,7 @@ flowchart LR
     GLOBAL --> OVERLAYSTATE["overlay registries"]
     GLOBAL --> INTEGRATIONSTATE["integration providers"]
     GLOBAL --> MUTATIONSTATE["active mutation plans"]
-    GLOBAL --> HOSTSTATE["live host registry"]
+    GLOBAL --> HOSTREGISTRY["host registry"]
 
     SERVICES --> PUBLIC
     PUBLIC --> AUTHORS

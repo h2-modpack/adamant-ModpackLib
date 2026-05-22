@@ -1,6 +1,6 @@
 local createLibHarness = require("tests/harness/create_lib_harness")
 
-local function createValueSession(value)
+local function createValueStagedState(value)
     return {
         read = function()
             return value
@@ -14,7 +14,7 @@ local function createValueSession(value)
     }
 end
 
-local function createReadOnlySession(values)
+local function createReadOnlyStagedState(values)
     return {
         read = function(alias)
             return values[alias]
@@ -99,7 +99,7 @@ end
 
 local function createModuleState(base, config, definition)
     local state = base.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 local function createPackedDefinition(base, fields)
@@ -126,14 +126,17 @@ local function createWidgetHarness(opts)
     local h = {
         harness = base,
         public = base.public,
+        rom = base.rom,
         widgets = base.widgets,
         nav = base.nav,
+        uiDraw = base.uiDraw,
         storage = base.storage,
         moduleHost = base.moduleHost,
         moduleState = base.moduleState,
+        uiActions = base.uiActions,
 
-        createValueSession = createValueSession,
-        createReadOnlySession = createReadOnlySession,
+        createValueStagedState = createValueStagedState,
+        createReadOnlyStagedState = createReadOnlyStagedState,
         makeDropdownImgui = makeDropdownImgui,
         makeStepperImgui = makeStepperImgui,
     }
@@ -150,10 +153,10 @@ local function createWidgetHarness(opts)
         return createPackedDefinition(base, fields)
     end
 
-    function h.createPackedSession()
+    function h.createPackedStagedState()
         local definition = createPackedDefinition(base)
-        local _, session = createModuleState(base, { Enabled = false, DebugMode = false, Packed = 0 }, definition)
-        return session
+        local _, stagedState = createModuleState(base, { Enabled = false, DebugMode = false, Packed = 0 }, definition)
+        return stagedState
     end
 
     return h

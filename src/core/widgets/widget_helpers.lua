@@ -6,7 +6,6 @@ local widgetHelpers = {
     actions = deps.actions,
     imguiHelpers = deps.imguiHelpers,
     logging = logging,
-    widgets = deps.widgets,
 }
 widgetHelpers.EMPTY_OPTS = {}
 widgetHelpers.EMPTY_LIST = {}

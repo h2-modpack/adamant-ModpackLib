@@ -162,7 +162,7 @@ function TestOverlays_Retained:testHostOverlayDeclarationsRejectAfterActivation(
     end)
 end
 
-function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnManagedHostState()
+function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnHostRegistry()
     local host = self:createHostWithOverlays("test.retained.state-declarations", function(overlays)
         overlays.createLine("line", {
             region = "middleRightStack",
@@ -172,10 +172,10 @@ function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnManagedHost
         })
     end)
 
-    local state = self.h.harness.hostState.get(host)
-    lu.assertNotNil(state.overlayDeclarations)
-    lu.assertEquals(state.overlayDeclarations.entries[1].kind, "createLine")
-    lu.assertEquals(state.overlayDeclarations.entries[1].name, "line")
+    local record = self.h.harness.hostRegistry.getRecord(host)
+    lu.assertNotNil(record.overlayDeclarations)
+    lu.assertEquals(record.overlayDeclarations.entries[1].kind, "createLine")
+    lu.assertEquals(record.overlayDeclarations.entries[1].name, "line")
 end
 
 function TestOverlays_Retained:testProjectionContextDoesNotExposeOwner()
@@ -200,7 +200,7 @@ end
 function TestOverlays_Retained:testHostCommitDispatchesOverlaysAfterSettingsObserver()
     local pluginGuid = "test-retained-overlay-commit"
     local order = {}
-    local host, authorHost, _, session = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, authorHost, _, stagedState = self:createHostWithOverlays(pluginGuid, function(overlays)
         overlays.onCommit(function()
             order[#order + 1] = "overlay"
         end)
@@ -220,7 +220,7 @@ function TestOverlays_Retained:testHostCommitDispatchesOverlaysAfterSettingsObse
     local ok, err = authorHost.activate()
     lu.assertTrue(ok, tostring(err))
 
-    session.write("Flag", true)
+    stagedState.write("Flag", true)
     ok, err = host.flush()
 
     lu.assertTrue(ok, tostring(err))
@@ -231,7 +231,7 @@ function TestOverlays_Retained:testHostCommitDispatchesOverlaysWhenSettingsObser
     local warnings = self:captureWarnings()
     local pluginGuid = "test-retained-overlay-commit-observer-failure"
     local order = {}
-    local host, authorHost, _, session = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, authorHost, _, stagedState = self:createHostWithOverlays(pluginGuid, function(overlays)
         overlays.onCommit(function()
             order[#order + 1] = "overlay"
         end)
@@ -252,7 +252,7 @@ function TestOverlays_Retained:testHostCommitDispatchesOverlaysWhenSettingsObser
     local ok, err = authorHost.activate()
     lu.assertTrue(ok, tostring(err))
 
-    session.write("Flag", true)
+    stagedState.write("Flag", true)
     ok, err = host.flush()
 
     lu.assertTrue(ok, tostring(err))

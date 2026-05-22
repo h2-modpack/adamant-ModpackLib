@@ -61,7 +61,7 @@ return {
 
     ["host.invalid_create_opts"] = {
         severity = "error",
-        description = "Module host creation requires prepared definition, pluginGuid, store/session handles, drawTab, and valid callbacks.",
+        description = "Module host creation requires prepared definition, pluginGuid, state handles, drawTab, and callbacks.",
     },
     ["host.invalid_activate_opts"] = {
         severity = "error",
@@ -87,9 +87,9 @@ return {
         severity = "warn",
         description = "A module enable/disable transition failed and the UI state may need resync.",
     },
-    ["host.session_commit_failed"] = {
+    ["host.staged_state_commit_failed"] = {
         severity = "warn",
-        description = "A UI session commit failed and Lib attempted to restore the previous config state.",
+        description = "A staged UI state commit failed and Lib attempted to restore the previous config state.",
     },
     ["host.structural_rebuild_unavailable"] = {
         severity = "error",
@@ -181,13 +181,13 @@ return {
         severity = "warn",
         description = "A module onSettingsCommitted callback returned false.",
     },
-    ["lifecycle.session_drift_detected"] = {
+    ["lifecycle.staged_state_drift_detected"] = {
         severity = "warn",
         description = "Staged UI state drifted from persisted config and was reloaded.",
     },
-    ["lifecycle.session_rollback_reapply_failed"] = {
+    ["lifecycle.staged_state_rollback_reapply_failed"] = {
         severity = "warn",
-        description = "A session rollback could not fully reapply the previous mutation state.",
+        description = "A staged state rollback could not fully reapply the previous mutation state.",
     },
 
     ["overlays.invalid_registration"] = {
@@ -217,17 +217,17 @@ return {
         description = "Stepped range widgets require both fields to share one storage owner.",
     },
 
-    ["session.unknown_alias"] = {
+    ["staged_state.unknown_alias"] = {
         severity = "error",
-        description = "Session operations only accept declared storage aliases.",
+        description = "Staged state operations only accept declared storage aliases.",
     },
-    ["session.invalid_table_alias"] = {
+    ["staged_state.invalid_table_alias"] = {
         severity = "error",
-        description = "Session table access requires a table root alias, not scalar or packed-bit aliases.",
+        description = "Staged state table access requires a table root alias, not scalar or packed-bit aliases.",
     },
-    ["session.readonly_view_write"] = {
+    ["staged_state.readonly_view_write"] = {
         severity = "error",
-        description = "Session view is read-only; writes must go through session.write.",
+        description = "Staged state view is read-only; writes must go through stagedState.write.",
     },
     ["storage.invalid_field_alias"] = {
         severity = "error",
@@ -258,17 +258,13 @@ return {
         severity = "error",
         description = "Store creation requires a module config table for persisted backing values.",
     },
-    ["store.invalid_managed_store"] = {
-        severity = "error",
-        description = "Internal persisted writes require a Lib-managed store handle.",
-    },
     ["store.invalid_table_alias"] = {
         severity = "error",
         description = "Store table access requires a table root alias, not scalar or packed-bit aliases.",
     },
     ["store.invalid_surface"] = {
         severity = "error",
-        description = "Store operations cannot access session-only transient UI storage.",
+        description = "Store operations cannot access staged-only transient UI storage.",
     },
     ["store.unknown_alias"] = {
         severity = "error",

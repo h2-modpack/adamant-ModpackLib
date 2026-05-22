@@ -84,7 +84,7 @@ If a real run-data edit cannot be expressed by the current plan surface, add a f
 
 - Do not hand-write apply/revert pairs in module code.
 - Do not guard patch-plan construction with `host.isEnabled()`.
-- Do not read staged `session` values in mutation callbacks.
+- Do not read staged draw `state` values in mutation callbacks.
 - Do not use mutation callbacks for one-shot actions.
 - Do not mutate unrelated tables inside `plan:transform(...)`.
 

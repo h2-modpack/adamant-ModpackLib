@@ -47,7 +47,7 @@ activation:
 That host owns:
 - `drawTab`
 - optional `drawQuickContent`
-- built-in host state helpers for Framework and fallback UI
+- built-in host registry helpers for Framework and fallback UI
 
 Module behavior is hosted through Lib's live host registry.
 
@@ -171,7 +171,7 @@ Rules:
 - `write(nil)` is invalid; use `clear(...)`
 - persistent cache is not staged, hashed, profiled, or reset by Lib
 
-## Store And Session
+## Store And State
 
 ### `lib.createModule(opts)`
 
@@ -212,14 +212,14 @@ Returns:
 - `nil, nil, err` when construction fails
 
 `createModule(...)` intentionally does not return the prepared definition or
-raw session. Draw callbacks receive four draw-phase arguments:
-`draw`, staged `data`, draw `actions`, and draw-safe `services`.
-`draw` owns `imgui`, `widgets`, and `nav`; the other arguments own data,
+raw staged state. Draw callbacks receive four draw-phase arguments:
+`draw`, staged `state`, draw `actions`, and draw-safe `services`.
+`draw` owns `imgui`, `widgets`, and `nav`; the other arguments own staged UI state,
 deferred UI intent, and narrow draw-safe services.
 
 Declare hooks on `host.hooks.*` before `host.activate()`. Runtime helper
 files should receive the needed `store` or narrowed read/access closures from
-the module's hook-declaration code; draw/UI paths should use the `data`,
+the module's hook-declaration code; draw/UI paths should use the `state`,
 `actions`, and `services` arguments passed to draw callbacks.
 
 The failure path logs `host.create_failed` and does not activate or publish a
@@ -240,7 +240,7 @@ The runtime store surface provides:
 - `store.get(alias)`
 - `store.read(alias, ...)`
 
-Persisted writes happen through host-owned semantic helpers or session flushes:
+Persisted writes happen through host-owned semantic helpers or staged-state flushes:
 
 ```lua
 host.setEnabled(enabled)
@@ -261,13 +261,13 @@ Scalar fields accept no extra path arguments; table handles accept the same row
 path arguments as `tableHandle:read(...)`.
 
 Rules:
-- widgets and draw code should usually read staged values through `data.get(...)`
+- widgets and draw code should usually read staged values through `state.get(...)`
 - runtime/gameplay code should read persisted values through `store.get(...):read()` or `store.read(...)`
 - new flat runtime markers should prefer `host.cache.persistent.*`
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
-- profile/hash plumbing should stage values through `session.write(...)` and flush them through `session._flushToConfig()`
-- transient aliases are read from `session`
+- profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
+- transient aliases are read from `state` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
 
 Composite table storage is declared as one table root with a uniform row schema:
@@ -301,7 +301,7 @@ arrays with no row ids or holes.
 Read table state through `get(...)` when using the object-factory path:
 
 ```lua
-local tiers = data.get("Tiers")
+local tiers = state.get("Tiers")
 local enabled = tiers:read(1, "Enabled")
 local enabledField = tiers:get(1, "Enabled")
 
@@ -310,10 +310,10 @@ local committedEnabled = runtimeTiers:read(1, "Enabled")
 local committedEnabledSugar = store.read("Tiers", 1, "Enabled")
 ```
 
-Lib internals still expose direct table helpers on the full session object:
+Lib internals still expose direct table helpers on the full staged-state object:
 
 ```lua
-local tiers = session.table("Tiers")
+local tiers = stagedState.table("Tiers")
 tiers:append({ Enabled = true, ChoiceA = true })
 tiers:write(1, "ChoiceMode", 2)
 local enabled = tiers:read(1, "Enabled")
@@ -322,10 +322,10 @@ local field = tiers:get(1, "ChoiceMode")
 
 Table handles:
 - `store.get(alias)` returns a read-only field or table handle for persisted aliases
-- `data.get(alias)` returns a writable staged field or table handle
+- `state.get(alias)` returns a writable staged field or table handle
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - full internal stores expose `store.table(alias)` for framework plumbing
-- full internal sessions expose `session.table(alias)` for framework plumbing
+- full internal staged-state objects expose `stagedState.table(alias)` for framework plumbing
 - table handles are object methods; call them with colon syntax such as `tiers:read(rowIndex, alias)`
 - row aliases can address scalar row roots, packed row roots, or packed child aliases
 - `snapshot(rowIndex)` returns a copied row table
@@ -338,7 +338,7 @@ backing keys internally.
 
 Storage axis defaults:
 
-| Declaration | Persisted config | Session/staged UI | Hash/profile |
+| Declaration | Persisted config | Staged UI state | Hash/profile |
 | --- | --- | --- | --- |
 | omitted flags | yes | yes | yes |
 | `persist = false, hash = false` | no | yes | no |
@@ -351,45 +351,46 @@ Reserved aliases:
 - `Enabled`
 - `DebugMode`
 
-### `session`
+### `stagedState`
 
 Managed staged UI state for the module. This is a Lib/Framework plumbing
-object; module draw callbacks receive the narrower `data` adapter below.
+object; module draw callbacks receive the narrower `state` adapter below.
 
 Internal surface:
-- `session.view`
-- `session.get(alias)`
-- `session.read(alias)`
-- `session.table(alias)`
-- `session.field(alias)`
-- `session.getAliasSchema(alias)`
-- `session.write(alias, value)`
-- `session.reset(alias)`
-- `session.isDirty()`
-- `session.auditMismatches()`
+- `stagedState.view`
+- `stagedState.get(alias)`
+- `stagedState.read(alias)`
+- `stagedState.table(alias)`
+- `stagedState.field(alias)`
+- `stagedState.getAliasSchema(alias)`
+- `stagedState.write(alias, value)`
+- `stagedState.reset(alias)`
+- `stagedState.resetAll(opts?)`
+- `stagedState.isDirty()`
+- `stagedState.auditMismatches()`
 
 Host/framework plumbing methods:
-- `session._flushToConfig()`
-- `session._reloadFromConfig()`
-- `session._captureDirtyConfigSnapshot()`
-- `session._restoreConfigSnapshot(snapshot)`
+- `stagedState._flushToConfig()`
+- `stagedState._reloadFromConfig()`
+- `stagedState._captureDirtyConfigSnapshot()`
+- `stagedState._restoreConfigSnapshot(snapshot)`
 
 When a module is rendered through a Lib host, draw callbacks receive a
-restricted author-facing `data` view with:
+restricted author-facing `state` view with:
 - `get(alias)`
 - `read(alias, ...)`
 - `write(alias, ...)`
-- `resetToDefaults(opts?)`
+- `resetAll(opts?)`
 
-Draw action staging is no longer exposed on `session`; use
+Draw action staging is not exposed on `stagedState`; use
 `actions.get(actionKey)` instead.
 
-`session.get(alias)` returns a storage object: scalar and packed aliases return
-`StorageField`; table roots return staged table handles. `data.get(alias)` is
+`stagedState.get(alias)` returns a storage object: scalar and packed aliases return
+`StorageField`; table roots return staged table handles. `state.get(alias)` is
 the author-facing entrypoint for the same staged storage objects.
-`data.read(alias, ...)` and `data.write(alias, ...)` are convenience forwards
-for custom raw ImGui draw code; they call `data.get(alias):read(...)` and
-`data.get(alias):write(...)`.
+`state.read(alias, ...)` and `state.write(alias, ...)` are convenience forwards
+for custom raw ImGui draw code; they call `state.get(alias):read(...)` and
+`state.get(alias):write(...)`.
 `tableHandle:get(rowIndex, alias)` returns `StorageField` targets for widgets
 and UI helpers. A storage field is a resolved leaf value target; storage and
 table APIs own traversal, while widgets render the final field. Storage fields
@@ -399,20 +400,20 @@ alias; table cell control ids are cached by the table owner and include table
 alias, row index, and cell alias.
 
 Behavior:
-- persisted aliases stage in `session` and only hit config on flush/commit
-- transient aliases live only in `session`
+- persisted aliases stage in `stagedState` and only hit config on flush/commit
+- transient aliases live only in `stagedState`
 - staged actions are transient "last intent wins" command slots that make the
-  session dirty and are delivered to `onSettingsCommitted(host, store, commit)`
+  staged state dirty and are delivered to `onSettingsCommitted(host, store, commit)`
 - packed child aliases re-encode their owning packed root automatically
 
-`session.read(alias)` returns:
+`stagedState.read(alias)` returns:
 - staged value
 
-## Reset Helpers
+## Whole-State Reset
 
-### `host.resetToDefaults(opts?)`
+### `host.resetAll(opts?)`
 
-Resets changed persistent storage roots back to their defaults in the host's staged session.
+Resets changed persistent storage roots back to their defaults in the host's staged state.
 
 Returns:
 - `changed`
@@ -421,7 +422,7 @@ Returns:
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
 
-Draw callbacks receive the same reset behavior through `data.resetToDefaults(opts?)`.
+Draw callbacks receive the same reset behavior through `state.resetAll(opts?)`.
 
 ## `host.hooks`
 
@@ -635,12 +636,12 @@ The registrar supports `createLine(...)` and
 `afterHook(...)` are intentionally not exposed.
 
 ```lua
-local runtime = lib.createFrameworkRuntime("adamant-ModpackFramework")
+local frameworkRuntime = lib.createFrameworkRuntime("adamant-ModpackFramework")
 
-runtime.overlays.define("pack", "hud", function(overlays)
+frameworkRuntime.overlays.define("pack", "hud", function(overlays)
     overlays.createLine("hash", {
         region = "middleRightStack",
-        order = runtime.overlays.order.framework,
+        order = frameworkRuntime.overlays.order.framework,
         minWidth = 120,
     })
 end)
@@ -700,7 +701,7 @@ The returned map and nodes are read-only metadata owned by Lib storage preparati
 Includes:
 - hash/profile root aliases
 - non-hash staged aliases
-- transient session aliases
+- transient staged-state aliases
 - packed child aliases
 
 ### `frameworkRuntime.hashing.valuesEqual(node, a, b)`
@@ -732,7 +733,7 @@ Raw numeric bit extraction helper.
 
 Raw numeric bit write helper.
 
-Enabled/debug transitions, activation-time mutation sync, and session commit/resync are host responsibilities. Use the returned module host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
+Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are host responsibilities. Use the returned module host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
 
 ## `host.fallbackUi`
 
@@ -762,7 +763,7 @@ Behavior:
 - the fallback window includes built-in:
   - `Enabled`
   - `Debug Mode`
-  - `Resync Session`
+  - `Resync State`
 - then calls `moduleHost.drawTab(...)`
 - commits dirty staged state through `moduleHost.commitIfDirty()`
 
@@ -852,27 +853,27 @@ These are direct immediate-mode helpers. `draw.widgets` is bound to the current
 `imgui` for the render call. Value widgets accept `StorageField` refs:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+function ui.drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
     draw.imgui.SameLine()
-    draw.widgets.dropdown(data.get("Mode"), {
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Default", "Custom" },
     })
 end
 ```
 
-Use `data.get(alias)` for root storage fields, and
+Use `state.get(alias)` for root storage fields, and
 `tableHandle:get(rowIndex, alias)` for table-backed fields:
 
 ```lua
-local mode = data.get("Mode")
+local mode = state.get("Mode")
 draw.widgets.dropdown(mode, opts)
 
-local rows = data.get("Rows")
+local rows = state.get("Rows")
 draw.widgets.packedDropdown(rows:get(1, "PackedChoices"), opts)
 ```
 

@@ -74,7 +74,7 @@ function TestWidgets_Nav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColo
     lu.assertEquals(calls.colorArgs, { 5, 1, 0, 0, 1 })
 end
 
-function TestWidgets_Nav:testBoundNavUsesCapturedImguiForVerticalTabs()
+function TestWidgets_Nav:testDrawNavUsesCurrentImguiForVerticalTabs()
     local calls = {
         labels = {},
     }
@@ -97,10 +97,16 @@ function TestWidgets_Nav:testBoundNavUsesCapturedImguiForVerticalTabs()
             return label == "Second##two"
         end,
     }
-    local bound = self.h.nav.bind(imgui)
+    for key in pairs(self.h.rom.ImGui) do
+        self.h.rom.ImGui[key] = nil
+    end
+    for key, value in pairs(imgui) do
+        self.h.rom.ImGui[key] = value
+    end
+    local drawNav = self.h.uiDraw.get().nav
 
-    local selected = bound.verticalTabs({
-        id = "bound",
+    local selected = drawNav.verticalTabs({
+        id = "draw",
         activeKey = "one",
         tabs = {
             { key = "one", label = "First" },
@@ -109,7 +115,7 @@ function TestWidgets_Nav:testBoundNavUsesCapturedImguiForVerticalTabs()
     })
 
     lu.assertEquals(selected, "two")
-    lu.assertEquals(calls.childId, "bound##nav")
+    lu.assertEquals(calls.childId, "draw##nav")
     lu.assertEquals(calls.labels, { "First##one", "Second##two" })
     lu.assertTrue(calls.ended)
     lu.assertTrue(calls.sameLine)

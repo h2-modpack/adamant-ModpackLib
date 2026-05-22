@@ -1,11 +1,11 @@
 local deps = ...
 
 local logging = deps.logging
-local hostState = deps.hostState
+local hostRegistry = deps.hostRegistry
 local coordinator = deps.coordinator
 local overlays = deps.overlays
 local createSystem = deps.createSystem
-local runtime = deps.runtime
+local fallbackRegistry = deps.fallbackRegistry
 local rom = deps.rom
 local modutil = deps.modutil
 local SetupRunData = deps.gameDeps.runData.SetupRunData
@@ -19,18 +19,16 @@ local SetupRunData = deps.gameDeps.runData.SetupRunData
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
 
-runtime.fallbackUi = runtime.fallbackUi or {}
 -- Hot-reload-stable fallback UI runtime. Bridges and GUI callbacks late-read
 -- this table so replacement module hosts can swap behavior without new handles.
-runtime.fallbackUi.bridges = runtime.fallbackUi.bridges or {}
-runtime.fallbackUi.guiAttached = runtime.fallbackUi.guiAttached or {}
-runtime.fallbackUi.runtimes = runtime.fallbackUi.runtimes or {}
-runtime.fallbackUi.fallbackHud = runtime.fallbackUi.fallbackHud or {}
+fallbackRegistry.bridges = fallbackRegistry.bridges or {}
+fallbackRegistry.guiAttached = fallbackRegistry.guiAttached or {}
+fallbackRegistry.runtimes = fallbackRegistry.runtimes or {}
+fallbackRegistry.fallbackHud = fallbackRegistry.fallbackHud or {}
 
-local fallbackUiState = runtime.fallbackUi
-local bridges = fallbackUiState.bridges
-local guiAttached = fallbackUiState.guiAttached
-local runtimes = fallbackUiState.runtimes
+local bridges = fallbackRegistry.bridges
+local guiAttached = fallbackRegistry.guiAttached
+local runtimes = fallbackRegistry.runtimes
 local fallbackUi = {}
 
 local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
@@ -38,26 +36,26 @@ local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     overlays = overlays,
     createSystem = createSystem,
     runtimes = runtimes,
-    state = fallbackUiState.fallbackHud,
+    state = fallbackRegistry.fallbackHud,
 })
 
-local function requireHostState(host, apiName)
-    local state = hostState.get(host)
-    if not state then
+local function requireHostRecord(host, apiName)
+    local record = hostRegistry.getRecord(host)
+    if not record then
         logging.violate("fallback_ui.invalid_args", "%s: expected managed module host", apiName)
     end
-    return state
+    return record
 end
 
 local function requireAttachmentOpen(host)
-    local state = requireHostState(host, "host.fallbackUi.attachGuiOnce")
-    if state.activating == true or state.activated == true then
+    local record = requireHostRecord(host, "host.fallbackUi.attachGuiOnce")
+    if record.activating == true or record.activated == true then
         logging.violate(
             "fallback_ui.invalid_args",
             "host.fallbackUi.attachGuiOnce cannot be called after activation begins"
         )
     end
-    return state
+    return record
 end
 
 local function getFallbackUiRuntime(ownerId)
@@ -251,20 +249,20 @@ local function createRuntime(host)
                 host.setDebugMode(debugValue)
             end
 
-            if imgui.Button("Resync Session") then
+            if imgui.Button("Resync State") then
                 host.resync()
             end
 
             imgui.Separator()
             imgui.Spacing()
-            host.drawTab(imgui)
+            host.drawTab()
             local ok, err, committed = host.commitIfDirty()
             if ok and committed and host.read("Enabled") == true then
                 markRunDataDirty()
             elseif ok == false then
                 logging.violate(
-                    "host.session_commit_failed",
-                    "%s session commit failed; restored previous config where possible: %s",
+                    "host.staged_state_commit_failed",
+                    "%s staged state commit failed; restored previous config where possible: %s",
                     tostring(meta.name or moduleId or "module"),
                     tostring(err)
                 )
@@ -353,7 +351,7 @@ function fallbackUi.createFallbackMarker()
 end
 
 local function installGuiCloseWatcher()
-    if fallbackUiState.guiCloseWatcherRegistered then
+    if fallbackRegistry.guiCloseWatcherRegistered then
         return
     end
     if not (rom and rom.gui and type(rom.gui.add_always_draw_imgui) == "function"
@@ -361,19 +359,19 @@ local function installGuiCloseWatcher()
         return
     end
 
-    fallbackUiState.guiCloseWatcherRegistered = true
-    fallbackUiState.wasGuiOpen = rom.gui.is_open() == true
+    fallbackRegistry.guiCloseWatcherRegistered = true
+    fallbackRegistry.wasGuiOpen = rom.gui.is_open() == true
     rom.gui.add_always_draw_imgui(function()
         local isGuiOpen = rom.gui.is_open() == true
-        if fallbackUiState.wasGuiOpen and not isGuiOpen
-            and type(fallbackUiState.handleHostGuiClosed) == "function" then
-            fallbackUiState.handleHostGuiClosed()
+        if fallbackRegistry.wasGuiOpen and not isGuiOpen
+            and type(fallbackRegistry.handleHostGuiClosed) == "function" then
+            fallbackRegistry.handleHostGuiClosed()
         end
-        fallbackUiState.wasGuiOpen = isGuiOpen
+        fallbackRegistry.wasGuiOpen = isGuiOpen
     end)
 end
 
-fallbackUiState.handleHostGuiClosed = fallbackUi.handleHostGuiClosed
+fallbackRegistry.handleHostGuiClosed = fallbackUi.handleHostGuiClosed
 
 installGuiCloseWatcher()
 

@@ -1,7 +1,7 @@
 local deps = ...
 local logging = deps.logging
 local modutil = deps.modutil
-local REGISTRY_KEY = "__adamantHooks"
+local REGISTRY_KEY = deps.registryKey
 
 if not (modutil and modutil.mod and modutil.mod.Path) then
     logging.violate("hooks.modutil_unavailable", "hooks: SGG_Modding-ModUtil is not available")

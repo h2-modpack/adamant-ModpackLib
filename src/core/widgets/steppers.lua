@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 ---@class StepperOpts
 ---@field id string|number|nil
@@ -75,7 +76,14 @@ local function DrawStepperControl(imgui, field, id, renderedValue, opts, minValu
 
     if imgui.Button("-##" .. tostring(id) .. "_dec") and (minValue == nil or currentValue > minValue) then
         local wrote
-        wrote, currentValue = CommitStepperValue(field, currentValue, currentValue - step, opts.default, minValue, maxValue)
+        wrote, currentValue = CommitStepperValue(
+            field,
+            currentValue,
+            currentValue - step,
+            opts.default,
+            minValue,
+            maxValue
+        )
         changed = wrote or changed
     end
 
@@ -85,7 +93,14 @@ local function DrawStepperControl(imgui, field, id, renderedValue, opts, minValu
     helpers.SameLineWithGap(imgui, gap)
     if imgui.Button("+##" .. tostring(id) .. "_inc") and (maxValue == nil or currentValue < maxValue) then
         local wrote
-        wrote, currentValue = CommitStepperValue(field, currentValue, currentValue + step, opts.default, minValue, maxValue)
+        wrote, currentValue = CommitStepperValue(
+            field,
+            currentValue,
+            currentValue + step,
+            opts.default,
+            minValue,
+            maxValue
+        )
         changed = wrote or changed
     end
 
@@ -96,7 +111,7 @@ end
 ---@param field StorageField
 ---@param opts StepperOpts|nil
 ---@return boolean
-function helpers.widgets.stepper(imgui, field, opts)
+function widgets.stepper(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local id = opts.id ~= nil and tostring(opts.id) or field:controlId()
     local minValue = opts.min
@@ -122,7 +137,7 @@ end
 ---@param maxField StorageField
 ---@param opts SteppedRangeOpts|nil
 ---@return boolean
-function helpers.widgets.steppedRange(imgui, minField, maxField, opts)
+function widgets.steppedRange(imgui, minField, maxField, opts)
     opts = opts or helpers.EMPTY_OPTS
     local minFieldControlId = minField:controlId()
     local maxFieldControlId = maxField:controlId()
@@ -174,3 +189,5 @@ function helpers.widgets.steppedRange(imgui, minField, maxField, opts)
     end
     return changed
 end
+
+return widgets

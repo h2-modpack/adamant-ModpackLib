@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 ---@class InputTextOpts
 ---@field label string|nil
@@ -14,7 +15,7 @@ local helpers = ...
 ---@param field StorageField
 ---@param opts InputTextOpts|nil
 ---@return boolean
-function helpers.widgets.inputText(imgui, field, opts)
+function widgets.inputText(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local fieldControlId = field:controlId()
     local current = tostring(field:read() or "")
@@ -41,3 +42,5 @@ function helpers.widgets.inputText(imgui, field, opts)
     end
     return false
 end
+
+return widgets

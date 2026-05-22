@@ -9,7 +9,7 @@ end
 
 local function createModuleState(harness, config, definition)
     local state = harness.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 function TestStorageValidation:setUp()
@@ -112,8 +112,8 @@ function TestStorageValidation:testStringMaxLenNormalizesTableRows()
             },
         },
     })
-    local _, session = createModuleState(self.harness, {}, definition)
-    local rows = session.table("Rows")
+    local _, stagedState = createModuleState(self.harness, {}, definition)
+    local rows = stagedState.table("Rows")
 
     lu.assertTrue(rows:write(1, "Note", "abcdef"))
     lu.assertEquals(rows:read(1, "Note"), "abcd")
@@ -132,7 +132,7 @@ function TestStorageValidation:testTransientRootRegistersAliasButNotPersistedRoo
     lu.assertNotNil(self.storage.getAliases(storage).FilterText)
 end
 
-function TestStorageValidation:testPersistFalseRootRegistersSessionAliasButNotHashRoot()
+function TestStorageValidation:testPersistFalseRootRegistersStagedStateAliasButNotHashRoot()
     local storage = {
         { type = "bool", alias = "Enabled", default = false },
         { type = "bool", alias = "FilterEnabled", default = false, persist = false, hash = false },
@@ -143,7 +143,7 @@ function TestStorageValidation:testPersistFalseRootRegistersSessionAliasButNotHa
     lu.assertEquals(#self.storage.getRoots(storage), 1)
     lu.assertEquals(self.storage.getRoots(storage)[1].alias, "Enabled")
     lu.assertNotNil(self.storage.getAliases(storage).FilterEnabled)
-    lu.assertEquals(#self.storage.getSessionRoots(storage), 2)
+    lu.assertEquals(#self.storage.getStagedRoots(storage), 2)
 end
 
 function TestStorageValidation:testStageFieldFailsAsUnknownStorageField()

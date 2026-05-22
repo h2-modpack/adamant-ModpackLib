@@ -2,17 +2,17 @@ local deps = ...
 local externals = deps.externals
 
 AdamantModpackLib_Runtime = AdamantModpackLib_Runtime or {}
-local runtime = AdamantModpackLib_Runtime
+local runtimeRoot = AdamantModpackLib_Runtime
 
 local logging = import('core/logging/logging.lua', nil, {
     config = deps.config,
 })
 
-local moduleRuntimeRegistry = import('core/lib_bootstrap/runtime_registry.lua', nil, {
-    runtime = runtime,
+local registry = import('core/lib_bootstrap/registry.lua', nil, {
+    runtimeRoot = runtimeRoot,
 })
-local hostState = import('core/lib_bootstrap/module_host_state.lua', nil, {
-    moduleHostStateStore = moduleRuntimeRegistry.getModuleHostStateStore(),
+local hostRegistry = import('core/lib_bootstrap/host_registry.lua', nil, {
+    hostBucket = registry.hosts,
 })
 local systemScope = import('core/lib_bootstrap/system_scope.lua', nil, {
     logging = logging,
@@ -25,7 +25,7 @@ local gameDeps = externals.gameDeps or import('core/game_deps/game_deps.lua', ni
 
 local values = import('core/helpers/values.lua')
 
-local storage = import('core/storage/storage.lua', nil, {
+local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
     values = values,
 })
@@ -33,26 +33,23 @@ local storage = import('core/storage/storage.lua', nil, {
 local hashingBundle = import('core/hashing/hashing.lua', nil, {
     storage = storage,
 })
-public.hashing = nil
 
-local moduleState = import('core/module_state/module_state.lua', nil, {
+local moduleState = import('core/module_state/00_init.lua', nil, {
     chalk = externals.chalk,
     logging = logging,
     storage = storage,
     values = values,
 })
-public.resetStorageToDefaults = nil
 
-local cacheBundle = import('core/cache/cache.lua', nil, {
+local cacheBundle = import('core/cache/00_init.lua', nil, {
     logging = logging,
     gameDeps = gameDeps,
-    hostState = hostState,
+    hostRegistry = hostRegistry,
 })
-public.cache = nil
 
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
     logging = logging,
-    runtime = runtime,
+    coordinatorRegistry = registry.coordinators,
 })
 
 
@@ -62,73 +59,72 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
     storage = storage,
     values = values,
     coordinator = coordinator,
-    moduleRuntimeRegistry = moduleRuntimeRegistry,
+    hostRegistry = hostRegistry,
 })
-local integrationsBundle = import('core/integrations/integrations.lua', nil, {
+local integrationsBundle = import('core/integrations/00_init.lua', nil, {
     logging = logging,
-    runtime = runtime,
-    hostState = hostState,
+    integrationRegistry = registry.integrations,
+    hostRegistry = hostRegistry,
 })
 local integrations = integrationsBundle.service
-public.integrations = nil
-local hooksBundle = import('core/hooks/hooks.lua', nil, {
+
+local hooksBundle = import('core/hooks/00_init.lua', nil, {
     modutil = externals.modutil,
     logging = logging,
-    hostState = hostState,
-    runtime = runtime,
+    hostRegistry = hostRegistry,
+    hookRegistry = registry.hooks,
 })
 local hooks = hooksBundle.service
-public.hooks = nil
+
 local overlayRendererSystem = systemScope.create("adamant-lib.overlays.renderer", {
     hooks = hooksBundle.system,
 })
-local overlaysBundle = import('core/overlays/overlays.lua', nil, {
+local overlaysBundle = import('core/overlays/00_init.lua', nil, {
     gameDeps = gameDeps,
     rom = externals.rom,
     logging = logging,
     hooks = hooks,
-    hostState = hostState,
+    hostRegistry = hostRegistry,
     rendererSystem = overlayRendererSystem,
-    runtime = runtime,
+    overlayRegistry = registry.overlays,
     values = values,
 })
 local overlays = overlaysBundle.service
-public.overlays = nil
+
 local function createSystem(ownerId)
     return systemScope.create(ownerId, {
         hooks = hooksBundle.system,
         overlays = overlaysBundle.system,
     })
 end
-public.createSystem = nil
-local mutationBundle = import('core/mutations/mutations.lua', nil, {
+
+local mutationBundle = import('core/mutations/00_init.lua', nil, {
     gameDeps = gameDeps,
     logging = logging,
     values = values,
-    hostState = hostState,
+    hostRegistry = hostRegistry,
     coordinator = coordinator,
-    runtime = runtime,
+    mutationRegistry = registry.mutations,
 })
 local mutation = mutationBundle.service
-public.mutation = nil
-local widgetsBundle = import('core/widgets/init.lua', nil, {
+
+local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
-    actions = moduleState.actions,
+    actions = moduleState.actionBuffer,
+    rom = externals.rom,
 })
-public.widgets = nil
-public.nav = nil
-public.imguiHelpers = nil
+
 local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
     gameDeps = gameDeps,
     rom = externals.rom,
     modutil = externals.modutil,
     logging = logging,
-    hostState = hostState,
+    hostRegistry = hostRegistry,
     coordinator = coordinator,
     overlays = overlays,
     createSystem = createSystem,
-    runtime = runtime,
+    fallbackRegistry = registry.fallback,
 })
 local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
     fallbackUi = fallbackUiBundle.author,
@@ -141,8 +137,7 @@ local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
 local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     logging = logging,
     definition = definition,
-    hostState = hostState,
-    moduleRuntimeRegistry = moduleRuntimeRegistry,
+    hostRegistry = hostRegistry,
     moduleState = moduleState,
     integrations = integrations,
     hooks = hooks,
@@ -151,11 +146,10 @@ local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     fallbackUi = fallbackUiBundle.service,
     coordinator = coordinator,
     storage = storage,
-    widgets = widgetsBundle.widgets,
-    nav = widgetsBundle.nav,
+    uiDraw = widgetsBundle.uiDraw,
     authorHost = authorHost,
 })
-public.getLiveModuleHost = nil
+
 local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil, {
     config = deps.config,
     logging = logging,

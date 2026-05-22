@@ -11,7 +11,7 @@ end
 
 local function createModuleState(harness, config, definition)
     local state = harness.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 function TestMutation_DefinitionLifecycle:setUp()
@@ -46,7 +46,7 @@ function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mu
             return pluginGuid
         end,
     }
-    self.harness.hostState.set(host, {
+    self.harness.hostRegistry.setRecord(host, {
         pluginGuid = pluginGuid,
         definition = def,
         mutationBundle = mutationBundle,
@@ -66,24 +66,24 @@ function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutati
     return self.mutation.revertForHost(host)
 end
 
-function TestMutation_DefinitionLifecycle:commitSession(def, mutationBundle, settingsObserver, authorHost, store, session,
+function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, authorHost, store, stagedState,
         pluginGuid, actions)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
-    return self.hostLifecycle.commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session, actions)
+    return self.hostLifecycle.commitStagedState(host, def, mutationBundle, commitNotifier, store, stagedState, actions)
 end
 
-function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, authorHost, store, enabled, pluginGuid)
+function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, authorHost, store, stagedState, enabled, pluginGuid)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
-    return self.hostLifecycle.setEnabled(host, def, store, enabled)
+    return self.hostLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, patchCallback)
-    local store, session = createModuleState(self.harness, config, definition)
+    local store, stagedState = createModuleState(self.harness, config, definition)
     local _, authorHost = self.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     if patchCallback ~= nil then
@@ -313,7 +313,7 @@ function TestMutation_DefinitionLifecycle:testAffectsRunDataUsesPatchDeclaration
     lu.assertFalse(self.mutation.affectsRunData({}))
 end
 
-function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverAfterFlush()
+function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObserverAfterFlush()
     local calls = 0
     local observedValue = nil
     local config = {
@@ -321,8 +321,8 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
         Value = false,
     }
     local definition = self.moduleHost.prepareDefinition({}, {
-        id = "CommitSessionObserver",
-        name = "Commit Session Observer",
+        id = "CommitStagedStateObserver",
+        name = "Commit stagedState Observer",
         storage = {
             {
                 type = "bool",
@@ -331,14 +331,14 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
             },
         },
     })
-    local store, session = createModuleState(self.harness, config, definition)
-    local settingsObserver = function(_, activeStore)
+    local store, stagedState = createModuleState(self.harness, config, definition)
+    local settingsObserver = function()
         calls = calls + 1
-        observedValue = activeStore.read("Value")
+        observedValue = store.read("Value")
     end
 
-    session.write("Value", true)
-    local ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session)
+    stagedState.write("Value", true)
+    local ok, err = self:commitStagedState(definition, nil, settingsObserver, nil, store, stagedState)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -346,13 +346,13 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
     lu.assertTrue(observedValue)
     lu.assertTrue(config.Value)
 
-    ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session)
+    ok, err = self:commitStagedState(definition, nil, settingsObserver, nil, store, stagedState)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
 end
 
-function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserverForActions()
+function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObserverForActions()
     local calls = 0
     local observedAction = nil
     local observedHasAction = nil
@@ -362,14 +362,14 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
         Enabled = true,
     }
     local definition = self.moduleHost.prepareDefinition({}, {
-        id = "CommitSessionActionObserver",
-        name = "Commit Session Action Observer",
+        id = "CommitStagedStateActionObserver",
+        name = "Commit stagedState Action Observer",
         storage = {},
     })
-    local store, session = createModuleState(self.harness, config, definition)
-    local actionState = self.harness.moduleState.createActionState()
-    local drawActions = self.harness.moduleState.createDrawActions(actionState)
-    local settingsObserver = function(_, _, commit)
+    local store, stagedState = createModuleState(self.harness, config, definition)
+    local actionBuffer = self.harness.moduleState.createActionBuffer()
+    local uiActions = self.harness.uiActions.create(actionBuffer)
+    local settingsObserver = function(commit)
         calls = calls + 1
         local recording = commit.actions.get("recording")
         observedAction = recording:read()
@@ -378,8 +378,8 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
         observedConfigChange = commit.hadConfigChanges()
     end
 
-    drawActions.get("recording"):stage({ kind = "start" })
-    local ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session, nil, actionState)
+    uiActions.get("recording"):stage({ kind = "start" })
+    local ok, err = self:commitStagedState(definition, nil, settingsObserver, nil, store, stagedState, nil, actionBuffer)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -388,16 +388,16 @@ function TestMutation_DefinitionLifecycle:testCommitSessionCallsSettingsObserver
     lu.assertTrue(observedHasAction)
     lu.assertTrue(observedHasAnyAction)
     lu.assertFalse(observedConfigChange)
-    lu.assertFalse(actionState.hasAny())
-    lu.assertFalse(session.isDirty())
+    lu.assertFalse(actionBuffer.hasAny())
+    lu.assertFalse(stagedState.isDirty())
 
-    ok, err = self:commitSession(definition, nil, settingsObserver, nil, store, session, nil, actionState)
+    ok, err = self:commitStagedState(definition, nil, settingsObserver, nil, store, stagedState, nil, actionBuffer)
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertEquals(calls, 1)
 end
 
-function TestMutation_DefinitionLifecycle:testCommitSessionDoesNotReapplyMutationWhenPackDisabled()
+function TestMutation_DefinitionLifecycle:testCommitStagedStateDoesNotReapplyMutationWhenPackDisabled()
     local packId = "test-pack-disabled-commit"
     self.coordinator.register(packId, { ModEnabled = false })
 
@@ -409,8 +409,8 @@ function TestMutation_DefinitionLifecycle:testCommitSessionDoesNotReapplyMutatio
     }
     local definition = self.moduleHost.prepareDefinition({}, {
         modpack = packId,
-        id = "CommitSessionPackDisabled",
-        name = "Commit Session Pack Disabled",
+        id = "CommitStagedStatePackDisabled",
+        name = "Commit stagedState Pack Disabled",
         storage = {
             {
                 type = "bool",
@@ -419,14 +419,14 @@ function TestMutation_DefinitionLifecycle:testCommitSessionDoesNotReapplyMutatio
             },
         },
     })
-    local store, session = createModuleState(self.harness, config, definition)
+    local store, stagedState = createModuleState(self.harness, config, definition)
     local mutation = patchMutation(function(plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)
 
-    session.write("Value", true)
-    local ok, err = self:commitSession(definition, mutation, nil, nil, store, session,
+    stagedState.write("Value", true)
+    local ok, err = self:commitStagedState(definition, mutation, nil, nil, store, stagedState,
         "test-pack-disabled-commit")
 
     lu.assertTrue(ok)
@@ -535,7 +535,7 @@ function TestMutation_DefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleM
 end
 
 function TestMutation_DefinitionLifecycle:testDeprecatedAffectedFlagDoesNotCreateMutationLifecycle()
-    local store = self:makeStore(false)
+    local store, stagedState = self:makeStore(false)
     local def = { id = "DeprecatedAffectedFlag" }
 
     local ok, err = self:applyMutation("test-deprecated-affected-flag", def,
@@ -633,14 +633,14 @@ function TestMutation_DefinitionLifecycle:testActivationSyncDisabledDoesNotBuild
 end
 
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAfterSuccessfulEnable()
-    local store = self:makeStore(false)
+    local store, stagedState = self:makeStore(false)
     local target = { Value = false }
     local def = { id = "SuccessfulEnable" }
     local mutation = patchMutation(function(plan)
         plan:set(target, "Value", true)
     end)
 
-    local ok, err = self:setEnabled(def, mutation, nil, store, true, "test-successful-enable")
+    local ok, err = self:setEnabled(def, mutation, nil, store, stagedState, true, "test-successful-enable")
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -649,13 +649,13 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledCommitsOnlyAft
 end
 
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitFailedEnable()
-    local store = self:makeStore(false)
+    local store, stagedState = self:makeStore(false)
     local def = { id = "FailedEnable" }
     local mutation = patchMutation(function()
         error("enable boom")
     end)
 
-    local ok, err = self:setEnabled(def, mutation, nil, store, true, "test-failed-enable")
+    local ok, err = self:setEnabled(def, mutation, nil, store, stagedState, true, "test-failed-enable")
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "enable boom")
@@ -663,7 +663,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDoesNotCommitF
 end
 
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledReappliesWhenAlreadyEnabled()
-    local store = self:makeStore(true)
+    local store, stagedState = self:makeStore(true)
     local target = { Value = 0 }
     local buildCalls = 0
     local def = { id = "ReapplyEnabled" }
@@ -678,7 +678,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledReappliesWhenA
     lu.assertNil(err)
     lu.assertEquals(target.Value, 1)
 
-    ok, err = self:setEnabled(def, mutation, nil, store, true, pluginGuid)
+    ok, err = self:setEnabled(def, mutation, nil, store, stagedState, true, pluginGuid)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -688,7 +688,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledReappliesWhenA
 end
 
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDisablesActivePatch()
-    local store = self:makeStore(true)
+    local store, stagedState = self:makeStore(true)
     local target = { Value = "base" }
     local def = { id = "DisableActivePatch" }
     local pluginGuid = "test-disable-active-patch"
@@ -701,7 +701,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDisablesActive
     lu.assertNil(err)
     lu.assertEquals(target.Value, "patched")
 
-    ok, err = self:setEnabled(def, mutation, nil, store, false, pluginGuid)
+    ok, err = self:setEnabled(def, mutation, nil, store, stagedState, false, pluginGuid)
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -710,14 +710,14 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledDisablesActive
 end
 
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlreadyDisabled()
-    local store = self:makeStore(false)
+    local store, stagedState = self:makeStore(false)
     local buildCalls = 0
     local def = { id = "AlreadyDisabled" }
     local mutation = patchMutation(function()
         buildCalls = buildCalls + 1
     end)
 
-    local ok, err = self:setEnabled(def, mutation, nil, store, false, "test-already-disabled")
+    local ok, err = self:setEnabled(def, mutation, nil, store, stagedState, false, "test-already-disabled")
 
     lu.assertTrue(ok)
     lu.assertNil(err)
@@ -729,7 +729,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledPersistsWithou
     local packId = "test-pack-disabled-enable"
     self.coordinator.register(packId, { ModEnabled = false })
 
-    local store = self:makeStore(false)
+    local store, stagedState = self:makeStore(false)
     local target = { Value = "base" }
     local buildCalls = 0
     local def = {
@@ -741,7 +741,7 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledPersistsWithou
         plan:set(target, "Value", "patched")
     end)
 
-    local ok, err = self:setEnabled(def, mutation, nil, store, true,
+    local ok, err = self:setEnabled(def, mutation, nil, store, stagedState, true,
         "test-pack-disabled-enable")
 
     lu.assertTrue(ok)

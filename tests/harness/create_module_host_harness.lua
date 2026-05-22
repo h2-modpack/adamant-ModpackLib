@@ -12,8 +12,8 @@ local function createModuleHostHarness(harnessOpts)
         moduleBundle = base.moduleBundle,
         moduleState = base.moduleState,
         hostLifecycle = base.hostLifecycle,
-        moduleRuntimeRegistry = base.moduleRuntimeRegistry,
-        hostState = base.hostState,
+        registry = base.registry,
+        hostRegistry = base.hostRegistry,
         coordinator = base.coordinator,
         integrations = base.integrations,
         overlays = base.overlays,
@@ -42,7 +42,7 @@ local function createModuleHostHarness(harnessOpts)
 
     function h:createModuleState(config, definition)
         local state = self.moduleState.create(config, definition)
-        return state.store, state.session
+        return state.persistentState, state.stagedState
     end
 
     function h:createModuleOrThrow(opts)
@@ -51,11 +51,11 @@ local function createModuleHostHarness(harnessOpts)
 
     function h:createHost(pluginGuid, hostOpts)
         hostOpts = hostOpts or {}
-        local host, authorHost, authorStore = self.moduleHost.create({
+        local host, authorHost, store = self.moduleHost.create({
             pluginGuid = pluginGuid,
             definition = hostOpts.definition,
-            store = hostOpts.store,
-            session = hostOpts.session,
+            persistentState = hostOpts.persistentState,
+            stagedState = hostOpts.stagedState,
             onSettingsCommitted = hostOpts.onSettingsCommitted,
             drawTab = hostOpts.drawTab,
             drawQuickContent = hostOpts.drawQuickContent,
@@ -63,19 +63,13 @@ local function createModuleHostHarness(harnessOpts)
         if hostOpts.patchMutation ~= nil then
             authorHost.mutation.patch(hostOpts.patchMutation)
         end
-        return host, authorHost, authorStore
+        return host, authorHost, store
     end
 
     function h:createActivatedHost(pluginGuid, hostOpts)
-        local host, authorHost, authorStore = self:createHost(pluginGuid, hostOpts)
+        local host, authorHost, store = self:createHost(pluginGuid, hostOpts)
         local ok, err = authorHost.activate()
-        return host, authorHost, ok, err, authorStore
-    end
-
-    function h:createPreparedStore(config, rawDefinition)
-        local definition = self:prepareDefinition({}, rawDefinition)
-        local store, session = self:createModuleState(config, definition)
-        return definition, store, session
+        return host, authorHost, ok, err, store
     end
 
     function h:liveHost(pluginGuid)

@@ -12,12 +12,12 @@ function TestModuleHost_PrepareDefinition:tearDown()
     self.h:restoreWarnings()
 end
 
-local function createAndActivate(h, pluginGuid, definition, store, session)
+local function createAndActivate(h, pluginGuid, definition, store, stagedState)
     local _, authorHost = h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     return authorHost.activate()
@@ -183,12 +183,12 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRequestsCoordinato
         },
     })
 
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    createAndActivate(self.h, "test-module", prepared, store, session)
+    createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertTrue(owner.requiresFullReload)
     lu.assertNotNil(self.h.moduleHost.getLiveHost("test-module"))
@@ -222,17 +222,17 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsWhenCoordina
         },
     })
 
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, session)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "host.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRuntimeRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(self.h.hostRegistry.getPendingCoordinatorRebuild(prepared))
 end
 
 function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
@@ -261,17 +261,17 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsAndKeepsPend
         },
     })
 
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, session)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "host.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRuntimeRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(self.h.hostRegistry.getPendingCoordinatorRebuild(prepared))
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionKeepsStableStructuralFingerprint()
@@ -310,12 +310,12 @@ function TestModuleHost_PrepareDefinition:testCreateStoreAcceptsPreparedDefiniti
         },
     })
 
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         EnabledFlag = true,
     }, definition)
 
     lu.assertEquals(store.read("EnabledFlag"), true)
-    lu.assertEquals(session.read("EnabledFlag"), true)
+    lu.assertEquals(stagedState.read("EnabledFlag"), true)
     lu.assertEquals(#self.h.warnings, 0)
 end
 
@@ -353,7 +353,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRejectsRawDefiniti
             { type = "bool", alias = "EnabledFlag", default = false },
         },
     })
-    local store, session = self.h:createModuleState({}, prepared)
+    local store, stagedState = self.h:createModuleState({}, prepared)
 
     lu.assertErrorMsgContains("prepared definition is required", function()
         self.h.moduleHost.create({
@@ -363,8 +363,8 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRejectsRawDefiniti
                     { type = "bool", alias = "EnabledFlag", default = false },
                 },
             },
-            store = store,
-            session = session,
+            persistentState = store,
+            stagedState = stagedState,
             drawTab = function() end,
         })
     end)
@@ -376,10 +376,10 @@ function TestModuleHost_PrepareDefinition:testCreateStoreRequiresStorage()
         name = "No Storage",
     })
 
-    local store, session = self.h:createModuleState({}, definition)
+    local store, stagedState = self.h:createModuleState({}, definition)
 
     lu.assertFalse(store.read("Enabled"))
-    lu.assertFalse(session.read("DebugMode"))
+    lu.assertFalse(stagedState.read("DebugMode"))
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionPreservesHashGroupPlan()

@@ -7,10 +7,11 @@ Recommended order:
 1. [../../CONTRIBUTING.md](../../CONTRIBUTING.md)
 2. [LIB_INTERNALS.md](LIB_INTERNALS.md)
 3. [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md)
-4. [AUTHOR_HOST_FACADE_DESIGN.md](AUTHOR_HOST_FACADE_DESIGN.md)
-5. [DRAW_STORE_ACTION_DESIGN.md](DRAW_STORE_ACTION_DESIGN.md)
-6. [TESTING.md](TESTING.md)
-7. [OVERLAY_SUBSYSTEM_DESIGN.md](OVERLAY_SUBSYSTEM_DESIGN.md)
+4. [HOT_RELOAD_REGISTRY_MIGRATION.md](HOT_RELOAD_REGISTRY_MIGRATION.md)
+5. [AUTHOR_HOST_FACADE_DESIGN.md](AUTHOR_HOST_FACADE_DESIGN.md)
+6. [DRAW_STORE_ACTION_DESIGN.md](DRAW_STORE_ACTION_DESIGN.md)
+7. [TESTING.md](TESTING.md)
+8. [OVERLAY_SUBSYSTEM_DESIGN.md](OVERLAY_SUBSYSTEM_DESIGN.md)
 
 For public API behavior, use [../../API.md](../../API.md).
 
@@ -31,9 +32,10 @@ Use these terms consistently in contributor docs and implementation notes:
 
 Runtime identity uses `pluginGuid`. Pack id and module id are Lib/Framework
 domain metadata used for coordination, profiles, hashes, labels, and debug
-translation. The low-level `lib_bootstrap/runtime_registry` service owns the
-hot-reload-stable `pluginGuid` tables, including live-host lookup, plugin
-metadata, and the backing weak side table used by `lib_bootstrap/module_host_state`.
+translation. The low-level `lib_bootstrap/registry` service owns Lib's
+hot-reload-stable root buckets. The host bucket currently includes live-host
+lookup, plugin metadata, and the backing weak side table used by
+`lib_bootstrap/host_registry`.
 
 Capability backends use `ownerId`, not `pluginGuid`. `pluginGuid` belongs at
 the module bootstrap/runtime/host-adapter boundary. Once a capability call
@@ -43,7 +45,7 @@ receive an explicit `ownerId` from the managed system scope.
 
 System scopes are Lib-created owner objects for first-party behavior that is
 not owned by a module host. They close over explicit owner ids and do not own
-module host state. System owner ids must be deliberately scoped, such as
+module host records. System owner ids must be deliberately scoped, such as
 `adamant-lib.overlays.renderer` or `adamant-framework.<pack>.hud`, so they do
 not collide with module plugin guids or with other system capabilities.
 

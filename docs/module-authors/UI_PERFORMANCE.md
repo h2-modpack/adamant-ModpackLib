@@ -3,8 +3,8 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to module draw code:
-- `drawTab(draw, data, actions, services)`
-- optional `drawQuickContent(draw, data, actions, services)`
+- `drawTab(draw, state, actions, services)`
+- optional `drawQuickContent(draw, state, actions, services)`
 - `draw.widgets.*`
 - `draw.nav.*`
 - raw ImGui for structure
@@ -12,8 +12,8 @@ This guidance applies to module draw code:
 ## Why Draw Paths Need Care
 
 Module UI is immediate-mode:
-- `drawTab(draw, data, actions, services)`
-- optional `drawQuickContent(draw, data, actions, services)`
+- `drawTab(draw, state, actions, services)`
+- optional `drawQuickContent(draw, state, actions, services)`
 
 These run every imgui frame.
 Any unnecessary allocation or repeated C-boundary call inside those paths shows up immediately.
@@ -23,11 +23,11 @@ Any unnecessary allocation or repeated C-boundary call inside those paths shows 
 This document assumes:
 - raw `config` stays local to `main.lua`
 - `lib.createModule(...)` owns the definition and state construction boundary
-- draw code reads staged values through `data.get(...)`
+- draw code reads staged values through `state.get(...)`
 - runtime/gameplay code reads persisted values through `store.get(...)`
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
-- framework/host own `session` commit timing
+- framework/host own staged-state commit timing
 - fallback UI registers ROM callbacks through `host.fallbackUi.attachGuiOnce(...)`
   and installs the active runtime during `host.activate()`
 
@@ -88,10 +88,10 @@ Do the same for:
 - `GetFrameHeight()`
 - `GetStyle().ItemSpacing.x` if you are already using it repeatedly in one function
 
-### 4. Reuse `data.get(...)` refs for repeated reads
+### 4. Reuse `state.get(...)` refs for repeated reads
 
 Use:
-- `local enabled = data.get("Enabled")`
+- `local enabled = state.get("Enabled")`
 - `enabled:read()`
 
 When a draw helper reads the same value multiple times, cache the field handle
@@ -107,8 +107,8 @@ Ownership:
   `host.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 
 The module's job is:
-- render from `data`
-- stage edits into `data`
+- render from `state`
+- stage edits into `state`
 
 Not:
 - custom flush timing
@@ -148,8 +148,8 @@ Do not rebuild the same large option table multiple times in the same frame.
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
 - splitting one draw flow into extra lifecycle phases without a real need
-- calling `store.get(...):read()` from draw code instead of reading staged values through `data.get(...)`
-- doing config writes directly from draw code instead of staging through `data`
+- calling `store.get(...):read()` from draw code instead of reading staged values through `state.get(...)`
+- doing config writes directly from draw code instead of staging through `state`
 - bypassing the host/framework flow for normal widget edits
 
 

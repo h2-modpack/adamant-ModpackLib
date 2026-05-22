@@ -15,12 +15,12 @@ local function makeCommitContext(actionSnapshot, hadConfigChanges)
     }
 end
 
-local function notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
-    if settingsObserver == nil then
+local function notifySettingsCommitted(def, commitNotifier, commitContext)
+    if commitNotifier == nil then
         return true, nil
     end
 
-    local ok, result = pcall(settingsObserver, authorHost, store, commitContext or makeCommitContext(nil, false))
+    local ok, result = pcall(commitNotifier, commitContext or makeCommitContext(nil, false))
     if not ok then
         logging.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
             tostring(def.name or def.id or "module"),
@@ -42,109 +42,115 @@ local function isPackEnabled(packId)
     return true
 end
 
-local function isEnabled(store, packId)
+local function isEnabled(persistentState, packId)
     if not isPackEnabled(packId) then
         return false
     end
-    if not store then
+    if not persistentState then
         return false
     end
-    return store.read("Enabled") == true
+    return persistentState.read("Enabled") == true
 end
 
-local function resyncSession(def, session, actions)
-    local mismatches = session.auditMismatches()
+local function restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, primaryErr)
+    stagedState._restoreConfigSnapshot(snapshot)
+    stagedState._reloadFromConfig()
+
+    local rollbackOk
+    local rollbackErr
+    if previousEffective then
+        rollbackOk, rollbackErr = mutation.applyForHost(host)
+    else
+        rollbackOk, rollbackErr = mutation.revertForHost(host)
+    end
+    if not rollbackOk then
+        logging.violate("lifecycle.staged_state_rollback_reapply_failed", "%s: staged state rollback reapply failed: %s",
+            tostring(def.name or def.id or "module"),
+            tostring(rollbackErr))
+        return false, tostring(primaryErr) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"
+    end
+
+    return false, primaryErr
+end
+
+local function resyncStagedState(def, stagedState, actionBuffer)
+    local mismatches = stagedState.auditMismatches()
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
-        logging.violate("lifecycle.session_drift_detected", "%s: session drift detected; reloading staged values for: %s",
+        logging.violate("lifecycle.staged_state_drift_detected", "%s: staged state drift detected; reloading staged values for: %s",
             tostring(name),
             table.concat(mismatches, ", "))
-        session._reloadFromConfig()
-        if actions then
-            actions.clearAll()
+        stagedState._reloadFromConfig()
+        if actionBuffer then
+            actionBuffer.clearAll()
         end
     end
     return mismatches
 end
 
-local function commitSession(host, def, mutationBundle, settingsObserver, authorHost, store, session, actions)
-    local hasPendingActions = actions and actions.hasAny()
-    if not session.isDirty() and not hasPendingActions then
+local function commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+    local hasPendingActions = actionBuffer and actionBuffer.hasAny()
+    if not stagedState.isDirty() and not hasPendingActions then
         return true, nil
     end
 
-    local hadConfigChanges = session._hasConfigChanges()
-    local actionSnapshot = actions and actions.captureSnapshot() or {}
+    local hadConfigChanges = stagedState._hasConfigChanges()
+    local previousEffective = isEnabled(persistentState, def and def.modpack)
+    local actionSnapshot = actionBuffer and actionBuffer.captureSnapshot() or {}
     local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
-    local snapshot = hadConfigChanges and session._captureDirtyConfigSnapshot() or nil
+    local snapshot = hadConfigChanges and stagedState._captureDirtyConfigSnapshot() or nil
     if hadConfigChanges then
-        session._flushToConfig()
+        stagedState._flushToConfig()
     end
-    if actions then
-        actions.clearAll()
+    if actionBuffer then
+        actionBuffer.clearAll()
     end
 
-    local shouldReapply = mutation.affectsRunData(mutationBundle)
+    local nextEffective = isEnabled(persistentState, def and def.modpack)
+    local shouldSyncMutation = mutation.affectsRunData(mutationBundle)
         and hadConfigChanges
-        and isEnabled(store, def and def.modpack)
 
-    if not shouldReapply then
-        return notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
+    if not shouldSyncMutation then
+        return notifySettingsCommitted(def, commitNotifier, commitContext)
     end
 
-    local ok, err = mutation.applyForHost(host)
-    if ok then
-        return notifySettingsCommitted(def, settingsObserver, authorHost, store, commitContext)
-    end
-
-    session._restoreConfigSnapshot(snapshot)
-    session._reloadFromConfig()
-
-    local rollbackOk, rollbackErr = mutation.applyForHost(host)
-    if not rollbackOk then
-        logging.violate("lifecycle.session_rollback_reapply_failed", "%s: session rollback reapply failed: %s",
-            tostring(def.name or def.id or "module"),
-            tostring(rollbackErr))
-        return false, tostring(err) .. " (rollback reapply failed: " .. tostring(rollbackErr) .. ")"
-    end
-
-    return false, err
-end
-
-local function setEnabled(host, def, store, enabled)
-    local nextEnabled = enabled == true
-    local currentEnabled = store.read("Enabled") == true
-    local packEnabled = isPackEnabled(def and def.modpack)
-    local currentEffective = currentEnabled and packEnabled
-    local nextEffective = nextEnabled and packEnabled
-
-    local ok, err
-    if nextEffective and currentEffective then
+    local ok
+    local err
+    if nextEffective then
         ok, err = mutation.applyForHost(host)
-    elseif nextEffective then
-        ok, err = mutation.applyForHost(host)
-    elseif currentEffective then
+    elseif previousEffective then
         ok, err = mutation.revertForHost(host)
     else
         ok, err = true, nil
     end
-
-    if not ok then
-        return false, err
+    if ok then
+        return notifySettingsCommitted(def, commitNotifier, commitContext)
     end
 
-    moduleState.writePersisted(store, "Enabled", nextEnabled)
-    return true, nil
+    return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)
 end
 
-local function setDebugMode(store, enabled)
-    moduleState.writePersisted(store, "DebugMode", enabled == true)
+local function setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer, enabled)
+    local previousEffective = isEnabled(persistentState, def and def.modpack)
+    stagedState.write("Enabled", enabled == true)
+    if not stagedState.isDirty() and not (actionBuffer and actionBuffer.hasAny()) then
+        if previousEffective and enabled == true and mutation.affectsRunData(mutationBundle) then
+            return mutation.applyForHost(host)
+        end
+        return true, nil
+    end
+    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+end
+
+local function setDebugMode(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer, enabled)
+    stagedState.write("DebugMode", enabled == true)
+    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
 end
 
 return {
     isEnabled = isEnabled,
-    resyncSession = resyncSession,
-    commitSession = commitSession,
+    resyncStagedState = resyncStagedState,
+    commitStagedState = commitStagedState,
     setEnabled = setEnabled,
     setDebugMode = setDebugMode,
 }

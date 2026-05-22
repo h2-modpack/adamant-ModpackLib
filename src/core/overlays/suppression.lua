@@ -1,15 +1,15 @@
 local deps = ...
 
-local overlayState = deps.state
+local overlayRegistry = deps.state
 local renderer = deps.renderer
 local isUiSuppressed = deps.isUiSuppressed
 local suppression = {}
 
 function suppression.suppressForUi()
-    overlayState.nextUiSuppressorId = overlayState.nextUiSuppressorId + 1
-    local id = overlayState.nextUiSuppressorId
+    overlayRegistry.nextUiSuppressorId = overlayRegistry.nextUiSuppressorId + 1
+    local id = overlayRegistry.nextUiSuppressorId
     local wasSuppressed = isUiSuppressed()
-    overlayState.uiSuppressors[id] = true
+    overlayRegistry.uiSuppressors[id] = true
     if not wasSuppressed then
         renderer.refreshAll()
     end
@@ -21,7 +21,7 @@ function suppression.suppressForUi()
                 return
             end
             released = true
-            overlayState.uiSuppressors[id] = nil
+            overlayRegistry.uiSuppressors[id] = nil
             if not isUiSuppressed() then
                 renderer.refreshAll()
             end

@@ -19,7 +19,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
----@field alias string Public alias used by store/session/widget APIs and as the persisted backing key.
+---@field alias string Public alias used by store/stagedState/widget APIs and as the persisted backing key.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
@@ -57,13 +57,13 @@ local lib = {}
 ---@field snapshots fun(self: AdamantModpackLib.StorageTableReadOnly): table[]
 
 ---Writable table handles are object handles; call methods with colon syntax (`rows:write(...)`).
----@class AdamantModpackLib.StorageTableSession: AdamantModpackLib.StorageTableReadOnly
----@field write fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string, value: any): boolean
----@field reset fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, alias: string): boolean
----@field append fun(self: AdamantModpackLib.StorageTableSession, rowValues?: table): boolean
----@field insert fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer, rowValues?: table): boolean
----@field remove fun(self: AdamantModpackLib.StorageTableSession, rowIndex: integer): boolean
----@field clear fun(self: AdamantModpackLib.StorageTableSession): boolean
+---@class AdamantModpackLib.StorageTableStagedState: AdamantModpackLib.StorageTableReadOnly
+---@field write fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, alias: string, value: any): boolean
+---@field reset fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, alias: string): boolean
+---@field append fun(self: AdamantModpackLib.StorageTableStagedState, rowValues?: table): boolean
+---@field insert fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, rowValues?: table): boolean
+---@field remove fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer): boolean
+---@field clear fun(self: AdamantModpackLib.StorageTableStagedState): boolean
 
 ---@class AdamantModpackLib.StorageField
 ---@field read fun(self: AdamantModpackLib.StorageField): any
@@ -75,25 +75,25 @@ local lib = {}
 ---@field owner fun(self: AdamantModpackLib.StorageField): table
 
 ---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableReadOnly
----@alias AdamantModpackLib.DrawDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableSession
+---@alias AdamantModpackLib.DrawStateRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
----@class AdamantModpackLib.ManagedStore
+---@class AdamantModpackLib.PersistentState
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a storage object for a persisted alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
----@class AdamantModpackLib.AuthorStore
+---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
----@class AdamantModpackLib.Session
+---@class AdamantModpackLib.StagedState
 ---@field view table<string, any>
----@field get fun(alias: string): AdamantModpackLib.DrawDataRef? Return a storage object for a staged alias.
+---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
----@field table fun(alias: string): AdamantModpackLib.StorageTableSession?
+---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
@@ -106,11 +106,11 @@ local lib = {}
 ---@field isDirty fun(): boolean
 ---@field auditMismatches fun(): string[]
 
----@class AdamantModpackLib.AuthorSession
----@field get fun(alias: string): AdamantModpackLib.DrawDataRef? Return a storage object for a staged alias.
+---@class AdamantModpackLib.DrawState
+---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
----@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
@@ -219,7 +219,7 @@ local lib = {}
 ---@field patch fun(callback: fun(
 ---    plan: AdamantModpackLib.MutationPlan,
 ---    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.AuthorStore
+---    store: AdamantModpackLib.Store
 ---))
 
 ---@class AdamantModpackLib.AuthorCache
@@ -252,7 +252,7 @@ local lib = {}
 ---@field patchMutation? fun(
 ---    plan: AdamantModpackLib.MutationPlan,
 ---    host: AdamantModpackLib.AuthorHost?,
----    store: AdamantModpackLib.AuthorStore
+---    store: AdamantModpackLib.Store
 ---)
 
 ---@class AdamantModpackLib.ModuleCreateOpts
@@ -268,26 +268,26 @@ local lib = {}
 --- Post-commit observer for rebuilding derived runtime/UI structures.
 ---@field onSettingsCommitted? fun(
 ---    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.AuthorStore,
+---    store: AdamantModpackLib.Store,
 ---    commit: AdamantModpackLib.CommitContext
 ---)
 ---@field drawTab fun(
 ---    draw: AdamantModpackLib.DrawContext,
----    data: AdamantModpackLib.AuthorSession,
+---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
 ---    services: AdamantModpackLib.DrawServices
 ---)
 ---@field drawQuickContent? fun(
 ---    draw: AdamantModpackLib.DrawContext,
----    data: AdamantModpackLib.AuthorSession,
+---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
 ---    services: AdamantModpackLib.DrawServices
 ---)
 
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
----@field widgets AdamantModpackLib.BoundWidgetsApi
----@field nav AdamantModpackLib.BoundNavApi
+---@field widgets AdamantModpackLib.DrawWidgetsApi
+---@field nav AdamantModpackLib.DrawNavApi
 
 ---@class AdamantModpackLib.ModuleHost
 ---@field getHostId fun(): string
@@ -303,7 +303,7 @@ local lib = {}
 ---@field flush fun(): boolean
 ---@field reloadFromConfig fun()
 ---@field resync fun(): string[]
----@field resetToDefaults fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 ---@field commitIfDirty fun(): boolean, string?, boolean
 ---@field isEnabled fun(): boolean
 ---@field setEnabled fun(enabled: boolean): boolean, string?
@@ -311,8 +311,8 @@ local lib = {}
 ---@field applyMutation fun(): boolean, string?
 ---@field revertMutation fun(): boolean, string?
 ---@field activate fun(): boolean, string?
----@field drawTab fun(imgui: table)
----@field drawQuickContent? fun(imgui: table)
+---@field drawTab fun()
+---@field drawQuickContent? fun()
 
 ---@class AdamantModpackLib.ModuleMeta
 ---@field name? string
@@ -538,7 +538,7 @@ local lib = {}
 ---@class AdamantModpackLib.UiSuppressionToken
 ---@field release fun()
 
----@class AdamantModpackLib.BoundWidgetsApi
+---@class AdamantModpackLib.DrawWidgetsApi
 ---@field separator fun()
 ---@field text fun(text: any, opts?: AdamantModpackLib.TextOpts)
 ---@field button fun(label: any, opts?: AdamantModpackLib.ButtonOpts): boolean
@@ -558,16 +558,16 @@ local lib = {}
 ---@field checkbox fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.CheckboxOpts): boolean
 ---@field packedCheckboxList fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedCheckboxListOpts): boolean
 
----@class AdamantModpackLib.BoundNavApi
+---@class AdamantModpackLib.DrawNavApi
 ---@field verticalTabs fun(opts?: AdamantModpackLib.VerticalTabsOpts): string|number?
 
 ---@class AdamantModpackLib.ModuleState
----@field store AdamantModpackLib.ManagedStore
----@field session AdamantModpackLib.Session
+---@field persistentState AdamantModpackLib.PersistentState
+---@field stagedState AdamantModpackLib.StagedState
 
 ---@param opts AdamantModpackLib.ModuleCreateOpts
 ---@return AdamantModpackLib.AuthorHost? host
----@return AdamantModpackLib.AuthorStore? store
+---@return AdamantModpackLib.Store? store
 ---@return string? err
 function lib.createModule(opts)
 end

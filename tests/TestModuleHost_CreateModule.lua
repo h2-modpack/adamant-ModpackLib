@@ -15,13 +15,13 @@ end
 function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local drawContext = nil
     local drawImgui = nil
-    local drawData = nil
+    local capturedState = nil
     local drawServices = nil
-    local drawActions = nil
+    local capturedActions = nil
     local drawWidgets = nil
     local drawNav = nil
     local authorSchemaNode = nil
-    local authorDataField = nil
+    local authorStateField = nil
     local authorRowValue = nil
     local authorRowField = nil
     local config = {}
@@ -43,57 +43,56 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
                 },
             },
         },
-        drawTab = function(draw, data, actions, services)
+        drawTab = function(draw, state, actions, services)
             drawContext = draw
             drawImgui = draw.imgui
-            drawData = data
+            capturedState = state
             drawServices = services
-            drawActions = actions
+            capturedActions = actions
             drawWidgets = draw.widgets
             drawNav = draw.nav
-            authorDataField = data.get("Flag")
-            authorSchemaNode = authorDataField:schema()
-            local rows = data.get("Rows")
+            authorStateField = state.get("Flag")
+            authorSchemaNode = authorStateField:schema()
+            local rows = state.get("Rows")
             authorRowField = rows:get(1, "Limit")
             authorRowValue = rows:read(1, "Limit")
-            authorDataField:write(true)
-            data.write("Rows", 1, "Limit", 3)
+            authorStateField:write(true)
+            state.write("Rows", 1, "Limit", 3)
         end,
     })
 
     lu.assertNil(self.h:liveHost("test-create-module"))
     host.activate()
     local liveHost = self.h:liveHost("test-create-module")
-    liveHost.drawTab({})
+    liveHost.drawTab()
 
     lu.assertNotNil(drawImgui)
-    lu.assertNotNil(drawData)
+    lu.assertNotNil(capturedState)
     lu.assertEquals(type(drawServices.log), "function")
     lu.assertEquals(type(drawServices.logIf), "function")
     lu.assertEquals(type(drawServices.isHostEnabled), "function")
     lu.assertEquals(type(drawServices.invokeIntegration), "function")
-    lu.assertEquals(type(drawActions.get), "function")
-    lu.assertEquals(type(drawActions.hasAny), "function")
+    lu.assertEquals(type(capturedActions.get), "function")
+    lu.assertEquals(type(capturedActions.hasAny), "function")
     lu.assertEquals(type(drawWidgets.checkbox), "function")
-    lu.assertNil(drawWidgets.forSession)
+    lu.assertNil(drawWidgets.forStagedState)
     lu.assertEquals(type(drawNav.verticalTabs), "function")
     lu.assertNil(drawNav.isVisible)
-    lu.assertNil(drawContext.data)
-    lu.assertNil(drawContext.session)
+    lu.assertNil(drawContext.state)
     lu.assertNil(drawContext.actions)
     lu.assertNil(drawContext.services)
     lu.assertNil(drawContext.field)
-    lu.assertNil(drawData.view)
-    lu.assertNil(drawData.table)
-    lu.assertNil(drawData.field)
-    lu.assertNil(drawData.reset)
-    lu.assertNil(drawData.getAliasSchema)
-    lu.assertEquals(type(drawData.read), "function")
-    lu.assertEquals(type(drawData.write), "function")
-    lu.assertEquals(drawData.read("Flag"), true)
-    lu.assertEquals(drawData.read("Rows", 1, "Limit"), 3)
+    lu.assertNil(capturedState.view)
+    lu.assertNil(capturedState.table)
+    lu.assertNil(capturedState.field)
+    lu.assertNil(capturedState.reset)
+    lu.assertNil(capturedState.getAliasSchema)
+    lu.assertEquals(type(capturedState.read), "function")
+    lu.assertEquals(type(capturedState.write), "function")
+    lu.assertEquals(capturedState.read("Flag"), true)
+    lu.assertEquals(capturedState.read("Rows", 1, "Limit"), 3)
     lu.assertErrorMsgContains("storage.invalid_field_args", function()
-        drawData.read("Flag", 1, "Limit")
+        capturedState.read("Flag", 1, "Limit")
     end)
     lu.assertEquals(type(host.isEnabled), "function")
     lu.assertEquals(type(store.get), "function")
@@ -108,7 +107,7 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     end)
     liveHost.flush()
     lu.assertEquals(store.read("Flag"), true)
-    lu.assertEquals(self.h.moduleRuntimeRegistry.getPluginInfo("test-create-module"), {
+    lu.assertEquals(self.h.hostRegistry.getPluginInfo("test-create-module"), {
         pluginGuid = "test-create-module",
         packId = "create-module-pack",
         moduleId = "CreateModule",
@@ -117,13 +116,13 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNotNil(authorSchemaNode)
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
-    lu.assertEquals(authorDataField:alias(), "Flag")
-    lu.assertEquals(authorDataField:schema().alias, "Flag")
+    lu.assertEquals(authorStateField:alias(), "Flag")
+    lu.assertEquals(authorStateField:schema().alias, "Flag")
     lu.assertEquals(authorRowValue, 2)
     lu.assertEquals(authorRowField:alias(), "Limit")
     lu.assertEquals(authorRowField:read(), 3)
-    local liveState = self.h.moduleHost.getState(liveHost)
-    lu.assertEquals(type(liveState.definition._structuralFingerprint), "string")
+    local liveRecord = self.h.moduleHost.getRecord(liveHost)
+    lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
 
 function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
@@ -135,13 +134,13 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
         id = "StableDrawServices",
         name = "Stable Draw Services",
         storage = {},
-        drawTab = function(draw, data, actions, services)
+        drawTab = function(draw, state, actions, services)
             calls[#calls + 1] = {
                 draw = draw,
                 imgui = draw.imgui,
                 widgets = draw.widgets,
                 nav = draw.nav,
-                data = data,
+                state = state,
                 actions = actions,
                 services = services,
             }
@@ -150,28 +149,63 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
 
     host.activate()
     local liveHost = self.h:liveHost("test-create-module-stable-draw-services")
-    local firstImgui = {}
-    local secondImgui = {}
-    liveHost.drawTab(firstImgui)
-    liveHost.drawTab(firstImgui)
-    liveHost.drawTab(secondImgui)
+    liveHost.drawTab()
+    liveHost.drawTab()
+    liveHost.drawTab()
 
     lu.assertEquals(#calls, 3)
     lu.assertEquals(calls[1].draw, calls[2].draw)
     lu.assertEquals(calls[1].draw, calls[3].draw)
-    lu.assertEquals(calls[1].imgui, firstImgui)
-    lu.assertEquals(calls[2].imgui, firstImgui)
-    lu.assertEquals(calls[3].imgui, secondImgui)
+    lu.assertEquals(calls[1].imgui, self.h.rom.ImGui)
+    lu.assertEquals(calls[2].imgui, self.h.rom.ImGui)
+    lu.assertEquals(calls[3].imgui, self.h.rom.ImGui)
     lu.assertEquals(calls[1].widgets, calls[2].widgets)
+    lu.assertEquals(calls[2].widgets, calls[3].widgets)
     lu.assertEquals(calls[1].nav, calls[2].nav)
-    lu.assertNotEquals(calls[2].widgets, calls[3].widgets)
-    lu.assertNotEquals(calls[2].nav, calls[3].nav)
-    lu.assertEquals(calls[1].data, calls[2].data)
-    lu.assertEquals(calls[1].data, calls[3].data)
+    lu.assertEquals(calls[2].nav, calls[3].nav)
+    lu.assertEquals(calls[1].state, calls[2].state)
+    lu.assertEquals(calls[1].state, calls[3].state)
     lu.assertEquals(calls[1].actions, calls[2].actions)
     lu.assertEquals(calls[1].actions, calls[3].actions)
     lu.assertEquals(calls[1].services, calls[2].services)
     lu.assertEquals(calls[1].services, calls[3].services)
+end
+
+function TestModuleHost_CreateModule:testDrawFacadeIsSharedAcrossHosts()
+    local firstDraw = nil
+    local secondDraw = nil
+    local firstHost = self.h.public.createModule({
+        pluginGuid = "test-create-module-shared-draw-a",
+        config = {},
+        modpack = "create-module-pack",
+        id = "SharedDrawA",
+        name = "Shared Draw A",
+        storage = {},
+        drawTab = function(draw)
+            firstDraw = draw
+        end,
+    })
+    local secondHost = self.h.public.createModule({
+        pluginGuid = "test-create-module-shared-draw-b",
+        config = {},
+        modpack = "create-module-pack",
+        id = "SharedDrawB",
+        name = "Shared Draw B",
+        storage = {},
+        drawTab = function(draw)
+            secondDraw = draw
+        end,
+    })
+
+    firstHost.activate()
+    secondHost.activate()
+    self.h:liveHost("test-create-module-shared-draw-a").drawTab()
+    self.h:liveHost("test-create-module-shared-draw-b").drawTab()
+
+    lu.assertNotNil(firstDraw)
+    lu.assertEquals(firstDraw, secondDraw)
+    lu.assertEquals(firstDraw.widgets, secondDraw.widgets)
+    lu.assertEquals(firstDraw.nav, secondDraw.nav)
 end
 
 function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurface()

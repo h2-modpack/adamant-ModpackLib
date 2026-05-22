@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 ---@class TextOpts
 ---@field color Color|nil
@@ -7,7 +8,7 @@ local helpers = ...
 
 ---@param imgui table
 ---@return nil
-function helpers.widgets.separator(imgui)
+function widgets.separator(imgui)
     imgui.Separator()
 end
 
@@ -15,7 +16,7 @@ end
 ---@param text any
 ---@param opts TextOpts|nil
 ---@return nil
-function helpers.widgets.text(imgui, text, opts)
+function widgets.text(imgui, text, opts)
     opts = opts or helpers.EMPTY_OPTS
     local renderedText = tostring(text or "")
     if opts.alignToFramePadding == true then
@@ -26,3 +27,5 @@ function helpers.widgets.text(imgui, text, opts)
     end
     helpers.ShowTooltip(imgui, opts.tooltip)
 end
+
+return widgets

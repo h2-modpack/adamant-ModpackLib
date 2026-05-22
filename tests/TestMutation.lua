@@ -5,7 +5,7 @@ TestMutation = {}
 
 local function createModuleState(harness, config, definition)
     local state = harness.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 function TestMutation:setUp()
@@ -80,8 +80,8 @@ function TestMutation:testPlanDoesNotExposeExecutionMethods()
 end
 
 function TestMutation.testPlanExecutorSurvivesLibReload()
-    local runtime = {}
-    local first = createLibHarness({ runtime = runtime })
+    local runtimeRoot = {}
+    local first = createLibHarness({ runtime = runtimeRoot })
     local tbl = { Value = "base" }
     local plan = first.mutationPlan.createPlan()
         :set(tbl, "Value", "patched")
@@ -89,7 +89,7 @@ function TestMutation.testPlanExecutorSurvivesLibReload()
     lu.assertTrue(first.mutationPlan.applyPlan(plan))
     lu.assertEquals(tbl.Value, "patched")
 
-    local second = createLibHarness({ runtime = runtime })
+    local second = createLibHarness({ runtime = runtimeRoot })
 
     lu.assertTrue(second.mutationPlan.revertPlan(plan))
     lu.assertEquals(tbl.Value, "base")
@@ -315,15 +315,15 @@ function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
         name = "Noop Mutation Receipt",
         storage = {},
     })
-    local store, session = createModuleState(self.harness, {
+    local store, stagedState = createModuleState(self.harness, {
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host = self.harness.moduleHost.create({
         pluginGuid = "test-noop-mutation-receipt",
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     local receipt = self.mutation.syncForHost(host)

@@ -15,9 +15,9 @@ local modulePublic = {}
 ---@field tooltip string|nil
 ---@field storage StorageSchema|nil
 ---@field hashGroupPlan HashGroupPlan|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: AuthorStore, commit: table)|nil
----@field drawTab fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)
----@field drawQuickContent fun(draw: DrawContext, data: AuthorSession, actions: DrawActions, services: DrawServices)|nil
+---@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
+---@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)
+---@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)|nil
 
 local KnownModuleOpts = {
     pluginGuid = true,
@@ -62,8 +62,8 @@ end
 
 local function GetStructuralBaseline(pluginGuid)
     local previousHost = moduleHost.getLiveHost(pluginGuid)
-    local previousState = moduleHost.getState(previousHost)
-    local previousDefinition = previousState and previousState.definition or nil
+    local previousRecord = moduleHost.getRecord(previousHost)
+    local previousDefinition = previousRecord and previousRecord.definition or nil
     local previousFingerprint = previousDefinition and previousDefinition._structuralFingerprint or nil
     if previousFingerprint == nil then
         return nil
@@ -92,27 +92,27 @@ local function createModuleOrThrow(opts)
         hasQuickContent = type(opts.drawQuickContent) == "function",
     })
     local state = moduleState.create(opts.config, definition)
-    local store = state.store
-    local session = state.session
+    local persistentState = state.persistentState
+    local stagedState = state.stagedState
     local cacheStore = state.cacheStore
-    local _, authorHost, authorStore = moduleHost.create({
+    local _, authorHost, store = moduleHost.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
-        store = store,
-        session = session,
+        persistentState = persistentState,
+        stagedState = stagedState,
         cacheStore = cacheStore,
         onSettingsCommitted = opts.onSettingsCommitted,
         drawTab = opts.drawTab,
         drawQuickContent = opts.drawQuickContent,
     })
-    return authorHost, authorStore
+    return authorHost, store
 end
 
 --- Safely creates a module through the canonical prepare -> store -> host pipeline.
 --- Returns nils plus the construction error instead of throwing.
 ---@param opts ModuleCreateOpts
 ---@return AuthorHost|nil host
----@return AuthorStore|nil store
+---@return Store|nil store
 ---@return string|nil err
 local function createModule(opts)
     local ok, host, store = pcall(createModuleOrThrow, opts)

@@ -32,13 +32,13 @@ end
 - Configuration defaults belong in their source files. If a source file changes, a new import should rebuild from that source.
 - Do not preserve runtime state across Lib re-imports unless it is a real lifetime anchor.
 - Comment only actual persistence anchors: owner identities, hook/overlay lifecycle state, runtime registries, or other tables whose identity must survive.
-- `core/init.lua` owns creation of `AdamantModpackLib_Runtime` and passes the runtime table to subsystems that need real hot-reload anchors.
-- Keep persistent runtime registries under a subsystem-named `AdamantModpackLib_Runtime` namespace; do not use a generic internal bus as the registry owner.
-- Runtime tables closed over by installed game/ModUtil callbacks are legitimate hot-reload anchors, but should still be owned by the subsystem runtime namespace rather than the internal bus.
-- Runtime tables that keep active plans/receipts revertible across Lib re-imports are also real anchors; keep them under the subsystem runtime namespace and comment the reason.
+- `core/init.lua` owns creation of `AdamantModpackLib_Runtime`; `core/lib_bootstrap/registry.lua` is the only file that shapes Lib-owned root registry buckets below it.
+- Keep persistent runtime registries under `AdamantModpackLib_Runtime.registry.<subsystem>`. The root registry creates only subsystem buckets; each subsystem owns the leaf tables inside its bucket.
+- Runtime tables closed over by installed game/ModUtil callbacks are legitimate hot-reload anchors, but should still be owned by a scoped registry bucket rather than a broad dependency bus.
+- Runtime tables that keep active plans/receipts revertible across Lib re-imports are also real anchors; keep them under the scoped registry bucket and comment the reason.
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
-- Module host live-host, pending-rebuild, and weak host-state tables are activation anchors; keep the tables under `runtime.moduleHost`, but keep lifecycle behavior on the returned `moduleHost` service.
-- Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `runtime.fallbackUi`, and make callbacks late-read that table.
+- Module host live-host, pending-rebuild, and weak host-record tables are activation anchors; keep the tables under `AdamantModpackLib_Runtime.registry.hosts`, but keep lifecycle behavior on the returned `moduleHost` service.
+- Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
 ## Legacy Internal Shims
 

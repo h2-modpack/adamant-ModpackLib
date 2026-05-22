@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local coordinator = deps.coordinator
 local setupRunData = deps.setupRunData
-local mutationState = deps.mutationState
+local mutationRegistry = deps.mutationRegistry
 local plan = deps.plan
 
 local lifecycle = {
@@ -13,40 +13,40 @@ local lifecycle = {
     revertPlan = plan.revertPlan,
 }
 
-local function getRuntimeKey(ownerId)
+local function getMutationSlotKey(ownerId)
     if type(ownerId) ~= "string" or ownerId == "" then
         logging.violate("mutation.invalid_runtime_key", "mutation lifecycle requires ownerId")
     end
-    return "owner:" .. ownerId, mutationState.ownerRuntime
+    return "owner:" .. ownerId, mutationRegistry.ownerSlots
 end
 
-local function getRuntimeState(ownerId)
-    local key, bucket = getRuntimeKey(ownerId)
+local function getMutationSlot(ownerId)
+    local key, bucket = getMutationSlotKey(ownerId)
     return bucket[key], key, bucket
 end
 
-local function setRuntimeState(ownerId, state)
-    local key, bucket = getRuntimeKey(ownerId)
-    if state == nil or state.plan == nil then
+local function setMutationSlot(ownerId, slot)
+    local key, bucket = getMutationSlotKey(ownerId)
+    if slot == nil or slot.plan == nil then
         bucket[key] = nil
         return
     end
-    bucket[key] = state
+    bucket[key] = slot
 end
 
 local function setActiveMutationPlan(ownerId, activePlan)
-    local runtimeState = getRuntimeState(ownerId) or {}
-    runtimeState.plan = activePlan
-    setRuntimeState(ownerId, runtimeState)
+    local slot = getMutationSlot(ownerId) or {}
+    slot.plan = activePlan
+    setMutationSlot(ownerId, slot)
 end
 
 local function captureActiveMutation(ownerId)
-    local runtimeState = getRuntimeState(ownerId)
-    if not runtimeState then
+    local slot = getMutationSlot(ownerId)
+    if not slot then
         return nil
     end
     return {
-        plan = runtimeState.plan,
+        plan = slot.plan,
     }
 end
 
@@ -92,15 +92,15 @@ local function isEnabledForSync(def, store)
 end
 
 local function revertActivePlan(ownerId)
-    local runtimeState = getRuntimeState(ownerId)
-    local activePlan = runtimeState and runtimeState.plan or nil
+    local slot = getMutationSlot(ownerId)
+    local activePlan = slot and slot.plan or nil
     if not activePlan then
         return true, nil, false
     end
 
     local okPlan, errPlan = pcall(lifecycle.revertPlan, activePlan)
-    runtimeState.plan = nil
-    setRuntimeState(ownerId, runtimeState)
+    slot.plan = nil
+    setMutationSlot(ownerId, slot)
     if not okPlan then
         return false, errPlan, true
     end
@@ -135,7 +135,7 @@ end
 ---@param ownerId string Stable owner id owning the active mutation slot.
 ---@param mutationBundle table|nil Module mutation callbacks.
 ---@param authorHost AuthorHost|nil Module author host passed to mutation builders.
----@param store AuthorStore|nil Author-facing module store associated with the definition.
+---@param store Store|nil Author-facing module store associated with the definition.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
 function lifecycle.apply(ownerId, mutationBundle, authorHost, store)

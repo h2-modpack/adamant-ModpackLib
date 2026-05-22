@@ -4,14 +4,14 @@ local helpers = {}
 helpers.createLibHarness = createLibHarness
 
 function helpers.prepareDefinition(harness, definition)
-    definition.id = definition.id or "SessionTest"
-    definition.name = definition.name or "Session Test"
+    definition.id = definition.id or "StagedStateTest"
+    definition.name = definition.name or "stagedState Test"
     return harness.moduleHost.prepareDefinition({}, definition)
 end
 
 function helpers.createModuleState(harness, config, definition)
     local state = harness.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 function helpers.getHostLifecycle(harness)

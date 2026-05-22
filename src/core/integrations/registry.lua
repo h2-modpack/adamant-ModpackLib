@@ -1,18 +1,15 @@
 local deps = ...
-local runtime = deps.runtime
+local integrationRegistry = deps.integrationRegistry
 
--- Hot-reload-stable integration registry.
-runtime.integrations = runtime.integrations or {}
-runtime.integrations.registry = runtime.integrations.registry or {}
-
-local registry = runtime.integrations.registry
+-- Hot-reload-stable integration provider buckets.
+local providers = integrationRegistry.providers
 
 local function getRegistry()
-    return registry
+    return providers
 end
 
 local function getBucket(id, create)
-    local bucket = registry[id]
+    local bucket = providers[id]
     if not bucket and create then
         bucket = {
             providers = {},
@@ -20,7 +17,7 @@ local function getBucket(id, create)
             ownerTokens = {},
             order = {},
         }
-        registry[id] = bucket
+        providers[id] = bucket
     end
     if bucket then
         bucket.ownerIds = bucket.ownerIds or {}
@@ -59,7 +56,7 @@ end
 
 local function pruneBucket(id, bucket)
     if bucket and #bucket.order == 0 then
-        registry[id] = nil
+        providers[id] = nil
     end
 end
 

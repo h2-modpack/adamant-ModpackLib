@@ -85,7 +85,7 @@ end
 
 local function createModuleState(base, config, definition)
     local state = base.moduleState.create(config, definition)
-    return state.store, state.session
+    return state.persistentState, state.stagedState
 end
 
 local function createOverlayHarness(opts)
@@ -109,9 +109,9 @@ local function createOverlayHarness(opts)
         public = base.public,
         config = base.config,
         runtime = base.runtime,
-        overlayState = base.runtime.overlays,
-        rendererState = base.runtime.overlays.renderer,
-        retainedState = base.runtime.overlays.retained,
+        overlayRegistry = base.registry.overlays,
+        rendererState = base.registry.overlays.renderer,
+        retainedState = base.registry.overlays.retained,
         overlays = base.overlays,
         moduleHost = base.moduleHost,
         moduleState = base.moduleState,
@@ -130,15 +130,15 @@ local function createOverlayHarness(opts)
                 name = hostOpts.name or "Overlay Host",
                 storage = hostOpts.storage or {},
             })
-            local store, session = createModuleState(base, hostOpts.config or {
+            local store, stagedState = createModuleState(base, hostOpts.config or {
                 Enabled = true,
                 DebugMode = false,
             }, definition)
             local host, authorHost = base.moduleHost.create({
                 pluginGuid = pluginGuid,
                 definition = definition,
-                store = store,
-                session = session,
+                persistentState = store,
+                stagedState = stagedState,
                 onSettingsCommitted = hostOpts.onSettingsCommitted,
                 drawTab = function() end,
             })
@@ -148,7 +148,7 @@ local function createOverlayHarness(opts)
             if type(declareOverlays) == "function" then
                 declareOverlays(authorHost.overlays, authorHost, store)
             end
-            return host, authorHost, store, session, definition
+            return host, authorHost, store, stagedState, definition
         end,
     }
 end

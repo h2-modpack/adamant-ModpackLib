@@ -9,7 +9,7 @@ Two domains exist today:
 - `currentRun`: table buckets that follow the lifetime of active `CurrentRun`
 - `persistent`: flat scalar values that survive reloads and restarts
 
-Neither domain participates in staging, hashes, profiles, or reset-to-defaults.
+Neither domain participates in staging, hashes, profiles, or whole-state resets.
 
 ## Current Run
 

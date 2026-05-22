@@ -1,5 +1,6 @@
 local helpers = ...
 local imguiHelpers = helpers.imguiHelpers
+local widgets = {}
 ---@class DropdownOpts
 ---@field id string|number|nil
 ---@field label string|nil
@@ -113,7 +114,7 @@ end
 ---@param field StorageField
 ---@param opts DropdownOpts|nil
 ---@return boolean
-function helpers.widgets.dropdown(imgui, field, opts)
+function widgets.dropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local current = helpers.NormalizeChoiceValue(opts, field:read())
@@ -157,7 +158,7 @@ end
 ---@param field StorageField
 ---@param opts PackedDropdownOpts|nil
 ---@return boolean
-function helpers.widgets.packedDropdown(imgui, field, opts)
+function widgets.packedDropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local children = helpers.ResolvePackedChildren(field)
@@ -220,9 +221,11 @@ end
 ---@param field StorageField
 ---@param opts PackedDropdownOpts|PackedRadioOpts|nil
 ---@return string|nil selectedAlias
-function helpers.widgets.getPackedChoiceAlias(field, opts)
+function widgets.getPackedChoiceAlias(field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
     return selection.selectedChild and selection.selectedChild.alias or nil
 end
+
+return widgets

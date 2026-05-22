@@ -1,23 +1,16 @@
 local deps = ...
-local runtime = deps.runtime
+local hookRegistry = deps.hookRegistry
 local modutilHooks = import('core/hooks/modutil_registry.lua', nil, {
     modutil = deps.modutil,
     logging = deps.logging,
+    registryKey = hookRegistry.modutilOwnerKey,
 })
 
--- `hookDispatchers` own the installed ModUtil adapter for each path.
+-- `dispatchers` own the installed ModUtil adapter for each path.
 -- `ownerSlots` choose which owner object for an owner id is currently visible to those adapters.
 -- Both tables are hot-reload-stable because ModUtil wrappers close over them.
-runtime.hooks = runtime.hooks or {}
-runtime.hooks.ownerSlots = runtime.hooks.ownerSlots or {}
-runtime.hooks.hookDispatchers = runtime.hooks.hookDispatchers or {
-    wrap = {},
-    override = {},
-    contextWrap = {},
-}
-
-local ownerSlots = runtime.hooks.ownerSlots
-local hookDispatchers = runtime.hooks.hookDispatchers
+local ownerSlots = hookRegistry.ownerSlots
+local dispatchers = hookRegistry.dispatchers
 local MODUTIL_DISPATCHER_KEY = "__hook_dispatcher"
 
 local function getOwnerSlot(ownerId)
@@ -35,7 +28,7 @@ local function getCurrentOwner(ownerId)
 end
 
 local function getDispatcher(kind, path)
-    local bucket = hookDispatchers[kind]
+    local bucket = dispatchers[kind]
     local dispatcher = bucket[path]
     if not dispatcher then
         dispatcher = {
@@ -132,7 +125,7 @@ local function pruneDispatcher(kind, path, dispatcher)
     -- Wrap/context dispatchers are also the installed ModUtil wrapper anchors.
     -- Keep those path entries so a future registration reuses the same wrapper.
     if kind == "override" and not dispatcher.installed then
-        hookDispatchers.override[path] = nil
+        dispatchers.override[path] = nil
     end
 end
 
@@ -141,8 +134,8 @@ local function pruneOwnerSlot(ownerId)
         return
     end
 
-    for _, dispatchers in pairs(hookDispatchers) do
-        for _, dispatcher in pairs(dispatchers) do
+    for _, dispatcherBucket in pairs(dispatchers) do
+        for _, dispatcher in pairs(dispatcherBucket) do
             if dispatcherHasOwnerHandlers(dispatcher, ownerId) then
                 return
             end
@@ -287,7 +280,7 @@ function refreshOverrideDispatcher(dispatcher)
 end
 
 local function refreshOverrideDispatchersForOwner(ownerId)
-    for _, dispatcher in pairs(hookDispatchers.override) do
+    for _, dispatcher in pairs(dispatchers.override) do
         if dispatcher.handlers and dispatcher.handlers[ownerId] then
             refreshOverrideDispatcher(dispatcher)
         end

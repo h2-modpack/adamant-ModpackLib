@@ -235,30 +235,34 @@ boundary:
 - domain-named implementation files, such as `current_run_cache.lua`:
   stateless backend logic and backend-owned validation. Avoid generic names
   like `core.lua`.
-- `adapter_author.lua`: host-bound adapter factories. These validate
-  managed-host access,
-  extract host-owned state such as `host.getHostId()`, and pass explicit state
-  into the backend.
-- `adapter_host.lua`: internal lifecycle-host adapter when Lib runtime code
+- `adapters/[consumer]_[feature].lua`: consumer-facing adapter for one
+  specific capability surface. The consumer prefix is `author`, `host`,
+  `system`, `framework`, or `public`; the feature suffix should say what is
+  being adapted, such as `author_declarations.lua`, `host_install.lua`, or
+  `framework_overlays.lua`.
+- Author adapters validate managed-host access, extract host-owned data such
+  as `host.getHostId()`, and pass explicit state into the backend.
+- Host adapters are internal lifecycle-host adapters for Lib runtime code that
   still needs host-shaped service methods such as `applyForHost(...)`. These
-  should prove managed-host access, unpack host state, and delegate to explicit
+  should prove managed-host access, unpack host records, and delegate to explicit
   backend functions.
-- `adapter_public.lua`: remaining direct `lib.*` bridge when a capability still
+- Public adapters are remaining direct `lib.*` bridges when a capability still
   exposes public functions. Public adapters should validate at the public call
   boundary or delegate to a backend that does.
-- `adapter_framework.lua`: Framework-runtime adapter when Framework needs a
-  helper that normal module authors should not receive directly.
-- the subsystem entrypoint, such as `cache.lua`: composition only. It
+- Framework adapters are Framework-runtime surfaces for helpers that normal
+  module authors should not receive directly.
+- the subsystem entrypoint, such as `00_init.lua`: composition only. It
   imports the backend and adapter, builds the audience bundle, and wires runtime
   dependencies.
 
 Adapters should not duplicate backend validation. Their job is to prove and
 unwrap the host; backend code owns subsystem semantics. Mutations are the
-reference example for a capability that needs both `adapter_author.lua` and
-`adapter_host.lua`; integrations are the reference example for a capability
-that needs all three adapter audiences. Hooks are the reference example for a
-capability with host/author adapters plus an internal physical-install service
-used by another subsystem.
+reference example for a capability that needs both `adapters/author_patch.lua`
+and `adapters/host_lifecycle.lua`; integrations are the reference example for a
+capability that needs both `adapters/author_integrations.lua` and
+`adapters/host_install.lua`. Hooks are the reference example for a capability
+with host/author/system adapters plus an internal ModUtil-install service used
+by another subsystem.
 
 Identity boundary:
 
@@ -361,7 +365,7 @@ host.hooks.wrap("SomeGameFunction", function(base, ...)
 end)
 ```
 
-`host.store` should be an author-facing facade, not the raw managed store. The
+`host.store` should be an author-facing facade, not the raw persistent state. The
 facade can enforce phase and owner rules at method call time. This allows common
 Lua patterns like:
 
@@ -378,29 +382,31 @@ Draw is a Lib-owned invocation window.
 The `ModuleHost` receives the Framework-facing call:
 
 ```lua
-moduleHost.drawTab(imgui)
+moduleHost.drawTab()
 ```
 
-It should open the author host's draw phase, invoke the authored callback, and
+It should open the module's draw phase, invoke the authored callback, and
 always close the phase:
 
 ```lua
-authorHost:_beginDraw(imgui)
-local ok, result = pcall(drawTab, authorHost)
-local closeOk, closeErr = pcall(authorHost._endDraw, authorHost)
+drawPhase.begin(host)
+local ok, result = pcall(drawTab, draw, data, actions, services)
+local closeOk, closeErr = pcall(drawPhase.end, host)
 ```
 
 During draw, these surfaces are available:
 
-- `host.imgui`
-- `host.widgets`
-- `host.nav`
-- `host.session`
+- `draw.imgui`
+- `draw.widgets`
+- `draw.nav`
+- `data`
+- `actions`
+- `services`
 
 After draw, those surfaces reject or become inert with clear phase errors.
 
-This keeps the author API simple without pretending ImGui draw stack state is
-globally valid.
+This keeps the author API simple without pretending module draw/data/action
+objects are globally valid outside the draw invocation.
 
 ## Hooks
 
@@ -421,7 +427,7 @@ end)
 The author no longer calls `lib.hooks.*`. Ownership is structural because the
 hook registrar is already bound to the module host.
 
-Author hook declarations are staged on managed host state until activation.
+Author hook declarations are staged on managed host records until activation.
 The hook declaration backend should only build plain declaration records; it
 should not keep a host-keyed weak registry of staged author declarations.
 
@@ -449,7 +455,7 @@ end)
 Overlay projection callbacks may keep their projection context. That context is
 already event-specific and intentionally narrower than the author host.
 
-Author overlay declarations are staged on managed host state until activation.
+Author overlay declarations are staged on managed host records until activation.
 The declaration backend should only build plain declaration records; the host
 adapter translates `host.getHostId()` into the owner id consumed by retained
 overlay internals.
@@ -569,7 +575,7 @@ domains. Cache values are not staged, hashed, profiled, or reset by Lib.
 The backend is internal service code. The module-author surface is only the
 host-bound facade; there is no global `lib.cache.*` author API.
 
-The host facade receives the managed host, uses private host state only to
+The host facade receives the managed host, uses private host records only to
 verify that the object is Lib-managed, then reads runtime ownership from
 `host.getHostId()`. The host adapter translates that module runtime identity
 into the `ownerId` passed to the backend. The backend only sees an owner key
@@ -680,7 +686,7 @@ host facade over stateless Lib backends.
 ## Non-Goals
 
 - Do not make Lib capability modules stateful global services.
-- Do not expose raw managed store/session objects directly through host.
+- Do not expose raw persistent-state/session objects directly through host.
 - Do not make `host.read(...)` choose session or store by phase.
 - Do not flatten all capability methods directly onto host.
 - Do not turn `ModuleHost` into the author capability surface.

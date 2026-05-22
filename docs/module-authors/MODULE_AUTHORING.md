@@ -4,7 +4,7 @@ This guide describes the supported module contract in Lib:
 - namespaced public API
 - managed storage and explicit draw/runtime data surfaces
 - immediate-mode widgets
-- direct draw-function authoring through `drawTab(draw, data, actions, services)`
+- direct draw-function authoring through `drawTab(draw, state, actions, services)`
 
 ## Lib Surface
 
@@ -44,20 +44,20 @@ Use focused capability guides for feature-level authoring details:
 Typical coordinated module:
 
 ```lua
-local function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("EnabledFlag"), {
+local function drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("EnabledFlag"), {
         label = "Enabled",
     })
 
-    draw.widgets.dropdown(data.get("Mode"), {
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 180,
     })
 end
 
-local function drawQuickContent(draw, data, actions, services)
-    draw.widgets.dropdown(data.get("Mode"), {
+local function drawQuickContent(draw, state, actions, services)
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
         controlWidth = 140,
@@ -131,10 +131,10 @@ end
 
 Callback argument order follows a stable convention:
 - work surface first when a callback has one, such as `draw` for draw callbacks or `plan` for patch mutation callbacks
-- state/context handles next, using `data`, `actions`, and `services` for draw and `host` for runtime/module context
+- state/context handles next, using `state`, `actions`, and `services` for draw and `host` for runtime/module context
 - `store` last when persisted runtime values are needed
 
-Examples: `drawTab(draw, data, actions, services)`, local
+Examples: `drawTab(draw, state, actions, services)`, local
 `registerHooks(host, store)` helpers, local overlay declaration helpers that
 call `host.overlays.*`, and
 `host.mutation.patch(function(plan, host, store) ... end)`.
@@ -172,14 +172,14 @@ For the focused state guide, read [capabilities/MANAGED_STATE.md](capabilities/M
 
 Module construction creates two author-facing state handles:
 
-- draw code receives `data` for staged UI reads and writes
+- draw code receives `state` for staged UI reads and writes
 - runtime callbacks receive `store` for committed gameplay reads
 
 Raw Chalk config should stay local to `main.lua`. Host/framework plumbing owns
 commit, reload, hash/profile import, and config flush behavior.
 
 Storage roots live on `definition.storage`. Normal roots persist and hash by
-default. Use `persist = false, hash = false` for transient session-only UI
+default. Use `persist = false, hash = false` for transient staged-only UI
 state. Runtime markers should prefer `host.cache.persistent.*`.
 
 Lib injects `Enabled` and `DebugMode` into every prepared definition. Do not
@@ -214,7 +214,7 @@ Lib widgets cover common controls. Use raw ImGui for custom structure and layout
 
 Framework Quick Setup reads:
 - coordinator `drawPackQuickContent(ctx)`
-- module `drawQuickContent(draw, data, actions, services)`
+- module `drawQuickContent(draw, state, actions, services)`
 
 `drawQuickContent` is a Framework Quick Setup hook.
 
@@ -257,10 +257,10 @@ code normally uses the author host returned by `lib.createModule(...)`.
 
 Framework behavior:
 - each coordinated module gets its own top-level tab
-- `ModuleHost.drawTab(imgui)` is the normal rendering contract
-- `ModuleHost.drawQuickContent(imgui)` participates only in Quick Setup
-- authored draw callbacks receive `drawTab(draw, data, actions, services)` and
-  `drawQuickContent(draw, data, actions, services)`
+- `ModuleHost.drawTab()` is the normal rendering contract
+- `ModuleHost.drawQuickContent()` participates only in Quick Setup
+- authored draw callbacks receive `drawTab(draw, state, actions, services)` and
+  `drawQuickContent(draw, state, actions, services)`
 
 ## Fallback UI Modules
 
@@ -296,7 +296,7 @@ Notes:
 - the fallback UI window includes built-in:
   - `Enabled`
   - `Debug Mode`
-  - `Resync Session`
+  - `Resync State`
 - the fallback UI window renders `drawTab`; Framework Quick Setup renders `drawQuickContent`
 
 ## Complete Example
@@ -367,32 +367,32 @@ local function init()
     host.activate()
 end
 
-function drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+function drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
         tooltip = "Turns the feature logic on for this module.",
     })
 
-    draw.widgets.dropdown(data.get("Mode"), {
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 180,
     })
 
-    draw.widgets.inputText(data.get("FilterText"), {
+    draw.widgets.inputText(state.get("FilterText"), {
         label = "Filter",
         controlWidth = 180,
     })
 
     draw.imgui.Separator()
     draw.widgets.text("Packed Flags")
-    draw.widgets.packedCheckboxList(data.get("PackedFlags"), {
+    draw.widgets.packedCheckboxList(state.get("PackedFlags"), {
         optionsPerLine = 2,
     })
 end
 
-function drawQuickContent(draw, data, actions, services)
-    draw.widgets.dropdown(data.get("Mode"), {
+function drawQuickContent(draw, state, actions, services)
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },
         controlWidth = 140,
@@ -420,12 +420,12 @@ end)
 Notes on the example:
 - `config` and `reload` stay local to `main.lua`
 - `store` is passed to runtime hooks and mutation callbacks
-- draw callbacks receive staged UI data through the `data` argument
+- draw callbacks receive staged UI state through the `state` argument
 - `host.activate()` owns live coordinated host registration
 - `host.hooks.*` declarations happen before `host.activate()`
 - `host.overlays.*` declarations happen before `host.activate()`
 - `host.fallbackUi.attachGuiOnce(...)` keeps ROM GUI registration in module context without stacking across reloads
 - `drawTab` uses raw ImGui for structure and `draw.widgets.*` / `draw.nav.*` for Lib draw helpers
 - `drawQuickContent` is optional
-- packed widgets use `StorageField` values produced by the draw `data`
+- packed widgets use `StorageField` values produced by the draw `state`
   argument

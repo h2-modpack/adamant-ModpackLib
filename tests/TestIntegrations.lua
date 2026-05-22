@@ -13,8 +13,8 @@ local function createIntegrationHost(harness, pluginGuid)
     local host, authorHost = harness.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = state.store,
-        session = state.session,
+        persistentState = state.persistentState,
+        stagedState = state.stagedState,
         drawTab = function() end,
     })
     return host, authorHost
@@ -78,7 +78,7 @@ function TestIntegrations:testRegistryStoresLifecycleOwnerIdAndInstallToken()
         end,
     })
 
-    local bucket = self.harness.runtime.integrations.registry[integrationId]
+    local bucket = self.harness.registry.integrations.providers[integrationId]
 
     lu.assertEquals(bucket.ownerIds[providerId], pluginGuid)
     lu.assertEquals(type(bucket.ownerTokens[providerId]), "table")

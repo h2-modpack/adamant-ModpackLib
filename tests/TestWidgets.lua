@@ -3,7 +3,7 @@ local createWidgetHarness = require("tests/harness/create_widget_harness")
 
 TestWidgets = {}
 
-local function createWritableSession(values, schemas)
+local function createWritableStagedState(values, schemas)
     return {
         view = values,
         read = function(alias)
@@ -26,11 +26,25 @@ local function Field(h, owner, alias)
     return h.createField(owner, alias)
 end
 
+local function UseImgui(h, imgui)
+    for key in pairs(h.rom.ImGui) do
+        h.rom.ImGui[key] = nil
+    end
+    for key, value in pairs(imgui) do
+        h.rom.ImGui[key] = value
+    end
+end
+
+local function DrawWidgets(h, imgui)
+    UseImgui(h, imgui)
+    return h.uiDraw.get().widgets
+end
+
 function TestWidgets:testPlainDropdownUsesNativePreview()
     local imgui, state = self.h.makeDropdownImgui()
-    local session = self.h.createValueSession(2)
+    local stagedState = self.h.createValueStagedState(2)
 
-    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -48,9 +62,9 @@ end
 
 function TestWidgets:testLabeledControlFallsBackToGapWhenLabelWidthIsTooSmall()
     local imgui, state = self.h.makeDropdownImgui()
-    local session = self.h.createValueSession(2)
+    local stagedState = self.h.createValueStagedState(2)
 
-    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
         label = "Long Label",
         values = { 1, 2 },
         labelWidth = 4,
@@ -62,9 +76,9 @@ end
 
 function TestWidgets:testInputTextHonorsLabelWidth()
     local imgui, state = self.h.makeDropdownImgui()
-    local session = self.h.createValueSession("abc")
+    local stagedState = self.h.createValueStagedState("abc")
 
-    self.h.widgets.bind(imgui).inputText(Field(self.h, session, "Filter"), {
+    DrawWidgets(self.h, imgui).inputText(Field(self.h, stagedState, "Filter"), {
         label = "Filter",
         labelWidth = 90,
         maxLen = 64,
@@ -76,9 +90,9 @@ end
 
 function TestWidgets:testColoredDropdownUsesCustomPreview()
     local imgui, state = self.h.makeDropdownImgui()
-    local session = self.h.createValueSession(2)
+    local stagedState = self.h.createValueStagedState(2)
 
-    self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
         label = "Mode",
         values = { 1, 2 },
         displayValues = {
@@ -105,7 +119,7 @@ function TestWidgets:testTextColorUsesDefaultAlphaWithoutAllocatingNormalizedCol
         state.coloredText = { r = r, g = g, b = b, a = a, text = text }
     end
 
-    self.h.widgets.bind(imgui).text("Warning", {
+    DrawWidgets(self.h, imgui).text("Warning", {
         color = { 0.8, 0.2, 0.1 },
     })
 
@@ -126,9 +140,9 @@ function TestWidgets:testCheckboxColorUsesDefaultAlphaWithoutDrawClosure()
         state.checkboxLabel = label
         return current, false
     end
-    local session = self.h.createValueSession(true)
+    local stagedState = self.h.createValueStagedState(true)
 
-    self.h.widgets.bind(imgui).checkbox(Field(self.h, session, "Enabled"), {
+    DrawWidgets(self.h, imgui).checkbox(Field(self.h, stagedState, "Enabled"), {
         color = { 0.1, 0.2, 0.3 },
     })
 
@@ -139,10 +153,10 @@ end
 
 function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
     local imgui = self.h.makeDropdownImgui()
-    local session = self.h.createValueSession(3)
+    local stagedState = self.h.createValueStagedState(3)
 
     local ok = pcall(function()
-        self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
+        DrawWidgets(self.h, imgui).stepper(Field(self.h, stagedState, "Runs"), {
             label = "Runs",
             min = 1,
             max = 10,
@@ -155,9 +169,9 @@ end
 
 function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
     local imgui, clickedButtons = self.h.makeStepperImgui("+##Runs_inc")
-    local session = self.h.createValueSession(3)
+    local stagedState = self.h.createValueStagedState(3)
 
-    local changed = self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
+    local changed = DrawWidgets(self.h, imgui).stepper(Field(self.h, stagedState, "Runs"), {
         label = "Runs",
         min = 1,
         max = 10,
@@ -165,17 +179,17 @@ function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Runs"), 4)
+    lu.assertEquals(stagedState.read("Runs"), 4)
     lu.assertEquals(clickedButtons[1], "-##Runs_dec")
     lu.assertEquals(clickedButtons[2], "+##Runs_inc")
 end
 
-function TestWidgets:testPackedDropdownResolvesChildrenFromSessionSchema()
-    local session = self.h.createPackedSession()
-    session.write("Second", true)
+function TestWidgets:testPackedDropdownResolvesChildrenFromStagedStateSchema()
+    local stagedState = self.h.createPackedStagedState()
+    stagedState.write("Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
+    DrawWidgets(self.h, imgui).packedDropdown(stagedState.get("Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -208,12 +222,12 @@ function TestWidgets:testBoundPackedDropdownAcceptsTableRowStorageField()
             },
         },
     })
-    local _, session = self.h.createModuleState({}, definition)
-    local rows = session.table("Rows")
+    local _, stagedState = self.h.createModuleState({}, definition)
+    local rows = stagedState.table("Rows")
     rows:write(1, "Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui).packedDropdown(rows:get(1, "Packed"), {
+    DrawWidgets(self.h, imgui).packedDropdown(rows:get(1, "Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -224,12 +238,12 @@ function TestWidgets:testBoundPackedDropdownAcceptsTableRowStorageField()
     lu.assertEquals(state.customPreviewText, "Second Choice")
 end
 
-function TestWidgets:testBoundWidgetsAcceptSessionGetStorageField()
-    local session = self.h.createPackedSession()
-    session.write("Second", true)
+function TestWidgets:testDrawWidgetsAcceptStagedStateGetStorageField()
+    local stagedState = self.h.createPackedStagedState()
+    stagedState.write("Second", true)
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
+    DrawWidgets(self.h, imgui).packedDropdown(stagedState.get("Packed"), {
         label = "Packed",
         displayValues = {
             Second = "Second Choice",
@@ -261,30 +275,30 @@ function TestWidgets:testBoundPackedChoiceAliasAcceptsTableRowStorageField()
             },
         },
     })
-    local _, session = self.h.createModuleState({}, definition)
-    local rows = session.table("Rows")
+    local _, stagedState = self.h.createModuleState({}, definition)
+    local rows = stagedState.table("Rows")
     rows:write(1, "Second", true)
     local imgui = self.h.makeDropdownImgui()
 
-    local selected = self.h.widgets.bind(imgui).getPackedChoiceAlias(rows:get(1, "Packed"))
+    local selected = DrawWidgets(self.h, imgui).getPackedChoiceAlias(rows:get(1, "Packed"))
 
     lu.assertEquals(selected, "Second")
 end
 
-function TestWidgets:testBoundWidgetsRejectUnbrandedTableTargets()
+function TestWidgets:testDrawWidgetsRejectUnbrandedTableTargets()
     local imgui = self.h.makeDropdownImgui()
-    local bound = self.h.widgets.bind(imgui)
+    local drawWidgets = DrawWidgets(self.h, imgui)
 
     lu.assertErrorMsgContains("expected StorageField", function()
-        bound.dropdown({ alias = "Packed" }, {})
+        drawWidgets.dropdown({ alias = "Packed" }, {})
     end)
 end
 
 function TestWidgets:testPackedDropdownSupportsExplicitControlId()
-    local session = self.h.createPackedSession()
+    local stagedState = self.h.createPackedStagedState()
     local imgui, state = self.h.makeDropdownImgui()
 
-    self.h.widgets.bind(imgui).packedDropdown(session.get("Packed"), {
+    DrawWidgets(self.h, imgui).packedDropdown(stagedState.get("Packed"), {
         id = "Packed_Row_2",
         label = "Packed",
     })
@@ -308,8 +322,8 @@ function TestWidgets:testButtonRejectsRawActionKey()
 end
 
 function TestWidgets:testButtonStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("recording")
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("recording")
     local clickedLabels = {}
     local imgui = self.h.makeDropdownImgui()
     imgui.Button = function(label)
@@ -329,27 +343,27 @@ function TestWidgets:testButtonStagesDrawActionRef()
 end
 
 function TestWidgets:testCheckboxStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("enabled")
-    local session = self.h.createValueSession(false)
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("enabled")
+    local stagedState = self.h.createValueStagedState(false)
     local imgui = self.h.makeDropdownImgui()
     imgui.Checkbox = function(_, current)
         return not current, true
     end
 
-    local changed = self.h.widgets.bind(imgui).checkbox(Field(self.h, session, "Enabled"), {
+    local changed = DrawWidgets(self.h, imgui).checkbox(Field(self.h, stagedState, "Enabled"), {
         action = action,
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Enabled"), true)
+    lu.assertEquals(stagedState.read("Enabled"), true)
     lu.assertEquals(action:read(), true)
 end
 
 function TestWidgets:testDropdownStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("mode")
-    local session = self.h.createValueSession(1)
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("mode")
+    local stagedState = self.h.createValueStagedState(1)
     local imgui = self.h.makeDropdownImgui()
     imgui.BeginCombo = function()
         return true
@@ -359,7 +373,7 @@ function TestWidgets:testDropdownStagesDrawActionRef()
     end
     imgui.EndCombo = function() end
 
-    local changed = self.h.widgets.bind(imgui).dropdown(Field(self.h, session, "Mode"), {
+    local changed = DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
         values = { 1, 2 },
         displayValues = {
             [1] = "One",
@@ -369,37 +383,37 @@ function TestWidgets:testDropdownStagesDrawActionRef()
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Mode"), 2)
+    lu.assertEquals(stagedState.read("Mode"), 2)
     lu.assertEquals(action:read(), 2)
 end
 
 function TestWidgets:testStepperStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("runs")
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("runs")
     local imgui = self.h.makeStepperImgui("+##Runs_inc")
-    local session = self.h.createValueSession(3)
+    local stagedState = self.h.createValueStagedState(3)
 
-    local changed = self.h.widgets.bind(imgui).stepper(Field(self.h, session, "Runs"), {
+    local changed = DrawWidgets(self.h, imgui).stepper(Field(self.h, stagedState, "Runs"), {
         min = 1,
         max = 10,
         action = action,
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Runs"), 4)
+    lu.assertEquals(stagedState.read("Runs"), 4)
     lu.assertEquals(action:read(), 4)
 end
 
 function TestWidgets:testRadioStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("mode")
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("mode")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
         return label == "Two##Mode_2"
     end
-    local session = self.h.createValueSession(1)
+    local stagedState = self.h.createValueStagedState(1)
 
-    local changed = self.h.widgets.bind(imgui).radio(Field(self.h, session, "Mode"), {
+    local changed = DrawWidgets(self.h, imgui).radio(Field(self.h, stagedState, "Mode"), {
         values = { 1, 2 },
         displayValues = {
             [1] = "One",
@@ -409,34 +423,34 @@ function TestWidgets:testRadioStagesDrawActionRef()
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Mode"), 2)
+    lu.assertEquals(stagedState.read("Mode"), 2)
     lu.assertEquals(action:read(), 2)
 end
 
 function TestWidgets:testPackedRadioStagesSelectedChildAction()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("packed")
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("packed")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
         return label == "First##Packed_2"
     end
-    local session = self.h.createPackedSession()
+    local stagedState = self.h.createPackedStagedState()
 
-    local changed = self.h.widgets.bind(imgui).packedRadio(session.get("Packed"), {
+    local changed = DrawWidgets(self.h, imgui).packedRadio(stagedState.get("Packed"), {
         action = action,
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("First"), true)
-    lu.assertEquals(session.read("Second"), false)
+    lu.assertEquals(stagedState.read("First"), true)
+    lu.assertEquals(stagedState.read("Second"), false)
     lu.assertEquals(action:read(), "First")
 end
 
 function TestWidgets:testSteppedRangeStagesDrawActionRef()
-    local actionState = self.h.moduleState.createActionState()
-    local action = self.h.moduleState.createDrawActions(actionState).get("range")
+    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local action = self.h.uiActions.create(actionBuffer).get("range")
     local imgui = self.h.makeStepperImgui("+##Max_max_inc")
-    local session = createWritableSession({
+    local stagedState = createWritableStagedState({
         Min = 2,
         Max = 4,
     }, {
@@ -444,9 +458,9 @@ function TestWidgets:testSteppedRangeStagesDrawActionRef()
         Max = { alias = "Max", type = "int" },
     })
 
-    local changed = self.h.widgets.bind(imgui).steppedRange(
-        Field(self.h, session, "Min"),
-        Field(self.h, session, "Max"),
+    local changed = DrawWidgets(self.h, imgui).steppedRange(
+        Field(self.h, stagedState, "Min"),
+        Field(self.h, stagedState, "Max"),
         {
         min = 1,
         max = 10,
@@ -454,7 +468,7 @@ function TestWidgets:testSteppedRangeStagesDrawActionRef()
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(session.read("Min"), 2)
-    lu.assertEquals(session.read("Max"), 5)
+    lu.assertEquals(stagedState.read("Min"), 2)
+    lu.assertEquals(stagedState.read("Max"), 5)
     lu.assertEquals(action:read(), { min = 2, max = 5 })
 end

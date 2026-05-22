@@ -200,7 +200,7 @@ end
 function TestCache:testAuthorCurrentRunCacheRejectsUnmanagedHost()
     local host = self.harness.cacheBundle.author.create({})
 
-    lu.assertErrorMsgContains("expected managed module host state", function()
+    lu.assertErrorMsgContains("expected managed module host record", function()
         host.currentRun.get("run")
     end)
 end

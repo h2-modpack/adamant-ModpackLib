@@ -67,14 +67,4 @@ function nav.verticalTabs(imgui, opts)
     return activeKey
 end
 
----@param imgui table
----@return BoundNav
-function nav.bind(imgui)
-    return {
-        verticalTabs = function(opts)
-            return nav.verticalTabs(imgui, opts)
-        end,
-    }
-end
-
 return nav

@@ -21,6 +21,8 @@ function TestCoordinator:testNotRegisteredByDefault()
     lu.assertFalse(self.coordinator.isRegistered("test-pack"))
     lu.assertFalse(self.coordinator.hasRegistrations())
     lu.assertNil(self.coordinator.getConfig("test-pack"))
+    lu.assertEquals(type(self.harness.registry.coordinators.configs), "table")
+    lu.assertEquals(type(self.harness.registry.coordinators.rebuilds), "table")
 end
 
 function TestCoordinator:testRegisterAddsPackConfig()
@@ -109,8 +111,8 @@ function TestCoordinator:testRegisterRebuildRejectsInvalidCallback()
 end
 
 function TestCoordinator.testCoordinatorRegistrySurvivesLibReload()
-    local runtime = {}
-    local first = createLibHarness({ runtime = runtime })
+    local runtimeRoot = {}
+    local first = createLibHarness({ runtime = runtimeRoot })
     local rebuildCount = 0
 
     first.coordinator.register("pack-a", { ModEnabled = false })
@@ -119,7 +121,7 @@ function TestCoordinator.testCoordinatorRegistrySurvivesLibReload()
         return reason.kind == "test"
     end)
 
-    local second = createLibHarness({ runtime = runtime })
+    local second = createLibHarness({ runtime = runtimeRoot })
 
     lu.assertTrue(second.coordinator.isRegistered("pack-a"))
     lu.assertEquals(second.coordinator.getConfig("pack-a"), { ModEnabled = false })

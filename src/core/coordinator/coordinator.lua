@@ -1,27 +1,26 @@
 local deps = ...
 
 local logging = deps.logging
-local runtime = deps.runtime
+local coordinatorRegistry = deps.coordinatorRegistry
 
 -- Hot-reload-stable coordinator registries.
-runtime.coordinator = runtime.coordinator or {}
-runtime.coordinator.coordinators = runtime.coordinator.coordinators or {}
-runtime.coordinator.rebuilds = runtime.coordinator.rebuilds or {}
+coordinatorRegistry.configs = coordinatorRegistry.configs or {}
+coordinatorRegistry.rebuilds = coordinatorRegistry.rebuilds or {}
 
 local coordinator = {}
-local coordinators = runtime.coordinator.coordinators
-local coordinatorRebuilds = runtime.coordinator.rebuilds
+local configs = coordinatorRegistry.configs
+local rebuilds = coordinatorRegistry.rebuilds
 
 local function isRegistered(packId)
-    return coordinators[packId] ~= nil
+    return configs[packId] ~= nil
 end
 
 local function hasRegistrations()
-    return next(coordinators) ~= nil
+    return next(configs) ~= nil
 end
 
 local function getConfig(packId)
-    return coordinators[packId]
+    return configs[packId]
 end
 
 local function register(packId, config)
@@ -43,12 +42,12 @@ local function register(packId, config)
             "coordinator.register: config.ModEnabled must be a boolean"
         )
     end
-    coordinators[packId] = config
+    configs[packId] = config
 end
 
 local function registerRebuild(packId, callback)
     if callback == nil then
-        coordinatorRebuilds[packId] = nil
+        rebuilds[packId] = nil
         return
     end
 
@@ -58,11 +57,11 @@ local function registerRebuild(packId, callback)
             "coordinator.registerRebuild: callback must be a function when provided"
         )
     end
-    coordinatorRebuilds[packId] = callback
+    rebuilds[packId] = callback
 end
 
 local function requestRebuild(packId, reason)
-    local callback = packId and coordinatorRebuilds[packId] or nil
+    local callback = packId and rebuilds[packId] or nil
     if callback == nil then
         return false
     end

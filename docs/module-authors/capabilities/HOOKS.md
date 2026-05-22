@@ -79,8 +79,7 @@ if host.isEnabled() and store.get("FeatureEnabled"):read() then
 end
 ```
 
-Do not read draw-session state inside hook callbacks. Draw sessions are staged
-UI state; hooks run against committed runtime behavior.
+Do not read draw-state values inside hook callbacks. Draw state is staged UI state; hooks run against committed runtime behavior.
 
 ## Wrap vs Override
 
@@ -95,7 +94,7 @@ reason about.
 
 - Do not call `host.hooks.*` after `host.activate()`.
 - Do not use random keys for keyed hooks; keys are part of hook identity.
-- Do not capture staged UI session state in runtime hooks.
+- Do not capture staged UI state in runtime hooks.
 - Do not use hooks for declarative table edits that fit mutation plans.
 
 See also:

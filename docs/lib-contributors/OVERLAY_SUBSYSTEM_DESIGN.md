@@ -68,9 +68,9 @@ Lib internals use private system scopes, while Framework consumes the scoped
 runtime overlay facade:
 
 ```lua
-local runtime = lib.createFrameworkRuntime("adamant-ModpackFramework")
+local frameworkRuntime = lib.createFrameworkRuntime("adamant-ModpackFramework")
 
-runtime.overlays.define("pack", "hud", function(overlays)
+frameworkRuntime.overlays.define("pack", "hud", function(overlays)
     overlays.createLine("hash.marker", spec)
 end)
 ```

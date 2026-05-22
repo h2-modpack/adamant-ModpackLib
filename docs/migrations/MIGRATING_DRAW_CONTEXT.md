@@ -25,14 +25,14 @@ function ui.drawQuickContent(draw)
 end
 ```
 
-The current target callback shape separates rendering, staged data, transient
+The current target callback shape separates rendering, staged state, transient
 actions, and draw-safe services:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
+function ui.drawTab(draw, state, actions, services)
 end
 
-function ui.drawQuickContent(draw, data, actions, services)
+function ui.drawQuickContent(draw, state, actions, services)
 end
 ```
 
@@ -59,21 +59,21 @@ Lib creates the context at the host draw boundary for each render call.
 ```lua
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table
----@field widgets AdamantModpackLib.BoundWidgets
----@field nav AdamantModpackLib.BoundNav
+---@field widgets AdamantModpackLib.DrawWidgets
+---@field nav AdamantModpackLib.DrawNav
 ```
 
-`draw.widgets` is the bound widget surface. Widget calls no longer repeat
+`draw.widgets` is the draw widget surface. Widget calls no longer repeat
 `imgui`, while value widgets receive explicit storage refs from `data`:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
-    draw.widgets.dropdown(data.get("Mode"), {
+function ui.drawTab(draw, state, actions, services)
+    draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Default", "Custom" },
     })
 
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 
@@ -81,7 +81,7 @@ function ui.drawTab(draw, data, actions, services)
 end
 ```
 
-`draw.nav` is the bound navigation surface. Navigation calls no longer repeat
+`draw.nav` is the draw navigation surface. Navigation calls no longer repeat
 `imgui`:
 
 ```lua
@@ -107,7 +107,7 @@ plumbing:
 
 ```lua
 subPanel.draw(draw)
-draw.widgets.checkbox(data.get("FeatureEnabled"), opts)
+draw.widgets.checkbox(state.get("FeatureEnabled"), opts)
 ```
 
 This intentionally differs from a `createDraw(...)` factory. `imgui`, staged
@@ -173,18 +173,18 @@ cleaner:
 The draw-context widget surface uses storage fields, not session-like table
 handles.
 
-Root widgets use refs from the draw `data` object:
+Root widgets use refs from the draw `state` object:
 
 ```lua
-draw.widgets.checkbox(data.get("FeatureEnabled"), opts)
-draw.widgets.dropdown(data.get("Mode"), opts)
-draw.widgets.packedCheckboxList(data.get("GodPool"), opts)
+draw.widgets.checkbox(state.get("FeatureEnabled"), opts)
+draw.widgets.dropdown(state.get("Mode"), opts)
+draw.widgets.packedCheckboxList(state.get("GodPool"), opts)
 ```
 
 Table-backed widgets use a `StorageField` produced by the table API:
 
 ```lua
-local bans = data.get("ConfigurableBanPools"):get(index, "BanPool")
+local bans = state.get("ConfigurableBanPools"):get(index, "BanPool")
 
 draw.widgets.packedCheckboxList(bans, opts)
 draw.widgets.packedDropdown(bans, opts)
@@ -203,7 +203,7 @@ table alias, positional row index, and cell alias.
 Bound widgets accept only these target forms:
 
 - `StorageField`: explicit resolved storage field from
-  `data.get(alias)` or `data.get(tableAlias):get(rowIndex, cellAlias)`.
+  `state.get(alias)` or `state.get(tableAlias):get(rowIndex, cellAlias)`.
 
 They do not accept arbitrary table-shaped targets, parse scoped path strings,
 root alias strings, or expose a public rebinding API. Future path support can
@@ -211,13 +211,13 @@ live in storage APIs and resolve to `StorageField` before widgets see it.
 
 Implementation audit checklist:
 
-- Add `data.get(alias)` for explicit root storage fields.
+- Add `state.get(alias)` for explicit root storage fields.
 - Add `tableHandle:get(rowIndex, alias)` for table row storage fields.
 - Route bound widget targets through one `StorageField` normalization path.
 - Keep widget binding scoped to the current `imgui` only.
 - Replace loose `(handle, alias)` widget call sites with named domain helpers
   that return `StorageField` values.
-- Root widget calls should pass `data.get(alias)` refs.
+- Root widget calls should pass `state.get(alias)` refs.
 
 ## Migration Steps
 
@@ -236,8 +236,8 @@ end
 After:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
-    draw.widgets.checkbox(data.get("FeatureEnabled"), {
+function ui.drawTab(draw, state, actions, services)
+    draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 end
@@ -281,7 +281,7 @@ hot reloads, or module activation boundaries.
 - Keep `drawTab = ui.drawTab` and `drawQuickContent = ui.drawQuickContent` in
   module creation.
 - Do not introduce `createDraw(...)` for normal module authoring.
-- Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `data`.
+- Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `state`.
 - Use `draw.nav.*` for Lib navigation helpers that bind to `imgui`.
 - Use `draw.imgui` for raw ImGui layout calls.
 - Use `data` for direct staged-state access.

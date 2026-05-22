@@ -22,12 +22,12 @@ All notable changes to this project will be documented in this file.
 - `lib.createFrameworkRuntime(...)` now requires the Framework plugin guid, while Framework overlays take the pack id at definition time to scope retained owners.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
-- The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetToDefaults(...)` or draw-scoped `data.resetToDefaults(...)`.
+- The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetAll(...)` or draw-scoped `data.resetAll(...)`.
 - Cache is now exposed to module authors through `host.cache.currentRun.*`; the old global cache surface has been removed.
 - Added `host.cache.persistent.*` for flat scalar runtime markers that persist outside storage/session/hash/profile flows.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw value widgets now target `StorageField` values from `data.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
-- Draw `data` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetToDefaults(opts?)`; older session-shaped helpers such as `data.view`, `data.table`, `data.field`, and schema access have been removed.
+- Draw `data` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetAll(opts?)`; older session-shaped helpers such as `data.view`, `data.table`, `data.field`, and schema access have been removed.
 - Module authors now receive a narrowed runtime `store` with `get(alias)` and `read(alias, ...)`; direct table/schema helpers remain internal Lib plumbing.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
@@ -70,11 +70,11 @@ All notable changes to this project will be documented in this file.
 - `createModuleHost(...)` now owns live-host publication and requires `drawTab`.
 - Public module host surface was narrowed around stable host accessors and behavior calls; direct raw definition access was removed.
 - `createModuleHost(...)` and fallback UI now require an explicit plugin guid captured at module load time.
-- Manual lifecycle hooks now receive the active author host and managed store as `apply(host, store)` and `revert(host, store)`.
+- Manual lifecycle hooks now receive the active author host and runtime store as `apply(host, store)` and `revert(host, store)`.
 - Mutation lifecycle state is tracked by stable module identity where available, making reload/reapply behavior more robust.
 - Host startup sync now reverts active tracked mutation state when a module reloads disabled.
 - Store creation now requires prepared definitions with explicit storage.
-- Runtime-only storage aliases are excluded from session staging, profile/hash surfaces, and reset-to-defaults flows.
+- Runtime-only storage aliases are excluded from session staging, profile/hash surfaces, and whole-session reset flows.
 - Host `writeAndFlush(...)` and `flush()` now notify `onSettingsCommitted` after successful dirty commits.
 - The fallback HUD marker now participates in the shared overlay layout instead of owning a separate HUD placement path.
 - Fallback module UI now suppresses Lib overlays while open and restores them on close after pending runtime flushes.

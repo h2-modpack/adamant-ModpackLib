@@ -45,10 +45,13 @@ Safe to rebuild on every module `init`:
 - lookup tables derived from current imports
 
 Expected to persist across reloads:
-- Lib coordinator registrations under `AdamantModpackLib_Runtime.coordinator`
-- Lib live-host registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.moduleHost`
+- Lib coordinator registrations under `AdamantModpackLib_Runtime.registry.coordinators`
+- Lib live-host registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.registry.hosts`
 - Lib hook dispatchers that map each capability owner slot to its current owner
-  object under `AdamantModpackLib_Runtime.hooks`
+  object under `AdamantModpackLib_Runtime.registry.hooks`
+- Lib integration providers, mutation owner slots, retained overlays, and
+  fallback GUI bridges under their scoped `AdamantModpackLib_Runtime.registry`
+  buckets
 - Framework pack registry and stable GUI callbacks
 - module-owned ROM GUI callbacks attached through `host.fallbackUi.attachGuiOnce(...)`
   and backed by Lib fallback UI bridges keyed by host id
@@ -233,7 +236,7 @@ implementation reloads.
 
 Important properties:
 - active tracked mutation state survives store recreation during module reload
-- active module-host state is keyed by `pluginGuid`
+- active module-host records are keyed by `pluginGuid`
 - host activation synchronizes live mutation state to the module's effective enabled state
 - if a module is disabled on reload, tracked active mutation state is reverted
 
@@ -245,7 +248,8 @@ correctness boundary before validating mutation rollback behavior.
 
 ## Coordinator And Fallback UI Behavior
 
-Coordinator metadata is persisted on `AdamantModpackLib_Runtime.coordinator.coordinators`.
+Coordinator metadata is persisted on
+`AdamantModpackLib_Runtime.registry.coordinators.configs`.
 
 Important consequences:
 - a Lib reload does not forget which packs are coordinated

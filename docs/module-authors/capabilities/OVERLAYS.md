@@ -84,7 +84,7 @@ The projection context exposes:
 - `ctx.refreshRegion(region)`
 - `ctx.refreshAll()`
 
-Use `ctx.read(alias)` for committed store values. Do not capture UI session state in overlay callbacks.
+Use `ctx.read(alias)` for committed store values. Do not capture UI state in overlay callbacks.
 
 ## Visibility And UI Suppression
 
@@ -102,7 +102,7 @@ facades while foreground configuration UI is open.
 
 - Do not render overlay text directly from draw-tab UI code.
 - Do not use overlays for editable configuration.
-- Do not read staged session values from projection callbacks.
+- Do not read staged UI state values from projection callbacks.
 
 See also:
 - [MANAGED_STATE.md](MANAGED_STATE.md)

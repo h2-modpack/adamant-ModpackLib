@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 ---@class ButtonOpts
 ---@field id string|number|nil
@@ -19,7 +20,7 @@ local helpers = ...
 ---@param label any
 ---@param opts ButtonOpts|nil
 ---@return boolean
-function helpers.widgets.button(imgui, label, opts)
+function widgets.button(imgui, label, opts)
     opts = opts or helpers.EMPTY_OPTS
     local id = tostring(opts.id or label or "")
     local clicked = imgui.Button(tostring(label or "") .. "##" .. id)
@@ -38,7 +39,7 @@ end
 ---@param label any
 ---@param opts ConfirmButtonOpts|nil
 ---@return boolean
-function helpers.widgets.confirmButton(imgui, id, label, opts)
+function widgets.confirmButton(imgui, id, label, opts)
     opts = opts or helpers.EMPTY_OPTS
     local popupId = tostring(id) .. "##popup"
     local changed = false
@@ -65,3 +66,5 @@ function helpers.widgets.confirmButton(imgui, id, label, opts)
     end
     return changed
 end
+
+return widgets

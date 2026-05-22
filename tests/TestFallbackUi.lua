@@ -332,7 +332,7 @@ function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     local imgui, calls = makeImgui({
         menuClicked = true,
         buttonClicks = {
-            ["Resync Session"] = true,
+            ["Resync State"] = true,
         },
     })
     self.h.rom.ImGui = imgui

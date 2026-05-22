@@ -17,11 +17,11 @@ function TestModuleHost:tearDown()
 end
 
 local function createActivatedHost(h, pluginGuid, opts)
-    local host, authorHost, authorStore = h.moduleHost.create({
+    local host, authorHost, store = h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = opts.definition,
-        store = opts.store,
-        session = opts.session,
+        persistentState = opts.persistentState,
+        stagedState = opts.stagedState,
         onSettingsCommitted = opts.onSettingsCommitted,
         drawTab = opts.drawTab,
         drawQuickContent = opts.drawQuickContent,
@@ -30,13 +30,13 @@ local function createActivatedHost(h, pluginGuid, opts)
         authorHost.mutation.patch(opts.patchMutation)
     end
     if type(opts.configureHost) == "function" then
-        opts.configureHost(authorHost, authorStore)
+        opts.configureHost(authorHost, store)
     end
     authorHost.activate()
-    return host, authorHost, authorStore
+    return host, authorHost, store
 end
 
-function TestModuleHost:testFallbackUiWarnsWhenSessionCommitFails()
+function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
     local drawCalls = 0
     local pluginGuid = "test-fallback-ui-commit"
     local definition = self.h.moduleHost.prepareDefinition({}, {
@@ -45,7 +45,7 @@ function TestModuleHost:testFallbackUiWarnsWhenSessionCommitFails()
         name = "Fallback UI Test",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
@@ -68,8 +68,8 @@ function TestModuleHost:testFallbackUiWarnsWhenSessionCommitFails()
 
     createActivatedHost(self.h, pluginGuid, {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         configureHost = function(authorHost)
             authorHost.fallbackUi.attachGuiOnce(function() end)
         end,
@@ -82,13 +82,13 @@ function TestModuleHost:testFallbackUiWarnsWhenSessionCommitFails()
         return false, "commit boom", false
     end
 
-    local runtime = self.h.runtime.fallbackUi.runtimes[pluginGuid]
+    local runtime = self.h.registry.fallback.runtimes[pluginGuid]
     runtime.addMenuBar()
     runtime.renderWindow()
 
     lu.assertEquals(drawCalls, 1)
     lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "Fallback UI Test session commit failed")
+    lu.assertStrContains(self.h.warnings[1], "Fallback UI Test staged state commit failed")
     lu.assertStrContains(self.h.warnings[1], "commit boom")
     lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), moduleHost)
 end
@@ -100,15 +100,15 @@ function TestModuleHost:testFallbackUiInstallsDuringActivation()
         name = "Fallback UI Registry Host",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local attached = nil
     local _, authorHost = createActivatedHost(self.h, pluginGuid, {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         configureHost = function(activeAuthorHost)
             attached = activeAuthorHost.fallbackUi.attachGuiOnce(function() end)
         end,
@@ -116,7 +116,7 @@ function TestModuleHost:testFallbackUiInstallsDuringActivation()
     })
     local host = self.h.moduleHost.getLiveHost(pluginGuid)
 
-    local runtime = self.h.runtime.fallbackUi.runtimes[pluginGuid]
+    local runtime = self.h.registry.fallback.runtimes[pluginGuid]
 
     lu.assertTrue(attached)
     lu.assertEquals(type(runtime.renderWindow), "function")
@@ -136,13 +136,13 @@ function TestModuleHost:testFlushNotifiesSettingsObserver()
             { type = "bool", alias = "Value", default = false },
         },
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Value = false,
     }, definition)
     createActivatedHost(self.h, "test-settings-observer-host", {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         onSettingsCommitted = function(_, activeStore)
             calls = calls + 1
             observedValue = activeStore.read("Value")
@@ -169,14 +169,14 @@ function TestModuleHost:testPatchMutationReceivesAuthorHost()
         name = "Patch Host Module",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host, authorHost = createActivatedHost(self.h, "test-patch-host", {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         patchMutation = function(plan, activeHost, activeStore)
             patchHost = activeHost
             patchStore = activeStore
@@ -188,7 +188,7 @@ function TestModuleHost:testPatchMutationReceivesAuthorHost()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(patchHost, authorHost)
-    lu.assertEquals(patchStore, self.h.moduleHost.getState(host).authorStore)
+    lu.assertEquals(patchStore, self.h.moduleHost.getRecord(host).store)
     lu.assertNotEquals(patchStore, store)
     lu.assertTrue(target.Value)
 end
@@ -199,12 +199,12 @@ function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
         name = "Inactive Host",
         storage = {},
     })
-    local store, session = self.h:createModuleState({}, definition)
+    local store, stagedState = self.h:createModuleState({}, definition)
     local host = self.h.moduleHost.create({
         pluginGuid = "test-inactive-host",
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
 
@@ -213,8 +213,8 @@ function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
     end)
 end
 
-function TestModuleHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelper()
-    local capturedAuthorSession = nil
+function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
+    local capturedState = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "ResetHost",
         name = "Reset Host",
@@ -223,37 +223,37 @@ function TestModuleHost:testHostAndAuthorSessionResetToDefaultsDelegateToLibHelp
             { type = "int", alias = "Count", default = 2, min = 0, max = 9 },
         },
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         EnabledFlag = true,
         Count = 7,
     }, definition)
     createActivatedHost(self.h, "test-reset-host", {
         definition = definition,
-        store = store,
-        session = session,
-        drawTab = function(_, data)
-            capturedAuthorSession = data
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, state)
+            capturedState = state
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-reset-host")
 
-    host.drawTab({})
+    host.drawTab()
 
-    local changed, count = host.resetToDefaults()
+    local changed, count = host.resetAll()
     lu.assertTrue(changed)
     lu.assertEquals(count, 2)
-    lu.assertEquals(session.read("EnabledFlag"), false)
-    lu.assertEquals(session.read("Count"), 2)
+    lu.assertEquals(stagedState.read("EnabledFlag"), false)
+    lu.assertEquals(stagedState.read("Count"), 2)
 
-    session.write("EnabledFlag", true)
-    session.write("Count", 6)
-    local authorChanged, authorCount = capturedAuthorSession.resetToDefaults({
+    stagedState.write("EnabledFlag", true)
+    stagedState.write("Count", 6)
+    local authorChanged, authorCount = capturedState.resetAll({
         exclude = { Count = true },
     })
     lu.assertTrue(authorChanged)
     lu.assertEquals(authorCount, 1)
-    lu.assertEquals(session.read("EnabledFlag"), false)
-    lu.assertEquals(session.read("Count"), 6)
+    lu.assertEquals(stagedState.read("EnabledFlag"), false)
+    lu.assertEquals(stagedState.read("Count"), 6)
 end
 
 function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
@@ -265,17 +265,17 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
         name = "Author Host Module",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = true,
     }, definition)
     local _, returnedHost = createActivatedHost(self.h, "test-author-host", {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
-        drawQuickContent = function(draw, data, actions, services)
-            quickArgs = { draw = draw, data = data, actions = actions, services = services }
+        drawQuickContent = function(draw, state, actions, services)
+            quickArgs = { draw = draw, state = state, actions = actions, services = services }
         end,
         configureHost = function(authorHost)
             callbackHost = authorHost
@@ -283,11 +283,11 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     })
 
     local host = self.h.moduleHost.getLiveHost("test-author-host")
-    host.drawTab({})
-    host.drawQuickContent({})
+    host.drawTab()
+    host.drawQuickContent()
 
     lu.assertEquals(type(quickArgs.draw.widgets), "table")
-    lu.assertEquals(type(quickArgs.data.get), "function")
+    lu.assertEquals(type(quickArgs.state.get), "function")
     lu.assertEquals(type(quickArgs.actions.get), "function")
     lu.assertEquals(type(quickArgs.services.log), "function")
     lu.assertEquals(returnedHost, callbackHost)
@@ -325,14 +325,14 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
         name = "Draw Services Module",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = true,
     }, definition)
     createActivatedHost(self.h, "test-draw-services", {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function(_, _, _, drawServices)
             services = drawServices
             enabled = services.isHostEnabled()
@@ -355,7 +355,7 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     local host = self.h.moduleHost.getLiveHost("test-draw-services")
     local warningCount = #self.h.warnings
 
-    host.drawTab({})
+    host.drawTab()
 
     lu.assertEquals(type(services), "table")
     lu.assertEquals(type(services.log), "function")
@@ -382,15 +382,15 @@ function TestModuleHost:testFullHostOwnsAuthorHostCapabilities()
         name = "Full Host Capabilities",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host, authorHost = self.h.moduleHost.create({
         pluginGuid = "test-full-host-capabilities",
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
 
@@ -424,23 +424,23 @@ function TestModuleHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFra
             { type = "bool", alias = "EnabledFlag", default = false },
         },
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
         EnabledFlag = false,
     }, definition)
     createActivatedHost(self.h, "reload-pack.ReloadHost", {
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
 
     local applyCalls = 0
 
-    local previousState = self.h.moduleHost.getState(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"))
+    local previousRecord = self.h.moduleHost.getRecord(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"))
     local prepared = self.h.moduleHost.prepareDefinition({
-        _definitionStructuralFingerprint = previousState.definition._structuralFingerprint,
+        _definitionStructuralFingerprint = previousRecord.definition._structuralFingerprint,
     }, {
         modpack = packId,
         id = "ReloadHost",
@@ -449,15 +449,15 @@ function TestModuleHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFra
             { type = "bool", alias = "OtherFlag", default = false },
         },
     })
-    local reloadStore, reloadSession = self.h:createModuleState({
+    local reloadStore, reloadStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
     createActivatedHost(self.h, "reload-pack.ReloadHost", {
         definition = prepared,
-        store = reloadStore,
-        session = reloadSession,
+        persistentState = reloadStore,
+        stagedState = reloadStagedState,
         patchMutation = function(plan)
             applyCalls = applyCalls + 1
             plan:set({}, "unused", true)
@@ -488,14 +488,14 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         name = "Activation Rollback",
         storage = {},
     })
-    local firstStore, firstSession = self.h:createModuleState({
+    local firstStore, firstStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
     local firstHost, firstAuthorHost = createActivatedHost(self.h, pluginGuid, {
         definition = firstDefinition,
-        store = firstStore,
-        session = firstSession,
+        persistentState = firstStore,
+        stagedState = firstStagedState,
         configureHost = function(authorHost)
             authorHost.integrations.register(integrationId, {
                 providerId = providerId,
@@ -510,15 +510,15 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         name = "Activation Rollback Replacement",
         storage = {},
     })
-    local secondStore, secondSession = self.h:createModuleState({
+    local secondStore, secondStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
     local secondHost, secondAuthorHost = self.h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
-        store = secondStore,
-        session = secondSession,
+        persistentState = secondStore,
+        stagedState = secondStagedState,
         drawTab = function() end,
     })
     secondAuthorHost.mutation.patch(function()
@@ -539,7 +539,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "integration boom")
     lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), firstHost)
-    lu.assertEquals(self.h.moduleRuntimeRegistry.getPluginInfo(pluginGuid), {
+    lu.assertEquals(self.h.hostRegistry.getPluginInfo(pluginGuid), {
         pluginGuid = pluginGuid,
         packId = nil,
         moduleId = "ActivationRollback",
@@ -561,15 +561,15 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
         name = "Activation New Integration Rollback",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host, authorHost = self.h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     authorHost.mutation.patch(function()
@@ -589,7 +589,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "new integration boom")
     lu.assertNil(self.h.moduleHost.getLiveHost(pluginGuid))
-    lu.assertNil(self.h.moduleRuntimeRegistry.getPluginInfo(pluginGuid))
+    lu.assertNil(self.h.hostRegistry.getPluginInfo(pluginGuid))
     lu.assertNil(authorHost.integrations.invoke(integrationId, "read", nil))
     lu.assertErrorMsgContains("host.not_activated", function()
         host.flush()
@@ -609,14 +609,14 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         name = "Activation Runtime Rollback",
         storage = {},
     })
-    local firstStore, firstSession = self.h:createModuleState({
+    local firstStore, firstStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
     local firstHost = createActivatedHost(self.h, pluginGuid, {
         definition = firstDefinition,
-        store = firstStore,
-        session = firstSession,
+        persistentState = firstStore,
+        stagedState = firstStagedState,
         patchMutation = function(plan)
             plan:set(target, "Value", "first")
         end,
@@ -629,15 +629,15 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         name = "Activation Runtime Rollback",
         storage = {},
     })
-    local secondStore, secondSession = self.h:createModuleState({
+    local secondStore, secondStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
     local secondHost, secondAuthorHost = self.h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
-        store = secondStore,
-        session = secondSession,
+        persistentState = secondStore,
+        stagedState = secondStagedState,
         drawTab = function() end,
     })
     secondAuthorHost.mutation.patch(function()
@@ -665,15 +665,15 @@ function TestModuleHost:testactivateModuleReturnsErrorAndDoesNotPublishBrokenHos
         name = "Try Activate Failure",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host, authorHost = self.h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     authorHost.mutation.patch(function()
@@ -700,15 +700,15 @@ function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
         name = "Try Activate Success",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host = self.h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
 
@@ -729,14 +729,14 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         name = "Activation Refresh",
         storage = {},
     })
-    local firstStore, firstSession = self.h:createModuleState({
+    local firstStore, firstStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
     local _, firstAuthorHost = createActivatedHost(self.h, pluginGuid, {
         definition = firstDefinition,
-        store = firstStore,
-        session = firstSession,
+        persistentState = firstStore,
+        stagedState = firstStagedState,
         configureHost = function(authorHost)
             authorHost.integrations.register(integrationId, {
                 providerId = providerId,
@@ -757,14 +757,14 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         name = "Activation Refresh",
         storage = {},
     })
-    local secondStore, secondSession = self.h:createModuleState({
+    local secondStore, secondStagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
     createActivatedHost(self.h, pluginGuid, {
         definition = secondDefinition,
-        store = secondStore,
-        session = secondSession,
+        persistentState = secondStore,
+        stagedState = secondStagedState,
         drawTab = function() end,
     })
 
@@ -777,7 +777,7 @@ function TestModuleHost:testActivationRejectsReentrantActivateCalls()
         name = "Reentrant Activate",
         storage = {},
     })
-    local store, session = self.h:createModuleState({
+    local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
@@ -785,8 +785,8 @@ function TestModuleHost:testActivationRejectsReentrantActivateCalls()
     host, authorHost = self.h.moduleHost.create({
         pluginGuid = "test-reentrant-activate",
         definition = definition,
-        store = store,
-        session = session,
+        persistentState = store,
+        stagedState = stagedState,
         drawTab = function() end,
     })
     authorHost.mutation.patch(function()

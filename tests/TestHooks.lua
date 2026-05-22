@@ -67,14 +67,14 @@ local function createPathMock(target)
     return counts, testModUtil
 end
 
-local function createSession()
-    local session
-    session = {
+local function createStagedState()
+    local stagedState
+    stagedState = {
         view = {},
         get = function(alias)
             return {
                 read = function()
-                    return session.read(alias)
+                    return stagedState.read(alias)
                 end,
             }
         end,
@@ -91,7 +91,7 @@ local function createSession()
             return {}
         end,
     }
-    return session
+    return stagedState
 end
 
 local function createStore(enabled)
@@ -127,7 +127,7 @@ function TestHooks:setUp()
     self.coordinator = self.harness.coordinator
     self.moduleHost = self.harness.moduleHost
     self.mutation = self.harness.mutation
-    self.hookRuntime = self.harness.runtime.hooks
+    self.hookRegistry = self.harness.registry.hooks
 end
 
 function TestHooks:createHostWithHooks(pluginGuid, registerHooks, activationOpts)
@@ -136,8 +136,8 @@ function TestHooks:createHostWithHooks(pluginGuid, registerHooks, activationOpts
     local host, authorHost = self.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        store = store,
-        session = createSession(),
+        persistentState = store,
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
     if activationOpts.patchMutation ~= nil then
@@ -234,7 +234,7 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
             return "first:" .. base(value)
         end)
     end)
-    local dispatcher = self.hookRuntime.hookDispatchers.wrap[path]
+    local dispatcher = self.hookRegistry.dispatchers.wrap[path]
 
     lu.assertNotNil(dispatcher)
     lu.assertEquals(dispatcher.ownerOrder, { ownerId })
@@ -247,7 +247,7 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(dispatcher.ownerOrder, {})
     lu.assertNil(dispatcher.ownerSeen[ownerId])
     lu.assertNil(dispatcher.handlers[ownerId])
-    lu.assertNil(self.hookRuntime.ownerSlots[ownerId])
+    lu.assertNil(self.hookRegistry.ownerSlots[ownerId])
 
     self:createHostWithHooks(pluginGuid, function(host)
         host.hooks.wrap(path, function(base, value)
@@ -260,12 +260,12 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(self.env[path]("x"), "second:base:x")
 end
 
-function TestHooks:testHostHookDeclarationsAreStoredOnManagedHostState()
+function TestHooks:testHostHookDeclarationsAreStoredOnHostRegistry()
     local host, authorHost = self.moduleHost.create({
         pluginGuid = "hook-test-state-declarations",
         definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        store = createStore(false),
-        session = createSession(),
+        persistentState = createStore(false),
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
 
@@ -273,9 +273,9 @@ function TestHooks:testHostHookDeclarationsAreStoredOnManagedHostState()
         return base()
     end)
 
-    local state = self.harness.hostState.get(host)
-    lu.assertNotNil(state.hookDeclarations)
-    lu.assertNotNil(state.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
+    local record = self.harness.hostRegistry.getRecord(host)
+    lu.assertNotNil(record.hookDeclarations)
+    lu.assertNotNil(record.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
 end
 
 function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
@@ -291,13 +291,13 @@ function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
         end)
     end)
 
-    lu.assertNotNil(self.hookRuntime.hookDispatchers.override[path])
+    lu.assertNotNil(self.hookRegistry.dispatchers.override[path])
     lu.assertEquals(self.env[path](), "override")
 
     self:createHostWithHooks(pluginGuid, nil)
 
     lu.assertEquals(self.env[path](), "base")
-    lu.assertNil(self.hookRuntime.hookDispatchers.override[path])
+    lu.assertNil(self.hookRegistry.dispatchers.override[path])
 end
 
 function TestHooks:testHostHooksDeclareAgainstAuthorHost()
@@ -369,8 +369,8 @@ function TestHooks:testHostHookDeclarationsRejectAfterActivation()
     local host, authorHost = self.moduleHost.create({
         pluginGuid = "hook-test-declare-after-activation",
         definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        store = createStore(false),
-        session = createSession(),
+        persistentState = createStore(false),
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
     self.moduleHost.activateOrThrow(host)
@@ -643,8 +643,8 @@ function TestHooks:testCreateModuleHostSyncsCoordinatedRuntimeImmediately()
     local host, authorHost = self.moduleHost.create({
         pluginGuid = "hook-pack.Alpha",
         definition = definition,
-        store = createStore(true),
-        session = createSession(),
+        persistentState = createStore(true),
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
     authorHost.mutation.patch(function(plan)
@@ -675,8 +675,8 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
     local firstHost, firstAuthorHost = self.moduleHost.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = firstDefinition,
-        store = store,
-        session = createSession(),
+        persistentState = store,
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
     firstAuthorHost.mutation.patch(function(plan)
@@ -694,8 +694,8 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
     local secondHost, secondAuthorHost = self.moduleHost.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = secondDefinition,
-        store = store,
-        session = createSession(),
+        persistentState = store,
+        stagedState = createStagedState(),
         drawTab = function() end,
     })
     secondAuthorHost.mutation.patch(function(plan)
@@ -713,7 +713,7 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
             return "hook-reload-pack.Alpha"
         end,
     }
-    self.harness.hostState.set(mutationHost, {
+    self.harness.hostRegistry.setRecord(mutationHost, {
         pluginGuid = "hook-reload-pack.Alpha",
         definition = {
             modpack = packId,

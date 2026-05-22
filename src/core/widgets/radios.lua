@@ -1,4 +1,5 @@
 local helpers = ...
+local widgets = {}
 
 ---@class RadioOpts
 ---@field label string|nil
@@ -57,7 +58,7 @@ end
 ---@param field StorageField
 ---@param opts RadioOpts|nil
 ---@return boolean
-function helpers.widgets.radio(imgui, field, opts)
+function widgets.radio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local current = helpers.NormalizeChoiceValue(opts, field:read())
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
@@ -92,7 +93,7 @@ end
 ---@param field StorageField
 ---@param opts PackedRadioOpts|nil
 ---@return boolean
-function helpers.widgets.packedRadio(imgui, field, opts)
+function widgets.packedRadio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
@@ -139,3 +140,5 @@ function helpers.widgets.packedRadio(imgui, field, opts)
 
     return changed
 end
+
+return widgets

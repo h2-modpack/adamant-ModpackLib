@@ -8,15 +8,15 @@ retire it in favor of normal author and contributor docs.
 
 The live implementation has completed the major shape changes:
 
-- draw callbacks use `drawTab(draw, data, actions, services)` and
-  `drawQuickContent(draw, data, actions, services)`;
+- draw callbacks use `drawTab(draw, state, actions, services)` and
+  `drawQuickContent(draw, state, actions, services)`;
 - `draw` owns `imgui`, `widgets`, and `nav`;
-- `data` owns staged UI data access through `get`, `read`, `write`, and
-  `resetToDefaults`;
+- `state` owns staged UI state access through `get`, `read`, `write`, and
+  `resetAll`;
 - `actions` is a first-class staged intent surface;
 - `services` is the narrow draw-safe service surface;
 - author-facing `store` is narrowed to `get` and `read`;
-- widgets take `StorageField` refs, not raw aliases, sessions, stores, or table
+- widgets take `StorageField` refs, not raw aliases, staged-state objects, stores, or table
   handles;
 - storage refs are cached for hot draw paths.
 
@@ -24,11 +24,11 @@ Two intentional refinements supersede the target text below:
 
 - `store.read(alias, ...)` is accepted as shorthand for
   `store.get(alias):read(...)`;
-- `data.read(alias, ...)` and `data.write(alias, ...)` are accepted as shorthand
-  for `data.get(alias):read(...)` and `data.get(alias):write(...)`, mainly for
+- `state.read(alias, ...)` and `state.write(alias, ...)` are accepted as shorthand
+  for `state.get(alias):read(...)` and `state.get(alias):write(...)`, mainly for
   custom raw ImGui code that does not use Lib widgets.
 
-The main remaining design item is phase gating. `draw`, `data`, `actions`,
+The main remaining design item is phase gating. `draw`, `state`, `actions`,
 `services`, author `store`, and raw `draw.imgui` are shaped for future gating,
 but their methods do not yet enforce draw/runtime phase lifetimes.
 
@@ -59,10 +59,10 @@ Draw callbacks receive immediate UI render helpers, editable UI data, staged UI
 actions, and a narrow draw-safe service surface:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
+function ui.drawTab(draw, state, actions, services)
 end
 
-function ui.drawQuickContent(draw, data, actions, services)
+function ui.drawQuickContent(draw, state, actions, services)
 end
 ```
 
@@ -71,9 +71,9 @@ The phase boundary is the author-facing rule:
 - `host` is the declaration, activation, and runtime capability authority; it
   is not a draw-phase object.
 - `store` is the committed runtime data object; it is not a draw-phase object.
-- `draw`, `data`, `actions`, and `services` are draw-phase objects.
+- `draw`, `state`, `actions`, and `services` are draw-phase objects.
 - `store` is not available inside draw callbacks.
-- `draw`, `data`, `actions`, and `services` are not available outside the
+- `draw`, `state`, `actions`, and `services` are not available outside the
   active draw callback.
 
 Phase enforcement can come after migration, but the API should be shaped so
@@ -115,7 +115,7 @@ end
 ```
 
 Runtime `store` should stay read-oriented. Runtime cache writes belong to
-`host.cache.persistent`, while UI-staged edits belong to draw `data`.
+`host.cache.persistent`, while UI-staged edits belong to draw `state`.
 
 ## Draw Objects
 
@@ -131,26 +131,26 @@ work or are direct draw helpers:
 `draw.imgui` should eventually be a gated proxy. If raw ImGui is exposed
 without gating, it becomes the loophole in the draw-phase contract.
 
-### `data`
+### `state`
 
-`data` is the editable draw-time data adapter. It is closer to the model side
-of the UI than to the view side, so the public name is `data`, not `view`.
+`state` is the editable draw-time state adapter. It is closer to the model side
+of the UI than to the view side, so the public name is `state`, not `view`.
 
 ```lua
-local enabled = data.get("Enabled")
+local enabled = state.get("Enabled")
 
 if enabled:read() then
     enabled:write(false)
 end
 ```
 
-`data` uses the same conceptual storage grammar as `store`, but it reads and
+`state` uses the same conceptual storage grammar as `store`, but it reads and
 writes the staged UI state for the active draw callback.
 
 ### `actions`
 
 `actions` is the draw-time staged intent service. Actions are deferred UI
-commands that runtime commit code can process after staged data is committed.
+commands that runtime commit code can process after staged state is committed.
 They are not logging and they are not a replacement for ordinary data writes.
 
 ```lua
@@ -202,13 +202,13 @@ concerns.
 
 ## Storage Refs
 
-`store` and `data` should share a storage-ref vocabulary. The phase decides
+`store` and `state` should share a storage-ref vocabulary. The phase decides
 which backend is read or written; the addressing grammar stays consistent.
 
 Root scalar or packed storage returns a leaf ref:
 
 ```lua
-local enabled = data.get("Enabled")
+local enabled = state.get("Enabled")
 
 enabled:read()
 enabled:write(true)
@@ -220,7 +220,7 @@ enabled:controlId()
 Row-list storage returns a row-list object:
 
 ```lua
-local pools = data.get("ApolloBanPools")
+local pools = state.get("ApolloBanPools")
 
 local count = pools:count()
 local bans = pools:get(rowIndex, "Bans")
@@ -244,7 +244,7 @@ The row-list object owns table-wide operations:
 - `snapshots()`
 
 Runtime `store` may expose only the subset that is valid for committed data and
-runtime-read policy. Draw `data` exposes the editable staged subset.
+runtime-read policy. draw `state` exposes the editable staged subset.
 
 Table cells are path refs, not root aliases. Cell aliases stay scoped to the
 row schema; they do not become globally unique root aliases. If stable row
@@ -261,11 +261,11 @@ and cell alias. Widgets read `field:controlId()` when building ImGui ids.
 Widgets stay under `draw` because they are first-party render helpers:
 
 ```lua
-draw.widgets.checkbox(data.get("Enabled"), {
+draw.widgets.checkbox(state.get("Enabled"), {
     label = "Enabled",
 })
 
-draw.widgets.dropdown(data.get("Mode"), {
+draw.widgets.dropdown(state.get("Mode"), {
     label = "Mode",
     values = { "Default", "Custom" },
     action = actions.get("ModeChanged"),
@@ -278,18 +278,18 @@ draw.widgets.button("Reset", {
 
 Widget rules:
 
-- Value widgets take data refs, not raw sessions, raw stores, or table handles.
-- Value widgets directly edit the passed data ref by default.
+- Value widgets take state refs, not raw staged-state objects, raw stores, or table handles.
+- Value widgets directly edit the passed state ref by default.
 - Any interactive widget may optionally stage an action.
 - Buttons are command widgets, not the only action-aware widgets.
 - Raw `draw.imgui` remains available for custom UI.
 
-This makes widgets the sanctioned first-party bridge across draw, data, and
+This makes widgets the sanctioned first-party bridge across draw, state, and
 actions. Custom UI can still use the draw-phase objects explicitly.
 
 ## What Not To Do
 
-Do not collapse runtime and draw data into a polymorphic `read(...)` API:
+Do not collapse runtime and draw state into a polymorphic `read(...)` API:
 
 ```lua
 -- Avoid
@@ -303,7 +303,7 @@ Do not pass `host` into draw callbacks:
 
 ```lua
 -- Avoid
-function ui.drawTab(draw, data, actions, host)
+function ui.drawTab(draw, state, actions, host)
 end
 ```
 
@@ -311,7 +311,7 @@ Draw code should not get the full module capability object. Add narrow
 draw-phase services when draw code needs them:
 
 ```lua
-function ui.drawTab(draw, data, actions, services)
+function ui.drawTab(draw, state, actions, services)
     if services.invokeIntegration("run-director.god-availability", "isActive", false) then
         services.logIf("God Pool filtering is active")
     end
@@ -319,24 +319,24 @@ end
 ```
 
 Do not make action staging the backend for ordinary widget value edits. A
-checkbox click should change the checkbox data ref. Optional actions are for
+checkbox click should change the checkbox state ref. Optional actions are for
 extra deferred intent.
 
 ## Migration Plan
 
 1. Add draw-phase `services` with `log`, `logIf`, `isHostEnabled`, and
    `invokeIntegration`, then remove `draw.host` from the draw context.
-2. Extract actions from session into a first-class draw `actions` object.
-3. Add `store.get(...)` and `data.get(...)` storage-ref factories beside the
+2. Extract actions from staged state into a first-class draw `actions` object.
+3. Add `store.get(...)` and `state.get(...)` storage-ref factories beside the
    old APIs.
 4. Make widgets accept storage refs and optional action refs. Action support
    should be broad, not button-only.
-5. Change draw callbacks to `drawTab(draw, data, actions, services)` and
-   `drawQuickContent(draw, data, actions, services)`.
-6. Reassess module ergonomics after the draw/data/actions/services split.
+5. Change draw callbacks to `drawTab(draw, state, actions, services)` and
+   `drawQuickContent(draw, state, actions, services)`.
+6. Reassess module ergonomics after the draw/state/actions/services split.
 7. Port modules to storage refs and row-list objects module by module.
-8. Retire old author-facing session/store APIs.
-9. Add phase gating for `store`, `draw`, `data`, `actions`, and `services`.
+8. Retire old author-facing state/store APIs.
+9. Add phase gating for `store`, `draw`, `state`, `actions`, and `services`.
 
 ## Audit Checklist
 
@@ -344,21 +344,21 @@ Use this checklist while migrating:
 
 - No `draw.host` in module UI.
 - The draw context does not expose the author host.
-- No staged data aliases on the `draw` object in module UI.
+- No staged state aliases on the `draw` object in module UI.
 - Draw-time logging uses `services.log` or `services.logIf`.
 - Draw-time integration queries use `services.invokeIntegration`.
 - `services` does not expose host registration, lifecycle, or mutation APIs.
 - New `services` methods satisfy the draw-safe narrow read/query/logging rule.
-- No widget receives a raw session or raw store.
-- No widget receives a table handle instead of a data ref.
+- No widget receives a raw staged-state object or raw store.
+- No widget receives a table handle instead of a state ref.
 - Action support is not button-only.
 - Table cells are addressed as path refs, not root aliases.
 - `store` is not used inside draw callbacks.
-- `draw`, `data`, `actions`, and `services` are not used outside draw
+- `draw`, `state`, `actions`, and `services` are not used outside draw
   callbacks.
 - `draw.imgui` is included in phase enforcement or explicitly documented as a
   borrowed raw escape hatch.
 - Runtime callbacks use `host` for capabilities and `store` for committed data.
-- Draw callbacks use `draw` for rendering, `data` for staged UI data, and
+- Draw callbacks use `draw` for rendering, `state` for staged UI state, and
   `actions` for deferred UI intents, and `services` for draw-safe module
   services.

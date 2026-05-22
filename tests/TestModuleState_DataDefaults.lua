@@ -19,7 +19,7 @@ local function makeStore(harness, definition, config)
         definition = harness.moduleHost.prepareDefinition({}, definition)
     end
     local state = harness.moduleState.create(config, definition)
-    return state.store, state.session, config
+    return state.persistentState, state.stagedState, config
 end
 
 local function makeChalkConfig(harness)
@@ -72,9 +72,9 @@ function TestModuleState_DataDefaults:testUsesBoolStorageDefault()
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("MyFlag"))
+    lu.assertTrue(stagedState.read("MyFlag"))
 end
 
 function TestModuleState_DataDefaults:testUsesIntStorageDefault()
@@ -83,9 +83,9 @@ function TestModuleState_DataDefaults:testUsesIntStorageDefault()
             { type = "int", alias = "MyCount", default = 7, min = 0, max = 10 },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertEquals(session.read("MyCount"), 7)
+    lu.assertEquals(stagedState.read("MyCount"), 7)
 end
 
 function TestModuleState_DataDefaults:testUsesStringStorageDefault()
@@ -94,9 +94,9 @@ function TestModuleState_DataDefaults:testUsesStringStorageDefault()
             { type = "string", alias = "MyChoice", default = "Forced" },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertEquals(session.read("MyChoice"), "Forced")
+    lu.assertEquals(stagedState.read("MyChoice"), "Forced")
 end
 
 -- Live config value overrides the default when present
@@ -106,9 +106,9 @@ function TestModuleState_DataDefaults:testLiveConfigValueOverridesDefault()
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local _, session = makeStore(self.harness, definition, { MyFlag = false })
+    local _, stagedState = makeStore(self.harness, definition, { MyFlag = false })
 
-    lu.assertFalse(session.read("MyFlag"))
+    lu.assertFalse(stagedState.read("MyFlag"))
 end
 
 function TestModuleState_DataDefaults:testMissingStorageDefaultFails()
@@ -169,9 +169,9 @@ function TestModuleState_DataDefaults:testExplicitStorageDefaultsAreSafe()
             { type = "bool", alias = "MyFlag", default = true },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("MyFlag"))
+    lu.assertTrue(stagedState.read("MyFlag"))
 end
 
 function TestModuleState_DataDefaults:testCreateStoreHydratesMissingConfigFromStorageDefault()
@@ -191,12 +191,12 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingConfigFromSt
             },
         },
     }
-    local _, session, config = makeStore(self.harness, definition, {})
+    local _, stagedState, config = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("MyFlag"))
-    lu.assertEquals(session.read("MyCount"), 4)
-    lu.assertEquals(session.read("MyMode"), "Auto")
-    lu.assertEquals(session.read("PackedChoices"), 2)
+    lu.assertTrue(stagedState.read("MyFlag"))
+    lu.assertEquals(stagedState.read("MyCount"), 4)
+    lu.assertEquals(stagedState.read("MyMode"), "Auto")
+    lu.assertEquals(stagedState.read("PackedChoices"), 2)
     lu.assertEquals(config.MyFlag, true)
     lu.assertEquals(config.MyCount, 4)
     lu.assertEquals(config.MyMode, "Auto")
@@ -210,11 +210,11 @@ function TestModuleState_DataDefaults:testCreateStoreDoesNotHydrateTransientStor
             { type = "int", alias = "RunMarker", default = 3, min = 0, max = 10, persist = false, hash = false },
         },
     }
-    local store, session, config = makeStore(self.harness, definition, {})
+    local store, stagedState, config = makeStore(self.harness, definition, {})
 
-    lu.assertFalse(session.read("Enabled"))
-    lu.assertFalse(session.read("RecordingArmed"))
-    lu.assertEquals(session.read("RunMarker"), 3)
+    lu.assertFalse(stagedState.read("Enabled"))
+    lu.assertFalse(stagedState.read("RecordingArmed"))
+    lu.assertEquals(stagedState.read("RunMarker"), 3)
     lu.assertErrorMsgContains("store.invalid_surface", function()
         store.read("RecordingArmed")
     end)
@@ -230,10 +230,10 @@ function TestModuleState_DataDefaults:testCreateStorePreservesExistingConfigValu
             { type = "int", alias = "MyCount", default = 4, min = 0, max = 10 },
         },
     }
-    local _, session, config = makeStore(self.harness, definition, { MyFlag = false, MyCount = 9 })
+    local _, stagedState, config = makeStore(self.harness, definition, { MyFlag = false, MyCount = 9 })
 
-    lu.assertFalse(session.read("MyFlag"))
-    lu.assertEquals(session.read("MyCount"), 9)
+    lu.assertFalse(stagedState.read("MyFlag"))
+    lu.assertEquals(stagedState.read("MyCount"), 9)
     lu.assertEquals(config.MyFlag, false)
     lu.assertEquals(config.MyCount, 9)
 end
@@ -245,10 +245,10 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesAliasBackedConfig()
             { type = "int", alias = "FixedValue", default = 3, min = 0, max = 10 },
         },
     }
-    local _, session, config = makeStore(self.harness, definition, {})
+    local _, stagedState, config = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("GodModeEnabled"))
-    lu.assertEquals(session.read("FixedValue"), 3)
+    lu.assertTrue(stagedState.read("GodModeEnabled"))
+    lu.assertEquals(stagedState.read("FixedValue"), 3)
     lu.assertEquals(config.GodModeEnabled, true)
     lu.assertEquals(config.FixedValue, 3)
 end
@@ -262,14 +262,14 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingChalkEntryFr
         },
     }
 
-    local ok, _, session = pcall(function()
+    local ok, _, stagedState = pcall(function()
         return makeStore(self.harness, definition, config)
     end)
     restoreChalk()
 
     lu.assertTrue(ok)
-    lu.assertTrue(session.read("MyFlag"))
-    lu.assertEquals(session.read("FixedValue"), 3)
+    lu.assertTrue(stagedState.read("MyFlag"))
+    lu.assertEquals(stagedState.read("FixedValue"), 3)
     lu.assertEquals(raw.saved, 4)
 
     local valuesByPath = {}
@@ -288,9 +288,9 @@ function TestModuleState_DataDefaults:testLookupUsesAliasAsBackingKey()
             { type = "int", alias = "MyAlias", default = 0, min = 0, max = 10 },
         },
     }
-    local _, session = makeStore(self.harness, definition, { MyAlias = 1, OldBackingKey = 9 })
+    local _, stagedState = makeStore(self.harness, definition, { MyAlias = 1, OldBackingKey = 9 })
 
-    lu.assertEquals(session.read("MyAlias"), 1)
+    lu.assertEquals(stagedState.read("MyAlias"), 1)
 end
 
 function TestModuleState_DataDefaults:testMissingAliasUsesStorageDefault()
@@ -300,10 +300,10 @@ function TestModuleState_DataDefaults:testMissingAliasUsesStorageDefault()
             { type = "int",  alias = "FixedValue", default = 3, min = 0, max = 10 },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("GodModeEnabled"))
-    lu.assertEquals(session.read("FixedValue"), 3)
+    lu.assertTrue(stagedState.read("GodModeEnabled"))
+    lu.assertEquals(stagedState.read("FixedValue"), 3)
 end
 
 function TestModuleState_DataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
@@ -330,10 +330,10 @@ function TestModuleState_DataDefaults:testMultipleNodesAllFilled()
             { type = "string", alias = "Mode", default = "Vanilla" },
         },
     }
-    local _, session = makeStore(self.harness, definition, {})
+    local _, stagedState = makeStore(self.harness, definition, {})
 
-    lu.assertTrue(session.read("FlagA"))
-    lu.assertEquals(session.read("Count"), 5)
-    lu.assertEquals(session.read("Mode"), "Vanilla")
+    lu.assertTrue(stagedState.read("FlagA"))
+    lu.assertEquals(stagedState.read("Count"), 5)
+    lu.assertEquals(stagedState.read("Mode"), "Vanilla")
 end
 
