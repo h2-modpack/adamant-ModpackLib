@@ -42,7 +42,7 @@ What this means in practice:
 
 - existing module hosts may close over prior Lib implementation closures until the owning module reloads
 - active mutation runtime is durable across module reload, not arbitrary Lib implementation reload
-- a Framework file reload does not update an existing pack object until Core or a coordinator rebuild calls `Framework.init(...)` again
+- a Framework file reload does not update an existing pack object until Core or a coordinator rebuild calls `Framework.createPack(...)` again
 - retained HUD layout changes may require HUD recreation or a game HUD refresh
 
 Why this exists:
@@ -109,7 +109,7 @@ Patch-plan mutation edits raw game tables, then Lib asks the game to recompute d
 
 What this means in practice:
 
-- v1 has no mutation batch mode; each activation, profile load, enable/disable, or session/runtime transition owns its own recompute
+- v1 has no mutation batch mode; each activation, profile load, enable/disable, or staged-state/runtime transition owns its own recompute
 - `SetupRunData()` is treated as a trusted base-game recompute boundary, not an atomic commit primitive
 - if candidate mutation activation fails, Lib attempts to restore the prior raw patch state and keep the old host live
 - if the base-game recompute or rollback recompute fails, derived game state can be uncertain until restart or another clean game recompute
@@ -132,7 +132,7 @@ Lib provides clean state funnels for module authors:
 
 - prepared definitions for structural contract
 - managed storage for persisted state
-- transient session state for UI/runtime staging
+- transient draw state for UI/runtime staging
 - host methods for behavior
 
 But private module `internal` tables remain module-owned implementation detail. Lib does not enforce what authors store there.
@@ -144,7 +144,7 @@ Why this exists:
 
 What this means in practice:
 
-- first-party modules should use transient/session state for real UI state
+- first-party modules should use transient draw state for real UI state
 - private `internal` caching is still possible, even when it is less clean
 - enforcement here is by convention, review, and first-party examples, not runtime guards
 

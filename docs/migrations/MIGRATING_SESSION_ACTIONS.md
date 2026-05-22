@@ -1,7 +1,8 @@
 # Migrating Session Actions
 
-Session action helpers have been removed from the module-author `session`
-surface. `session` now represents staged storage data only.
+Session action helpers have been removed from the old module-author `session`
+surface. The current draw callback receives staged storage through `state` and
+transient action refs through `actions`.
 
 Use draw action refs for transient UI intent:
 

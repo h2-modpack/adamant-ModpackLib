@@ -1,4 +1,4 @@
-# Migrating Draw Callbacks To Draw/Data/Actions/Services
+# Migrating Draw Callbacks To Draw/State/Actions/Services
 
 This note covers the draw-callback API migration from earlier live draw
 surfaces to four render-scoped draw-phase objects.
@@ -64,7 +64,7 @@ Lib creates the context at the host draw boundary for each render call.
 ```
 
 `draw.widgets` is the draw widget surface. Widget calls no longer repeat
-`imgui`, while value widgets receive explicit storage refs from `data`:
+`imgui`, while value widgets receive explicit storage refs from `state`:
 
 ```lua
 function ui.drawTab(draw, state, actions, services)
@@ -111,7 +111,7 @@ draw.widgets.checkbox(state.get("FeatureEnabled"), opts)
 ```
 
 This intentionally differs from a `createDraw(...)` factory. `imgui`, staged
-data, actions, and services are live draw-phase surfaces, not static module
+state, actions, and services are live draw-phase surfaces, not static module
 dependencies. They should enter the module at draw time, not be captured during
 module construction.
 
@@ -254,7 +254,7 @@ components.draw(imgui, session, host)
 After:
 
 ```lua
-components.draw(draw, data, actions, services)
+components.draw(draw, state, actions, services)
 ```
 
 3. Keep static module dependencies in normal module binding.
@@ -284,7 +284,7 @@ hot reloads, or module activation boundaries.
 - Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `state`.
 - Use `draw.nav.*` for Lib navigation helpers that bind to `imgui`.
 - Use `draw.imgui` for raw ImGui layout calls.
-- Use `data` for direct staged-state access.
+- Use `state` for direct staged-state access.
 - Use `actions` for transient draw intent.
 - Use `services` for draw-safe module services such as logging, enabled
   checks, or integration queries. `draw.host` is no longer available.

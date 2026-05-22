@@ -72,7 +72,7 @@ Core owns coordinator bootstrap and stable GUI callback registration.
 Core responsibilities:
 - register stable `rom.gui` callbacks once behind `modutil.once_loaded.game(...)`
 - register coordinator metadata from `mods.on_all_mods_loaded(...)`
-- call `Framework.init(...)` from the reload body
+- call `Framework.createPack(...)` from the reload body
 - late-read Framework factories so a Framework reload does not leave Core holding stale closures
 
 `mods.on_all_mods_loaded(...)` is intentional coordinator timing, not a generic
@@ -91,7 +91,7 @@ Framework owns pack-level coordinator state:
 - coordinator UI
 
 Framework owns the current pack object for each `packId`.
-Coordinator/Core code owns the init parameters and re-calls `Framework.init(...)`
+Coordinator/Core code owns the pack creation parameters and re-calls `Framework.createPack(...)`
 when the coordinator/framework layer reloads or when Lib requests a coordinated
 structural rebuild.
 
@@ -158,7 +158,7 @@ That means one coordinated module reload refreshes its live runtime behavior imm
 ## Framework Pack Refresh
 
 Framework replaces the current pack object when the coordinator calls
-`Framework.init(params)` again for the same `packId`. The replacement keeps the
+`Framework.createPack(...)` again for the same `packId`. The replacement keeps the
 pack's stable HUD/index slot while rebuilding discovery, HUD, hash, and UI state
 from the current live module hosts.
 
@@ -168,7 +168,7 @@ reloads by late-reading the current Framework renderer/menu factories from
 
 The invariant is:
 - stable callbacks survive reloads
-- coordinator/Core owns `Framework.init(params)` re-entry
+- coordinator/Core owns `Framework.createPack(...)` re-entry
 - ordinary coordinated module behavior reloads do not require a pack rebuild
 
 Framework reload is an infrastructure path, not the fast module-authoring path.
@@ -178,7 +178,7 @@ feedback may be lost. Persist only correctness-critical state across Framework
 reloads. Module behavior state refreshes through Lib hosts.
 
 A Framework file reload does not, by itself, rebuild an existing pack object.
-The coordinator must call `Framework.init(params)` again, either from its reload
+The coordinator must call `Framework.createPack(...)` again, either from its reload
 body or through a coordinated structural rebuild request.
 
 HUD marker text is safe to refresh in place. HUD marker layout is not: the game
@@ -281,7 +281,7 @@ Best-effort infrastructure development path.
 Persistent Lib registries survive Lib reload, and Core late-reads Framework
 callbacks. Existing module hosts may still close over prior Lib implementation
 closures until the owning module reloads. Coordinator/Core must re-call
-`Framework.init(params)` to rebuild Framework pack state after Framework changes.
+`Framework.createPack(...)` to rebuild Framework pack state after Framework changes.
 Use a full process restart as the correctness boundary for infrastructure
 changes that affect mutation internals, top-level registration, or retained HUD
 layout.
