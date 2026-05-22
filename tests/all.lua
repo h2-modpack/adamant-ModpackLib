@@ -28,6 +28,7 @@ require('tests/TestModuleHost_CreateModule')
 require('tests/TestModuleHost_PrepareDefinition')
 require('tests/TestModuleHost_IsEnabled')
 require('tests/TestFallbackUi')
+require('tests/TestPhaseGate')
 require('tests/TestWidgets')
 require('tests/TestWidgets_Nav')
 

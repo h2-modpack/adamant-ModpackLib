@@ -15,11 +15,15 @@ local authorHostService = deps.authorHost
 local moduleHost = {
     prepareDefinition = definition.prepareDefinition,
 }
-local uiHost = import('core/module_bootstrap/ui/ui_host.lua')
+local phaseGate = deps.phaseGate
+local uiHost = import('core/module_bootstrap/ui/ui_host.lua', nil, {
+    phaseGate = phaseGate,
+})
 local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
     uiDraw = uiDraw,
     moduleState = moduleState,
     uiHost = uiHost,
+    phaseGate = phaseGate,
 })
 local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
     logging = logging,
@@ -190,7 +194,8 @@ function moduleHost.create(opts)
     local actionBuffer = moduleState.createActionBuffer()
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
-    local store = moduleState.createStore(persistentState)
+    local phaseOwner = {}
+    local store = moduleState.createStore(persistentState, phaseOwner)
 
     if type(drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
@@ -359,17 +364,18 @@ function moduleHost.create(opts)
         stagedState = stagedState,
         actionBuffer = actionBuffer,
         authorHost = authorHost,
+        phaseOwner = phaseOwner,
     })
 
     function host.drawTab()
         requireActivated("drawTab")
-        return drawTab(uiPhase.draw, uiPhase.state, uiPhase.actions, uiPhase.services)
+        return uiPhase.run(drawTab)
     end
 
     if type(drawQuickContent) == "function" then
         function host.drawQuickContent()
             requireActivated("drawQuickContent")
-            return drawQuickContent(uiPhase.draw, uiPhase.state, uiPhase.actions, uiPhase.services)
+            return uiPhase.run(drawQuickContent)
         end
     end
 

@@ -368,7 +368,6 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
     })
     local store, stagedState = createModuleState(self.harness, config, definition)
     local actionBuffer = self.harness.moduleState.createActionBuffer()
-    local uiActions = self.harness.uiActions.create(actionBuffer)
     local settingsObserver = function(commit)
         calls = calls + 1
         local recording = commit.actions.get("recording")
@@ -378,7 +377,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
         observedConfigChange = commit.hadConfigChanges()
     end
 
-    uiActions.get("recording"):stage({ kind = "start" })
+    actionBuffer.stage("recording", { kind = "start" })
     local ok, err = self:commitStagedState(definition, nil, settingsObserver, nil, store, stagedState, nil, actionBuffer)
 
     lu.assertTrue(ok)
@@ -535,7 +534,7 @@ function TestMutation_DefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleM
 end
 
 function TestMutation_DefinitionLifecycle:testDeprecatedAffectedFlagDoesNotCreateMutationLifecycle()
-    local store, stagedState = self:makeStore(false)
+    local store = self:makeStore(false)
     local def = { id = "DeprecatedAffectedFlag" }
 
     local ok, err = self:applyMutation("test-deprecated-affected-flag", def,

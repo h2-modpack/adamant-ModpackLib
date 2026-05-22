@@ -5,6 +5,7 @@ local nav = deps.nav
 local logging = deps.logging
 local storage = deps.storage
 local imgui = deps.rom.ImGui
+local phaseGate = deps.phaseGate
 
 local uiDraw = {}
 local draw = {
@@ -43,23 +44,28 @@ local function resolveField(target, methodName)
 end
 
 local function callFieldWidget(methodName, target, opts)
+    phaseGate.requireAnyDraw()
     local field = resolveField(target, methodName)
     return widgets[methodName](draw.imgui, field, opts)
 end
 
 function draw.widgets.separator()
+    phaseGate.requireAnyDraw()
     return widgets.separator(draw.imgui)
 end
 
 function draw.widgets.text(text, opts)
+    phaseGate.requireAnyDraw()
     return widgets.text(draw.imgui, text, opts)
 end
 
 function draw.widgets.button(label, opts)
+    phaseGate.requireAnyDraw()
     return widgets.button(draw.imgui, label, opts)
 end
 
 function draw.widgets.confirmButton(id, label, opts)
+    phaseGate.requireAnyDraw()
     return widgets.confirmButton(draw.imgui, id, label, opts)
 end
 
@@ -76,6 +82,7 @@ function draw.widgets.packedDropdown(target, opts)
 end
 
 function draw.widgets.getPackedChoiceAlias(target, opts)
+    phaseGate.requireAnyDraw()
     local field = resolveField(target, "getPackedChoiceAlias")
     return widgets.getPackedChoiceAlias(field, opts)
 end
@@ -93,6 +100,7 @@ function draw.widgets.stepper(target, opts)
 end
 
 function draw.widgets.steppedRange(minTarget, maxTarget, opts)
+    phaseGate.requireAnyDraw()
     local minField = resolveField(minTarget, "steppedRange")
     local maxField = resolveField(maxTarget, "steppedRange")
     if minField:owner() ~= maxField:owner() then
@@ -112,6 +120,7 @@ function draw.widgets.packedCheckboxList(target, opts)
 end
 
 function draw.nav.verticalTabs(opts)
+    phaseGate.requireAnyDraw()
     return nav.verticalTabs(draw.imgui, opts)
 end
 

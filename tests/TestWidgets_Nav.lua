@@ -7,6 +7,12 @@ function TestWidgets_Nav:setUp()
     self.h = createWidgetHarness()
 end
 
+local TestDrawOwner = {}
+
+local function InDraw(h, callback)
+    return h.phaseGate.runDraw(TestDrawOwner, callback)
+end
+
 function TestWidgets_Nav:testVerticalTabsReturnsSelectedKeyAndDrawsGroupsAndColors()
     local calls = {
         beginChild = 0,
@@ -105,18 +111,26 @@ function TestWidgets_Nav:testDrawNavUsesCurrentImguiForVerticalTabs()
     end
     local drawNav = self.h.uiDraw.get().nav
 
-    local selected = drawNav.verticalTabs({
-        id = "draw",
-        activeKey = "one",
-        tabs = {
-            { key = "one", label = "First" },
-            { key = "two", label = "Second" },
-        },
-    })
+    local selected = InDraw(self.h, function()
+        return drawNav.verticalTabs({
+            id = "draw",
+            activeKey = "one",
+            tabs = {
+                { key = "one", label = "First" },
+                { key = "two", label = "Second" },
+            },
+        })
+    end)
 
     lu.assertEquals(selected, "two")
     lu.assertEquals(calls.childId, "draw##nav")
     lu.assertEquals(calls.labels, { "First##one", "Second##two" })
     lu.assertTrue(calls.ended)
     lu.assertTrue(calls.sameLine)
+end
+
+function TestWidgets_Nav:testDrawNavRejectsUseOutsideDrawPhase()
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        self.h.uiDraw.get().nav.verticalTabs({})
+    end)
 end

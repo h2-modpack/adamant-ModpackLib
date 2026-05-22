@@ -195,6 +195,23 @@ return {
         description = "Overlay registration requires valid ids, draw functions, and column descriptors.",
     },
 
+    ["phase.invalid_ui_access"] = {
+        severity = "error",
+        description = "Draw-phase objects can only be used during their sanctioned module draw callback.",
+    },
+    ["phase.invalid_runtime_access"] = {
+        severity = "error",
+        description = "Runtime store access is closed while the owning module draw callback is running.",
+    },
+    ["phase.nested_draw"] = {
+        severity = "error",
+        description = "Only one module draw callback may be active at a time.",
+    },
+    ["phase.invalid_leave"] = {
+        severity = "error",
+        description = "Draw phase exit must match the active draw owner.",
+    },
+
     ["actions.invalid_key"] = {
         severity = "error",
         description = "Action refs require a non-empty string action key.",

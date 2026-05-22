@@ -28,6 +28,7 @@ globals = {
     "TestModuleState_DataDefaults",
     "TestModuleState_Session",
     "TestModuleState_PersistentState",
+    "TestModuleState_StagedState",
     "TestMutation",
     "TestMutation_BackupSystem",
     "TestMutation_DefinitionLifecycle",

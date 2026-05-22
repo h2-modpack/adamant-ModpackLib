@@ -35,27 +35,44 @@ local function requireRefSelf(context, self, ref)
     end
 end
 
-local function createDrawActionRef(actionBuffer, actionKey)
+local function createDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
     local ref
     ref = markActionRef({
         stage = function(self, value)
             requireRefSelf("actions.get(...):stage", self, ref)
+            if phaseGate ~= nil then
+                phaseGate.requireOwnerDraw(phaseOwner)
+            end
             actionBuffer.stage(actionKey, value)
         end,
         read = function(self)
             requireRefSelf("actions.get(...):read", self, ref)
+            if phaseGate ~= nil then
+                phaseGate.requireOwnerDraw(phaseOwner)
+            end
             return actionBuffer.read(actionKey)
         end,
         clear = function(self)
             requireRefSelf("actions.get(...):clear", self, ref)
+            if phaseGate ~= nil then
+                phaseGate.requireOwnerDraw(phaseOwner)
+            end
             actionBuffer.clear(actionKey)
         end,
         has = function(self)
             requireRefSelf("actions.get(...):has", self, ref)
+            if phaseGate ~= nil then
+                phaseGate.requireOwnerDraw(phaseOwner)
+            end
             return actionBuffer.has(actionKey)
         end,
     }, DRAW_ACTION_REF)
     return ref
+end
+
+local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
+    validateActionKey("actions.get", actionKey)
+    return createDrawActionRef(actionBuffer, actionKey, phaseGate, phaseOwner)
 end
 
 local function createCommitActionRef(snapshot, actionKey)
@@ -152,5 +169,6 @@ end
 return {
     createBuffer = createBuffer,
     createCommitActions = createCommitActions,
+    createGatedDrawActionRef = createGatedDrawActionRef,
     isDrawActionRef = isDrawActionRef,
 }

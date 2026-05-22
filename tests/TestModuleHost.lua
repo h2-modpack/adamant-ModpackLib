@@ -215,6 +215,9 @@ end
 
 function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
     local capturedState = nil
+    local doAuthorReset = false
+    local authorChanged = nil
+    local authorCount = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "ResetHost",
         name = "Reset Host",
@@ -233,6 +236,11 @@ function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
         stagedState = stagedState,
         drawTab = function(_, state)
             capturedState = state
+            if doAuthorReset then
+                authorChanged, authorCount = state.resetAll({
+                    exclude = { Count = true },
+                })
+            end
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-reset-host")
@@ -247,13 +255,15 @@ function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
 
     stagedState.write("EnabledFlag", true)
     stagedState.write("Count", 6)
-    local authorChanged, authorCount = capturedState.resetAll({
-        exclude = { Count = true },
-    })
+    doAuthorReset = true
+    host.drawTab()
     lu.assertTrue(authorChanged)
     lu.assertEquals(authorCount, 1)
     lu.assertEquals(stagedState.read("EnabledFlag"), false)
     lu.assertEquals(stagedState.read("Count"), 6)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        capturedState.resetAll()
+    end)
 end
 
 function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
@@ -312,6 +322,90 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     lu.assertEquals(self.h.warnings[warningCount + 1], "[AuthorHostModule] plain message")
     lu.assertEquals(self.h.warnings[warningCount + 2], "[AuthorHostModule] debug 7")
     lu.assertEquals(#self.h.warnings, warningCount + 2)
+end
+
+function TestModuleHost:testDrawPhaseClearsAfterDrawCallbackError()
+    local secondDraws = 0
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawPhaseError",
+        name = "Draw Phase Error",
+        storage = {},
+    })
+    local firstStore, firstStagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local secondStore, secondStagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+
+    local firstHost = createActivatedHost(self.h, "test-draw-phase-error-first", {
+        definition = definition,
+        persistentState = firstStore,
+        stagedState = firstStagedState,
+        drawTab = function()
+            error("draw boom")
+        end,
+    })
+    local secondHost = createActivatedHost(self.h, "test-draw-phase-error-second", {
+        definition = definition,
+        persistentState = secondStore,
+        stagedState = secondStagedState,
+        drawTab = function()
+            secondDraws = secondDraws + 1
+        end,
+    })
+
+    lu.assertErrorMsgContains("draw boom", function()
+        firstHost.drawTab()
+    end)
+
+    secondHost.drawTab()
+
+    lu.assertEquals(secondDraws, 1)
+end
+
+function TestModuleHost:testNestedDrawEntryIsRejected()
+    local nestedDraws = 0
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "NestedDraw",
+        name = "Nested Draw",
+        storage = {},
+    })
+    local firstStore, firstStagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local secondStore, secondStagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    local secondHost
+    local firstHost = createActivatedHost(self.h, "test-nested-draw-first", {
+        definition = definition,
+        persistentState = firstStore,
+        stagedState = firstStagedState,
+        drawTab = function()
+            secondHost.drawTab()
+        end,
+    })
+    secondHost = createActivatedHost(self.h, "test-nested-draw-second", {
+        definition = definition,
+        persistentState = secondStore,
+        stagedState = secondStagedState,
+        drawTab = function()
+            nestedDraws = nestedDraws + 1
+        end,
+    })
+
+    lu.assertErrorMsgContains("phase.nested_draw", function()
+        firstHost.drawTab()
+    end)
+
+    secondHost.drawTab()
+
+    lu.assertEquals(nestedDraws, 1)
 end
 
 function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
@@ -374,6 +468,99 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawServicesModule] service log")
     lu.assertEquals(self.h.warnings[warningCount + 2], "[DrawServicesModule] service debug")
     lu.assertEquals(#self.h.warnings, warningCount + 2)
+end
+
+function TestModuleHost:testDrawServicesRejectUseOutsideOwningDrawPhase()
+    local services = nil
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawServicesPhase",
+        name = "Draw Services Phase",
+        storage = {},
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    createActivatedHost(self.h, "test-draw-services-phase", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, _, _, drawServices)
+            services = drawServices
+            services.isHostEnabled()
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-draw-services-phase")
+
+    host.drawTab()
+
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        services.isHostEnabled()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        services.log("outside")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        services.logIf("outside")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        services.invokeIntegration("missing", "value", nil)
+    end)
+end
+
+function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
+    local actions = nil
+    local actionRef = nil
+    local observed = nil
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawActionsPhase",
+        name = "Draw Actions Phase",
+        storage = {},
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    createActivatedHost(self.h, "test-draw-actions-phase", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, _, drawActions)
+            actions = drawActions
+            actionRef = actions.get("recording")
+            actionRef:stage({ kind = "start" })
+            observed = {
+                hasAny = actions.hasAny(),
+                has = actionRef:has(),
+                value = actionRef:read(),
+            }
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-draw-actions-phase")
+
+    host.drawTab()
+
+    lu.assertTrue(observed.hasAny)
+    lu.assertTrue(observed.has)
+    lu.assertEquals(observed.value, { kind = "start" })
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actions.hasAny()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actions.get("recording")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actionRef:read()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actionRef:stage({ kind = "again" })
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actionRef:clear()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actionRef:has()
+    end)
 end
 
 function TestModuleHost:testFullHostOwnsAuthorHostCapabilities()

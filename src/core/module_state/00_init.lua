@@ -4,6 +4,7 @@ local logging = deps.logging
 local storageService = deps.storage
 local values = deps.values
 local chalk = deps.chalk
+local phaseGate = deps.phaseGate
 
 local moduleState = {}
 
@@ -25,7 +26,10 @@ local actionBufferModule = import('core/module_state/actions/action_buffer.lua',
 })
 moduleState.actionBuffer = actionBufferModule
 
-local uiActionsModule = import('core/module_state/actions/ui_actions.lua')
+local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, {
+    phaseGate = phaseGate,
+    actionRefs = actionBufferModule,
+})
 moduleState.uiActions = uiActionsModule
 
 local stagedStateModule = import('core/module_state/staged/staged_state.lua', nil, {
@@ -34,10 +38,18 @@ local stagedStateModule = import('core/module_state/staged/staged_state.lua', ni
     values = values,
 })
 
-local uiStateModule = import('core/module_state/staged/ui_state.lua')
+local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
+    logging = logging,
+    phaseGate = phaseGate,
+    storage = storageService,
+})
 moduleState.uiState = uiStateModule
 
-local storeModule = import('core/module_state/persistent/store.lua')
+local storeModule = import('core/module_state/persistent/store.lua', nil, {
+    logging = logging,
+    phaseGate = phaseGate,
+    storage = storageService,
+})
 
 ---@class ConfigBackendEntry
 ---@field get fun(self: ConfigBackendEntry): any
@@ -145,8 +157,8 @@ function moduleState.create(modConfig, definition)
 end
 
 -- Internal API: narrows persistent state to the author-facing runtime store.
-function moduleState.createStore(persistentState)
-    return storeModule.create(persistentState)
+function moduleState.createStore(persistentState, phaseOwner)
+    return storeModule.create(persistentState, phaseOwner)
 end
 
 function moduleState.createActionBuffer()

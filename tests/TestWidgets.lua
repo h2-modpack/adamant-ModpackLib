@@ -35,9 +35,45 @@ local function UseImgui(h, imgui)
     end
 end
 
+local TestDrawOwner = {}
+
+local function InDraw(h, callback)
+    return h.phaseGate.runDraw(TestDrawOwner, callback)
+end
+
+local function DrawSurface(h, surface)
+    return setmetatable({}, {
+        __index = function(_, key)
+            local value = surface[key]
+            if type(value) ~= "function" then
+                return value
+            end
+            return function(...)
+                local args = { ... }
+                return InDraw(h, function()
+                    return value(table.unpack(args))
+                end)
+            end
+        end,
+    })
+end
+
 local function DrawWidgets(h, imgui)
     UseImgui(h, imgui)
-    return h.uiDraw.get().widgets
+    return DrawSurface(h, h.uiDraw.get().widgets)
+end
+
+local function DrawAction(h, actionBuffer, key)
+    local actions = h.uiActions.create(actionBuffer, TestDrawOwner)
+    return InDraw(h, function()
+        return actions.get(key)
+    end)
+end
+
+function TestWidgets:testDrawWidgetsRejectUseOutsideDrawPhase()
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        self.h.uiDraw.get().widgets.text("outside")
+    end)
 end
 
 function TestWidgets:testPlainDropdownUsesNativePreview()
@@ -323,7 +359,7 @@ end
 
 function TestWidgets:testButtonStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("recording")
+    local action = DrawAction(self.h, actionBuffer, "recording")
     local clickedLabels = {}
     local imgui = self.h.makeDropdownImgui()
     imgui.Button = function(label)
@@ -331,7 +367,7 @@ function TestWidgets:testButtonStagesDrawActionRef()
         return true
     end
 
-    local clicked = self.h.widgets.button(imgui, "Start", {
+    local clicked = DrawWidgets(self.h, imgui).button("Start", {
         id = "start_recording",
         action = action,
         value = { kind = "start" },
@@ -339,12 +375,12 @@ function TestWidgets:testButtonStagesDrawActionRef()
 
     lu.assertTrue(clicked)
     lu.assertEquals(clickedLabels[1], "Start##start_recording")
-    lu.assertEquals(action:read(), { kind = "start" })
+    lu.assertEquals(actionBuffer.read("recording"), { kind = "start" })
 end
 
 function TestWidgets:testCheckboxStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("enabled")
+    local action = DrawAction(self.h, actionBuffer, "enabled")
     local stagedState = self.h.createValueStagedState(false)
     local imgui = self.h.makeDropdownImgui()
     imgui.Checkbox = function(_, current)
@@ -357,12 +393,12 @@ function TestWidgets:testCheckboxStagesDrawActionRef()
 
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Enabled"), true)
-    lu.assertEquals(action:read(), true)
+    lu.assertEquals(actionBuffer.read("enabled"), true)
 end
 
 function TestWidgets:testDropdownStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("mode")
+    local action = DrawAction(self.h, actionBuffer, "mode")
     local stagedState = self.h.createValueStagedState(1)
     local imgui = self.h.makeDropdownImgui()
     imgui.BeginCombo = function()
@@ -384,12 +420,12 @@ function TestWidgets:testDropdownStagesDrawActionRef()
 
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Mode"), 2)
-    lu.assertEquals(action:read(), 2)
+    lu.assertEquals(actionBuffer.read("mode"), 2)
 end
 
 function TestWidgets:testStepperStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("runs")
+    local action = DrawAction(self.h, actionBuffer, "runs")
     local imgui = self.h.makeStepperImgui("+##Runs_inc")
     local stagedState = self.h.createValueStagedState(3)
 
@@ -401,12 +437,12 @@ function TestWidgets:testStepperStagesDrawActionRef()
 
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Runs"), 4)
-    lu.assertEquals(action:read(), 4)
+    lu.assertEquals(actionBuffer.read("runs"), 4)
 end
 
 function TestWidgets:testRadioStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("mode")
+    local action = DrawAction(self.h, actionBuffer, "mode")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
         return label == "Two##Mode_2"
@@ -424,12 +460,12 @@ function TestWidgets:testRadioStagesDrawActionRef()
 
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Mode"), 2)
-    lu.assertEquals(action:read(), 2)
+    lu.assertEquals(actionBuffer.read("mode"), 2)
 end
 
 function TestWidgets:testPackedRadioStagesSelectedChildAction()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("packed")
+    local action = DrawAction(self.h, actionBuffer, "packed")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
         return label == "First##Packed_2"
@@ -443,12 +479,12 @@ function TestWidgets:testPackedRadioStagesSelectedChildAction()
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("First"), true)
     lu.assertEquals(stagedState.read("Second"), false)
-    lu.assertEquals(action:read(), "First")
+    lu.assertEquals(actionBuffer.read("packed"), "First")
 end
 
 function TestWidgets:testSteppedRangeStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
-    local action = self.h.uiActions.create(actionBuffer).get("range")
+    local action = DrawAction(self.h, actionBuffer, "range")
     local imgui = self.h.makeStepperImgui("+##Max_max_inc")
     local stagedState = createWritableStagedState({
         Min = 2,
@@ -470,5 +506,5 @@ function TestWidgets:testSteppedRangeStagesDrawActionRef()
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Min"), 2)
     lu.assertEquals(stagedState.read("Max"), 5)
-    lu.assertEquals(action:read(), { min = 2, max = 5 })
+    lu.assertEquals(actionBuffer.read("range"), { min = 2, max = 5 })
 end

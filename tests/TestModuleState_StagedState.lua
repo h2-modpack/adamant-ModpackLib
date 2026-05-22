@@ -15,6 +15,12 @@ local makeMinRowsTableDefinition = helpers.makeMinRowsTableDefinition
 
 TestModuleState_StagedState = {}
 
+local TestDrawOwner = {}
+
+local function inDraw(harness, callback)
+    return harness.phaseGate.runDraw(TestDrawOwner, callback)
+end
+
 function TestModuleState_StagedState:setUp()
     self.harness = createLibHarness()
 end
@@ -567,34 +573,44 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
     })
     local _, stagedState = createModuleState(self.harness, {}, definition)
     local actionBuffer = self.harness.moduleState.createActionBuffer()
-    local actions = self.harness.uiActions.create(actionBuffer)
-    local recording = actions.get("recording")
+    local actions = self.harness.uiActions.create(actionBuffer, TestDrawOwner)
+    local recording = inDraw(self.harness, function()
+        return actions.get("recording")
+    end)
 
-    lu.assertFalse(actions.hasAny())
-    lu.assertFalse(recording:has())
+    inDraw(self.harness, function()
+        lu.assertFalse(actions.hasAny())
+        lu.assertFalse(recording:has())
 
-    recording:stage({ kind = "start" })
+        recording:stage({ kind = "start" })
 
-    lu.assertTrue(actions.hasAny())
-    lu.assertTrue(actionBuffer.hasAny())
+        lu.assertTrue(actions.hasAny())
+        lu.assertTrue(actionBuffer.hasAny())
+        lu.assertFalse(stagedState.isDirty())
+        lu.assertTrue(recording:has())
+        lu.assertEquals(recording:read(), { kind = "start" })
+
+        recording:clear()
+
+        lu.assertFalse(actions.hasAny())
+    end)
+
     lu.assertFalse(stagedState.isDirty())
-    lu.assertTrue(recording:has())
-    lu.assertEquals(recording:read(), { kind = "start" })
-
-    recording:clear()
-
-    lu.assertFalse(actions.hasAny())
     lu.assertFalse(actionBuffer.hasAny())
-    lu.assertFalse(stagedState.isDirty())
 end
 
 function TestModuleState_StagedState:testActionRefsRequireMethodCallSyntax()
     local actionBuffer = self.harness.moduleState.createActionBuffer()
-    local drawAction = self.harness.uiActions.create(actionBuffer).get("recording")
+    local actions = self.harness.uiActions.create(actionBuffer, TestDrawOwner)
+    local drawAction = inDraw(self.harness, function()
+        return actions.get("recording")
+    end)
     local commitAction = self.harness.moduleState.createCommitActions({ recording = true }).get("recording")
 
     lu.assertErrorMsgContains("api.invalid_method_call", function()
-        drawAction.stage(true)
+        inDraw(self.harness, function()
+            drawAction.stage(true)
+        end)
     end)
     lu.assertErrorMsgContains("api.invalid_method_call", function()
         commitAction.read()

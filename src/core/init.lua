@@ -7,6 +7,9 @@ local runtimeRoot = AdamantModpackLib_Runtime
 local logging = import('core/logging/logging.lua', nil, {
     config = deps.config,
 })
+local phaseGate = import('core/module_bootstrap/ui/phase_gate.lua', nil, {
+    logging = logging,
+})
 
 local registry = import('core/lib_bootstrap/registry.lua', nil, {
     runtimeRoot = runtimeRoot,
@@ -39,6 +42,7 @@ local moduleState = import('core/module_state/00_init.lua', nil, {
     logging = logging,
     storage = storage,
     values = values,
+    phaseGate = phaseGate,
 })
 
 local cacheBundle = import('core/cache/00_init.lua', nil, {
@@ -113,6 +117,7 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     storage = storage,
     actions = moduleState.actionBuffer,
     rom = externals.rom,
+    phaseGate = phaseGate,
 })
 
 local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
@@ -148,6 +153,7 @@ local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     storage = storage,
     uiDraw = widgetsBundle.uiDraw,
     authorHost = authorHost,
+    phaseGate = phaseGate,
 })
 
 local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil, {

@@ -22,11 +22,23 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local drawNav = nil
     local authorSchemaNode = nil
     local authorStateField = nil
+    local authorStateFieldAlias = nil
+    local authorStateFieldSchemaAlias = nil
     local authorRowValue = nil
+    local authorRows = nil
     local authorRowField = nil
+    local authorRowFieldAlias = nil
+    local authorRowFieldValue = nil
+    local capturedFlagValue = nil
+    local capturedRowValue = nil
+    local runtimeField = nil
+    local runtimeRows = nil
+    local runtimeRowField = nil
     local config = {}
+    local host, store
+    local checkRuntimeRefs = false
 
-    local host, store = self.h.public.createModule({
+    host, store = self.h.public.createModule({
         pluginGuid = "test-create-module",
         config = config,
         modpack = "create-module-pack",
@@ -54,10 +66,36 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
             authorStateField = state.get("Flag")
             authorSchemaNode = authorStateField:schema()
             local rows = state.get("Rows")
+            authorRows = rows
             authorRowField = rows:get(1, "Limit")
-            authorRowValue = rows:read(1, "Limit")
+            if authorRowValue == nil then
+                authorRowValue = rows:read(1, "Limit")
+            end
             authorStateField:write(true)
             state.write("Rows", 1, "Limit", 3)
+            capturedFlagValue = state.read("Flag")
+            capturedRowValue = state.read("Rows", 1, "Limit")
+            lu.assertErrorMsgContains("storage.invalid_field_args", function()
+                state.read("Flag", 1, "Limit")
+            end)
+            authorStateFieldAlias = authorStateField:alias()
+            authorStateFieldSchemaAlias = authorStateField:schema().alias
+            authorRowFieldAlias = authorRowField:alias()
+            authorRowFieldValue = authorRowField:read()
+            lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
+                store.read("Flag")
+            end)
+            if checkRuntimeRefs then
+                lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
+                    runtimeField:read()
+                end)
+                lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
+                    runtimeRows:read(1, "Limit")
+                end)
+                lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
+                    runtimeRowField:read()
+                end)
+            end
         end,
     })
 
@@ -89,10 +127,13 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNil(capturedState.getAliasSchema)
     lu.assertEquals(type(capturedState.read), "function")
     lu.assertEquals(type(capturedState.write), "function")
-    lu.assertEquals(capturedState.read("Flag"), true)
-    lu.assertEquals(capturedState.read("Rows", 1, "Limit"), 3)
-    lu.assertErrorMsgContains("storage.invalid_field_args", function()
-        capturedState.read("Flag", 1, "Limit")
+    lu.assertEquals(capturedFlagValue, true)
+    lu.assertEquals(capturedRowValue, 3)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        capturedState.read("Flag")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        capturedState.write("Flag", false)
     end)
     lu.assertEquals(type(host.isEnabled), "function")
     lu.assertEquals(type(store.get), "function")
@@ -100,6 +141,16 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNil(store.table)
     lu.assertNil(store.getAliasSchema)
     lu.assertNil(store.write)
+    runtimeField = store.get("Flag")
+    runtimeRows = store.get("Rows")
+    runtimeRowField = runtimeRows:get(1, "Limit")
+    lu.assertEquals(runtimeField:read(), false)
+    lu.assertEquals(runtimeField:alias(), "Flag")
+    lu.assertEquals(runtimeRows:count(), 1)
+    lu.assertEquals(runtimeRows:read(1, "Limit"), 2)
+    lu.assertEquals(runtimeRowField:read(), 2)
+    checkRuntimeRefs = true
+    liveHost.drawTab()
     lu.assertEquals(store.read("Flag"), false)
     lu.assertEquals(store.read("Rows", 1, "Limit"), 2)
     lu.assertErrorMsgContains("storage.invalid_field_args", function()
@@ -107,6 +158,7 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     end)
     liveHost.flush()
     lu.assertEquals(store.read("Flag"), true)
+    lu.assertEquals(runtimeField:read(), true)
     lu.assertEquals(self.h.hostRegistry.getPluginInfo("test-create-module"), {
         pluginGuid = "test-create-module",
         packId = "create-module-pack",
@@ -116,11 +168,29 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertNotNil(authorSchemaNode)
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
-    lu.assertEquals(authorStateField:alias(), "Flag")
-    lu.assertEquals(authorStateField:schema().alias, "Flag")
+    lu.assertEquals(authorStateFieldAlias, "Flag")
+    lu.assertEquals(authorStateFieldSchemaAlias, "Flag")
     lu.assertEquals(authorRowValue, 2)
-    lu.assertEquals(authorRowField:alias(), "Limit")
-    lu.assertEquals(authorRowField:read(), 3)
+    lu.assertEquals(authorRowFieldAlias, "Limit")
+    lu.assertEquals(authorRowFieldValue, 3)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorStateField:alias()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorRows:count()
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorRows:read(1, "Limit")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorRows:get(1, "Limit")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorRows:write(1, "Limit", 4)
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        authorRowField:read()
+    end)
     local liveRecord = self.h.moduleHost.getRecord(liveHost)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
