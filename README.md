@@ -6,7 +6,7 @@ configuration-heavy mods, or coordinated feature bundles.
 ModpackLib provides the common plumbing that those projects usually need:
 
 - typed storage definitions for module settings
-- a staged UI `session` model for responsive ImGui config screens
+- draw-phase `state`, `actions`, and `services` for responsive ImGui config screens
 - a persistent `store` model for runtime hook logic
 - profile and hash helpers for saving, loading, and identifying settings
 - mutation helpers for modules that patch run data
@@ -21,7 +21,7 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = "ExampleModule",
@@ -51,7 +51,7 @@ Module authors:
 - [docs/module-authors/GETTING_STARTED.md](docs/module-authors/GETTING_STARTED.md)
   First module flow, file roles, and core concepts.
 - [docs/module-authors/MODULE_AUTHORING.md](docs/module-authors/MODULE_AUTHORING.md)
-  Full authoring contract for storage, sessions, lifecycle, hooks, overlays, mutations, and hosting.
+  Full authoring contract for managed state, lifecycle, hooks, overlays, mutations, and hosting.
 - [docs/module-authors/capabilities/README.md](docs/module-authors/capabilities/README.md)
   Focused guides for managed state, widgets, hooks, mutations, overlays, integrations, and cache.
 - [API.md](API.md)

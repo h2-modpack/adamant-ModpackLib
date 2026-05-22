@@ -9,7 +9,7 @@ Use integrations when modules can cooperate but should still work when the provi
 Hosted modules register providers on the author host before activation:
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -17,6 +17,7 @@ local host, store = lib.createModule({
     storage = data.buildStorage(),
     drawTab = ui.drawTab,
 })
+if not host then return end
 
 host.integrations.register("run-director.god-availability", {
     providerId = MODULE_ID,
@@ -52,6 +53,10 @@ Runtime consumer code should use the author host passed into hook, overlay,
 mutation, and module helper paths. Draw code should use
 `services.invokeIntegration(...)`.
 
+`host.integrations.invoke(...)` is a runtime helper. Draw callbacks receive the
+narrower `services.invokeIntegration(...)` instead, so draw code can perform
+draw-safe cross-module queries without gaining host lifecycle authority.
+
 ## Public Surface
 
 Use:
@@ -66,6 +71,10 @@ replaced.
 
 Provider declarations close when activation begins. Register the complete
 current provider set before calling `host.activate()`.
+
+Provider API tables should be small and reload-safe. Consumers should call
+through `invoke(...)` instead of caching provider tables, because a provider
+module reload replaces the current implementation.
 
 ## Naming
 

@@ -29,6 +29,12 @@ draw `state` exposes the same convenience shape for custom raw ImGui code:
 `state.read(alias, ...)` and `state.write(alias, ...)` forward through the
 staged object returned by `state.get(alias)`.
 
+These surfaces are phase-gated:
+
+- `store` is for runtime code and rejects access during its owning module's draw callback.
+- `state`, `actions`, `services`, and refs returned from them are for the active draw callback and reject access outside that callback.
+- Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
+
 ```lua
 function ui.drawTab(draw, state, actions, services)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
@@ -177,7 +183,9 @@ Use actions for one-shot UI intent that should be observed by runtime commit
 plumbing, not for ordinary persistent settings. Stage actions through
 `actions`, not through `state`.
 
-Observe committed actions with `onSettingsCommitted(host, store, commit)`:
+Observe committed actions with `onSettingsCommitted(host, store, commit)`.
+This callback runs after staged state commits, so it reads committed values
+through `store` and action payloads through `commit.actions`:
 
 ```lua
 local function onSettingsCommitted(host, store, commit)
@@ -192,7 +200,7 @@ local function onSettingsCommitted(host, store, commit)
     end
 end
 
-local host = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -201,6 +209,8 @@ local host = lib.createModule({
     onSettingsCommitted = onSettingsCommitted,
     drawTab = ui.drawTab,
 })
+if not host then return end
+
 host.activate()
 ```
 

@@ -39,7 +39,7 @@ These tables are initialized with `X = X or {}` so they survive a file reload in
 Safe to rebuild on every module `init`:
 - `definition`
 - `store`
-- `session`
+- staged state and its author-facing draw adapters
 - live module host created by `lib.createModule(...)` and activated by `host.activate()`
 - UI draw closures
 - lookup tables derived from current imports
@@ -109,10 +109,10 @@ Lib owns the shared reload-sensitive plumbing:
 ### Modules
 
 Modules own their local rebuild:
-- recreate `definition`, `store`, `session`, and the Lib-created live host in `init`
+- recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - keep persisted runtime reads on `store`
-- keep staged UI edits on the author-facing `session`
+- keep staged UI edits on the author-facing draw `state`
 - declare runtime hooks on `host.hooks.*` before activation
 - declare retained overlays on `host.overlays.*` before activation
 
@@ -147,7 +147,7 @@ The important part is the split:
 `lib.createModule(...)` plus `host.activate()` is the normal behavior refresh boundary for a coordinated module.
 
 During module creation and activation:
-- the module host closes over the current `definition`, `store`, and `session`
+- the module host closes over the current `definition`, `store`, and staged state
 - `host.activate()` publishes the live host
 - Lib refreshes hook registrations under the module owner id derived from `pluginGuid`; absent hook registrations for that owner are deactivated
 - Lib refreshes integration registrations under the module owner id derived from `pluginGuid`; absent integration providers for that owner are removed
@@ -316,8 +316,8 @@ coordinated path, use a full reload.
 ## Practical Rules
 
 - keep `chalk`, `reload`, and raw config local to `main.lua`
-- recreate `definition`, `store`, `session`, and the Lib-created live host in `init`
-- keep `session` local to `main.lua`; draw callbacks receive the restricted author session through the host
+- recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
+- keep staged state behind the host; draw callbacks receive restricted `state`, `actions`, and `services` arguments through the host
 - register runtime hooks through `host.hooks.*` before activation
 - pass `pluginGuid` to `lib.createModule(...)`
 - call `host.activate()` after construction

@@ -444,6 +444,35 @@ function TestOverlays_Retained:testAfterHookObservesResultsWithoutChangingReturn
     })
 end
 
+function TestOverlays_Retained:testAfterHookPreservesNilResultArity()
+    local wrapped = nil
+    local observed = nil
+    self.h.modutil.mod.Path.Wrap = function(path, handler)
+        lu.assertEquals(path, "StartNewRunNilResults")
+        wrapped = handler
+    end
+
+    local _, authorHost = self:createHostWithOverlays("test-retained-overlay-after-hook-nil-results", function(overlays)
+        overlays.afterHook("StartNewRunNilResults", function(_, event)
+            observed = event.results
+        end)
+    end)
+    local ok, err = authorHost.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    local first, second, third = wrapped(function()
+        return nil, "second", nil
+    end)
+
+    lu.assertNil(first)
+    lu.assertEquals(second, "second")
+    lu.assertNil(third)
+    lu.assertEquals(observed.n, 3)
+    lu.assertNil(observed[1])
+    lu.assertEquals(observed[2], "second")
+    lu.assertNil(observed[3])
+end
+
 function TestOverlays_Retained:testSystemOverlayDoesNotExposeHookOrIntervalEvents()
     self.h.createSystem("test.retained.system.surface").overlays.define(function(overlays)
         lu.assertNil(overlays.afterHook)

@@ -19,7 +19,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
----@field alias string Public alias used by store/stagedState/widget APIs and as the persisted backing key.
+---@field alias string Public alias used by store/state/widget APIs and as the persisted backing key.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
@@ -51,13 +51,14 @@ local lib = {}
 ---Table handles are object handles; call methods with colon syntax (`rows:read(...)`).
 ---@class AdamantModpackLib.StorageTableReadOnly
 ---@field count fun(self: AdamantModpackLib.StorageTableReadOnly): integer
----@field get fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): AdamantModpackLib.StorageField
+---@field get fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): AdamantModpackLib.StorageFieldReadOnly
 ---@field read fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer, alias: string): any
 ---@field snapshot fun(self: AdamantModpackLib.StorageTableReadOnly, rowIndex: integer): table?
 ---@field snapshots fun(self: AdamantModpackLib.StorageTableReadOnly): table[]
 
 ---Writable table handles are object handles; call methods with colon syntax (`rows:write(...)`).
 ---@class AdamantModpackLib.StorageTableStagedState: AdamantModpackLib.StorageTableReadOnly
+---@field get fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, alias: string): AdamantModpackLib.StorageField
 ---@field write fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, alias: string, value: any): boolean
 ---@field reset fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer, alias: string): boolean
 ---@field append fun(self: AdamantModpackLib.StorageTableStagedState, rowValues?: table): boolean
@@ -65,30 +66,44 @@ local lib = {}
 ---@field remove fun(self: AdamantModpackLib.StorageTableStagedState, rowIndex: integer): boolean
 ---@field clear fun(self: AdamantModpackLib.StorageTableStagedState): boolean
 
----@class AdamantModpackLib.StorageField
----@field read fun(self: AdamantModpackLib.StorageField): any
----@field write fun(self: AdamantModpackLib.StorageField, value: any): boolean?
----@field reset fun(self: AdamantModpackLib.StorageField): boolean?
----@field schema fun(self: AdamantModpackLib.StorageField): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
----@field alias fun(self: AdamantModpackLib.StorageField): string
----@field controlId fun(self: AdamantModpackLib.StorageField): string Draw/control identity from the current owner structure.
----@field owner fun(self: AdamantModpackLib.StorageField): table
+---@class AdamantModpackLib.StorageFieldReadOnly
+---@field read fun(self: AdamantModpackLib.StorageFieldReadOnly): any
+---@field readAlias fun(
+---    self: AdamantModpackLib.StorageFieldReadOnly,
+---    alias: string
+---): any Read another alias in this field's storage scope.
+---@field schema fun(self: AdamantModpackLib.StorageFieldReadOnly): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
+---@field alias fun(self: AdamantModpackLib.StorageFieldReadOnly): string
+---@field controlId fun(self: AdamantModpackLib.StorageFieldReadOnly): string Draw/control identity from the current owner structure.
+---@field owner fun(self: AdamantModpackLib.StorageFieldReadOnly): table Opaque owner identity used for same-owner checks.
 
----@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableReadOnly
+---@class AdamantModpackLib.StorageField: AdamantModpackLib.StorageFieldReadOnly
+---@field write fun(self: AdamantModpackLib.StorageField, value: any): boolean?
+---@field writeAlias fun(
+---    self: AdamantModpackLib.StorageField,
+---    alias: string,
+---    value: any
+---): boolean? Write another alias in this field's storage scope.
+---@field reset fun(self: AdamantModpackLib.StorageField): boolean?
+
+---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageFieldReadOnly|AdamantModpackLib.StorageTableReadOnly
 ---@alias AdamantModpackLib.DrawStateRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
+---Internal trusted persistent state. Module authors receive `Store`.
 ---@class AdamantModpackLib.PersistentState
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a storage object for a persisted alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
+---Committed runtime state facade. Store methods are valid outside the owning module's draw callback and reject during that draw callback.
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
+---Internal trusted staged state. Module authors receive `DrawState` during draw callbacks.
 ---@class AdamantModpackLib.StagedState
 ---@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
@@ -106,16 +121,19 @@ local lib = {}
 ---@field isDirty fun(): boolean
 ---@field auditMismatches fun(): string[]
 
+---Draw-phase staged UI state facade. Methods and returned refs are valid only during the owning module's draw callback.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
+---Draw-phase transient action surface. Methods and returned refs are valid only during the owning module's draw callback.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field hasAny fun(): boolean
 
+---Draw-phase action ref. Use colon syntax; methods are valid only during the owning module's draw callback.
 ---@class AdamantModpackLib.DrawActionRef
 ---@field stage fun(self: AdamantModpackLib.DrawActionRef, value: any)
 ---@field read fun(self: AdamantModpackLib.DrawActionRef): any
@@ -134,6 +152,7 @@ local lib = {}
 ---@field actions AdamantModpackLib.CommitActions
 ---@field hadConfigChanges fun(): boolean
 
+---Module-facing host facade. Declare host-owned capabilities before activation; declaration namespaces reject after activation.
 ---@class AdamantModpackLib.AuthorHost
 ---Activates module hooks, integrations, live-host registration, and initial runtime sync.
 ---Call once after construction.
@@ -152,6 +171,7 @@ local lib = {}
 ---@field mutation AdamantModpackLib.AuthorMutation
 ---@field overlays AdamantModpackLib.RetainedOverlayRegistrar
 
+---Draw-phase service surface. Methods are valid only during the owning module's draw callback.
 ---@class AdamantModpackLib.DrawServices
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
@@ -284,8 +304,9 @@ local lib = {}
 ---    services: AdamantModpackLib.DrawServices
 ---)
 
+---Draw-phase immediate UI surface. `widgets` and `nav` methods require an active draw callback; `imgui` is the raw environment ImGui table.
 ---@class AdamantModpackLib.DrawContext
----@field imgui table
+---@field imgui table Raw ImGui backend table for custom layout and controls.
 ---@field widgets AdamantModpackLib.DrawWidgetsApi
 ---@field nav AdamantModpackLib.DrawNavApi
 
@@ -538,6 +559,7 @@ local lib = {}
 ---@class AdamantModpackLib.UiSuppressionToken
 ---@field release fun()
 
+---Draw-phase widget helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawWidgetsApi
 ---@field separator fun()
 ---@field text fun(text: any, opts?: AdamantModpackLib.TextOpts)
@@ -558,9 +580,11 @@ local lib = {}
 ---@field checkbox fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.CheckboxOpts): boolean
 ---@field packedCheckboxList fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedCheckboxListOpts): boolean
 
+---Draw-phase navigation helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawNavApi
 ---@field verticalTabs fun(opts?: AdamantModpackLib.VerticalTabsOpts): string|number?
 
+---Internal constructed module state bundle.
 ---@class AdamantModpackLib.ModuleState
 ---@field persistentState AdamantModpackLib.PersistentState
 ---@field stagedState AdamantModpackLib.StagedState

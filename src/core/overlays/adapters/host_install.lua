@@ -24,10 +24,10 @@ local function createAfterHookReceipt(host, paths)
         for _, path in ipairs(paths) do
             local hookPath = path
             declare.wrap(hookPath, "overlay.after:" .. hookPath, function(base, ...)
-                local args = { ... }
-                local results = { base(...) }
+                local args = table.pack(...)
+                local results = table.pack(base(...))
                 retained.dispatchAfterHook(host, hookPath, args, results)
-                return table.unpack(results)
+                return table.unpack(results, 1, results.n)
             end)
         end
     end)

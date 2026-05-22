@@ -57,6 +57,10 @@ function StorageFieldMethods:read(...)
     return self._owner.read(self._alias)
 end
 
+function StorageFieldMethods:readAlias(alias)
+    return self._owner.read(NormalizeAlias(alias, self._source or "StorageField.readAlias"))
+end
+
 function StorageFieldMethods:write(value)
     if type(self._owner.write) ~= "function" then
         logging.violate("storage.readonly_field",
@@ -67,6 +71,18 @@ function StorageFieldMethods:write(value)
         return false
     end
     return self._owner.write(self._alias, value)
+end
+
+function StorageFieldMethods:writeAlias(alias, value)
+    if type(self._owner.write) ~= "function" then
+        logging.violate("storage.readonly_field",
+            "%s: storage field '%s' is read-only",
+            tostring(self._source or "StorageField.writeAlias"),
+            tostring(self._alias)
+        )
+        return false
+    end
+    return self._owner.write(NormalizeAlias(alias, self._source or "StorageField.writeAlias"), value)
 end
 
 function StorageFieldMethods:reset()

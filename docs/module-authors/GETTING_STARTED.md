@@ -61,6 +61,10 @@ Use the right state object for the right job:
 - gameplay/runtime logic uses `store`
 
 If you ignore that boundary, the module will still often "work", but you will create drift between the UI and the persisted state model.
+Lib enforces this at the author-facing surfaces: `state`, `actions`,
+`services`, `draw.widgets`, and `draw.nav` are only valid during the active draw
+callback, while `store` is for runtime code and rejects access during its owning
+module's draw callback.
 
 `lib.createModule(...)` owns the normal construction pipeline so store/draw-state
 ownership stays paired. Keep custom module setup around this boundary instead
@@ -125,7 +129,7 @@ Start with the template, then fill in these pieces in order.
 At minimum:
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -133,6 +137,8 @@ local host, store = lib.createModule({
     name = "Example Module",
     drawTab = function() end,
 })
+if not host then return end
+
 host.activate()
 ```
 
@@ -185,7 +191,7 @@ Then attach it to the module definition:
 ```lua
 local data = import("mods/data.lua")
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -194,6 +200,8 @@ local host, store = lib.createModule({
     storage = data.buildStorage(),
     drawTab = function() end,
 })
+if not host then return end
+
 host.activate()
 ```
 
@@ -214,7 +222,7 @@ or hashes, use `host.cache.persistent.*`.
 ### 3. Create the module with storage and callbacks in `main.lua`
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -224,6 +232,8 @@ local host, store = lib.createModule({
     drawTab = ui.drawTab,
     drawQuickContent = ui.drawQuickContent,
 })
+if not host then return end
+
 logic.registerHooks(host, store)
 host.activate()
 ```
@@ -257,6 +267,9 @@ Draw callbacks receive the author-facing `state` API:
 - `state.read(alias, ...)`
 - `state.write(alias, ...)`
 - `state.resetAll(opts?)`
+
+`draw`, `state`, `actions`, and `services` should be treated as callback-local
+objects. Do not cache them or refs returned from them for runtime use.
 
 Commit and reload operations are handled by host/framework plumbing.
 
@@ -303,7 +316,7 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -313,6 +326,8 @@ local host, store = lib.createModule({
     drawTab = ui.drawTab,
     drawQuickContent = ui.drawQuickContent,
 })
+if not host then return end
+
 host.mutation.patch(logic.buildPatchPlan)
 logic.registerHooks(host, store)
 host.activate()

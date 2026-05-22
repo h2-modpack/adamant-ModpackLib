@@ -52,7 +52,9 @@ function storageRefAdapter.create(opts)
 
     local function createFieldWrapper(rawField, contextSource, ownerToken)
         local readContext = contextSource .. ":read"
+        local readAliasContext = contextSource .. ":readAlias"
         local writeContext = contextSource .. ":write"
+        local writeAliasContext = contextSource .. ":writeAlias"
         local resetContext = contextSource .. ":reset"
         local schemaContext = contextSource .. ":schema"
         local aliasContext = contextSource .. ":alias"
@@ -70,6 +72,15 @@ function storageRefAdapter.create(opts)
                 end
                 return rawField:read(...)
             end,
+            readAlias = function(self, alias)
+                requireMethodSelf(readAliasContext, self, field)
+                if isDrawPhase then
+                    phaseGate.requireOwnerDraw(phaseOwner)
+                else
+                    phaseGate.requireRuntime(phaseOwner)
+                end
+                return rawField:readAlias(alias)
+            end,
             write = function(self, value)
                 requireMethodSelf(writeContext, self, field)
                 if isDrawPhase then
@@ -78,6 +89,15 @@ function storageRefAdapter.create(opts)
                     phaseGate.requireRuntime(phaseOwner)
                 end
                 return rawField:write(value)
+            end,
+            writeAlias = function(self, alias, value)
+                requireMethodSelf(writeAliasContext, self, field)
+                if isDrawPhase then
+                    phaseGate.requireOwnerDraw(phaseOwner)
+                else
+                    phaseGate.requireRuntime(phaseOwner)
+                end
+                return rawField:writeAlias(alias, value)
             end,
             reset = function(self)
                 requireMethodSelf(resetContext, self, field)

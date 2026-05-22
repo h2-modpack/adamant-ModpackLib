@@ -174,10 +174,6 @@ function widgetHelpers.MakeSelectableId(label, uniqueId)
     return tostring(label or "") .. "##" .. tostring(uniqueId or "")
 end
 
-function widgetHelpers.GetFieldOwner(field)
-    return field:owner()
-end
-
 function widgetHelpers.StageAction(context, opts, defaultValue)
     local action = opts and opts.action or nil
     if action == nil then
@@ -232,14 +228,13 @@ end
 
 function widgetHelpers.ClassifyPackedChoice(node, field, children)
     local mode = GetPackedChoiceMode(node)
-    local owner = widgetHelpers.GetFieldOwner(field)
     local activeCount = 0
     local totalCount = 0
     local lastActiveChild = nil
 
     for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
         totalCount = totalCount + 1
-        local value = owner.read(child.alias)
+        local value = field:readAlias(child.alias)
         if value == nil then
             value = PACKED_CHOICE_NONE_VALUE
         end
@@ -267,17 +262,16 @@ function widgetHelpers.ClassifyPackedChoice(node, field, children)
 end
 
 function widgetHelpers.ApplyPackedChoiceSelection(field, children, selectedAlias, selection)
-    local owner = widgetHelpers.GetFieldOwner(field)
     local changed = false
     for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
         local shouldBeActive = child.alias == selectedAlias
         local nextValue = GetPackedChoiceWriteValue(selection.mode, shouldBeActive)
-        local currentValue = owner.read(child.alias)
+        local currentValue = field:readAlias(child.alias)
         if currentValue == nil then
             currentValue = selection.noneValue
         end
         if currentValue ~= nextValue then
-            owner.write(child.alias, nextValue)
+            field:writeAlias(child.alias, nextValue)
             changed = true
         end
     end
@@ -285,15 +279,14 @@ function widgetHelpers.ApplyPackedChoiceSelection(field, children, selectedAlias
 end
 
 function widgetHelpers.ClearPackedChoiceSelection(field, children, selection)
-    local owner = widgetHelpers.GetFieldOwner(field)
     local changed = false
     for _, child in ipairs(children or widgetHelpers.EMPTY_LIST) do
-        local currentValue = owner.read(child.alias)
+        local currentValue = field:readAlias(child.alias)
         if currentValue == nil then
             currentValue = selection.noneValue
         end
         if currentValue ~= selection.noneValue then
-            owner.write(child.alias, selection.noneValue)
+            field:writeAlias(child.alias, selection.noneValue)
             changed = true
         end
     end

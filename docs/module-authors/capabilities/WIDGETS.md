@@ -7,6 +7,11 @@ normally uses `draw.widgets`, which calls the current draw pass `imgui`
 backend without making modules thread `imgui` through widget calls. Navigation
 helpers use `draw.nav` the same way.
 
+`draw`, `state`, `actions`, and `services` are draw-phase objects. Their
+methods are valid only while Lib is executing the owning module's draw callback.
+Do not cache them, storage fields returned by `state.get(...)`, or action refs
+for use after the callback returns.
+
 For storage schema, table handles, packed roots, and state/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
 
 ## Widgets
@@ -112,6 +117,10 @@ When `value` is omitted, value widgets stage their edited value by default:
 
 Use explicit `value` when the commit observer needs a stable command payload
 instead of the edited value.
+
+Do not use actions for normal field edits. The widget's default data edit
+should remain the source of truth; actions are extra draw intent for commit-time
+logic.
 
 ### Labels and tooltips
 

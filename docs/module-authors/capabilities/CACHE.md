@@ -10,6 +10,9 @@ Two domains exist today:
 - `persistent`: flat scalar values that survive reloads and restarts
 
 Neither domain participates in staging, hashes, profiles, or whole-state resets.
+Cache lives on the author `host`, so it belongs to runtime/helper code. Draw
+callbacks do not receive `host`; if a button or widget should update cache,
+stage a draw `action` and handle it from `onSettingsCommitted(host, store, commit)`.
 
 ## Current Run
 

@@ -23,7 +23,7 @@ local function registerHooks(host, store)
     end)
 end
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -31,6 +31,7 @@ local host, store = lib.createModule({
     storage = data.buildStorage(),
     drawTab = ui.drawTab,
 })
+if not host then return end
 
 registerHooks(host, store)
 host.activate()
@@ -80,6 +81,8 @@ end
 ```
 
 Do not read draw-state values inside hook callbacks. Draw state is staged UI state; hooks run against committed runtime behavior.
+Store access is runtime-phase access. It is valid in hook callbacks and normal
+runtime helper code, but not during the owning module's draw callback.
 
 ## Wrap vs Override
 

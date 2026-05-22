@@ -51,7 +51,6 @@ end
 ---@return boolean
 function widgets.packedCheckboxList(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
-    local owner = helpers.GetFieldOwner(field)
     local fieldControlId = field:controlId()
     local children = helpers.ResolvePackedChildren(field)
     local lowerFilter = type(opts.filterText) == "string" and opts.filterText:lower() or ""
@@ -74,7 +73,7 @@ function widgets.packedCheckboxList(imgui, field, opts)
         if drawn >= slotCount then
             break
         end
-        local current = owner.read(child.alias) == true
+        local current = field:readAlias(child.alias) == true
         local matchesText = not hasFilter or tostring(child.label):lower():find(lowerFilter, 1, true) ~= nil
         local matchesMode = filterMode == "all"
             or (filterMode == "checked" and current)
@@ -94,7 +93,7 @@ function widgets.packedCheckboxList(imgui, field, opts)
                 color
             )
             if clicked then
-                owner.write(child.alias, nextValue)
+                field:writeAlias(child.alias, nextValue)
                 helpers.StageAction("draw.widgets.packedCheckboxList", opts, {
                     alias = child.alias,
                     value = nextValue,

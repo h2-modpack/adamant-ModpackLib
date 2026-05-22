@@ -241,6 +241,60 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
     lu.assertEquals(calls[1].services, calls[3].services)
 end
 
+function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases()
+    local config = { Packed = 0 }
+    local checkboxLabels = {}
+    local changed = false
+    local ownerReadType = nil
+    self.h.rom.ImGui.Checkbox = function(label, current)
+        checkboxLabels[#checkboxLabels + 1] = label
+        if label == "First##Packed:First" then
+            return true, true
+        end
+        return current, false
+    end
+
+    local host, store = self.h.public.createModule({
+        pluginGuid = "test-create-module-packed-widget-owner",
+        config = config,
+        modpack = "create-module-pack",
+        id = "PackedWidgetOwner",
+        name = "Packed Widget Owner",
+        storage = {
+            {
+                type = "packedInt",
+                alias = "Packed",
+                bits = {
+                    { alias = "First", offset = 0, width = 1, type = "bool", default = false },
+                    { alias = "Second", offset = 1, width = 1, type = "bool", default = false },
+                },
+            },
+        },
+        drawTab = function(draw, state)
+            local field = state.get("Packed")
+            ownerReadType = type(field:owner().read)
+            changed = draw.widgets.packedCheckboxList(field, {
+                slotCount = 2,
+            })
+        end,
+    })
+
+    host.activate()
+    self.h:liveHost("test-create-module-packed-widget-owner").drawTab()
+
+    lu.assertEquals(ownerReadType, "nil")
+    lu.assertTrue(changed)
+    lu.assertEquals(checkboxLabels, {
+        "First##Packed:First",
+        "Second##Packed:Second",
+    })
+    lu.assertEquals(store.read("Packed"), 0)
+
+    self.h:liveHost("test-create-module-packed-widget-owner").flush()
+    lu.assertEquals(store.read("Packed"), 1)
+    lu.assertEquals(config.Packed, 1)
+end
+
 function TestModuleHost_CreateModule:testDrawFacadeIsSharedAcrossHosts()
     local firstDraw = nil
     local secondDraw = nil

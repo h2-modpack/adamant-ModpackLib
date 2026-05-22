@@ -9,7 +9,7 @@ Use overlays when the module needs a retained display. Use widgets when the modu
 Create the host, declare overlays on `host.overlays`, then activate:
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -17,6 +17,7 @@ local host, store = lib.createModule({
     storage = data.buildStorage(),
     drawTab = ui.drawTab,
 })
+if not host then return end
 
 host.overlays.createLine("summary.igt", {
     region = "middleRightStack",
@@ -85,6 +86,9 @@ The projection context exposes:
 - `ctx.refreshAll()`
 
 Use `ctx.read(alias)` for committed store values. Do not capture UI state in overlay callbacks.
+Projection callbacks are runtime projections, not draw callbacks. They do not
+receive `draw`, `state`, `actions`, or `services`, and should not cache their
+`ctx` object outside the callback.
 
 ## Visibility And UI Suppression
 
@@ -103,6 +107,7 @@ facades while foreground configuration UI is open.
 - Do not render overlay text directly from draw-tab UI code.
 - Do not use overlays for editable configuration.
 - Do not read staged UI state values from projection callbacks.
+- Do not call draw widgets or raw ImGui from overlay projection callbacks.
 
 See also:
 - [MANAGED_STATE.md](MANAGED_STATE.md)

@@ -16,7 +16,6 @@ Use this path when building a module or modpack feature on top of Lib.
 
 - [lib-contributors/LIB_INTERNALS.md](lib-contributors/LIB_INTERNALS.md)
 - [lib-contributors/HOT_RELOAD_ARCHITECTURE.md](lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
-- [lib-contributors/OVERLAY_SUBSYSTEM_DESIGN.md](lib-contributors/OVERLAY_SUBSYSTEM_DESIGN.md)
 - [lib-contributors/TESTING.md](lib-contributors/TESTING.md)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 

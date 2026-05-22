@@ -70,7 +70,7 @@ local function registerHooks(host, store)
     end)
 end
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -175,6 +175,11 @@ Module construction creates two author-facing state handles:
 - draw code receives `state` for staged UI reads and writes
 - runtime callbacks receive `store` for committed gameplay reads
 
+The public surfaces are phase-gated. `state`, `actions`, `services`,
+`draw.widgets`, and `draw.nav` are valid only inside the active draw callback.
+`store` is valid for runtime/helper code and rejects access during its owning
+module's draw callback.
+
 Raw Chalk config should stay local to `main.lua`. Host/framework plumbing owns
 commit, reload, hash/profile import, and config flush behavior.
 
@@ -203,10 +208,10 @@ Typical patterns:
 - `draw.nav.verticalTabs(...)`
 
 Use raw ImGui layout as needed:
-- `ui.Text(...)`
-- `ui.SameLine()`
-- `ui.BeginTabBar(...)`
-- `ui.BeginChild(...)`
+- `draw.imgui.Text(...)`
+- `draw.imgui.SameLine()`
+- `draw.imgui.BeginTabBar(...)`
+- `draw.imgui.BeginChild(...)`
 
 Lib widgets cover common controls. Use raw ImGui for custom structure and layout.
 
@@ -272,7 +277,7 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = "ExampleModule",
@@ -281,6 +286,8 @@ local host, store = lib.createModule({
     drawTab = ui.drawTab,
     drawQuickContent = ui.drawQuickContent,
 })
+if not host then return end
+
 host.fallbackUi.attachGuiOnce(function(fallbackUi)
     rom.gui.add_imgui(fallbackUi.renderWindow)
     rom.gui.add_to_menu_bar(fallbackUi.addMenuBar)
@@ -334,7 +341,7 @@ local registerHooks
 local function init()
     import_as_fallback(rom.game)
 
-    local host, store = lib.createModule({
+    local host, store, err = lib.createModule({
         pluginGuid = PLUGIN_GUID,
         config = config,
         modpack = PACK_ID,
@@ -359,6 +366,8 @@ local function init()
         drawTab = drawTab,
         drawQuickContent = drawQuickContent,
     })
+    if not host then return end
+
     host.fallbackUi.attachGuiOnce(function(fallbackUi)
         rom.gui.add_imgui(fallbackUi.renderWindow)
         rom.gui.add_to_menu_bar(fallbackUi.addMenuBar)

@@ -60,7 +60,7 @@ remaining fully functional when absent.
 Typical provider declaration before activation:
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -186,7 +186,7 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -479,7 +479,7 @@ local PLUGIN_GUID = _PLUGIN.guid
 local data = import("mods/data.lua")
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
@@ -527,7 +527,7 @@ Order bands:
 Modules declare overlay structure on the returned author host before activation:
 
 ```lua
-local host, store = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -779,7 +779,7 @@ the plugin guid is invalid or no live host is registered.
 
 This is infrastructure API for Framework discovery. Normal module code should
 keep the author host returned by `lib.createModule(...)` and use
-`store`/callback sessions for state access.
+`store` and draw callback arguments for state access.
 
 ## Draw Services
 

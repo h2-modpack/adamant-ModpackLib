@@ -16,7 +16,7 @@ local function buildPatchPlan(plan, host, store)
     end
 end
 
-local host = lib.createModule({
+local host, store, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
@@ -24,6 +24,8 @@ local host = lib.createModule({
     storage = data.buildStorage(),
     drawTab = ui.drawTab,
 })
+if not host then return end
+
 host.mutation.patch(buildPatchPlan)
 host.activate()
 ```
@@ -33,6 +35,10 @@ It should describe the mutation for an enabled module. Lib owns enabled gating,
 including enable/disable transitions and coordinated pack enablement. Do not
 guard the plan with `host.isEnabled()`; during an enable transition, Lib may
 build the plan before the persisted `Enabled` alias has been written.
+
+Mutation patch callbacks run in runtime space, not draw space. Read committed
+settings from `store`, and use draw `actions` plus
+`onSettingsCommitted(host, store, commit)` for one-shot UI intent.
 
 ## Plan Operations
 
@@ -75,7 +81,7 @@ Do not use mutation plans for:
 
 - transient UI state
 - optional cross-module provider APIs
-- state that should live on a game object instance
+- state that belongs in `host.cache.currentRun` or another owned runtime cache
 - arbitrary side effects that cannot be restored
 
 If a real run-data edit cannot be expressed by the current plan surface, add a first-class plan operation instead of bypassing the tracked lifecycle.

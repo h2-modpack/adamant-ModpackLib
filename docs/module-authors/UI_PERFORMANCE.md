@@ -25,6 +25,7 @@ This document assumes:
 - `lib.createModule(...)` owns the definition and state construction boundary
 - draw code reads staged values through `state.get(...)`
 - runtime/gameplay code reads persisted values through `store.get(...)`
+- draw-phase objects and refs are callback-local; do not cache them for runtime use
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own staged-state commit timing
@@ -38,7 +39,7 @@ This document assumes:
 Bad:
 
 ```lua
-ui.Text("Equipped: " .. tostring(currentWeapon))
+draw.imgui.Text("Equipped: " .. tostring(currentWeapon))
 ```
 
 Better:
@@ -71,16 +72,17 @@ This applies to:
 Bad:
 
 ```lua
-ui.SetCursorPosX(ui.GetWindowWidth() * 0.5)
-ui.PushItemWidth(ui.GetWindowWidth() * 0.3)
+draw.imgui.SetCursorPosX(draw.imgui.GetWindowWidth() * 0.5)
+draw.imgui.PushItemWidth(draw.imgui.GetWindowWidth() * 0.3)
 ```
 
 Better:
 
 ```lua
-local winW = ui.GetWindowWidth()
-ui.SetCursorPosX(winW * 0.5)
-ui.PushItemWidth(winW * 0.3)
+local imgui = draw.imgui
+local winW = imgui.GetWindowWidth()
+imgui.SetCursorPosX(winW * 0.5)
+imgui.PushItemWidth(winW * 0.3)
 ```
 
 Do the same for:
