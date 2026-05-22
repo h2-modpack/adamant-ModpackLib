@@ -38,17 +38,21 @@ local stagedStateModule = import('core/module_state/staged/staged_state.lua', ni
     values = values,
 })
 
-local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
+local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', nil, {
     logging = logging,
     phaseGate = phaseGate,
     storage = storageService,
 })
+
+local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
+    phaseGate = phaseGate,
+    storageRefAdapter = storageRefAdapter,
+})
 moduleState.uiState = uiStateModule
 
 local storeModule = import('core/module_state/persistent/store.lua', nil, {
-    logging = logging,
     phaseGate = phaseGate,
-    storage = storageService,
+    storageRefAdapter = storageRefAdapter,
 })
 
 ---@class ConfigBackendEntry
