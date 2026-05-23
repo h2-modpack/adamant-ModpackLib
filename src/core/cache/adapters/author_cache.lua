@@ -18,6 +18,14 @@ local function getHostOwnerId(host, context)
     return host.getHostId()
 end
 
+local function requireRegistrationOpen(host, context)
+    local record = getHostRecord(host, context)
+    if record.activated == true or record.activating == true then
+        logging.violate("cache.invalid_args", "%s cannot publish after activation begins", context)
+    end
+    return record
+end
+
 local function getPersistentCacheState(host, context)
     local record = getHostRecord(host, context)
     local cacheStore = record.cacheStore
@@ -26,6 +34,16 @@ local function getPersistentCacheState(host, context)
         logging.violate("cache.invalid_args", "%s: expected managed persistent cache store", context)
     end
     return host.getHostId(), cacheStore
+end
+
+local function getSharedWriteState(host, context)
+    local record = getHostRecord(host, context)
+    local publications = record.sharedCachePublications
+    local ownerToken = publications and publications.ownerToken or nil
+    if ownerToken == nil then
+        logging.violate("cache.shared_not_owner", "%s requires an activated shared cache publication", context)
+    end
+    return host.getHostId(), ownerToken
 end
 
 function author.create(host)
@@ -60,6 +78,27 @@ function author.create(host)
             has = function(key)
                 local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.has")
                 return service.persistent.has(cacheStore, ownerId, key)
+            end,
+        },
+        shared = {
+            publish = function(id, opts)
+                return service.shared.stagePublication(
+                    requireRegistrationOpen(host, "host.cache.shared.publish"),
+                    host,
+                    id,
+                    opts)
+            end,
+            read = function(id, fallback)
+                getHostRecord(host, "host.cache.shared.read")
+                return service.shared.read(id, fallback)
+            end,
+            write = function(id, value)
+                local ownerId, ownerToken = getSharedWriteState(host, "host.cache.shared.write")
+                return service.shared.write(ownerId, ownerToken, id, value)
+            end,
+            clear = function(id)
+                local ownerId, ownerToken = getSharedWriteState(host, "host.cache.shared.clear")
+                return service.shared.clear(ownerId, ownerToken, id)
             end,
         },
     }

@@ -8,6 +8,11 @@ local currentRunCache = import('core/cache/current_run_cache.lua', nil, {
 local persistentCache = import('core/cache/persistent_cache.lua', nil, {
     logging = deps.logging,
 })
+local sharedCache = import('core/cache/shared_cache.lua', nil, {
+    logging = deps.logging,
+    values = deps.values,
+    sharedRegistry = deps.cacheRegistry.shared,
+})
 
 local service = {}
 
@@ -39,6 +44,24 @@ service.persistent = {
     end,
     has = function(cacheStore, ownerId, key)
         return persistentCache.has(cacheStore, ownerId, key)
+    end,
+}
+
+service.shared = {
+    stagePublication = function(record, host, id, opts)
+        return sharedCache.stagePublication(record, host, id, opts)
+    end,
+    install = function(ownerId, publications)
+        return sharedCache.install(ownerId, publications)
+    end,
+    read = function(id, fallback)
+        return sharedCache.read(id, fallback)
+    end,
+    write = function(ownerId, ownerToken, id, value)
+        return sharedCache.write(ownerId, ownerToken, id, value)
+    end,
+    clear = function(ownerId, ownerToken, id)
+        return sharedCache.clear(ownerId, ownerToken, id)
     end,
 }
 

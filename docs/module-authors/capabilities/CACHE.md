@@ -4,15 +4,16 @@ Cache is a Lib-owned namespace for module runtime cache values. Use it for
 runtime state that is not staged UI config, hash/profile config, or mutation
 state.
 
-Two domains exist today:
+Three domains exist today:
 
 - `currentRun`: table buckets that follow the lifetime of active `CurrentRun`
 - `persistent`: flat scalar values that survive reloads and restarts
+- `shared`: owner-published live read models that other modules can read
 
-Neither domain participates in staging, hashes, profiles, or whole-state resets.
-Cache lives on the author `host`, so it belongs to runtime/helper code. Draw
-callbacks do not receive `host`; if a button or widget should update cache,
-stage a draw `action` and handle it from `onSettingsCommitted(host, store, commit)`.
+No cache domain participates in staging, hashes, profiles, or whole-state
+resets. `currentRun` and `persistent` live on the author `host`.
+`shared` also has a draw-services read/write surface so owner UI code can
+publish live projections from draw-visible staged state.
 
 ## Current Run
 
@@ -85,6 +86,57 @@ Allowed persistent value types:
 default. It does not create a stored value. `write(nil)` is invalid; use
 `clear(...)` to remove a stored value.
 
+## Shared
+
+Shared cache is for cross-module read models. The owner module publishes a
+stable id before activation, writes the current projection when it changes, and
+other modules read that projection cheaply from runtime or draw code.
+
+```lua
+host.cache.shared.publish("run-director.god-availability", {
+    default = { active = false, available = {} },
+})
+
+host.cache.shared.write("run-director.god-availability", {
+    active = true,
+    available = {
+        Apollo = false,
+    },
+})
+```
+
+Draw consumers can read:
+
+```lua
+local snapshot = services.cache.shared.read("run-director.god-availability", {
+    active = false,
+    available = {},
+})
+```
+
+Shared surface:
+
+- `host.cache.shared.publish(id, opts?)`
+- `host.cache.shared.read(id, fallback?)`
+- `host.cache.shared.write(id, value)`
+- `host.cache.shared.clear(id)`
+- `services.cache.shared.read(id, fallback?)`
+- `services.cache.shared.write(id, value)`
+- `services.cache.shared.clear(id)`
+
+`publish(...)` is declaration-time only and must run before activation. Only
+the publishing host can write or clear that id. Other modules can only read.
+
+`write(...)` updates live memory immediately. `clear(...)` resets the projection
+to the publisher default. Shared cache does not persist and does not flush.
+
+Reads return the caller fallback when no active publisher exists or when the
+publisher is disabled. If an active publisher exists but has not written a
+value, reads return the publisher default when one was declared.
+
+Values may be scalars or tables. Lib deep-copies on write and read so consumers
+cannot mutate the publisher's cached projection.
+
 ## When To Use It
 
 Use current-run cache for:
@@ -97,6 +149,12 @@ Use persistent cache for:
 - small runtime markers that should survive reloads or restarts
 - values that should not appear in UI, hashes, profiles, or reset defaults
 
+Use shared cache for:
+
+- public live read models owned by one module and consumed by other modules
+- immediate-mode UI filters that should read a cheap current projection instead
+  of polling another module repeatedly
+
 Use managed storage instead when the value is module configuration.
 
 ## Common Mistakes
@@ -107,6 +165,10 @@ Use managed storage instead when the value is module configuration.
 - Do not let the factory return non-table values.
 - Do not put tables in persistent cache. Serialize to a string yourself if a
   complex value is truly needed.
+- Do not publish shared cache ids from draw code. Declare them before
+  activation, then write from host or draw services later.
+- Do not use shared cache for behavior calls. Use integrations for cross-module
+  behavior APIs.
 
 See also:
 - [MANAGED_STATE.md](MANAGED_STATE.md)

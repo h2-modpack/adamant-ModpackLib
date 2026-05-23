@@ -1,6 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
+local cache = deps.cache
 local moduleState = deps.moduleState
 local overlays = deps.overlays
 local mutation = deps.mutation
@@ -29,6 +30,7 @@ local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
 })
 local hostActivation = import('core/module_bootstrap/host_activation.lua', nil, {
     logging = logging,
+    cache = cache,
     integrations = deps.integrations,
     hooks = deps.hooks,
     overlays = overlays,
@@ -90,9 +92,18 @@ end
 ---@field has fun(self: DrawActionRef): boolean
 
 ---@class DrawServices
+---@field cache DrawServicesCache
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
 ---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
+
+---@class DrawServicesCache
+---@field shared DrawServicesSharedCache
+
+---@class DrawServicesSharedCache
+---@field read fun(id: string, fallback: any): any
+---@field write fun(id: string, value: any): boolean
+---@field clear fun(id: string): boolean
 
 ---@class ModuleHost
 ---@field getHostId fun(): string

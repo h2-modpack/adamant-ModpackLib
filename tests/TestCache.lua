@@ -325,3 +325,217 @@ function TestCache:testAuthorPersistentCacheRejectsInvalidInputs()
         host.cache.persistent.write("RecordingReady", {})
     end)
 end
+
+local function createSharedCacheHost(harness, pluginGuid, opts)
+    opts = opts or {}
+    local moduleId = opts.id or ("SharedCache" .. tostring(pluginGuid):gsub("[^%w_]", ""))
+    return harness.public.createModule({
+        pluginGuid = pluginGuid,
+        config = opts.config or {},
+        modpack = "test-pack",
+        id = moduleId,
+        name = opts.name or pluginGuid,
+        drawTab = opts.drawTab or function() end,
+    })
+end
+
+local function activateAndEnableSharedCacheHost(harness, host, pluginGuid)
+    lu.assertTrue(host.activate())
+    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    lu.assertNotNil(fullHost)
+    lu.assertTrue(fullHost.setEnabled(true))
+    return fullHost
+end
+
+function TestCache:testSharedCachePublishesWritesAndReadsLiveProjection()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-publisher")
+    local reader = createSharedCacheHost(self.harness, "test-cache-shared-reader")
+
+    publisher.cache.shared.publish("test.shared", {
+        default = { active = false, available = {} },
+    })
+
+    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), { missing = true })
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-publisher")
+
+    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
+        active = false,
+        available = {},
+    })
+
+    lu.assertTrue(publisher.cache.shared.write("test.shared", {
+        active = true,
+        available = {
+            Apollo = false,
+        },
+    }))
+
+    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
+        active = true,
+        available = {
+            Apollo = false,
+        },
+    })
+
+    lu.assertTrue(publisher.cache.shared.clear("test.shared"))
+    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
+        active = false,
+        available = {},
+    })
+end
+
+function TestCache:testSharedCacheCopiesOnWriteAndRead()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-copy-publisher")
+    local reader = createSharedCacheHost(self.harness, "test-cache-shared-copy-reader")
+    publisher.cache.shared.publish("test.shared.copy")
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-copy-publisher")
+
+    local snapshot = {
+        nested = {
+            value = 1,
+        },
+    }
+    publisher.cache.shared.write("test.shared.copy", snapshot)
+    snapshot.nested.value = 2
+
+    local firstRead = reader.cache.shared.read("test.shared.copy", {})
+    lu.assertEquals(firstRead.nested.value, 1)
+    firstRead.nested.value = 3
+
+    local secondRead = reader.cache.shared.read("test.shared.copy", {})
+    lu.assertEquals(secondRead.nested.value, 1)
+end
+
+function TestCache:testSharedCacheRejectsInvalidPublicationAndValues()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-invalid")
+
+    lu.assertErrorMsgContains("id must be a non-empty string", function()
+        publisher.cache.shared.publish("")
+    end)
+    lu.assertErrorMsgContains("value must be a scalar or table", function()
+        publisher.cache.shared.publish("test.shared.invalid", {
+            default = function() end,
+        })
+    end)
+
+    publisher.cache.shared.publish("test.shared.invalid")
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-invalid")
+
+    lu.assertErrorMsgContains("value must not be nil", function()
+        publisher.cache.shared.write("test.shared.invalid", nil)
+    end)
+    lu.assertErrorMsgContains("value must be a scalar or table", function()
+        publisher.cache.shared.write("test.shared.invalid", function() end)
+    end)
+end
+
+function TestCache:testSharedCacheRequiresOwnerForWrites()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-owner")
+    local other = createSharedCacheHost(self.harness, "test-cache-shared-other")
+
+    publisher.cache.shared.publish("test.shared.owner")
+
+    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
+        publisher.cache.shared.write("test.shared.owner", true)
+    end)
+
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-owner")
+
+    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
+        other.cache.shared.write("test.shared.owner", true)
+    end)
+    lu.assertTrue(publisher.cache.shared.write("test.shared.owner", true))
+end
+
+function TestCache:testSharedCacheRejectsPublishAfterActivationBegins()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-late")
+    lu.assertTrue(publisher.activate())
+
+    lu.assertErrorMsgContains("cannot publish after activation begins", function()
+        publisher.cache.shared.publish("test.shared.late")
+    end)
+end
+
+function TestCache:testSharedCacheDifferentOwnerDuplicateFailsActivation()
+    local first = createSharedCacheHost(self.harness, "test-cache-shared-dupe-a")
+    local second = createSharedCacheHost(self.harness, "test-cache-shared-dupe-b")
+
+    first.cache.shared.publish("test.shared.dupe")
+    second.cache.shared.publish("test.shared.dupe")
+
+    activateAndEnableSharedCacheHost(self.harness, first, "test-cache-shared-dupe-a")
+    local ok, err = second.activate()
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "already published")
+end
+
+function TestCache:testSharedCacheSameOwnerHotReloadReplacesPublication()
+    local first = createSharedCacheHost(self.harness, "test-cache-shared-reload", {
+        id = "SharedReload",
+        name = "Shared Reload",
+    })
+    local reader = createSharedCacheHost(self.harness, "test-cache-shared-reload-reader")
+    first.cache.shared.publish("test.shared.reload", {
+        default = "first-default",
+    })
+    activateAndEnableSharedCacheHost(self.harness, first, "test-cache-shared-reload")
+    first.cache.shared.write("test.shared.reload", "first-value")
+
+    local second = createSharedCacheHost(self.harness, "test-cache-shared-reload", {
+        id = "SharedReload",
+        name = "Shared Reload",
+    })
+    second.cache.shared.publish("test.shared.reload", {
+        default = "second-default",
+    })
+    activateAndEnableSharedCacheHost(self.harness, second, "test-cache-shared-reload")
+
+    lu.assertEquals(reader.cache.shared.read("test.shared.reload", "fallback"), "second-default")
+    lu.assertTrue(second.cache.shared.write("test.shared.reload", "second-value"))
+    lu.assertEquals(reader.cache.shared.read("test.shared.reload", "fallback"), "second-value")
+    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
+        first.cache.shared.write("test.shared.reload", "stale")
+    end)
+end
+
+function TestCache:testSharedCacheDisabledOwnerIsInvisibleToReads()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-disabled")
+    local reader = createSharedCacheHost(self.harness, "test-cache-shared-disabled-reader")
+    publisher.cache.shared.publish("test.shared.disabled", {
+        default = "default",
+    })
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-disabled")
+    publisher.cache.shared.write("test.shared.disabled", "visible")
+
+    local fullHost = self.harness.moduleHost.getLiveHost("test-cache-shared-disabled")
+    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "visible")
+    lu.assertTrue(fullHost.setEnabled(false))
+    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "fallback")
+    lu.assertTrue(fullHost.setEnabled(true))
+    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "visible")
+end
+
+function TestCache:testDrawServicesCanReadAndOwnerCanWriteSharedCache()
+    local capturedServices
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-draw", {
+        drawTab = function(_, _, _, services)
+            capturedServices = services
+            local value = services.cache.shared.read("test.shared.draw", "fallback")
+            services.cache.shared.write("test.shared.draw", value .. "-draw")
+        end,
+    })
+    local reader = createSharedCacheHost(self.harness, "test-cache-shared-draw-reader")
+    publisher.cache.shared.publish("test.shared.draw", {
+        default = "default",
+    })
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-draw")
+
+    self.harness.moduleHost.getLiveHost("test-cache-shared-draw").drawTab()
+
+    lu.assertNotNil(capturedServices)
+    lu.assertEquals(reader.cache.shared.read("test.shared.draw", "fallback"), "default-draw")
+
+    lu.assertErrorMsgContains("draw-phase object can only run during a draw callback", function()
+        capturedServices.cache.shared.read("test.shared.draw", "fallback")
+    end)
+end

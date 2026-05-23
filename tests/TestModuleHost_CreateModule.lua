@@ -367,9 +367,9 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     local cacheSurfaceCount = 0
     for key in pairs(host.cache) do
         cacheSurfaceCount = cacheSurfaceCount + 1
-        lu.assertTrue(key == "currentRun" or key == "persistent", key)
+        lu.assertTrue(key == "currentRun" or key == "persistent" or key == "shared", key)
     end
-    lu.assertEquals(cacheSurfaceCount, 2)
+    lu.assertEquals(cacheSurfaceCount, 3)
     lu.assertEquals(type(host.activate), "function")
     lu.assertNil(host.tryActivate)
     lu.assertNil(host.read)

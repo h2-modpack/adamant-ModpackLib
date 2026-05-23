@@ -172,9 +172,18 @@ local lib = {}
 
 ---Draw-phase service surface. Methods are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawServices
+---@field cache AdamantModpackLib.DrawServicesCache
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 ---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Poll a registered integration method.
+
+---@class AdamantModpackLib.DrawServicesCache
+---@field shared AdamantModpackLib.DrawServicesSharedCache
+
+---@class AdamantModpackLib.DrawServicesSharedCache
+---@field read fun(id: string, fallback: any): any Read an owner-published shared cache projection.
+---@field write fun(id: string, value: any): boolean Write an owned shared cache projection from draw code.
+---@field clear fun(id: string): boolean Clear an owned shared cache projection from draw code.
 
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
@@ -255,6 +264,7 @@ local lib = {}
 ---@class AdamantModpackLib.AuthorCache
 ---@field currentRun AdamantModpackLib.AuthorCurrentRunCache
 ---@field persistent AdamantModpackLib.AuthorPersistentCache
+---@field shared AdamantModpackLib.AuthorSharedCache
 
 ---@class AdamantModpackLib.AuthorCurrentRunCache
 ---@field get fun(key: string, factory?: fun(): table): table?
@@ -266,6 +276,12 @@ local lib = {}
 ---@field write fun(key: string, value: boolean|number|string): boolean
 ---@field clear fun(key: string): boolean
 ---@field has fun(key: string): boolean
+
+---@class AdamantModpackLib.AuthorSharedCache
+---@field publish fun(id: string, opts?: table): boolean Declare an owner-published shared cache projection before activation.
+---@field read fun(id: string, fallback: any): any Read an owner-published shared cache projection.
+---@field write fun(id: string, value: any): boolean Write an owned shared cache projection after activation.
+---@field clear fun(id: string): boolean Clear an owned shared cache projection after activation.
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.

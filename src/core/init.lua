@@ -49,6 +49,8 @@ local cacheBundle = import('core/cache/00_init.lua', nil, {
     logging = logging,
     gameDeps = gameDeps,
     hostRegistry = hostRegistry,
+    cacheRegistry = registry.cache,
+    values = values,
 })
 
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
@@ -146,6 +148,7 @@ local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     hostRegistry = hostRegistry,
     moduleState = moduleState,
     integrations = integrations,
+    cache = cacheBundle.service,
     hooks = hooks,
     overlays = overlays,
     mutation = mutation,

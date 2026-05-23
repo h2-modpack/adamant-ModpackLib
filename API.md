@@ -192,6 +192,47 @@ Rules:
 - `write(nil)` is invalid; use `clear(...)`
 - persistent cache is not staged, hashed, profiled, or reset by Lib
 
+Shared live cache:
+
+```lua
+host.cache.shared.publish("run-director.god-availability", {
+    default = { active = false, available = {} },
+})
+
+host.cache.shared.write("run-director.god-availability", {
+    active = true,
+    available = {
+        Apollo = false,
+    },
+})
+```
+
+Draw consumers can read the same live projection:
+
+```lua
+local snapshot = services.cache.shared.read("run-director.god-availability", {
+    active = false,
+    available = {},
+})
+```
+
+Surface:
+- `host.cache.shared.publish(id, opts?)`
+- `host.cache.shared.read(id, fallback?)`
+- `host.cache.shared.write(id, value)`
+- `host.cache.shared.clear(id)`
+- `services.cache.shared.read(id, fallback?)`
+- `services.cache.shared.write(id, value)`
+- `services.cache.shared.clear(id)`
+
+Rules:
+- `publish(...)` is declaration-time only and must run before activation
+- only the publishing host can write or clear a shared cache id
+- writes update live memory immediately; there is no flush or persistence
+- reads return the fallback when no active publisher exists or the publisher is disabled
+- values may be scalars or tables and are deep-copied on write/read
+- use integrations for cross-module behavior calls; use shared cache for public live read models
+
 ## Store And State
 
 ### `lib.createModule(opts)`
@@ -812,6 +853,9 @@ Built-ins:
 - `services.log(fmt, ...)`
 - `services.logIf(fmt, ...)`
 - `services.pollIntegration(id, methodName, fallback, ...)`
+- `services.cache.shared.read(id, fallback?)`
+- `services.cache.shared.write(id, value)`
+- `services.cache.shared.clear(id)`
 
 These helpers are the sanctioned draw-time access path for narrow module
 services. `draw.host` is not available in module UI. `services` is

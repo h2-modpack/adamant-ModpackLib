@@ -1,6 +1,6 @@
 # Shared Cache Design
 
-Shared cache is a proposed cache domain for owner-published cross-module read
+Shared cache is a cache domain for owner-published cross-module read
 models. It standardizes the existing pattern where one module owns live domain
 truth, publishes a cheap projection, and other modules read that projection
 during runtime or draw code.

@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetAll(...)` or draw-scoped `state.resetAll(...)`.
 - Cache is now exposed to module authors through `host.cache.currentRun.*`; the old global cache surface has been removed.
 - Added `host.cache.persistent.*` for flat scalar runtime markers that persist outside managed storage/hash/profile flows.
+- Added `host.cache.shared.*` and `services.cache.shared.*` for owner-published live read-model projections that other modules can read cheaply from runtime or draw code.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw value widgets now target `StorageField` values from `state.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
 - Draw `state` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetAll(opts?)`; older session-shaped helpers such as `state.view`, `state.table`, `state.field`, and schema access have been removed.

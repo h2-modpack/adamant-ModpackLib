@@ -51,7 +51,15 @@ return {
     },
     ["cache.invalid_value"] = {
         severity = "error",
-        description = "Persistent cache values must be flat scalar values.",
+        description = "Cache values must match the value shape supported by their cache domain.",
+    },
+    ["cache.shared_duplicate_publisher"] = {
+        severity = "error",
+        description = "Shared cache ids can only have one active publishing owner.",
+    },
+    ["cache.shared_not_owner"] = {
+        severity = "error",
+        description = "Shared cache writes require the active publishing owner.",
     },
 
     ["game_deps.invalid_boundary"] = {

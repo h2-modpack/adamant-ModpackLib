@@ -66,6 +66,7 @@ local authorHost = {}
 ---@class AuthorCache
 ---@field currentRun AuthorCurrentRunCache
 ---@field persistent AuthorPersistentCache
+---@field shared AuthorSharedCache
 
 ---@class AuthorCurrentRunCache
 ---@field get fun(key: string, factory: (fun(): table)|nil): table|nil
@@ -77,6 +78,12 @@ local authorHost = {}
 ---@field write fun(key: string, value: boolean|number|string): boolean
 ---@field clear fun(key: string): boolean
 ---@field has fun(key: string): boolean
+
+---@class AuthorSharedCache
+---@field publish fun(id: string, opts: table|nil): boolean
+---@field read fun(id: string, fallback: any): any
+---@field write fun(id: string, value: any): boolean
+---@field clear fun(id: string): boolean
 
 ---@param host ModuleHost
 ---@return AuthorHost host Module-safe projection of the ModuleHost surface.
