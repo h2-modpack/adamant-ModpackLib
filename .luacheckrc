@@ -13,6 +13,7 @@ globals = {
     "AdamantModpackLib_Runtime",
     "ScreenData",
     "TestCoordinator",
+    "TestCache",
     "TestGameDeps",
     "TestGameCache",
     "TestHashing",

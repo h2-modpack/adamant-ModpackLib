@@ -40,13 +40,13 @@ function TestGameDeps:setUp()
     self.gameDeps = self.harness.gameDeps
 end
 
-function TestGameDeps:testGameGlobalsAreLateReadFromHarnessEnvironment()
+function TestGameDeps:testGameGlobalsAreLateReadFromRomGame()
     local currentRun = {}
-    self.harness.env.CurrentRun = currentRun
+    self.harness.game.CurrentRun = currentRun
 
     lu.assertIs(self.gameDeps.cache.CurrentRun(), currentRun)
-    lu.assertIs(self.gameDeps.overlays.ScreenData(), self.harness.env.ScreenData)
-    lu.assertIs(self.gameDeps.overlays.HUDScreen(), self.harness.env.HUDScreen)
+    lu.assertIs(self.gameDeps.overlays.ScreenData(), self.harness.game.ScreenData)
+    lu.assertIs(self.gameDeps.overlays.HUDScreen(), self.harness.game.HUDScreen)
     lu.assertEquals(self.gameDeps.overlays.ShowingCombatUI(), true)
 
     local replacementScreenData = {
@@ -56,15 +56,15 @@ function TestGameDeps:testGameGlobalsAreLateReadFromHarnessEnvironment()
             },
         },
     }
-    self.harness.env.ScreenData = replacementScreenData
-    self.harness.env.ShowingCombatUI = false
+    self.harness.game.ScreenData = replacementScreenData
+    self.harness.game.ShowingCombatUI = false
 
     lu.assertIs(self.gameDeps.overlays.ScreenData(), replacementScreenData)
     lu.assertEquals(self.gameDeps.overlays.ShowingCombatUI(), false)
 end
 
 function TestGameDeps:testOptionalGlobalTablesRejectMalformedValues()
-    self.harness.env.CurrentRun = true
+    self.harness.game.CurrentRun = true
 
     lu.assertErrorMsgContains("CurrentRun must be nil or a table", function()
         self.gameDeps.cache.CurrentRun()
@@ -72,7 +72,7 @@ function TestGameDeps:testOptionalGlobalTablesRejectMalformedValues()
 end
 
 function TestGameDeps:testGameGlobalFunctionsRejectMalformedValues()
-    self.harness.env.ModifyTextBox = true
+    self.harness.game.ModifyTextBox = true
 
     lu.assertErrorMsgContains("ModifyTextBox must be a function", function()
         self.gameDeps.overlays.ModifyTextBox({})

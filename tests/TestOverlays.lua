@@ -25,7 +25,7 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
     local text = "Ready"
     local visible = true
 
-    self.h.modutil.mod.Path.Wrap = function(path, handler)
+    self.h.modutil.Path.Wrap = function(path, handler)
         if path == "StartRoomPresentation" then
             wrappedStartRoomPresentation = handler
         end

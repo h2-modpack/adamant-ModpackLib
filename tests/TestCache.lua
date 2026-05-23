@@ -54,7 +54,7 @@ end
 
 function TestCache:testCurrentRunCreatesNamespacedStateOnce()
     local currentRun = {}
-    self.harness.env.CurrentRun = currentRun
+    self.harness.game.CurrentRun = currentRun
     local calls = 0
 
     local first = self.cache.currentRun.get("owner-a", "run", function()
@@ -75,7 +75,7 @@ function TestCache:testCurrentRunCreatesNamespacedStateOnce()
 end
 
 function TestCache:testCurrentRunNamespacesPreventOwnerCollisions()
-    self.harness.env.CurrentRun = {}
+    self.harness.game.CurrentRun = {}
 
     local a = self.cache.currentRun.get("owner-a", "run")
     local b = self.cache.currentRun.get("owner-b", "run")
@@ -89,7 +89,7 @@ end
 
 function TestCache:testCurrentRunPeekAndClearDoNotCreateBuckets()
     local currentRun = {}
-    self.harness.env.CurrentRun = currentRun
+    self.harness.game.CurrentRun = currentRun
 
     lu.assertNil(self.cache.currentRun.peek("owner", "run"))
     lu.assertNil(currentRun._AdamantModpackLibCache)
@@ -103,7 +103,7 @@ function TestCache:testCurrentRunPeekAndClearDoNotCreateBuckets()
 end
 
 function TestCache:testCurrentRunRejectsInvalidInputs()
-    self.harness.env.CurrentRun = {}
+    self.harness.game.CurrentRun = {}
 
     lu.assertErrorMsgContains("ownerId must be a non-empty string", function()
         self.cache.currentRun.get("", "run")
@@ -123,12 +123,12 @@ end
 
 function TestCache:testCurrentRunRejectsCorruptedNamespaceBuckets()
     lu.assertErrorMsgContains("root bucket is not a table", function()
-        self.harness.env.CurrentRun = { _AdamantModpackLibCache = true }
+        self.harness.game.CurrentRun = { _AdamantModpackLibCache = true }
         self.cache.currentRun.get("owner", "run")
     end)
 
     lu.assertErrorMsgContains("owner bucket is not a table", function()
-        self.harness.env.CurrentRun = {
+        self.harness.game.CurrentRun = {
             _AdamantModpackLibCache = {
                 owner = true,
             },
@@ -139,7 +139,7 @@ end
 
 function TestCache:testAuthorHostCurrentRunCacheBindsOwnerIdentity()
     local currentRun = {}
-    self.harness.env.CurrentRun = currentRun
+    self.harness.game.CurrentRun = currentRun
 
     local host = self.harness.public.createModule({
         pluginGuid = "test-cache-host",
@@ -162,7 +162,7 @@ function TestCache:testAuthorHostCurrentRunCacheBindsOwnerIdentity()
 end
 
 function TestCache:testAuthorHostCurrentRunCacheReturnsEmptyWhenNoCurrentRun()
-    self.harness.env.CurrentRun = nil
+    self.harness.game.CurrentRun = nil
 
     local host = self.harness.public.createModule({
         pluginGuid = "test-cache-no-run",
@@ -179,7 +179,7 @@ function TestCache:testAuthorHostCurrentRunCacheReturnsEmptyWhenNoCurrentRun()
 end
 
 function TestCache:testAuthorHostCurrentRunCacheRejectsInvalidInputsWithoutCurrentRun()
-    self.harness.env.CurrentRun = nil
+    self.harness.game.CurrentRun = nil
 
     local host = self.harness.public.createModule({
         pluginGuid = "test-cache-invalid-host",

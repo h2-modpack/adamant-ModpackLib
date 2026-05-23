@@ -56,18 +56,22 @@ end
 
 local function createModUtil()
     return {
+        Path = {
+            Wrap = function() end,
+            Override = function() end,
+            Restore = function() end,
+            Context = {
+                Wrap = function() end,
+            },
+        },
+    }
+end
+
+local function createModUtilPlugin()
+    return {
+        globals = {},
         once_loaded = {
             game = function() end,
-        },
-        mod = {
-            Path = {
-                Wrap = function() end,
-                Override = function() end,
-                Restore = function() end,
-                Context = {
-                    Wrap = function() end,
-                },
-            },
         },
     }
 end
@@ -100,6 +104,14 @@ local function createRom(config, opts)
     rom.game = rom.game or {}
     rom.game.DeepCopyTable = rom.game.DeepCopyTable or deepCopy
     rom.game.SetupRunData = rom.game.SetupRunData or function() end
+    rom.game.CurrentRun = opts.CurrentRun
+    rom.game.ScreenData = opts.ScreenData
+    rom.game.HUDScreen = opts.HUDScreen
+    rom.game.ShowingCombatUI = opts.ShowingCombatUI
+    rom.game.ModifyTextBox = opts.ModifyTextBox
+    rom.game.SetAlpha = opts.SetAlpha
+    rom.game.CreateComponentFromData = opts.CreateComponentFromData
+    rom.game.Destroy = opts.Destroy
     rom.ImGui = rom.ImGui or {}
     rom.ImGuiCond = rom.ImGuiCond or { FirstUseEver = 1 }
     rom.ImGuiCol = rom.ImGuiCol or { Text = 1 }
@@ -124,7 +136,8 @@ local function createRom(config, opts)
             return deepCopy(rawConfig)
         end,
     }
-    rom.mods['SGG_Modding-ModUtil'] = opts.modutil or rom.mods['SGG_Modding-ModUtil'] or createModUtil()
+    rom.mods['SGG_Modding-ModUtil'] = opts.modutilPlugin or rom.mods['SGG_Modding-ModUtil'] or createModUtilPlugin()
+    rom.mods['SGG_Modding-ModUtil'].globals = rom.mods['SGG_Modding-ModUtil'].globals or rom.game
 
     return rom
 end
@@ -160,12 +173,15 @@ local function createLibHarness(opts)
     local runtimeRoot = opts.runtime or {}
     local plugin = opts.plugin or { guid = "test-module" }
     local rom = createRom(config, opts)
+    local modUtilRuntime = opts.modutil or opts.modUtilRuntime or createModUtil()
+    rom.mods['SGG_Modding-ModUtil'].globals.ModUtil = modUtilRuntime
     local imports = {}
     local importOverrides = opts.importOverrides or {}
 
     local env = setmetatable({
         public = public,
         rom = rom,
+        ModUtil = modUtilRuntime,
         _PLUGIN = plugin,
         AdamantModpackLib_Runtime = runtimeRoot,
         ScreenData = opts.ScreenData,
@@ -189,7 +205,7 @@ local function createLibHarness(opts)
         rom = rom,
         chalk = opts.chalk or rom.mods['SGG_Modding-Chalk'],
         plugin = plugin,
-        modutil = opts.modutil or rom.mods['SGG_Modding-ModUtil'],
+        modutil = rom.mods['SGG_Modding-ModUtil'],
         gameDeps = opts.gameDeps,
     }
 
@@ -209,8 +225,10 @@ local function createLibHarness(opts)
         env = env,
         externals = externals,
         rom = rom,
+        game = rom.game,
         chalk = externals.chalk,
-        modutil = externals.modutil,
+        modutil = env.ModUtil,
+        modutilPlugin = externals.modutil,
         plugin = plugin,
 
         logging = imports["core/logging/logging.lua"],

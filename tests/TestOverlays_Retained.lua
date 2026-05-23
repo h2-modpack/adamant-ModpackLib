@@ -416,7 +416,7 @@ end
 function TestOverlays_Retained:testAfterHookObservesResultsWithoutChangingReturn()
     local wrapped = nil
     local observed = nil
-    self.h.modutil.mod.Path.Wrap = function(path, handler)
+    self.h.modutil.Path.Wrap = function(path, handler)
         lu.assertEquals(path, "StartNewRunAfter")
         wrapped = handler
     end
@@ -447,7 +447,7 @@ end
 function TestOverlays_Retained:testAfterHookPreservesNilResultArity()
     local wrapped = nil
     local observed = nil
-    self.h.modutil.mod.Path.Wrap = function(path, handler)
+    self.h.modutil.Path.Wrap = function(path, handler)
         lu.assertEquals(path, "StartNewRunNilResults")
         wrapped = handler
     end
@@ -486,7 +486,7 @@ function TestOverlays_Retained:testHostAfterHookIsRemovedWhenOmitted()
     local wrapCalls = 0
     local observed = false
     local pluginGuid = "test-retained-host-after-omit"
-    self.h.modutil.mod.Path.Wrap = function(path, handler)
+    self.h.modutil.Path.Wrap = function(path, handler)
         lu.assertEquals(path, "StartNewRunOmit")
         wrapCalls = wrapCalls + 1
         wrapped = handler
@@ -517,7 +517,7 @@ function TestOverlays_Retained:testHostAfterHookRollsBackOnActivationFailure()
     local wrapped = nil
     local observed = nil
     local pluginGuid = "test-retained-host-after-rollback"
-    self.h.modutil.mod.Path.Wrap = function(path, handler)
+    self.h.modutil.Path.Wrap = function(path, handler)
         lu.assertEquals(path, "StartNewRunRollback")
         wrapped = handler
     end

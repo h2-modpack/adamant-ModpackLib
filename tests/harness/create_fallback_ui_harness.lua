@@ -83,6 +83,7 @@ local function createFallbackUiHarness(opts)
         rom = opts.rom,
         chalk = opts.chalk,
         modutil = opts.modutil,
+        modutilPlugin = opts.modutilPlugin,
         gameDeps = opts.gameDeps or createGameDeps(game),
         importOverrides = opts.importOverrides,
     })

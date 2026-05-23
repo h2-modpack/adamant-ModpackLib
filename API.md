@@ -496,7 +496,7 @@ module owner id, derived from `pluginGuid`.
 
 ### `host.hooks.wrap(path, handler)`
 
-Registers or updates a stable `modutil.mod.Path.Wrap(...)` dispatcher.
+Registers or updates a stable ModUtil runtime `Path.Wrap(...)` dispatcher.
 
 Also supports:
 - `host.hooks.wrap(path, key, handler)`
@@ -505,7 +505,7 @@ Use the keyed form when one module registers more than one wrap against the same
 
 ### `host.hooks.override(path, replacement)`
 
-Registers or updates a stable `modutil.mod.Path.Override(...)`.
+Registers or updates a stable ModUtil runtime `Path.Override(...)`.
 
 Also supports:
 - `host.hooks.override(path, key, replacement)`
@@ -516,7 +516,7 @@ override.
 
 ### `host.hooks.contextWrap(path, context)`
 
-Registers or updates a stable `modutil.mod.Path.Context.Wrap(...)` dispatcher.
+Registers or updates a stable ModUtil runtime `Path.Context.Wrap(...)` dispatcher.
 
 Also supports:
 - `host.hooks.contextWrap(path, key, context)`

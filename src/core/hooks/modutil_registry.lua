@@ -3,10 +3,36 @@ local logging = deps.logging
 local modutil = deps.modutil
 local REGISTRY_KEY = deps.registryKey
 
-if not (modutil and modutil.mod and modutil.mod.Path) then
-    logging.violate("hooks.modutil_unavailable", "hooks: SGG_Modding-ModUtil is not available")
+local function getModUtilRuntime()
+    local globals = modutil and modutil.globals
+    local runtime = globals and globals.ModUtil
+    if not (runtime and runtime.Path) then
+        logging.violate("hooks.modutil_unavailable", "hooks: SGG_Modding-ModUtil is not available")
+    end
+    return runtime, globals
 end
-local modutilPath = modutil.mod.Path
+
+local function getModUtilPath()
+    local runtime = getModUtilRuntime()
+    return runtime.Path
+end
+
+local function getPathTarget(path)
+    local _, globals = getModUtilRuntime()
+    local node = globals
+    if type(path) == "table" then
+        for _, key in ipairs(path) do
+            if node == nil then return nil end
+            node = node[key]
+        end
+        return node
+    end
+    for key in string.gmatch(path, "[^%.]+") do
+        if node == nil then return nil end
+        node = node[key]
+    end
+    return node
+end
 
 local function getRegistry(owner)
     if type(owner) ~= "table" then
@@ -55,6 +81,7 @@ local function applyWrapState(state)
     end
 
     if not state.registered then
+        local modutilPath = getModUtilPath()
         modutilPath.Wrap(state.path, function(base, ...)
             local current = state.handler
             if current then
@@ -73,6 +100,7 @@ local function applyOverrideState(state)
 
     if type(replacement) == "function" then
         if not state.registered then
+            local modutilPath = getModUtilPath()
             modutilPath.Override(state.path, function(...)
                 local current = state.replacement
                 if type(current) ~= "function" then
@@ -83,6 +111,7 @@ local function applyOverrideState(state)
             state.registered = true
             state.usesDispatcher = true
         elseif not state.usesDispatcher then
+            local modutilPath = getModUtilPath()
             modutilPath.Restore(state.path)
             modutilPath.Override(state.path, function(...)
                 local current = state.replacement
@@ -97,8 +126,10 @@ local function applyOverrideState(state)
     end
 
     if state.registered then
+        local modutilPath = getModUtilPath()
         modutilPath.Restore(state.path)
     end
+    local modutilPath = getModUtilPath()
     modutilPath.Override(state.path, replacement)
     state.registered = true
     state.usesDispatcher = false
@@ -110,6 +141,7 @@ local function applyContextWrapState(state)
     end
 
     if not state.registered then
+        local modutilPath = getModUtilPath()
         modutilPath.Context.Wrap(state.path, function(...)
             local current = state.context
             if current then
@@ -158,6 +190,7 @@ local function deactivateSlot(state)
     if state.kind == "override" then
         state.replacement = nil
         if state.registered then
+            local modutilPath = getModUtilPath()
             modutilPath.Restore(state.path)
             state.registered = false
         end
@@ -169,4 +202,5 @@ return {
     installOverride = installOverride,
     installContextWrap = installContextWrap,
     deactivateSlot = deactivateSlot,
+    getPathTarget = getPathTarget,
 }

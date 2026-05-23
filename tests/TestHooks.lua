@@ -17,49 +17,44 @@ local function createPathMock(target)
     end
 
     local testModUtil = {
-        once_loaded = {
-            game = function() end,
-        },
-        mod = {
-            Path = {
-                Wrap = function(path, handler)
-                    counts.wrap = counts.wrap + 1
+        Path = {
+            Wrap = function(path, handler)
+                counts.wrap = counts.wrap + 1
+                local env = getEnv()
+                local base = env[path]
+                env[path] = function(...)
+                    return handler(base, ...)
+                end
+            end,
+
+            Override = function(path, value)
+                counts.override = counts.override + 1
+                local env = getEnv()
+                if originals[path] == nil then
+                    originals[path] = env[path]
+                end
+                env[path] = value
+            end,
+
+            Restore = function(path)
+                counts.restore = counts.restore + 1
+                if originals[path] == nil then
+                    error("object has no overrides")
+                end
+                getEnv()[path] = originals[path]
+                originals[path] = nil
+            end,
+
+            Context = {
+                Wrap = function(path, context)
+                    counts.contextWrap = counts.contextWrap + 1
                     local env = getEnv()
                     local base = env[path]
                     env[path] = function(...)
-                        return handler(base, ...)
+                        context(...)
+                        return base(...)
                     end
                 end,
-
-                Override = function(path, value)
-                    counts.override = counts.override + 1
-                    local env = getEnv()
-                    if originals[path] == nil then
-                        originals[path] = env[path]
-                    end
-                    env[path] = value
-                end,
-
-                Restore = function(path)
-                    counts.restore = counts.restore + 1
-                    if originals[path] == nil then
-                        error("object has no overrides")
-                    end
-                    getEnv()[path] = originals[path]
-                    originals[path] = nil
-                end,
-
-                Context = {
-                    Wrap = function(path, context)
-                        counts.contextWrap = counts.contextWrap + 1
-                        local env = getEnv()
-                        local base = env[path]
-                        env[path] = function(...)
-                            context(...)
-                            return base(...)
-                        end
-                    end,
-                },
             },
         },
     }
@@ -609,7 +604,7 @@ function TestHooks:testHookCommitFailureRemovesPartiallyInstalledCandidateSlots(
         end)
     end)
 
-    self.counts.modutil.mod.Path.Override = function()
+    self.counts.modutil.Path.Override = function()
         error("override install boom")
     end
 

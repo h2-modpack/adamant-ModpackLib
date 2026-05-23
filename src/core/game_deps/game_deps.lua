@@ -3,10 +3,6 @@ local deps = ...
 local rom = deps.rom
 local logging = deps.logging
 
-local function readGlobal(name)
-    return rawget(_G, name)
-end
-
 local function expectedMessage(expectedType, optional)
     local expected = "a " .. expectedType
     if optional then
@@ -25,16 +21,21 @@ local function validateBoundaryValue(label, value, expectedType, optional)
     return value
 end
 
-local function readOptionalGlobal(name, expectedType)
-    return validateBoundaryValue(name, readGlobal(name), expectedType, true)
+local function readGameGlobal(name)
+    local game = validateBoundaryValue("rom.game", rom.game, "table", false)
+    return game[name]
 end
 
-local function readRequiredGlobal(name, expectedType)
-    return validateBoundaryValue(name, readGlobal(name), expectedType, false)
+local function readOptionalGameGlobal(name, expectedType)
+    return validateBoundaryValue(name, readGameGlobal(name), expectedType, true)
 end
 
-local function callGlobalFunction(name, ...)
-    return readRequiredGlobal(name, "function")(...)
+local function readRequiredGameGlobal(name, expectedType)
+    return validateBoundaryValue(name, readGameGlobal(name), expectedType, false)
+end
+
+local function callGameGlobalFunction(name, ...)
+    return readRequiredGameGlobal(name, "function")(...)
 end
 
 local function callRomGameFunction(name, ...)
@@ -46,7 +47,7 @@ end
 local gameDeps = {
     cache = {
         CurrentRun = function()
-            return readOptionalGlobal("CurrentRun", "table")
+            return readOptionalGameGlobal("CurrentRun", "table")
         end,
     },
 
@@ -58,31 +59,31 @@ local gameDeps = {
 
     overlays = {
         ScreenData = function()
-            return readOptionalGlobal("ScreenData", "table")
+            return readOptionalGameGlobal("ScreenData", "table")
         end,
 
         HUDScreen = function()
-            return readOptionalGlobal("HUDScreen", "table")
+            return readOptionalGameGlobal("HUDScreen", "table")
         end,
 
         ShowingCombatUI = function()
-            return readOptionalGlobal("ShowingCombatUI", "boolean")
+            return readOptionalGameGlobal("ShowingCombatUI", "boolean")
         end,
 
         ModifyTextBox = function(args)
-            return callGlobalFunction("ModifyTextBox", args)
+            return callGameGlobalFunction("ModifyTextBox", args)
         end,
 
         SetAlpha = function(args)
-            return callGlobalFunction("SetAlpha", args)
+            return callGameGlobalFunction("SetAlpha", args)
         end,
 
         CreateComponentFromData = function(componentData, data)
-            return callGlobalFunction("CreateComponentFromData", componentData, data)
+            return callGameGlobalFunction("CreateComponentFromData", componentData, data)
         end,
 
         Destroy = function(args)
-            return callGlobalFunction("Destroy", args)
+            return callGameGlobalFunction("Destroy", args)
         end,
     },
 }

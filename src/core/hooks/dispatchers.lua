@@ -208,7 +208,7 @@ local function dispatchOverride(dispatcher, ...)
 end
 
 local function modutilDispatcherIsCurrent(dispatcher)
-    return dispatcher.installed and _G[dispatcher.path] == dispatcher.installedTarget
+    return dispatcher.installed and modutilHooks.getPathTarget(dispatcher.path) == dispatcher.installedTarget
 end
 
 local function resetModUtilDispatcher(dispatcher)
@@ -237,7 +237,7 @@ local function ensureWrapDispatcher(dispatcher)
         return dispatchWrap(dispatcher, base, ...)
     end)
     dispatcher.installed = true
-    dispatcher.installedTarget = _G[dispatcher.path]
+    dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
 end
 
 local function ensureContextWrapDispatcher(dispatcher)
@@ -251,7 +251,7 @@ local function ensureContextWrapDispatcher(dispatcher)
         return dispatchContextWrap(dispatcher, ...)
     end)
     dispatcher.installed = true
-    dispatcher.installedTarget = _G[dispatcher.path]
+    dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
 end
 
 function refreshOverrideDispatcher(dispatcher)
@@ -267,7 +267,7 @@ function refreshOverrideDispatcher(dispatcher)
             return dispatchOverride(dispatcher, ...)
         end)
         dispatcher.installed = true
-        dispatcher.installedTarget = _G[dispatcher.path]
+        dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
         return
     end
 

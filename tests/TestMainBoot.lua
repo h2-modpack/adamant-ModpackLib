@@ -58,7 +58,8 @@ local function ensureBit32(env)
     }
 end
 
-local function createBootHarness()
+local function createBootHarness(opts)
+    opts = opts or {}
     local public = {}
     local config = { DebugMode = false }
     local imports = {}
@@ -114,12 +115,17 @@ local function createBootHarness()
         end,
     }
     rom.mods['SGG_Modding-ModUtil'] = {
+        globals = rom.game,
         once_loaded = {
             game = function(callback)
                 onceLoadedCallbacks[#onceLoadedCallbacks + 1] = callback
             end,
         },
-        mod = {
+    }
+
+    local modUtilCore = opts.ModUtil
+    if modUtilCore == nil and opts.withoutModUtil ~= true then
+        modUtilCore = {
             Path = {
                 Wrap = function() end,
                 Override = function() end,
@@ -128,8 +134,9 @@ local function createBootHarness()
                     Wrap = function() end,
                 },
             },
-        },
-    }
+        }
+    end
+    rom.game.ModUtil = modUtilCore
 
     local env = setmetatable({
         public = public,
@@ -222,6 +229,15 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertEquals(type(h.runtime.registry.coordinators), "table")
     lu.assertNil(h.runtime.coordinator)
     lu.assertEquals(h.imports["core/init.lua"].coordinator, h.imports["core/coordinator/coordinator.lua"])
+end
+
+function TestMainBoot.testMainLoadsBeforeGlobalModUtilReady()
+    local h = createBootHarness({
+        withoutModUtil = true,
+    })
+
+    lu.assertEquals(type(h.public.createModule), "function")
+    lu.assertEquals(type(h.public.createFrameworkRuntime), "function")
 end
 
 function TestMainBoot.testMainCreatesFrameworkRuntimeFacade()

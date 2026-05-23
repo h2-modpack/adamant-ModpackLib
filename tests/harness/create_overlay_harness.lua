@@ -2,17 +2,12 @@ local createLibHarness = require("tests/harness/create_lib_harness")
 
 local function createModUtilMock()
     return {
-        once_loaded = {
-            game = function() end,
-        },
-        mod = {
-            Path = {
+        Path = {
+            Wrap = function() end,
+            Override = function() end,
+            Restore = function() end,
+            Context = {
                 Wrap = function() end,
-                Override = function() end,
-                Restore = function() end,
-                Context = {
-                    Wrap = function() end,
-                },
             },
         },
     }
