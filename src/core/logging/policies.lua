@@ -248,6 +248,10 @@ return {
         severity = "error",
         description = "Action refs require a non-empty string action key.",
     },
+    ["actions.unknown_key"] = {
+        severity = "error",
+        description = "Draw actions must be declared by the module definition before use.",
+    },
     ["api.invalid_method_call"] = {
         severity = "error",
         description = "Object handle methods must be called with Lua colon method syntax.",

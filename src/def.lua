@@ -290,7 +290,14 @@ local lib = {}
 ---@field shortName? string Short UI label.
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
+---@field actions? table<string, AdamantModpackLib.DrawActionHandler> Module draw-action handlers keyed by action id.
 ---@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Hash compaction hints.
+
+---@alias AdamantModpackLib.DrawActionHandler fun(
+---    state: AdamantModpackLib.DrawState,
+---    services: AdamantModpackLib.DrawServices,
+---    value: any
+---)
 
 ---@class AdamantModpackLib.PreparedDefinition: AdamantModpackLib.ModuleDefinition
 
@@ -310,6 +317,7 @@ local lib = {}
 ---@field shortName? string Short display name.
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Raw storage schema.
+---@field actions? table<string, AdamantModpackLib.DrawActionHandler> Draw-action handlers keyed by action id.
 ---@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Raw hash/profile group plan.
 --- Post-commit observer for rebuilding derived runtime/UI structures.
 ---@field onSettingsCommitted? fun(
@@ -419,7 +427,6 @@ local lib = {}
 ---@field tooltip? string
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when clicked.
 ---@field value? any Staged action payload.
----@field onClick? fun(imgui: table)
 
 ---@class AdamantModpackLib.ConfirmButtonOpts
 ---@field tooltip? string
@@ -427,7 +434,6 @@ local lib = {}
 ---@field cancelLabel? string
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when confirmed.
 ---@field value? any Staged action payload.
----@field onConfirm? fun(imgui: table)
 
 ---@class AdamantModpackLib.InputTextOpts
 ---@field label? string

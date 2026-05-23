@@ -16,6 +16,7 @@ local KnownDefinitionKeys = {
     shortName = true,
     tooltip = true,
     storage = true,
+    actions = true,
     hashGroupPlan = true,
 }
 
@@ -110,6 +111,41 @@ local function NormalizeStructuralSurface(surface)
     return {
         hasQuickContent = surface.hasQuickContent == true,
     }
+end
+
+local function CompareStrings(a, b)
+    return a < b
+end
+
+local function PrepareActions(definition, prefix)
+    local actions = definition.actions
+    if actions == nil then
+        definition.actions = {}
+        definition._actionOrder = {}
+        return
+    end
+    if type(actions) ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s: definition.actions should be table, got %s",
+            prefix, type(actions))
+    end
+
+    local actionOrder = {}
+    for key, handler in pairs(actions) do
+        if type(key) ~= "string" or key == "" then
+            logging.violate("definition.invalid_field_type", "%s: action keys must be non-empty strings", prefix)
+        elseif not IsStableIdentifier(key) then
+            logging.violate("definition.invalid_field_type", "%s: action key '%s' %s",
+                prefix, key, StableIdentifierDescription)
+        end
+        if type(handler) ~= "function" then
+            logging.violate("definition.invalid_field_type", "%s: actions.%s should be function, got %s",
+                prefix, tostring(key), type(handler))
+        end
+        actionOrder[#actionOrder + 1] = key
+    end
+
+    table.sort(actionOrder, CompareStrings)
+    definition._actionOrder = actionOrder
 end
 
 local function ValidateHashGroupPlan(definition, prefix)
@@ -484,7 +520,9 @@ local function ValidateDefinition(definition, label)
         checkType(key, "string")
     end
     checkType("storage", "table")
+    checkType("actions", "table")
     checkType("hashGroupPlan", "table")
+    PrepareActions(definition, prefix)
     ValidateHashGroupPlan(definition, prefix)
 end
 

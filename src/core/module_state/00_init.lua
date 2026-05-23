@@ -87,6 +87,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field captureSnapshot fun(): table
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
+---@field executePending fun(state: DrawState, services: DrawServices)
 
 ---@class PersistentCacheStore
 ---@field read fun(key: string): any
@@ -129,6 +130,8 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field tooltip string|nil
 ---@field default boolean|nil
 ---@field storage StorageSchema|nil
+---@field actions table<string, fun(state: DrawState, services: DrawServices, value: any)>|nil
+---@field _actionOrder string[]|nil
 ---@field hashGroupPlan table|nil
 
 --- Creates module state access surfaces around a prepared definition and config table.
@@ -165,8 +168,8 @@ function moduleState.createStore(persistentState)
     return storeModule.create(persistentState)
 end
 
-function moduleState.createActionBuffer()
-    return actionBufferModule.createBuffer()
+function moduleState.createActionBuffer(actionCatalog)
+    return actionBufferModule.createBuffer(actionCatalog)
 end
 
 function moduleState.createCommitActions(actionSnapshot)

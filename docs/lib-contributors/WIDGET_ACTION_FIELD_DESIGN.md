@@ -25,9 +25,9 @@ draw.widgets.checkbox(state.get("Enabled"), opts)
 They receive a `StorageField`, mutate staged draw state, and optionally stage
 `opts.action`.
 
-Buttons are the exception. `draw.widgets.button(...)` and
-`draw.widgets.confirmButton(...)` still support `onClick` and `onConfirm`,
-which run arbitrary code directly during draw. That callback path is both a
+Buttons used to be the exception. `draw.widgets.button(...)` and
+`draw.widgets.confirmButton(...)` supported `onClick` and `onConfirm`, which
+ran arbitrary code directly during draw. That callback path was both a
 conceptual bypass around draw actions and a recurring source of per-frame
 closure/option-table allocation.
 
@@ -82,7 +82,8 @@ Rules:
 - `actions.get(key)` rejects undeclared keys.
 - Staged actions execute after the draw callback returns and before staged
   state is flushed.
-- Execution order is deterministic declaration order.
+- Execution order is deterministic prepared order. Because Lua map literals do
+  not preserve source order, prepared action keys are sorted by key.
 - `nil` staged value means absent.
 - `commit.actions` continues to expose the captured action snapshot to commit
   observers after execution.
@@ -106,7 +107,7 @@ draw.widgets.button("Ban All", {
 })
 ```
 
-Public callback fields should be removed:
+Public callback fields have been removed:
 
 - `ButtonOpts.onClick`
 - `ConfirmButtonOpts.onConfirm`
@@ -195,7 +196,7 @@ UI metadata with no per-frame option allocation.
 2. Execute declared staged actions after draw and before flush.
 3. Make `actions.get(key)` reject undeclared keys.
 4. Port module button callbacks to declared actions.
-5. Remove `onClick` and `onConfirm` from Lib button widgets, defs, and docs.
+5. Remove `onClick` and `onConfirm` from Lib button widgets, defs, and docs. Done.
 6. Add storage `ui` validation and preparation at the storage-schema boundary.
 7. Add `draw.field(field, overrides?)`.
 8. Move obvious static field-widget opts from modules into storage `ui`.

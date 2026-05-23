@@ -182,12 +182,12 @@ Options:
 - `tooltip`
 - `action`
 - `value`
-- `onClick(imgui)`
 
 Notes:
 - returns whether the button was clicked
 - when `action` is an `actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
-- `onClick` is optional convenience only; you can ignore it and use the boolean return directly
+- command side effects should be declared in `createModule({ actions = ... })` and staged through `action`
+- for fully custom imperative behavior, use raw `draw.imgui.Button(...)` and own the side effect at the call site
 
 ### `draw.widgets.confirmButton(id, label, opts?)`
 
@@ -199,7 +199,6 @@ Options:
 - `cancelLabel`
 - `action`
 - `value`
-- `onConfirm(imgui)`
 
 Notes:
 - returns `true` only when the confirm action is taken

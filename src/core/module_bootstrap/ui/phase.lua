@@ -7,6 +7,13 @@ local phaseGate = deps.phaseGate
 
 local uiPhase = {}
 
+local function packResults(...)
+    return {
+        n = select("#", ...),
+        ...
+    }
+end
+
 ---@class UiPhaseObjects
 ---@field draw DrawContext
 ---@field state DrawState
@@ -36,7 +43,11 @@ function uiPhase.create(opts)
     }
 
     function objects.run(callback)
-        return phaseGate.runDraw(callback, objects.draw, objects.state, objects.actions, objects.services)
+        return phaseGate.runDraw(function(draw, state, actions, services)
+            local results = packResults(callback(draw, state, actions, services))
+            opts.actionBuffer.executePending(state, services)
+            return table.unpack(results, 1, results.n)
+        end, objects.draw, objects.state, objects.actions, objects.services)
     end
 
     return objects

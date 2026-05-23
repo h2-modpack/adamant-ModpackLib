@@ -156,6 +156,45 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsInvalidMet
     end)
 end
 
+function TestModuleHost_PrepareDefinition:testPrepareDefinitionPreparesActionsInDeterministicOrder()
+    local prepared = self.h.moduleHost.prepareDefinition({}, {
+        id = "ActionsModule",
+        name = "Actions Module",
+        storage = {},
+        actions = {
+            second = function() end,
+            first = function() end,
+        },
+    })
+
+    lu.assertEquals(prepared._actionOrder, { "first", "second" })
+    lu.assertEquals(type(prepared.actions.first), "function")
+    lu.assertEquals(type(prepared.actions.second), "function")
+end
+
+function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsInvalidActions()
+    lu.assertErrorMsgContains("action key 'Bad-Key'", function()
+        self.h.moduleHost.prepareDefinition({}, {
+            id = "BadActionsModule",
+            name = "Bad Actions Module",
+            storage = {},
+            actions = {
+                ["Bad-Key"] = function() end,
+            },
+        })
+    end)
+    lu.assertErrorMsgContains("actions.reset should be function", function()
+        self.h.moduleHost.prepareDefinition({}, {
+            id = "BadActionHandlerModule",
+            name = "Bad Action Handler Module",
+            storage = {},
+            actions = {
+                reset = true,
+            },
+        })
+    end)
+end
+
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsDefinitionWithoutId()
     lu.assertErrorMsgContains("definition.missing_id", function()
         self.h.moduleHost.prepareDefinition({}, {

@@ -7,9 +7,25 @@ local ACTION_REF_MARKER = {}
 local DRAW_ACTION_REF = "draw"
 local COMMIT_ACTION_REF = "commit"
 
+local function createActionCatalog(actions, actionOrder)
+    local handlers = actions or {}
+    local order = actionOrder or {}
+    return {
+        handlers = handlers,
+        order = order,
+    }
+end
+
 local function validateActionKey(context, actionKey)
     if type(actionKey) ~= "string" or actionKey == "" then
         logging.violate("actions.invalid_key", "%s: action key must be a non-empty string", tostring(context))
+    end
+end
+
+local function validateDeclaredAction(catalog, context, actionKey)
+    validateActionKey(context, actionKey)
+    if catalog ~= nil and catalog.handlers[actionKey] == nil then
+        logging.violate("actions.unknown_key", "%s: unknown action key '%s'", tostring(context), tostring(actionKey))
     end
 end
 
@@ -71,7 +87,11 @@ local function createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
 local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
-    validateActionKey("actions.get", actionKey)
+    if type(actionBuffer.validateAction) == "function" then
+        actionBuffer.validateAction("actions.get", actionKey)
+    else
+        validateActionKey("actions.get", actionKey)
+    end
     return createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
@@ -90,32 +110,41 @@ local function createCommitActionRef(snapshot, actionKey)
     return ref
 end
 
-local function createBuffer()
+local function createBuffer(actionCatalog)
+    local catalog = actionCatalog and createActionCatalog(actionCatalog.actions, actionCatalog.order) or nil
     local slots = {}
+    local pending = {}
     local refs = {}
     local buffer = {}
 
     function buffer.stage(actionKey, value)
-        validateActionKey("actions.stage", actionKey)
+        validateDeclaredAction(catalog, "actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
+            pending[actionKey] = nil
             return
         end
         slots[actionKey] = CloneValue(value)
+        pending[actionKey] = true
+    end
+
+    function buffer.validateAction(context, actionKey)
+        validateDeclaredAction(catalog, context, actionKey)
     end
 
     function buffer.read(actionKey)
-        validateActionKey("actions.read", actionKey)
+        validateDeclaredAction(catalog, "actions.read", actionKey)
         return CloneValue(slots[actionKey])
     end
 
     function buffer.clear(actionKey)
-        validateActionKey("actions.clear", actionKey)
+        validateDeclaredAction(catalog, "actions.clear", actionKey)
         slots[actionKey] = nil
+        pending[actionKey] = nil
     end
 
     function buffer.has(actionKey)
-        validateActionKey("actions.has", actionKey)
+        validateDeclaredAction(catalog, "actions.has", actionKey)
         return slots[actionKey] ~= nil
     end
 
@@ -129,10 +158,11 @@ local function createBuffer()
 
     function buffer.clearAll()
         slots = {}
+        pending = {}
     end
 
     function buffer.getRef(actionKey)
-        validateActionKey("actions.get", actionKey)
+        validateDeclaredAction(catalog, "actions.get", actionKey)
         local ref = refs[actionKey]
         if ref ~= nil then
             return ref
@@ -140,6 +170,18 @@ local function createBuffer()
         ref = createDrawActionRef(buffer, actionKey)
         refs[actionKey] = ref
         return ref
+    end
+
+    function buffer.executePending(state, services)
+        if catalog == nil then
+            return
+        end
+        for _, actionKey in ipairs(catalog.order) do
+            if pending[actionKey] then
+                pending[actionKey] = nil
+                catalog.handlers[actionKey](state, services, CloneValue(slots[actionKey]))
+            end
+        end
     end
 
     return buffer
@@ -171,4 +213,6 @@ return {
     createCommitActions = createCommitActions,
     createGatedDrawActionRef = createGatedDrawActionRef,
     isDrawActionRef = isDrawActionRef,
+    createActionCatalog = createActionCatalog,
+    validateDeclaredAction = validateDeclaredAction,
 }

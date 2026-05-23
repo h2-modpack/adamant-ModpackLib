@@ -511,6 +511,9 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
         id = "DrawActionsPhase",
         name = "Draw Actions Phase",
         storage = {},
+        actions = {
+            recording = function() end,
+        },
     })
     local store, stagedState = self.h:createModuleState({
         Enabled = true,
@@ -555,6 +558,80 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actionRef:has()
+    end)
+end
+
+function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
+    local observedCommitAction = nil
+    local observedConfigChange = nil
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DeclaredDrawActions",
+        name = "Declared Draw Actions",
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        actions = {
+            setFlag = function(state, _, value)
+                state.write("Flag", value == true)
+            end,
+        },
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+        Flag = false,
+    }, definition)
+    createActivatedHost(self.h, "test-declared-draw-actions", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        onSettingsCommitted = function(_, _, commit)
+            observedCommitAction = commit.actions.get("setFlag"):read()
+            observedConfigChange = commit.hadConfigChanges()
+        end,
+        drawTab = function(_, _, actions)
+            actions.get("setFlag"):stage(true)
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-declared-draw-actions")
+
+    host.drawTab()
+
+    lu.assertTrue(stagedState.read("Flag"))
+    lu.assertFalse(store.read("Flag"))
+
+    local ok, err = host.commitIfDirty()
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNil(err)
+    lu.assertTrue(store.read("Flag"))
+    lu.assertTrue(observedCommitAction)
+    lu.assertTrue(observedConfigChange)
+end
+
+function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "UndeclaredDrawAction",
+        name = "Undeclared Draw Action",
+        storage = {},
+        actions = {},
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    createActivatedHost(self.h, "test-undeclared-draw-action", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, _, actions)
+            actions.get("missing")
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-undeclared-draw-action")
+
+    lu.assertErrorMsgContains("actions.unknown_key", function()
+        host.drawTab()
     end)
 end
 

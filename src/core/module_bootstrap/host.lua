@@ -198,7 +198,10 @@ function moduleHost.create(opts)
 
     local drawTab = opts.drawTab
     local drawQuickContent = opts.drawQuickContent
-    local actionBuffer = moduleState.createActionBuffer()
+    local actionBuffer = moduleState.createActionBuffer({
+        actions = def.actions,
+        order = def._actionOrder,
+    })
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
     local store = moduleState.createStore(persistentState)
