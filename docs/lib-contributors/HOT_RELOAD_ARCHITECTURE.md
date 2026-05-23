@@ -237,7 +237,7 @@ implementation reloads.
 Important properties:
 - active tracked mutation state survives store recreation during module reload
 - active module-host records are keyed by `pluginGuid`
-- host activation synchronizes live mutation state to the module's effective enabled state
+- host activation synchronizes live mutation state to the module's persisted enabled state
 - if a module is disabled on reload, tracked active mutation state is reverted
 
 This keeps run-data patch lifecycles coherent across reloads.

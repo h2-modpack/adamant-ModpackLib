@@ -41,6 +41,14 @@ function TestStorageValidation:testInvalidRootAliasFails()
     end)
 end
 
+function TestStorageValidation:testInternalRootAliasFailsForAuthoredStorage()
+    lu.assertErrorMsgContains("alias '_PrivateFlag' must start with a letter", function()
+        self.storage.validate({
+            { type = "bool", alias = "_PrivateFlag", default = false },
+        }, "InternalRootAlias")
+    end)
+end
+
 function TestStorageValidation:testInvalidPackedChildAliasFails()
     lu.assertErrorMsgContains("alias 'Bad.Child' must start with a letter", function()
         self.storage.validate({

@@ -230,11 +230,12 @@ local function createRuntime(host)
         seedWindowSize(imgui)
         local open, shouldDraw = imgui.Begin(title, showWindow)
         if shouldDraw then
-            local enabled = host.read("Enabled") == true
+            local enabled = host.isEnabled()
             local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
             if enabledChanged then
                 local ok, err = host.setEnabled(enabledValue)
                 if ok then
+                    enabled = enabledValue == true
                     markRunDataDirty()
                 else
                     logging.violate("host.enable_transition_failed", "%s %s failed: %s",
@@ -253,19 +254,21 @@ local function createRuntime(host)
                 host.resync()
             end
 
-            imgui.Separator()
-            imgui.Spacing()
-            host.drawTab()
-            local ok, err, committed = host.commitIfDirty()
-            if ok and committed and host.read("Enabled") == true then
-                markRunDataDirty()
-            elseif ok == false then
-                logging.violate(
-                    "host.staged_state_commit_failed",
-                    "%s staged state commit failed; restored previous config where possible: %s",
-                    tostring(meta.name or moduleId or "module"),
-                    tostring(err)
-                )
+            if enabled then
+                imgui.Separator()
+                imgui.Spacing()
+                host.drawTab()
+                local ok, err, committed = host.commitIfDirty()
+                if ok and committed and host.isEnabled() then
+                    markRunDataDirty()
+                elseif ok == false then
+                    logging.violate(
+                        "host.staged_state_commit_failed",
+                        "%s staged state commit failed; restored previous config where possible: %s",
+                        tostring(meta.name or moduleId or "module"),
+                        tostring(err)
+                    )
+                end
             end
         end
         imgui.End()

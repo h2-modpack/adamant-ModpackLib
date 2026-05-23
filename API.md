@@ -54,8 +54,8 @@ Module behavior is hosted through Lib's live host registry.
 ## `host.integrations`
 
 Small registry for optional cross-module cooperation. Modules can publish
-domain-named integration methods, and consumers can use them when present while
-remaining fully functional when absent.
+domain-named integration methods and events, and consumers can use them when
+present while remaining fully functional when absent.
 
 Typical provider declaration before activation:
 
@@ -70,7 +70,7 @@ local host, store, err = lib.createModule({
 })
 if not host then return end
 
-host.integrations.register("run-director.god-availability", {
+host.integrations.provide("run-director.god-availability", {
     providerId = MODULE_ID,
     methods = {
         isActive = {
@@ -88,6 +88,9 @@ host.integrations.register("run-director.god-availability", {
             end,
         },
     },
+    events = {
+        availabilityChanged = true,
+    },
 })
 
 host.activate()
@@ -101,16 +104,18 @@ derives from `pluginGuid`; provider ids do not need to match the module's
 Typical consumer:
 
 ```lua
-local active = host.integrations.invoke("run-director.god-availability", "isActive", false)
+local active = host.integrations.poll("run-director.god-availability", "isActive", false)
 if active then
-    return host.integrations.invoke("run-director.god-availability", "isAvailable", true, godKey) ~= false
+    return host.integrations.poll("run-director.god-availability", "isAvailable", true, godKey) ~= false
 end
 return true
 ```
 
 Surface:
-- `host.integrations.register(id, { providerId = providerId, methods = methods })`
-- `host.integrations.invoke(id, methodName, fallback, ...)`
+- `host.integrations.provide(id, { providerId = providerId, methods = methods })`
+- `host.integrations.poll(id, methodName, fallback, ...)`
+- `host.integrations.listen(id, eventName, callback)`
+- `host.integrations.emit(id, eventName, payload)`
 
 Rules:
 - integration ids should describe domain behavior, not consumer names
@@ -119,8 +124,13 @@ Rules:
 - provider methods can only read aliases listed in that method's `reads`
 - provider read scopes use the provider module's staged state and close after the method returns
 - `reads` must be an array of aliases; declaring a table root allows read-only table access, while packed child reads must declare the child alias
-- consumers should prefer `host.integrations.invoke(...)` so Lib resolves active provider behavior at call time
-- when multiple providers exist, `invoke(...)` uses the most recently activated enabled provider
+- consumers should prefer `host.integrations.poll(...)` so Lib resolves active provider behavior at call time
+- when multiple providers exist, `poll(...)` uses the most recently activated enabled provider
+- provider events must be declared in the provider spec before they can be emitted
+- `providerChanged` is a Lib-reserved event emitted once after a provider host's module enabled state changes
+- events are runtime notifications; listener order is unspecified and nested emits are queued
+- listener callbacks receive `payload, providerId`
+- event payloads are not durable state; consumers should poll for current values when needed
 
 ## `host.cache`
 
@@ -745,6 +755,7 @@ Raw numeric bit extraction helper.
 Raw numeric bit write helper.
 
 Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are host responsibilities. Use the returned module host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
+Framework-owned pack suspension is also a host lifecycle responsibility; Framework uses `host.suspendForPackDisable`, `host.restoreForPackEnable`, and `host.rollbackPackTransition` so Lib can keep its internal restore marker private.
 
 ## `host.fallbackUi`
 
@@ -775,7 +786,7 @@ Behavior:
   - `Enabled`
   - `Debug Mode`
   - `Resync State`
-- then calls `moduleHost.drawTab(...)`
+- then calls `moduleHost.drawTab(...)` when the module is enabled
 - commits dirty staged state through `moduleHost.commitIfDirty()`
 
 ## `frameworkRuntime.modules`
@@ -800,7 +811,7 @@ argument.
 Built-ins:
 - `services.log(fmt, ...)`
 - `services.logIf(fmt, ...)`
-- `services.invokeIntegration(id, methodName, fallback, ...)`
+- `services.pollIntegration(id, methodName, fallback, ...)`
 
 These helpers are the sanctioned draw-time access path for narrow module
 services. `draw.host` is not available in module UI. `services` is

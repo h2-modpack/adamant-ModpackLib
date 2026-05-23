@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local coordinator = deps.coordinator
 local setupRunData = deps.setupRunData
 local mutationRegistry = deps.mutationRegistry
 local plan = deps.plan
@@ -79,12 +78,7 @@ local function buildMutationPlan(mutationBundle, authorHost, store)
     return mutationPlan
 end
 
-local function isEnabledForSync(def, store)
-    local packId = def and def.modpack or nil
-    local coord = packId and coordinator and coordinator.getConfig and coordinator.getConfig(packId) or nil
-    if coord and not coord.ModEnabled then
-        return false
-    end
+local function isEnabledForSync(store)
     if not store then
         return false
     end
@@ -178,7 +172,8 @@ function lifecycle.apply(ownerId, mutationBundle, authorHost, store)
 end
 
 function lifecycle.sync(ownerId, def, mutationBundle, authorHost, store)
-    local enabled = isEnabledForSync(def, store)
+    local _ = def
+    local enabled = isEnabledForSync(store)
     local hasPatch = hasPatchMutation(mutationBundle)
     local candidatePlan = nil
 

@@ -428,13 +428,13 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
         stagedState = stagedState,
         drawTab = function(_, _, _, drawServices)
             services = drawServices
-            integrationValue, integrationProvider = services.invokeIntegration("test.draw-services", "value",
+            integrationValue, integrationProvider = services.pollIntegration("test.draw-services", "value",
                 "fallback", "ok")
             services.log("service %s", "log")
             services.logIf("service %s", "debug")
         end,
         configureHost = function(authorHost)
-            authorHost.integrations.register("test.draw-services", {
+            authorHost.integrations.provide("test.draw-services", {
                 providerId = "DrawServicesProvider",
                 methods = {
                     value = {
@@ -454,7 +454,7 @@ function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
     lu.assertEquals(type(services), "table")
     lu.assertEquals(type(services.log), "function")
     lu.assertEquals(type(services.logIf), "function")
-    lu.assertEquals(type(services.invokeIntegration), "function")
+    lu.assertEquals(type(services.pollIntegration), "function")
     lu.assertNil(services.integrations)
     lu.assertNil(services.hooks)
     lu.assertNil(services.overlays)
@@ -485,7 +485,7 @@ function TestModuleHost:testDrawServicesRejectUseOutsideDrawPhase()
         stagedState = stagedState,
         drawTab = function(_, _, _, drawServices)
             services = drawServices
-            services.invokeIntegration("missing", "value", nil)
+            services.pollIntegration("missing", "value", nil)
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-draw-services-phase")
@@ -499,7 +499,7 @@ function TestModuleHost:testDrawServicesRejectUseOutsideDrawPhase()
         services.logIf("outside")
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        services.invokeIntegration("missing", "value", nil)
+        services.pollIntegration("missing", "value", nil)
     end)
 end
 
@@ -679,7 +679,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         persistentState = firstStore,
         stagedState = firstStagedState,
         configureHost = function(authorHost)
-            authorHost.integrations.register(integrationId, {
+            authorHost.integrations.provide(integrationId, {
                 providerId = providerId,
                 methods = {
                     read = {
@@ -710,7 +710,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
     secondAuthorHost.mutation.patch(function()
         error("integration boom")
     end)
-    secondAuthorHost.integrations.register(integrationId, {
+    secondAuthorHost.integrations.provide(integrationId, {
         providerId = providerId,
         methods = {
             read = {
@@ -722,7 +722,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
     })
 
     local ok, err = secondAuthorHost.activate()
-    local value = firstAuthorHost.integrations.invoke(integrationId, "read", nil)
+    local value = firstAuthorHost.integrations.poll(integrationId, "read", nil)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "integration boom")
@@ -763,7 +763,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
     authorHost.mutation.patch(function()
         error("new integration boom")
     end)
-    authorHost.integrations.register(integrationId, {
+    authorHost.integrations.provide(integrationId, {
         providerId = providerId,
         methods = {
             read = {
@@ -780,7 +780,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
     lu.assertStrContains(err, "new integration boom")
     lu.assertNil(self.h.moduleHost.getLiveHost(pluginGuid))
     lu.assertNil(self.h.hostRegistry.getPluginInfo(pluginGuid))
-    lu.assertNil(authorHost.integrations.invoke(integrationId, "read", nil))
+    lu.assertNil(authorHost.integrations.poll(integrationId, "read", nil))
     lu.assertErrorMsgContains("host.not_activated", function()
         host.flush()
     end)
@@ -928,7 +928,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         persistentState = firstStore,
         stagedState = firstStagedState,
         configureHost = function(authorHost)
-            authorHost.integrations.register(integrationId, {
+            authorHost.integrations.provide(integrationId, {
                 providerId = providerId,
                 methods = {
                     read = {
@@ -942,7 +942,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         drawTab = function() end,
     })
 
-    lu.assertEquals(firstAuthorHost.integrations.invoke(integrationId, "read", nil), "first")
+    lu.assertEquals(firstAuthorHost.integrations.poll(integrationId, "read", nil), "first")
 
     local secondDefinition = self.h.moduleHost.prepareDefinition({}, {
         id = providerId,
@@ -960,7 +960,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         drawTab = function() end,
     })
 
-    lu.assertNil(firstAuthorHost.integrations.invoke(integrationId, "read", nil))
+    lu.assertNil(firstAuthorHost.integrations.poll(integrationId, "read", nil))
 end
 
 function TestModuleHost:testActivationRejectsReentrantActivateCalls()

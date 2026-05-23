@@ -174,7 +174,7 @@ local lib = {}
 ---@class AdamantModpackLib.DrawServices
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
----@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Invoke a registered integration method.
+---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Poll a registered integration method.
 
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
@@ -228,6 +228,7 @@ local lib = {}
 ---@class AdamantModpackLib.AuthorIntegrationRegistration
 ---@field providerId string Public provider identity returned to consumers.
 ---@field methods table<string, AdamantModpackLib.AuthorIntegrationMethod> Provider methods exposed to consumers.
+---@field events table<string, true>? Provider events this integration may emit. `providerChanged` is reserved by Lib.
 
 ---@class AdamantModpackLib.AuthorIntegrationMethod
 ---@field reads string[]? Storage aliases this provider method may read from the provider's staged state.
@@ -239,8 +240,10 @@ local lib = {}
 ---Get a declared read-only storage ref.
 
 ---@class AdamantModpackLib.AuthorIntegrations
----@field register fun(id: string, opts: AdamantModpackLib.AuthorIntegrationRegistration): table
----@field invoke fun(id: string, methodName: string, fallback: any, ...): any, string?
+---@field provide fun(id: string, opts: AdamantModpackLib.AuthorIntegrationRegistration): table
+---@field poll fun(id: string, methodName: string, fallback: any, ...): any, string?
+---@field listen fun(id: string, eventName: string, callback: fun(payload: any, providerId: string)): table
+---@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
 
 ---@class AdamantModpackLib.AuthorMutation
 ---@field patch fun(callback: fun(
@@ -336,6 +339,11 @@ local lib = {}
 ---@field isEnabled fun(): boolean
 ---@field setEnabled fun(enabled: boolean): boolean, string?
 ---@field setDebugMode fun(enabled: boolean)
+---@field suspendForPackDisable fun(): boolean, string?, table?
+---@field ensureSuspendedForPackDisable fun(): boolean, string?, table?
+---@field restoreForPackEnable fun(): boolean, string?, table?
+---@field rollbackPackTransition fun(receipt: table?): boolean, string?
+---@field restorePackTransitionState fun(receipt: table?): boolean, string?
 ---@field applyMutation fun(): boolean, string?
 ---@field revertMutation fun(): boolean, string?
 ---@field activate fun(): boolean, string?

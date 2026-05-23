@@ -133,6 +133,18 @@ return {
         severity = "warn",
         description = "An integration provider method failed; Lib returned the caller fallback.",
     },
+    ["integrations.listener_failed"] = {
+        severity = "warn",
+        description = "An integration event listener failed; Lib continued delivering the event to other listeners.",
+    },
+    ["integrations.undeclared_event"] = {
+        severity = "error",
+        description = "Integration providers can only emit events declared by their provider spec.",
+    },
+    ["integrations.event_cycle"] = {
+        severity = "warn",
+        description = "Integration event delivery stopped because queued nested events exceeded the cycle guard.",
+    },
     ["integrations.closed_scope"] = {
         severity = "error",
         description = "Integration read scopes are valid only while their provider method is running.",

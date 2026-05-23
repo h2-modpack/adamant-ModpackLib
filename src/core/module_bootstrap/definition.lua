@@ -27,11 +27,20 @@ local KnownHashGroupKeys = {
 local BuiltInStorageNodes = {
     { type = "bool", alias = "Enabled", default = false },
     { type = "bool", alias = "DebugMode", default = false, hash = false },
+    {
+        type = "int",
+        alias = "AdamantFramework_PackRestoreSnapshot",
+        default = 0,
+        min = 0,
+        max = 2,
+        hash = false,
+    },
 }
 
 local BuiltInStorageAliases = {
     Enabled = true,
     DebugMode = true,
+    AdamantFramework_PackRestoreSnapshot = true,
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"

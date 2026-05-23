@@ -33,6 +33,7 @@ local authorHost = {}
 ---@class AuthorIntegrationRegistration
 ---@field providerId string
 ---@field methods table<string, AuthorIntegrationMethod>
+---@field events table<string, true>|nil
 
 ---@class AuthorIntegrationMethod
 ---@field reads string[]|nil
@@ -41,11 +42,12 @@ local authorHost = {}
 ---@class IntegrationReadScope
 ---@field read fun(alias: string, ...): any
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
----@field isEnabled fun(): boolean
 
 ---@class AuthorIntegrations
----@field register fun(id: string, opts: AuthorIntegrationRegistration): table
----@field invoke fun(id: string, methodName: string, fallback: any, ...): any, string|nil
+---@field provide fun(id: string, opts: AuthorIntegrationRegistration): table
+---@field poll fun(id: string, methodName: string, fallback: any, ...): any, string|nil
+---@field listen fun(id: string, eventName: string, callback: fun(payload: any, providerId: string)): table
+---@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
 
 ---@class AuthorMutation
 ---@field patch fun(callback: fun(plan: table, host: AuthorHost, store: Store)): nil

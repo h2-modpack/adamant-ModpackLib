@@ -3,6 +3,7 @@ local deps = ...
 local logging = deps.logging
 local hostRegistry = deps.hostRegistry
 local registrations = deps.registrations
+local events = deps.events
 local hostAdapter = {}
 
 local function requireHostRecord(host, context)
@@ -17,6 +18,11 @@ function hostAdapter.installForHost(host)
     local record = requireHostRecord(host, "integrations.installForHost")
     local ownerId = host.getHostId()
     return registrations.install(ownerId, record.integrationRegistrations)
+end
+
+function hostAdapter.notifyProviderChangedForHost(host, enabled)
+    requireHostRecord(host, "integrations.notifyProviderChangedForHost")
+    return events.notifyProviderChangedForHost(host, enabled)
 end
 
 return hostAdapter

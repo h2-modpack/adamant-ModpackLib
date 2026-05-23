@@ -304,7 +304,7 @@ Notes:
   - `Enabled`
   - `Debug Mode`
   - `Resync State`
-- the fallback UI window renders `drawTab`; Framework Quick Setup renders `drawQuickContent`
+- the fallback UI window renders `drawTab` when the module is enabled; Framework Quick Setup renders `drawQuickContent`
 
 ## Complete Example
 

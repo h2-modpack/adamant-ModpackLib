@@ -12,8 +12,10 @@ All notable changes to this project will be documented in this file.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
 - Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw, state, actions, services)` and `drawQuickContent(draw, state, actions, services)`, where `draw` contains `imgui` plus bound `widgets` / `nav`.
 - Runtime hooks are now declared through `host.hooks.*` before activation; the old ownerless `lib.hooks.*` registration surface and `createModule({ registerHooks = ... })` path have been removed.
-- Integration providers are now declared with `host.integrations.register(...)` before activation, and consumers call through `host.integrations.invoke(...)`; the old global integration surface has been removed.
+- Integration providers are now declared with `host.integrations.provide(...)` before activation, and consumers call through `host.integrations.poll(...)`; the old global integration surface has been removed.
 - Integration provider methods now declare scoped `reads` and receive a temporary read-only staged-state scope instead of arbitrary provider API callbacks closing over `store`.
+- Integration providers can now declare events and emit runtime notifications through `host.integrations.emit(...)`; consumers can declare lifecycle-owned listeners with `host.integrations.listen(...)`.
+- Lib now emits the reserved integration event `providerChanged` once after a provider host's module enabled state changes; consumers can listen to it and poll again to invalidate cached provider data.
 - Retained module overlays are now declared with `host.overlays.*` before activation; the old `createModule({ registerOverlays = ... })` path has been removed.
 - The global `lib.overlays.*` namespace has been removed; use `host.overlays.*`, `lib.createFrameworkRuntime(...).overlays`, or `lib.createFrameworkRuntime(...).ui` depending on the consumer.
 - The global `lib.createSystem(...)` helper has been removed; Framework owns non-module overlays through `lib.createFrameworkRuntime(...).overlays`, while Lib system scopes remain internal.
@@ -33,8 +35,9 @@ All notable changes to this project will be documented in this file.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
 - Session and commit action compatibility helpers have been removed; draw code stages transient intent through `actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
-- Integration invocation now skips disabled provider hosts before calling provider methods; scoped integration reads and draw services do not expose enabled-state helpers.
+- Integration polling now skips disabled provider hosts before calling provider methods; scoped integration reads and draw services do not expose enabled-state helpers.
 - Store, draw state, draw actions, draw services, widgets, and nav are now phase-gated at their author-facing surfaces.
+- Fallback UI now matches Framework module tabs by collapsing module draw content while the module is disabled.
 - Module authors now construct through `lib.createModule(...)` and activate through `host.activate()`; lower-level definition/state/host construction is internal.
 - Author hosts now expose `host.cache.currentRun.*` as a bound cache helper.
 - Cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.

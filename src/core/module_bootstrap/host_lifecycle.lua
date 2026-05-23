@@ -2,7 +2,12 @@ local deps = ...
 local logging = deps.logging
 local mutation = deps.mutation
 local moduleState = deps.moduleState
-local coordinator = deps.coordinator
+local integrations = deps.integrations
+
+local PACK_RESTORE_SNAPSHOT_ALIAS = "AdamantFramework_PackRestoreSnapshot"
+local PACK_RESTORE_NONE = 0
+local PACK_RESTORE_DISABLED = 1
+local PACK_RESTORE_ENABLED = 2
 
 local function makeCommitContext(actionSnapshot, hadConfigChanges)
     actionSnapshot = actionSnapshot or {}
@@ -34,18 +39,15 @@ local function notifySettingsCommitted(def, commitNotifier, commitContext)
     return true, nil
 end
 
-local function isPackEnabled(packId)
-    local coord = packId and coordinator.getConfig(packId)
-    if coord and not coord.ModEnabled then
-        return false
+local function notifyCommittedAndProviderChanged(host, def, commitNotifier, commitContext, previousEffective, nextEffective)
+    local ok, err = notifySettingsCommitted(def, commitNotifier, commitContext)
+    if ok and previousEffective ~= nextEffective then
+        integrations.notifyProviderChangedForHost(host, nextEffective)
     end
-    return true
+    return ok, err
 end
 
-local function isEnabled(persistentState, packId)
-    if not isPackEnabled(packId) then
-        return false
-    end
+local function isEnabled(persistentState)
     if not persistentState then
         return false
     end
@@ -95,7 +97,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
     end
 
     local hadConfigChanges = stagedState._hasConfigChanges()
-    local previousEffective = isEnabled(persistentState, def and def.modpack)
+    local previousEffective = isEnabled(persistentState)
     local actionSnapshot = actionBuffer and actionBuffer.captureSnapshot() or {}
     local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
     local snapshot = hadConfigChanges and stagedState._captureDirtyConfigSnapshot() or nil
@@ -106,12 +108,18 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         actionBuffer.clearAll()
     end
 
-    local nextEffective = isEnabled(persistentState, def and def.modpack)
+    local nextEffective = isEnabled(persistentState)
     local shouldSyncMutation = mutation.affectsRunData(mutationBundle)
         and hadConfigChanges
 
     if not shouldSyncMutation then
-        return notifySettingsCommitted(def, commitNotifier, commitContext)
+        return notifyCommittedAndProviderChanged(
+            host,
+            def,
+            commitNotifier,
+            commitContext,
+            previousEffective,
+            nextEffective)
     end
 
     local ok
@@ -124,14 +132,20 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         ok, err = true, nil
     end
     if ok then
-        return notifySettingsCommitted(def, commitNotifier, commitContext)
+        return notifyCommittedAndProviderChanged(
+            host,
+            def,
+            commitNotifier,
+            commitContext,
+            previousEffective,
+            nextEffective)
     end
 
     return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)
 end
 
 local function setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer, enabled)
-    local previousEffective = isEnabled(persistentState, def and def.modpack)
+    local previousEffective = isEnabled(persistentState)
     stagedState.write("Enabled", enabled == true)
     if not stagedState.isDirty() and not (actionBuffer and actionBuffer.hasAny()) then
         if previousEffective and enabled == true and mutation.affectsRunData(mutationBundle) then
@@ -147,10 +161,79 @@ local function setDebugMode(host, def, mutationBundle, commitNotifier, persisten
     return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
 end
 
+local function makePackTransitionReceipt(persistentState)
+    return {
+        previousEnabled = persistentState.read("Enabled") == true,
+        previousMarker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS),
+    }
+end
+
+local function stagePackTransitionReceipt(stagedState, receipt)
+    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, receipt and receipt.previousMarker or PACK_RESTORE_NONE)
+    stagedState.write("Enabled", receipt and receipt.previousEnabled == true)
+end
+
+local function suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+    local receipt = makePackTransitionReceipt(persistentState)
+    local marker = receipt.previousEnabled and PACK_RESTORE_ENABLED or PACK_RESTORE_DISABLED
+    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, marker)
+    local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer, false)
+    return ok, err, receipt
+end
+
+local function ensureSuspendedForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState,
+                                             actionBuffer)
+    local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
+    if marker == PACK_RESTORE_NONE or marker == nil then
+        return suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+    end
+    if persistentState.read("Enabled") ~= true then
+        return true, nil, nil
+    end
+
+    stagedState.write("Enabled", false)
+    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+end
+
+local function restoreForPackEnable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+    local receipt = makePackTransitionReceipt(persistentState)
+    local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
+    local target = receipt.previousEnabled
+    if marker == PACK_RESTORE_ENABLED then
+        target = true
+    elseif marker == PACK_RESTORE_DISABLED then
+        target = false
+    end
+
+    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, PACK_RESTORE_NONE)
+    local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer, target)
+    return ok, err, receipt
+end
+
+local function rollbackPackTransition(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+                                      receipt)
+    stagePackTransitionReceipt(stagedState, receipt)
+    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer)
+end
+
+local function restorePackTransitionState(stagedState, actionBuffer, receipt)
+    stagePackTransitionReceipt(stagedState, receipt)
+    stagedState._flushToConfig()
+    if actionBuffer then
+        actionBuffer.clearAll()
+    end
+    return true, nil
+end
+
 return {
     isEnabled = isEnabled,
     resyncStagedState = resyncStagedState,
     commitStagedState = commitStagedState,
     setEnabled = setEnabled,
     setDebugMode = setDebugMode,
+    suspendForPackDisable = suspendForPackDisable,
+    ensureSuspendedForPackDisable = ensureSuspendedForPackDisable,
+    restoreForPackEnable = restoreForPackEnable,
+    rollbackPackTransition = rollbackPackTransition,
+    restorePackTransitionState = restorePackTransitionState,
 }

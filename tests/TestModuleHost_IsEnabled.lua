@@ -18,11 +18,11 @@ function TestModuleHost_IsEnabled:makeStore(enabled)
 end
 
 function TestModuleHost_IsEnabled:testEnabledUncoordinated()
-    lu.assertTrue(self.h.hostLifecycle.isEnabled(self:makeStore(true), "test-pack"))
+    lu.assertTrue(self.h.hostLifecycle.isEnabled(self:makeStore(true)))
 end
 
 function TestModuleHost_IsEnabled:testDisabledUncoordinated()
-    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false), "test-pack"))
+    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false)))
 end
 
 function TestModuleHost_IsEnabled:testEnabledNoPackId()
@@ -30,22 +30,22 @@ function TestModuleHost_IsEnabled:testEnabledNoPackId()
     lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false)))
 end
 
-function TestModuleHost_IsEnabled:testEnabledWithCoordEnabled()
+function TestModuleHost_IsEnabled:testEnabledWithCoordinatorEnabled()
     self.h.coordinator.register("test-pack", { ModEnabled = true })
-    lu.assertTrue(self.h.hostLifecycle.isEnabled(self:makeStore(true), "test-pack"))
+    lu.assertTrue(self.h.hostLifecycle.isEnabled(self:makeStore(true)))
 end
 
-function TestModuleHost_IsEnabled:testDisabledWithCoordEnabled()
+function TestModuleHost_IsEnabled:testDisabledWithCoordinatorEnabled()
     self.h.coordinator.register("test-pack", { ModEnabled = true })
-    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false), "test-pack"))
+    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false)))
 end
 
-function TestModuleHost_IsEnabled:testEnabledWithCoordDisabled()
+function TestModuleHost_IsEnabled:testEnabledWithCoordinatorDisabled()
     self.h.coordinator.register("test-pack", { ModEnabled = false })
-    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(true), "test-pack"))
+    lu.assertTrue(self.h.hostLifecycle.isEnabled(self:makeStore(true)))
 end
 
-function TestModuleHost_IsEnabled:testDisabledWithCoordDisabled()
+function TestModuleHost_IsEnabled:testDisabledWithCoordinatorDisabled()
     self.h.coordinator.register("test-pack", { ModEnabled = false })
-    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false), "test-pack"))
+    lu.assertFalse(self.h.hostLifecycle.isEnabled(self:makeStore(false)))
 end

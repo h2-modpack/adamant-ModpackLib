@@ -51,7 +51,8 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionReturnsPreparedCl
     lu.assertEquals(prepared.name, "Example")
     lu.assertEquals(prepared.storage[1].alias, "Enabled")
     lu.assertEquals(prepared.storage[2].alias, "DebugMode")
-    lu.assertEquals(prepared.storage[3].alias, "EnabledFlag")
+    lu.assertEquals(prepared.storage[3].alias, "AdamantFramework_PackRestoreSnapshot")
+    lu.assertEquals(prepared.storage[4].alias, "EnabledFlag")
     lu.assertEquals(prepared.hashGroupPlan[1].keyPrefix, "group")
     lu.assertTrue(prepared._preparedDefinition)
     lu.assertEquals(owner.requiresFullReload, nil)
@@ -82,7 +83,7 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionMarksStructuralRe
     lu.assertTrue(owner.requiresFullReload)
     lu.assertEquals(#self.h.warnings, 1)
     lu.assertStrContains(self.h.warnings[1], "structural definition changed during hot reload")
-    lu.assertEquals(prepared.storage[3].alias, "OtherFlag")
+    lu.assertEquals(prepared.storage[4].alias, "OtherFlag")
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionInjectsBuiltInStorage()
@@ -100,7 +101,12 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionInjectsBuiltInSto
     lu.assertEquals(prepared.storage[2].alias, "DebugMode")
     lu.assertFalse(prepared.storage[2].default)
     lu.assertFalse(prepared.storage[2].hash)
-    lu.assertEquals(prepared.storage[3].alias, "Count")
+    lu.assertEquals(prepared.storage[3].alias, "AdamantFramework_PackRestoreSnapshot")
+    lu.assertEquals(prepared.storage[3].default, 0)
+    lu.assertEquals(prepared.storage[3].min, 0)
+    lu.assertEquals(prepared.storage[3].max, 2)
+    lu.assertFalse(prepared.storage[3].hash)
+    lu.assertEquals(prepared.storage[4].alias, "Count")
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsReservedBuiltInStorageAliases()
@@ -111,6 +117,29 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsReservedBu
             name = "Example",
             storage = {
                 { type = "bool", alias = "Enabled", default = true },
+            },
+        })
+    end)
+    lu.assertErrorMsgContains("storage alias 'AdamantFramework_PackRestoreSnapshot' is reserved by Lib", function()
+        self.h.moduleHost.prepareDefinition({}, {
+            modpack = "test-pack",
+            id = "Example",
+            name = "Example",
+            storage = {
+                { type = "int", alias = "AdamantFramework_PackRestoreSnapshot", default = 0, min = 0, max = 2 },
+            },
+        })
+    end)
+end
+
+function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsAuthoredInternalStorageAlias()
+    lu.assertErrorMsgContains("alias '_PrivateFlag' must start with a letter", function()
+        self.h.moduleHost.prepareDefinition({}, {
+            modpack = "test-pack",
+            id = "Example",
+            name = "Example",
+            storage = {
+                { type = "bool", alias = "_PrivateFlag", default = false },
             },
         })
     end)
@@ -666,8 +695,8 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionUsesStorageDefaul
 
     lu.assertFalse(prepared.storage[1].default)
     lu.assertFalse(prepared.storage[2].default)
-    lu.assertTrue(prepared.storage[3].default)
-    lu.assertEquals(prepared.storage[4].default, 7)
+    lu.assertTrue(prepared.storage[4].default)
+    lu.assertEquals(prepared.storage[5].default, 7)
     lu.assertStrContains(prepared._structuralFingerprint, "EnabledFlag")
     lu.assertStrContains(prepared._structuralFingerprint, "Count")
 end

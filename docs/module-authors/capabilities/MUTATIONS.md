@@ -32,7 +32,7 @@ host.activate()
 
 The callback receives committed runtime state through `store`.
 It should describe the mutation for an enabled module. Lib owns enabled gating,
-including enable/disable transitions and coordinated pack enablement. Do not
+including enable/disable transitions and coordinated pack suspension/restore. Do not
 guard the plan with `host.isEnabled()`; during an enable transition, Lib may
 build the plan before the persisted `Enabled` alias has been written.
 

@@ -30,6 +30,7 @@ local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
     mutation = mutation,
     moduleState = moduleState,
     coordinator = coordinator,
+    integrations = integrations,
 })
 
 function moduleHost.getRecord(host)
@@ -86,7 +87,7 @@ end
 ---@class DrawServices
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
----@field invokeIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
+---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
 
 ---@class ModuleHost
 ---@field getHostId fun(): string
@@ -315,7 +316,7 @@ function moduleHost.create(opts)
     end
 
     function host.isEnabled()
-        return hostLifecycle.isEnabled(persistentState, def.modpack)
+        return hostLifecycle.isEnabled(persistentState)
     end
 
     function host.setEnabled(enabled)
@@ -328,6 +329,35 @@ function moduleHost.create(opts)
         requireActivated("setDebugMode")
         return hostLifecycle.setDebugMode(host, def, mutationBundle, notifySettingsCommitted, persistentState, stagedState,
             actionBuffer, enabled)
+    end
+
+    function host.suspendForPackDisable()
+        requireActivated("suspendForPackDisable")
+        return hostLifecycle.suspendForPackDisable(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+            stagedState, actionBuffer)
+    end
+
+    function host.ensureSuspendedForPackDisable()
+        requireActivated("ensureSuspendedForPackDisable")
+        return hostLifecycle.ensureSuspendedForPackDisable(host, def, mutationBundle, notifySettingsCommitted,
+            persistentState, stagedState, actionBuffer)
+    end
+
+    function host.restoreForPackEnable()
+        requireActivated("restoreForPackEnable")
+        return hostLifecycle.restoreForPackEnable(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+            stagedState, actionBuffer)
+    end
+
+    function host.rollbackPackTransition(receipt)
+        requireActivated("rollbackPackTransition")
+        return hostLifecycle.rollbackPackTransition(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+            stagedState, actionBuffer, receipt)
+    end
+
+    function host.restorePackTransitionState(receipt)
+        requireActivated("restorePackTransitionState")
+        return hostLifecycle.restorePackTransitionState(stagedState, actionBuffer, receipt)
     end
 
     local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "

@@ -396,10 +396,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
     lu.assertEquals(calls, 1)
 end
 
-function TestMutation_DefinitionLifecycle:testCommitStagedStateDoesNotReapplyMutationWhenPackDisabled()
-    local packId = "test-pack-disabled-commit"
-    self.coordinator.register(packId, { ModEnabled = false })
-
+function TestMutation_DefinitionLifecycle:testCommitStagedStateAppliesMutationFromRawEnabledState()
     local buildCalls = 0
     local target = { Value = "base" }
     local config = {
@@ -407,9 +404,9 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateDoesNotReapplyMut
         Value = false,
     }
     local definition = self.moduleHost.prepareDefinition({}, {
-        modpack = packId,
-        id = "CommitStagedStatePackDisabled",
-        name = "Commit stagedState Pack Disabled",
+        modpack = "test-pack-disabled-commit",
+        id = "CommitStagedStateRawEnabled",
+        name = "Commit stagedState Raw Enabled",
         storage = {
             {
                 type = "bool",
@@ -426,13 +423,13 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateDoesNotReapplyMut
 
     stagedState.write("Value", true)
     local ok, err = self:commitStagedState(definition, mutation, nil, nil, store, stagedState,
-        "test-pack-disabled-commit")
+        "test-commit-raw-enabled")
 
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertTrue(config.Value)
-    lu.assertEquals(buildCalls, 0)
-    lu.assertEquals(target.Value, "base")
+    lu.assertEquals(buildCalls, 1)
+    lu.assertEquals(target.Value, "patched")
 end
 
 function TestMutation_DefinitionLifecycle:testApplyDefinitionSupportsPatchOnly()
@@ -724,16 +721,13 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlrea
     lu.assertFalse(store.read("Enabled"))
 end
 
-function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledPersistsWithoutApplyingWhenPackDisabled()
-    local packId = "test-pack-disabled-enable"
-    self.coordinator.register(packId, { ModEnabled = false })
-
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledAppliesFromRawEnabledState()
     local store, stagedState = self:makeStore(false)
     local target = { Value = "base" }
     local buildCalls = 0
     local def = {
-        modpack = packId,
-        id = "PackDisabledEnable",
+        modpack = "test-pack-disabled-enable",
+        id = "RawEnabledEnable",
     }
     local mutation = patchMutation(function(plan)
         buildCalls = buildCalls + 1
@@ -746,6 +740,6 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledPersistsWithou
     lu.assertTrue(ok)
     lu.assertNil(err)
     lu.assertTrue(store.read("Enabled"))
-    lu.assertEquals(buildCalls, 0)
-    lu.assertEquals(target.Value, "base")
+    lu.assertEquals(buildCalls, 1)
+    lu.assertEquals(target.Value, "patched")
 end

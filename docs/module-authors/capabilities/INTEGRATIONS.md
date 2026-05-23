@@ -1,12 +1,14 @@
 # Integrations
 
-Integrations are optional cross-module provider methods. They let one module publish a small domain capability and let other modules consume it without hard dependency coupling.
+Integrations are optional cross-module provider methods and events. They let
+one module publish a small domain capability and let other modules consume it
+without hard dependency coupling.
 
 Use integrations when modules can cooperate but should still work when the provider is absent.
 
 ## Provider Shape
 
-Hosted modules register providers on the author host before activation:
+Hosted modules provide integration methods on the author host before activation:
 
 ```lua
 local host, store, err = lib.createModule({
@@ -19,7 +21,7 @@ local host, store, err = lib.createModule({
 })
 if not host then return end
 
-host.integrations.register("run-director.god-availability", {
+host.integrations.provide("run-director.god-availability", {
     providerId = MODULE_ID,
     methods = {
         isActive = {
@@ -36,6 +38,9 @@ host.integrations.register("run-director.god-availability", {
                 return true
             end,
         },
+    },
+    events = {
+        availabilityChanged = true,
     },
 })
 
@@ -59,36 +64,94 @@ access to that table's rows. Packed root and packed child aliases are declared
 independently: if a method reads a packed child through `readAlias(...)`, declare
 that child alias.
 
-## Consumer Shape
-
-Consumers should prefer `invoke(...)`:
+Provider `events` declare the event names this provider may emit. Event names
+are scoped under the integration id and declared as a flat map:
 
 ```lua
-local active = host.integrations.invoke("run-director.god-availability", "isActive", false)
+events = {
+    availabilityChanged = true,
+}
+```
+
+`providerChanged` is reserved by Lib and cannot be declared or emitted by a
+provider.
+
+## Consumer Shape
+
+Consumers should prefer `poll(...)`:
+
+```lua
+local active = host.integrations.poll("run-director.god-availability", "isActive", false)
 if active then
-    return host.integrations.invoke("run-director.god-availability", "isAvailable", true, godKey) ~= false
+    return host.integrations.poll("run-director.god-availability", "isAvailable", true, godKey) ~= false
 end
 return true
 ```
 
-`invoke(...)` resolves the current preferred enabled provider at call time and returns the fallback when the provider or method is absent. Disabled provider hosts are skipped before provider code runs.
+`poll(...)` resolves the current preferred enabled provider at call time and returns the fallback when the provider or method is absent. Disabled provider hosts are skipped before provider code runs.
 Runtime consumer code should use the author host passed into hook, overlay,
 mutation, and module helper paths. Draw code should use
-`services.invokeIntegration(...)`.
+`services.pollIntegration(...)`.
 
-`host.integrations.invoke(...)` is a runtime helper. Draw callbacks receive the
-narrower `services.invokeIntegration(...)` instead, so draw code can perform
+`host.integrations.poll(...)` is a runtime helper. Draw callbacks receive the
+narrower `services.pollIntegration(...)` instead, so draw code can perform
 draw-safe cross-module queries without gaining host lifecycle authority.
+
+## Event Shape
+
+Consumers can listen for provider events before activation:
+
+```lua
+host.integrations.listen("run-director.god-availability", "availabilityChanged", function(payload, providerId)
+    refreshLocalAvailabilityCache(providerId)
+end)
+
+host.integrations.listen("run-director.god-availability", "providerChanged", function(payload, providerId)
+    refreshLocalAvailabilityCache(providerId)
+end)
+```
+
+Providers can emit declared events at runtime:
+
+```lua
+host.integrations.emit("run-director.god-availability", "availabilityChanged", {
+    reason = "settingsCommitted",
+})
+```
+
+Event payloads are plain Lua values. They should be small signals, not
+authoritative replicated state. Consumers that need current provider data
+should refresh by polling after receiving an event.
+
+Lib emits the reserved `providerChanged` event once after a provider host's
+module enabled state changes. The payload is `{ enabled = boolean }`.
+Consumers that cache provider data should listen to both their domain events
+and `providerChanged`.
+
+Event delivery rules:
+
+- disabled provider hosts cannot emit
+- disabled listener hosts do not receive events
+- listener order is unspecified
+- one failing listener logs and does not stop remaining listeners
+- emits inside listeners are queued until the current event fanout completes
+- events are not replayed to late listeners
+
+Listeners are runtime callbacks. Do not write managed settings from listeners.
+Use module-local runtime cache, `host.cache.currentRun`, or
+`host.cache.persistent` for explicit cache writes.
 
 ## Public Surface
 
 Use:
 
-- `host.integrations.register(id, { providerId = providerId, methods = methods })`
-- `host.integrations.invoke(id, methodName, fallback, ...)`
-- `services.invokeIntegration(id, methodName, fallback, ...)`
+- `host.integrations.provide(id, { providerId = providerId, methods = methods })`
+- `host.integrations.poll(id, methodName, fallback, ...)`
+- `host.integrations.listen(id, eventName, callback)`
+- `host.integrations.emit(id, eventName, payload)`
+- `services.pollIntegration(id, methodName, fallback, ...)`
 
-Hosted provider registrations should use `host.integrations.register(...)`.
+Hosted providers should use `host.integrations.provide(...)`.
 They are owned by the module lifecycle owner and are retired when that owner is
 replaced.
 
@@ -96,7 +159,7 @@ Provider declarations close when activation begins. Register the complete
 current provider set before calling `host.activate()`.
 
 Provider method tables should be small and reload-safe. Consumers should call
-through `invoke(...)` instead of caching provider behavior, because a provider
+through `poll(...)` instead of caching provider behavior, because a provider
 module reload replaces the current implementation.
 
 ## Naming
@@ -115,6 +178,8 @@ Provider ids should identify the module or provider implementation.
 - Do not make consumers require a provider to exist unless it is truly mandatory.
 - Do not cache provider method tables or integration read scopes across reloads.
 - Do not close over broad module internals when a scoped read declaration is enough.
+- Do not treat event payloads as durable state; poll for current values.
+- Do not write managed settings from event listeners.
 - Do not assume provider id and `pluginGuid` are the same concept.
 
 See also:

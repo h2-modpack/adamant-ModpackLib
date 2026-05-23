@@ -13,20 +13,13 @@ preserving polling as the source of truth for current provider state.
 
 ## Public Surface
 
-Target module-facing API:
+Module-facing API:
 
 ```lua
 host.integrations.provide(id, spec)
 host.integrations.poll(id, methodName, fallback, ...)
 host.integrations.listen(id, eventName, callback)
 host.integrations.emit(id, eventName, payload)
-```
-
-Planned renames:
-
-```lua
-register(...) -> provide(...)
-invoke(...)   -> poll(...)
 ```
 
 Draw services should expose only the draw-safe pull side:
@@ -72,6 +65,7 @@ Rules:
 - `providerId` is the public provider identity returned by `poll`.
 - `methods` are provider pull functions.
 - `events` is a flat map of provider-owned event names.
+- `providerChanged` is reserved for Lib-owned provider lifecycle notification.
 - Provider declarations close when `host.activate()` begins.
 - Provider hosts are lifecycle-owned by plugin guid and cleaned up on reload.
 - Disabled provider hosts are skipped by `poll`.
@@ -103,6 +97,10 @@ Polling answers: what is true now?
 host.integrations.listen("run-director.god-availability", "availabilityChanged", function(payload, providerId)
     refreshAvailabilityCache()
 end)
+
+host.integrations.listen("run-director.god-availability", "providerChanged", function(payload, providerId)
+    refreshAvailabilityCache()
+end)
 ```
 
 Rules:
@@ -116,6 +114,10 @@ Rules:
 - Listener callbacks should not write managed settings.
 - Listener callbacks should treat events as invalidation or change signals.
 - One failing listener logs and does not stop remaining listeners.
+
+`providerChanged` is a Lib-owned event available on every integration id. It is
+emitted once after a provider host's module enabled state changes. Its
+payload is `{ enabled = boolean }`.
 
 Events announce: something changed.
 
@@ -131,6 +133,7 @@ Rules:
 
 - The emitter must be an enabled provider for that integration id.
 - The event name must be declared by that provider's `events`.
+- The event name must not be `providerChanged`; that event is emitted by Lib.
 - Undeclared emits are author errors.
 - Payloads are plain Lua data.
 - Payloads should be small and should not be treated as authoritative long-term state.
@@ -170,6 +173,10 @@ host.integrations.listen(ID, "availabilityChanged", function()
     refresh(host)
 end)
 
+host.integrations.listen(ID, "providerChanged", function()
+    refresh(host)
+end)
+
 local function isAvailable(host, godKey)
     if availabilityCache == nil then
         refresh(host)
@@ -183,7 +190,8 @@ This handles module load order:
 - If the provider loads first, lazy polling recovers current state.
 - If the consumer loads first, later provider events refresh the cache.
 - If an initial event is missed, lazy polling still recovers.
-- If the provider reloads, changes, or disables, provider events can invalidate or refresh consumers.
+- If the provider changes while enabled, provider events can invalidate or refresh consumers.
+- If the provider enables or disables, Lib emits `providerChanged`, and consumers should poll again.
 
 Lib should not replay or cache events for late listeners. Replay would require
 retention policy, payload lifetime rules, and provider-disable semantics that
@@ -218,8 +226,9 @@ host.integrations.provide(ID, {
 })
 ```
 
-Consumers should use `poll(..., "snapshot", EMPTY)` for cache fill and listen
-to `availabilityChanged` for refresh. Consumers that do not cache can keep
+Consumers should use `poll(..., "snapshot", EMPTY)` for cache fill, listen to
+`availabilityChanged` for domain refreshes, and listen to `providerChanged` for
+provider enable/disable invalidation. Consumers that do not cache can keep
 polling directly.
 
 ## Relationship To Hooks

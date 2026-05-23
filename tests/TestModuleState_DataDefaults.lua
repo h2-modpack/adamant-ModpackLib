@@ -270,7 +270,7 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingChalkEntryFr
     lu.assertTrue(ok)
     lu.assertTrue(stagedState.read("MyFlag"))
     lu.assertEquals(stagedState.read("FixedValue"), 3)
-    lu.assertEquals(raw.saved, 4)
+    lu.assertEquals(raw.saved, 5)
 
     local valuesByPath = {}
     for descriptor, entry in pairs(raw.entries) do
@@ -278,6 +278,7 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingChalkEntryFr
     end
     lu.assertEquals(valuesByPath["config.Enabled"], false)
     lu.assertEquals(valuesByPath["config.DebugMode"], false)
+    lu.assertEquals(valuesByPath["config.AdamantFramework_PackRestoreSnapshot"], 0)
     lu.assertEquals(valuesByPath["config.MyFlag"], true)
     lu.assertEquals(valuesByPath["config.FixedValue"], 3)
 end
@@ -315,10 +316,10 @@ function TestModuleState_DataDefaults:testPreparedStorageDefaultsAreStableAcross
         },
     })
 
-    lu.assertEquals(definition.storage[3].default, 5)
+    lu.assertEquals(definition.storage[4].default, 5)
 
     makeStore(self.harness, definition, {})
-    lu.assertEquals(definition.storage[3].default, 5)
+    lu.assertEquals(definition.storage[4].default, 5)
 end
 
 -- Multiple nodes all receive their storage defaults.

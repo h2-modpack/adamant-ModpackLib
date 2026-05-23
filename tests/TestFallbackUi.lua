@@ -43,6 +43,9 @@ local function makeHost(opts)
             end
             return nil
         end,
+        isEnabled = function()
+            return enabled
+        end,
         setEnabled = function(value)
             calls.setEnabled[#calls.setEnabled + 1] = value
             if opts.setEnabledFails then
@@ -203,6 +206,43 @@ function TestFallbackUi:testBridgeDispatchesInstalledRuntime()
     bridge.renderWindow()
 
     lu.assertEquals(host.calls.drawTab, 1)
+end
+
+function TestFallbackUi:testDisabledFallbackRuntimeCollapsesModuleBody()
+    local bridge = createBridge(self.h)
+    local host = makeHost({ modpack = "fallback-pack", enabled = false })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({ menuClicked = true })
+    self.h.rom.ImGui = imgui
+
+    self.h:installFallbackRuntime(host)
+    bridge.addMenuBar()
+    bridge.renderWindow()
+
+    lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })
+    lu.assertEquals(host.calls.drawTab, 0)
+    lu.assertEquals(host.calls.commitIfDirty, 0)
+end
+
+function TestFallbackUi:testEnablingFallbackRuntimeOpensModuleBodyInSameFrame()
+    local bridge = createBridge(self.h)
+    local host = makeHost({ modpack = "fallback-pack", enabled = false })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui = makeImgui({
+        menuClicked = true,
+        checkboxValues = {
+            Enabled = true,
+        },
+    })
+    self.h.rom.ImGui = imgui
+
+    self.h:installFallbackRuntime(host)
+    bridge.addMenuBar()
+    bridge.renderWindow()
+
+    lu.assertEquals(host.calls.setEnabled, { true })
+    lu.assertEquals(host.calls.drawTab, 1)
+    lu.assertEquals(host.calls.commitIfDirty, 1)
 end
 
 function TestFallbackUi:testBridgeDispatchesReplacementRuntime()

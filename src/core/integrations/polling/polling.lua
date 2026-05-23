@@ -2,7 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local registry = deps.registry
-local invocation = {}
+local polling = {}
 
 local function validateIntegrationId(context, id)
     if type(id) ~= "string" or id == "" then
@@ -16,7 +16,7 @@ local function validateMethodName(context, methodName)
     end
 end
 
-function invocation.invoke(context, id, methodName, fallback, ...)
+function polling.poll(context, id, methodName, fallback, ...)
     validateIntegrationId(context, id)
     validateMethodName(context, methodName)
 
@@ -43,4 +43,4 @@ function invocation.invoke(context, id, methodName, fallback, ...)
     return result, providerId
 end
 
-return invocation
+return polling

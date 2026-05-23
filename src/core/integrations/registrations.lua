@@ -3,6 +3,7 @@ local deps = ...
 local logging = deps.logging
 local registry = deps.registry
 local readScope = deps.readScope
+local constants = deps.constants
 local registrations = {}
 
 local function validateIntegrationId(context, id)
@@ -29,15 +30,23 @@ local function validateMethods(context, methods)
     end
 end
 
+local function validateEventName(context, eventName)
+    if type(eventName) ~= "string" or eventName == "" then
+        logging.violate("integrations.invalid_args", "%s: event name must be a non-empty string", context)
+    end
+end
+
 local function createRegistrationSet()
     return {
         entries = {},
         byKey = {},
+        listenerEntries = {},
     }
 end
 
 local function hasRegistrationEntries(registrationSet)
-    return registrationSet and #registrationSet.entries > 0
+    return registrationSet
+        and (#(registrationSet.entries or {}) > 0 or #(registrationSet.listenerEntries or {}) > 0)
 end
 
 local function makeNoopReceipt()
@@ -104,8 +113,38 @@ local function normalizeReads(context, methodName, reads, stagedState)
     return normalized
 end
 
+local function normalizeEvents(context, events)
+    if events == nil then
+        return {}
+    end
+    if type(events) ~= "table" then
+        logging.violate("integrations.invalid_args", "%s: events must be a map of eventName = true", context)
+    end
+
+    local normalized = {}
+    for eventName, enabled in pairs(events) do
+        validateEventName(context, eventName)
+        if eventName == constants.PROVIDER_CHANGED_EVENT then
+            logging.violate(
+                "integrations.invalid_args",
+                "%s: event '%s' is reserved by Lib",
+                context,
+                tostring(eventName))
+        end
+        if enabled ~= true then
+            logging.violate(
+                "integrations.invalid_args",
+                "%s: event '%s' must be declared as true",
+                context,
+                tostring(eventName))
+        end
+        normalized[eventName] = true
+    end
+    return normalized
+end
+
 local function createProvider(record, host, id, opts)
-    local context = "host.integrations.register(" .. tostring(id) .. ")"
+    local context = "host.integrations.provide(" .. tostring(id) .. ")"
     validateMethods(context, opts.methods)
 
     local provider = {
@@ -113,6 +152,7 @@ local function createProvider(record, host, id, opts)
             return host.isEnabled()
         end,
         methods = {},
+        events = normalizeEvents(context, opts.events),
     }
     for methodName, methodOpts in pairs(opts.methods) do
         validateMethodName(context, methodName)
@@ -137,6 +177,15 @@ local function createProvider(record, host, id, opts)
     return provider
 end
 
+local function createListener(host, callback)
+    return {
+        callback = callback,
+        isEnabled = function()
+            return host.isEnabled()
+        end,
+    }
+end
+
 local function recordStagedRegistration(registrationSet, id, providerId, provider)
     local key = id .. "\0" .. providerId
     local entry = registrationSet.byKey[key]
@@ -154,14 +203,34 @@ local function recordStagedRegistration(registrationSet, id, providerId, provide
     return provider
 end
 
+local function recordStagedListener(registrationSet, id, eventName, listener)
+    registrationSet.listenerEntries = registrationSet.listenerEntries or {}
+    registrationSet.listenerEntries[#registrationSet.listenerEntries + 1] = {
+        id = id,
+        eventName = eventName,
+        listener = listener,
+    }
+    return listener
+end
+
 function registrations.stageAuthorRegistration(record, host, id, opts)
-    local context = "host.integrations.register"
+    local context = "host.integrations.provide"
     validateIntegrationId(context, id)
     if type(opts) ~= "table" then
         logging.violate("integrations.invalid_args", "%s: opts must be a table", context)
     end
     validateProviderId(context, opts.providerId)
     return recordStagedRegistration(ensureHostRegistrations(record), id, opts.providerId, createProvider(record, host, id, opts))
+end
+
+function registrations.stageAuthorListener(record, host, id, eventName, callback)
+    local context = "host.integrations.listen"
+    validateIntegrationId(context, id)
+    validateEventName(context, eventName)
+    if type(callback) ~= "function" then
+        logging.violate("integrations.invalid_args", "%s: callback must be a function", context)
+    end
+    return recordStagedListener(ensureHostRegistrations(record), id, eventName, createListener(host, callback))
 end
 
 function registrations.install(ownerId, hostRegistrations)
@@ -174,13 +243,18 @@ function registrations.install(ownerId, hostRegistrations)
         ownerToken = {},
         entries = {},
         byKey = {},
+        listenerEntries = {},
         previous = {},
+        previousListeners = {},
         committed = false,
         disposed = false,
     }
 
     for _, entry in ipairs(hostRegistrations.entries) do
         recordStagedRegistration(install, entry.id, entry.providerId, entry.provider)
+    end
+    for _, entry in ipairs(hostRegistrations.listenerEntries or {}) do
+        recordStagedListener(install, entry.id, entry.eventName, entry.listener)
     end
 
     return {
@@ -201,6 +275,21 @@ function registrations.install(ownerId, hostRegistrations)
                     orderIndex = bucket and registry.getProviderOrderIndex(bucket, entry.providerId) or nil,
                 }
                 registry.setProvider(entry.id, entry.providerId, entry.provider, ownerId, install.ownerToken)
+            end
+            for index, entry in ipairs(install.listenerEntries) do
+                local key = ownerId .. "\0" .. tostring(index)
+                local bucket = registry.getListenerBucket(entry.id, entry.eventName, false)
+                install.previousListeners[index] = {
+                    id = entry.id,
+                    eventName = entry.eventName,
+                    key = key,
+                    existed = bucket and bucket.listeners[key] ~= nil or false,
+                    listener = bucket and bucket.listeners[key] or nil,
+                    ownerId = bucket and bucket.ownerIds[key] or nil,
+                    ownerToken = bucket and bucket.ownerTokens[key] or nil,
+                    orderIndex = bucket and registry.getListenerOrderIndex(bucket, key) or nil,
+                }
+                registry.setListener(entry.id, entry.eventName, key, entry.listener, ownerId, install.ownerToken)
             end
             install.committed = true
             return true, nil
@@ -231,6 +320,31 @@ function registrations.install(ownerId, hostRegistrations)
                                 install.ownerId,
                                 install.ownerToken)
                             registry.pruneBucket(entry.id, bucket)
+                        end
+                    end
+                end
+                for index = #install.listenerEntries, 1, -1 do
+                    local previous = install.previousListeners[index]
+                    local bucket = registry.getListenerBucket(
+                        previous.id,
+                        previous.eventName,
+                        previous and previous.existed or false)
+                    if bucket
+                        and bucket.ownerIds[previous.key] == install.ownerId
+                        and bucket.ownerTokens[previous.key] == install.ownerToken
+                    then
+                        if previous and previous.existed then
+                            bucket.listeners[previous.key] = previous.listener
+                            bucket.ownerIds[previous.key] = previous.ownerId
+                            bucket.ownerTokens[previous.key] = previous.ownerToken
+                            registry.insertListenerOrder(bucket, previous.key, previous.orderIndex)
+                        else
+                            registry.removeListenerFromBucket(
+                                bucket,
+                                previous.key,
+                                install.ownerId,
+                                install.ownerToken)
+                            registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
                         end
                     end
                 end

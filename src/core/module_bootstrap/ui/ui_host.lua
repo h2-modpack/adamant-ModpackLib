@@ -16,9 +16,9 @@ function uiHost.create(authorHost)
             phaseGate.requireAnyDraw()
             return authorHost.logIf(fmt, ...)
         end,
-        invokeIntegration = function(id, methodName, fallback, ...)
+        pollIntegration = function(id, methodName, fallback, ...)
             phaseGate.requireAnyDraw()
-            return authorHost.integrations.invoke(id, methodName, fallback, ...)
+            return authorHost.integrations.poll(id, methodName, fallback, ...)
         end,
     }
 end

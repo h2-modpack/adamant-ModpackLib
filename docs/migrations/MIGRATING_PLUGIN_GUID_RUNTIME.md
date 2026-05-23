@@ -78,7 +78,7 @@ ownership, while Framework consumes first-party capability namespaces through
 
 ## Integration Notes
 
-Integration providers are declared with `host.integrations.register(...)`
+Integration providers are declared with `host.integrations.provide(...)`
 before activation and refreshed by the module's `pluginGuid`. The `providerId`
 inside the registration opts is still the public integration provider identity,
 not the lifecycle owner. It can remain a module/domain id chosen for consumers.

@@ -544,7 +544,7 @@ end
 
 function TestModuleState_StagedState:testTableStorageHashRoundTripsRows()
     local definition = makeTableDefinition(self.harness)
-    local tableNode = definition.storage[3]
+    local tableNode = definition.storage[4]
     local value = {
         { Enabled = false, Limit = 4, PackedChoices = 5 },
         { Enabled = true, Limit = 1, ChoiceMode = 2, Note = "a|b=%c" },
