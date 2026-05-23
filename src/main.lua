@@ -13,7 +13,6 @@ _PLUGIN = _PLUGIN
 local modutil = mods['SGG_Modding-ModUtil']
 local chalk = mods['SGG_Modding-Chalk']
 local libConfig = chalk.auto('config.lua')
-public.config = nil
 
 local externals = {
     rom = rom,
