@@ -29,6 +29,13 @@ Use this path when changing Lib itself.
 
 Use these when you need platform behavior, accepted constraints, or binding details.
 
+## Rejected Directions
+
+- [rejected-directions/DECLARATIVE_FIELD_UI.md](rejected-directions/DECLARATIVE_FIELD_UI.md)
+
+These record explored designs that should not be revived without a deliberate
+architecture review.
+
 ## Migrations
 
 - [migrations/MIGRATING_MUTATIONS.md](migrations/MIGRATING_MUTATIONS.md)
