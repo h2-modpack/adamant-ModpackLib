@@ -1,17 +1,17 @@
-# Widget, Action, And Field Editor Design
+# Widget And Action Design
 
-This note describes the planned cleanup for draw widgets, draw actions, and
-storage-backed default field editors.
+This note records the draw-widget and draw-action cleanup. It also records the
+discarded storage-backed field-editor direction so future work does not repeat
+the same declarative-UI detour without a deliberate redesign.
 
 ## Goals
 
 - Field widgets edit declared storage fields.
 - Command widgets stage declared actions.
-- Storage schema may optionally declare a default editor for a field.
-- Draw code composes layout and placement without recreating widget option
-  tables or running arbitrary side effects.
+- Draw code composes layout and placement directly.
 - Raw ImGui remains available for custom imperative UI, but first-party widget
   helpers should stay inside the storage/action model.
+- Storage remains a data schema, not a UI projection system.
 
 ## Current Shape
 
@@ -122,9 +122,9 @@ if draw.imgui.Button("Do Custom Thing") then
 end
 ```
 
-## Storage UI Metadata
+## Rejected: Storage UI Metadata
 
-Storage nodes may optionally declare default editor metadata:
+We explored letting storage nodes declare default editor metadata:
 
 ```lua
 {
@@ -143,52 +143,74 @@ Storage nodes may optionally declare default editor metadata:
 }
 ```
 
-`ui` is editor metadata only. It should describe how to edit the field, not
-where it appears, what panel owns it, or what arbitrary side effects should run.
+The idea was attractive for static settings, but it creates the wrong pressure
+for this project. It teaches authors that storage knows how it is drawn, while
+most module UI is immediate-mode projection over current game state, filters,
+cross-module cache, catalog indexes, and local layout.
 
-Allowed default editors:
+Static declarations worked for simple form-like settings, but dynamic controls
+quickly needed more than storage can honestly know:
 
-- `checkbox`
-- `inputText`
-- `dropdown`
-- `radio`
-- `stepper`
-- `packedCheckboxList`
-- `packedDropdown`
-- `packedRadio`
+- option providers
+- filtered value sets
+- display/color projections
+- slot-specific validity
+- cross-module availability
+- normalization rules
+- composite field relationships
 
-Initial support should not include callbacks or buttons inside storage `ui`.
-Table roots should not get a root-level editor at first; table row fields may
-carry `ui` metadata through their row schema.
+Adding those concepts would turn storage from durable state into a view-model
+system. That may be a valid architecture for a form-heavy application, but it is
+not the current Lib contract.
 
-## draw.field
+Decision:
 
-Add a draw helper for default field editors:
+- Do not add storage `ui` metadata.
+- Do not add `draw.field(...)`.
+- Do not reorganize module catalogs or storage just to make declarative field
+  rendering fit.
+- Authors should cache widget option tables near module UI code and draw with
+  `draw.widgets.*` or `draw.imgui` directly.
 
-```lua
-draw.field(state.get("MaxGodsPerRun"))
-draw.field(rows:get(index, "Bans"))
-```
+## Draw Language
 
-Behavior:
-
-- Requires draw phase.
-- Requires a `StorageField`.
-- Reads prepared `field:schema().ui`.
-- Dispatches to the matching widget helper.
-- Returns the widget changed boolean.
-- Fails clearly if the field has no default editor.
-
-Optional shallow overrides may be supported for local placement tweaks:
+The draw surface intentionally has one explicit widget language:
 
 ```lua
-draw.field(state.get("MaxGodsPerRun"), {
-    label = "",
+draw.widgets.dropdown(state.get("Mode"), MODE_DROPDOWN_OPTS)
+draw.widgets.checkbox(state.get("Enabled"), ENABLED_OPTS)
+draw.widgets.confirmButton("reset", "Reset All", {
+    confirmLabel = "Confirm Reset All",
+    action = actions.get("resetAll"),
 })
 ```
 
-Overrides should be the exception. The preferred fast path is prepared storage
-UI metadata with no per-frame option allocation.
+Use raw ImGui when the UI is inherently custom or when the caller owns an
+imperative local side effect:
+
+```lua
+if draw.imgui.Button("Do Custom Thing") then
+    -- caller owns this imperative local behavior
+end
+```
+
+This keeps the projection local to draw code. Storage fields remain explicit
+data refs passed into widgets.
+
+## Option Allocation
+
+Immediate-mode draw code should avoid allocating option tables every frame.
+Preferred patterns:
+
+- declare static option tables at module scope or in `bind(...)`
+- cache derived option tables by stable key
+- mutate cached draw-local fields such as `opts.values` only when that object is
+  intentionally reused for the active draw path
+- use raw ImGui for one-off local controls that do not benefit from widget
+  abstraction
+
+Lib should not solve per-frame allocation by moving dynamic projection into
+storage declarations.
 
 ## Migration Order
 
@@ -197,11 +219,9 @@ UI metadata with no per-frame option allocation.
 3. Make `actions.get(key)` reject undeclared keys.
 4. Port module button callbacks to declared actions.
 5. Remove `onClick` and `onConfirm` from Lib button widgets, defs, and docs. Done.
-6. Add storage `ui` validation and preparation at the storage-schema boundary.
-7. Add `draw.field(field, overrides?)`.
-8. Move obvious static field-widget opts from modules into storage `ui`.
-9. Keep complex or dynamic UI on `draw.widgets.*`.
+6. Keep all field rendering on explicit `draw.widgets.*` calls.
+7. Keep dynamic and custom UI on `draw.widgets.*` or `draw.imgui`.
 
-This preserves immediate-mode composition while giving module authors a
-low-boilerplate path: define data once, optionally describe its default editor
-there, then place it with `draw.field(...)`.
+The storage-backed field-editor migration was prototyped and discarded before
+publication. The retained API direction is: storage is data, actions are
+post-draw intent, and draw code owns UI projection.
