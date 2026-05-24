@@ -63,4 +63,53 @@ function persistentCache.has(cacheStore, ownerId, key)
     return cacheStore.has(getBackingKey(ownerId, key))
 end
 
+function persistentCache.snapshotRef(cacheStore, ownerId, key, defaultValue)
+    validateOwnerId(ownerId)
+    validateKey("cache.persistent.snapshotRef", key)
+    validateScalar("cache.persistent.snapshotRef default", defaultValue, true)
+
+    local backingKey = getBackingKey(ownerId, key)
+    local snapshot = cacheStore.read(backingKey)
+    if snapshot == nil then
+        snapshot = defaultValue
+    end
+
+    local ref = {}
+
+    ref.get = function()
+        return snapshot
+    end
+    ref.set = function(selfOrValue, maybeValue)
+        local value = maybeValue
+        if value == nil and selfOrValue ~= ref then
+            value = selfOrValue
+        end
+        validateScalar("cache.persistent.snapshotRef.set", value, false)
+        local ok = cacheStore.write(backingKey, value)
+        if ok then
+            snapshot = value
+        end
+        return ok
+    end
+    ref.clear = function()
+        local ok = cacheStore.clear(backingKey)
+        snapshot = defaultValue
+        return ok
+    end
+    ref.has = function()
+        return cacheStore.has(backingKey)
+    end
+    ref.refresh = function()
+        local value = cacheStore.read(backingKey)
+        if value == nil then
+            snapshot = defaultValue
+        else
+            snapshot = value
+        end
+        return snapshot
+    end
+
+    return ref
+end
+
 return persistentCache

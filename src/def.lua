@@ -276,6 +276,14 @@ local lib = {}
 ---@field write fun(key: string, value: boolean|number|string): boolean
 ---@field clear fun(key: string): boolean
 ---@field has fun(key: string): boolean
+---@field snapshotRef fun(key: string, defaultValue?: boolean|number|string): AdamantModpackLib.AuthorPersistentSnapshotRef
+
+---@class AdamantModpackLib.AuthorPersistentSnapshotRef
+---@field get fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean|number|string?
+---@field set fun(self: AdamantModpackLib.AuthorPersistentSnapshotRef, value: boolean|number|string): boolean
+---@field clear fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean
+---@field has fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean
+---@field refresh fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean|number|string?
 
 ---@class AdamantModpackLib.AuthorSharedCache
 ---@field publish fun(id: string, opts?: table): boolean Declare an owner-published shared cache projection before activation.

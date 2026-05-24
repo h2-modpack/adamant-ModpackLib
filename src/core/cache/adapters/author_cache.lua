@@ -79,6 +79,10 @@ function author.create(host)
                 local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.has")
                 return service.persistent.has(cacheStore, ownerId, key)
             end,
+            snapshotRef = function(key, defaultValue)
+                local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.snapshotRef")
+                return service.persistent.snapshotRef(cacheStore, ownerId, key, defaultValue)
+            end,
         },
         shared = {
             publish = function(id, opts)

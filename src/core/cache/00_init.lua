@@ -45,6 +45,9 @@ service.persistent = {
     has = function(cacheStore, ownerId, key)
         return persistentCache.has(cacheStore, ownerId, key)
     end,
+    snapshotRef = function(cacheStore, ownerId, key, defaultValue)
+        return persistentCache.snapshotRef(cacheStore, ownerId, key, defaultValue)
+    end,
 }
 
 service.shared = {

@@ -67,6 +67,10 @@ host.cache.persistent.write("RecordingReady", true)
 if host.cache.persistent.has("RecordingReady") then
     host.cache.persistent.clear("RecordingReady")
 end
+
+local recordingReady = host.cache.persistent.snapshotRef("RecordingReady", false)
+recordingReady:set(true)
+local drawSafeReady = recordingReady:get()
 ```
 
 Persistent surface:
@@ -75,6 +79,7 @@ Persistent surface:
 - `host.cache.persistent.write(key, value)`
 - `host.cache.persistent.clear(key)`
 - `host.cache.persistent.has(key)`
+- `host.cache.persistent.snapshotRef(key, default?)`
 
 Allowed persistent value types:
 
@@ -85,6 +90,10 @@ Allowed persistent value types:
 `read(...)` returns the stored value when present, otherwise the optional
 default. It does not create a stored value. `write(nil)` is invalid; use
 `clear(...)` to remove a stored value.
+
+`snapshotRef(...)` returns a small write-through projection of one persistent
+cache key. `get()` reads the in-memory snapshot, while `set(...)` and
+`clear()` update persistent cache immediately and then update the snapshot.
 
 ## Shared
 

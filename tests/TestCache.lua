@@ -244,6 +244,49 @@ function TestCache:testAuthorPersistentCachePreservesFalseAsPresentValue()
     lu.assertFalse(host.cache.persistent.read("RecordingReady", true))
 end
 
+function TestCache:testAuthorPersistentSnapshotRefProjectsAndWritesThrough()
+    local host = self.harness.public.createModule({
+        pluginGuid = "test-cache-persistent-snapshot",
+        config = {},
+        id = "PersistentSnapshotCacheHost",
+        name = "Persistent Snapshot Cache Host",
+        drawTab = function() end,
+    })
+
+    local ready = host.cache.persistent.snapshotRef("RecordingReady", false)
+    lu.assertFalse(ready:get())
+    lu.assertFalse(ready:has())
+    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
+
+    lu.assertTrue(ready:set(true))
+    lu.assertTrue(ready:get())
+    lu.assertTrue(ready:has())
+    lu.assertTrue(host.cache.persistent.read("RecordingReady", false))
+
+    lu.assertTrue(ready:clear())
+    lu.assertFalse(ready:get())
+    lu.assertFalse(ready:has())
+    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
+end
+
+function TestCache:testAuthorPersistentSnapshotRefRefreshesAfterExternalWrite()
+    local host = self.harness.public.createModule({
+        pluginGuid = "test-cache-persistent-snapshot-refresh",
+        config = {},
+        id = "PersistentSnapshotRefreshCacheHost",
+        name = "Persistent Snapshot Refresh Cache Host",
+        drawTab = function() end,
+    })
+
+    local ready = host.cache.persistent.snapshotRef("RecordingReady", false)
+    lu.assertFalse(ready:get())
+
+    host.cache.persistent.write("RecordingReady", true)
+    lu.assertFalse(ready:get())
+    lu.assertTrue(ready:refresh())
+    lu.assertTrue(ready:get())
+end
+
 function TestCache:testAuthorPersistentCacheNamespacesByOwner()
     local config = {}
     local first = self.harness.public.createModule({
@@ -323,6 +366,15 @@ function TestCache:testAuthorPersistentCacheRejectsInvalidInputs()
     end)
     lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
         host.cache.persistent.write("RecordingReady", {})
+    end)
+    lu.assertErrorMsgContains("key must be a non-empty string", function()
+        host.cache.persistent.snapshotRef("")
+    end)
+    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
+        host.cache.persistent.snapshotRef("RecordingReady", {})
+    end)
+    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
+        host.cache.persistent.snapshotRef("RecordingReady", false):set({})
     end)
 end
 
