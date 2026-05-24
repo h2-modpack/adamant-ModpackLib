@@ -270,26 +270,63 @@ local lib = {}
 ---@field get fun(key: string, factory?: fun(): table): table?
 ---@field peek fun(key: string): table?
 ---@field clear fun(key: string): boolean
+---@field create fun(key: string, opts?: AdamantModpackLib.CurrentRunCacheCreateOpts): AdamantModpackLib.CurrentRunCacheObject
 
 ---@class AdamantModpackLib.AuthorPersistentCache
 ---@field read fun(key: string, defaultValue?: boolean|number|string): boolean|number|string?
 ---@field write fun(key: string, value: boolean|number|string): boolean
 ---@field clear fun(key: string): boolean
 ---@field has fun(key: string): boolean
----@field snapshotRef fun(key: string, defaultValue?: boolean|number|string): AdamantModpackLib.AuthorPersistentSnapshotRef
+---@field create fun(key: string, opts?: AdamantModpackLib.PersistentCacheCreateOpts): AdamantModpackLib.PersistentCacheObject
 
----@class AdamantModpackLib.AuthorPersistentSnapshotRef
----@field get fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean|number|string?
----@field set fun(self: AdamantModpackLib.AuthorPersistentSnapshotRef, value: boolean|number|string): boolean
----@field clear fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean
----@field has fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean
----@field refresh fun(self?: AdamantModpackLib.AuthorPersistentSnapshotRef): boolean|number|string?
+---@class AdamantModpackLib.PersistentCacheCreateOpts
+---@field default? boolean|number|string
+
+---@class AdamantModpackLib.PersistentCacheObject
+---@field get fun(self?: AdamantModpackLib.PersistentCacheObject): boolean|number|string?
+---@field set fun(self: AdamantModpackLib.PersistentCacheObject, value: boolean|number|string): boolean
+---@field clear fun(self?: AdamantModpackLib.PersistentCacheObject): boolean
+---@field has fun(self?: AdamantModpackLib.PersistentCacheObject): boolean
+---@field refresh fun(self?: AdamantModpackLib.PersistentCacheObject): boolean|number|string?
+
+---@class AdamantModpackLib.CurrentRunCacheCreateOpts
+---@field factory? fun(): table
+
+---@class AdamantModpackLib.CurrentRunCacheObject
+---@field get fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
+---@field peek fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
+---@field clear fun(self?: AdamantModpackLib.CurrentRunCacheObject): boolean
+---@field refresh fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
 
 ---@class AdamantModpackLib.AuthorSharedCache
 ---@field publish fun(id: string, opts?: table): boolean Declare an owner-published shared cache projection before activation.
 ---@field read fun(id: string, fallback: any): any Read an owner-published shared cache projection.
 ---@field write fun(id: string, value: any): boolean Write an owned shared cache projection after activation.
 ---@field clear fun(id: string): boolean Clear an owned shared cache projection after activation.
+---@field create fun(
+---    id: string,
+---    opts: AdamantModpackLib.SharedCacheCreateOpts
+---): AdamantModpackLib.SharedOwnerCacheObject|AdamantModpackLib.SharedReaderCacheObject
+
+---@class AdamantModpackLib.SharedOwnerCacheCreateOpts
+---@field access "owner"
+---@field default? any
+
+---@class AdamantModpackLib.SharedReaderCacheCreateOpts
+---@field access "reader"
+---@field fallback? any
+
+---@alias AdamantModpackLib.SharedCacheCreateOpts AdamantModpackLib.SharedOwnerCacheCreateOpts|AdamantModpackLib.SharedReaderCacheCreateOpts
+
+---@class AdamantModpackLib.SharedOwnerCacheObject
+---@field get fun(self?: AdamantModpackLib.SharedOwnerCacheObject): any
+---@field set fun(self: AdamantModpackLib.SharedOwnerCacheObject, value: any): boolean
+---@field clear fun(self?: AdamantModpackLib.SharedOwnerCacheObject): boolean
+---@field refresh fun(self?: AdamantModpackLib.SharedOwnerCacheObject): any
+
+---@class AdamantModpackLib.SharedReaderCacheObject
+---@field get fun(self?: AdamantModpackLib.SharedReaderCacheObject): any
+---@field refresh fun(self?: AdamantModpackLib.SharedReaderCacheObject): any
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.

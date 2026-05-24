@@ -213,15 +213,13 @@ host.cache.shared.clear(...)
 Docs should prefer object APIs after they land. Raw functions can become legacy
 after modules are ported.
 
-The short-lived `persistent.snapshotRef(...)` API should be replaced by
-`persistent.create(...)` before it spreads, or kept only as a temporary alias.
+Use `persistent.create(...)` for persistent cache objects.
 
 ## Migration Order
 
 1. Add cache object APIs and focused Lib tests.
-2. Replace `persistent.snapshotRef(...)` with `persistent.create(...)`.
-3. Port Timer `RecordingReady`.
-4. Port shared cache users.
-5. Re-evaluate the draw-safe host facade after cache and integration polling
+2. Port Timer `RecordingReady`.
+3. Port shared cache users.
+4. Re-evaluate the draw-safe host facade after cache and integration polling
    have object-based alternatives.
-6. Mark raw cache functions as legacy only after modules are clean.
+5. Mark raw cache functions as legacy only after modules are clean.

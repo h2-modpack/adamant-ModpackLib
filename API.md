@@ -178,7 +178,9 @@ if host.cache.persistent.has("RecordingReady") then
     host.cache.persistent.clear("RecordingReady")
 end
 
-local recordingReady = host.cache.persistent.snapshotRef("RecordingReady", false)
+local recordingReady = host.cache.persistent.create("RecordingReady", {
+    default = false,
+})
 recordingReady:set(true)
 local drawSafeReady = recordingReady:get()
 ```
@@ -188,7 +190,7 @@ Surface:
 - `host.cache.persistent.write(key, value)`
 - `host.cache.persistent.clear(key)`
 - `host.cache.persistent.has(key)`
-- `host.cache.persistent.snapshotRef(key, default?)`
+- `host.cache.persistent.create(key, opts?)`
 
 Rules:
 - `key` must be a non-empty string
@@ -196,7 +198,7 @@ Rules:
 - `read(...)` does not create a stored value
 - `write(nil)` is invalid; use `clear(...)`
 - persistent cache is not staged, hashed, profiled, or reset by Lib
-- `snapshotRef(...)` returns a write-through in-memory projection for repeated
+- `create(...)` returns a write-through in-memory projection for repeated
   reads; writes and clears persist immediately
 
 Shared live cache:

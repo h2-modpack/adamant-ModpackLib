@@ -1,6 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
+local snapshotObject = deps.snapshotObject
 local values = deps.values
 local sharedRegistry = deps.sharedRegistry
 
@@ -222,6 +223,57 @@ function sharedCache.read(id, fallback)
         return values.deepCopy(record.default)
     end
     return values.deepCopy(fallback)
+end
+
+function sharedCache.createOwner(record, host, id, opts)
+    local context = "host.cache.shared.create"
+    if opts ~= nil and type(opts) ~= "table" then
+        logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
+    end
+    opts = opts or {}
+    if opts.access ~= nil and opts.access ~= "owner" then
+        logging.violate("cache.invalid_args", "%s access must be 'owner'", context)
+    end
+
+    sharedCache.stagePublication(record, host, id, {
+        default = opts.default,
+    })
+
+    local publications = ensurePublicationSet(record)
+    return snapshotObject.create({
+        load = function()
+            return copyOptional(opts.default)
+        end,
+        write = function(value)
+            local ok = sharedCache.write(host.getHostId(), publications.ownerToken, id, value)
+            return ok, copyOptional(value)
+        end,
+        clear = function()
+            local ok = sharedCache.clear(host.getHostId(), publications.ownerToken, id)
+            return ok, copyOptional(opts.default)
+        end,
+        refresh = function()
+            return sharedCache.read(id, opts.default)
+        end,
+    })
+end
+
+function sharedCache.createReader(id, opts)
+    local context = "host.cache.shared.create"
+    validateId(context, id)
+    if opts ~= nil and type(opts) ~= "table" then
+        logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
+    end
+    opts = opts or {}
+    if opts.access ~= nil and opts.access ~= "reader" then
+        logging.violate("cache.invalid_args", "%s access must be 'reader'", context)
+    end
+
+    return snapshotObject.create({
+        load = function()
+            return sharedCache.read(id, opts.fallback)
+        end,
+    })
 end
 
 return sharedCache

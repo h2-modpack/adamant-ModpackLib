@@ -1,6 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
+local snapshotObject = deps.snapshotObject
 local currentRunCache = {}
 
 local ROOT_KEY = "_AdamantModpackLibCache"
@@ -126,6 +127,32 @@ currentRunCache.clear = function(currentRun, ownerId, key)
         return false
     end
     return clearFromCurrentRun(currentRun, ownerId, key)
+end
+
+currentRunCache.create = function(getCurrentRun, ownerId, key, opts)
+    validateOwnerId(ownerId)
+    validateKey("cache.currentRun.create", key)
+    if opts ~= nil and type(opts) ~= "table" then
+        logging.violate("cache.invalid_args", "cache.currentRun.create opts must be a table when provided")
+    end
+    opts = opts or {}
+    validateFactory("cache.currentRun.create", opts.factory)
+
+    return snapshotObject.create({
+        load = function()
+            return currentRunCache.peek(getCurrentRun(), ownerId, key)
+        end,
+        get = function()
+            return currentRunCache.get(getCurrentRun(), ownerId, key, opts.factory)
+        end,
+        peek = function()
+            return currentRunCache.peek(getCurrentRun(), ownerId, key)
+        end,
+        clear = function()
+            local ok = currentRunCache.clear(getCurrentRun(), ownerId, key)
+            return ok, nil
+        end,
+    })
 end
 
 return currentRunCache

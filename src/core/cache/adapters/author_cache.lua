@@ -46,6 +46,17 @@ local function getSharedWriteState(host, context)
     return host.getHostId(), ownerToken
 end
 
+local function getSharedCreateAccess(opts)
+    if type(opts) ~= "table" then
+        logging.violate("cache.invalid_args", "host.cache.shared.create opts must be a table")
+    end
+    local access = opts.access
+    if access ~= "owner" and access ~= "reader" then
+        logging.violate("cache.invalid_args", "host.cache.shared.create access must be 'owner' or 'reader'")
+    end
+    return access
+end
+
 function author.create(host)
     return {
         currentRun = {
@@ -60,6 +71,10 @@ function author.create(host)
             clear = function(key)
                 local ownerId = getHostOwnerId(host, "host.cache.currentRun.clear")
                 return service.currentRun.clear(ownerId, key)
+            end,
+            create = function(key, opts)
+                local ownerId = getHostOwnerId(host, "host.cache.currentRun.create")
+                return service.currentRun.create(ownerId, key, opts)
             end,
         },
         persistent = {
@@ -79,9 +94,9 @@ function author.create(host)
                 local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.has")
                 return service.persistent.has(cacheStore, ownerId, key)
             end,
-            snapshotRef = function(key, defaultValue)
-                local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.snapshotRef")
-                return service.persistent.snapshotRef(cacheStore, ownerId, key, defaultValue)
+            create = function(key, opts)
+                local ownerId, cacheStore = getPersistentCacheState(host, "host.cache.persistent.create")
+                return service.persistent.create(cacheStore, ownerId, key, opts)
             end,
         },
         shared = {
@@ -103,6 +118,18 @@ function author.create(host)
             clear = function(id)
                 local ownerId, ownerToken = getSharedWriteState(host, "host.cache.shared.clear")
                 return service.shared.clear(ownerId, ownerToken, id)
+            end,
+            create = function(id, opts)
+                local access = getSharedCreateAccess(opts)
+                if access == "owner" then
+                    return service.shared.createOwner(
+                        requireRegistrationOpen(host, "host.cache.shared.create"),
+                        host,
+                        id,
+                        opts)
+                end
+                getHostRecord(host, "host.cache.shared.create")
+                return service.shared.createReader(id, opts)
             end,
         },
     }

@@ -2,14 +2,18 @@ local deps = ...
 
 local gameDeps = deps.gameDeps
 
+local snapshotObject = import('core/cache/snapshot_object.lua')
 local currentRunCache = import('core/cache/current_run_cache.lua', nil, {
     logging = deps.logging,
+    snapshotObject = snapshotObject,
 })
 local persistentCache = import('core/cache/persistent_cache.lua', nil, {
     logging = deps.logging,
+    snapshotObject = snapshotObject,
 })
 local sharedCache = import('core/cache/shared_cache.lua', nil, {
     logging = deps.logging,
+    snapshotObject = snapshotObject,
     values = deps.values,
     sharedRegistry = deps.cacheRegistry.shared,
 })
@@ -30,6 +34,9 @@ service.currentRun = {
     clear = function(ownerId, key)
         return currentRunCache.clear(getCurrentRun(), ownerId, key)
     end,
+    create = function(ownerId, key, opts)
+        return currentRunCache.create(getCurrentRun, ownerId, key, opts)
+    end,
 }
 
 service.persistent = {
@@ -45,8 +52,8 @@ service.persistent = {
     has = function(cacheStore, ownerId, key)
         return persistentCache.has(cacheStore, ownerId, key)
     end,
-    snapshotRef = function(cacheStore, ownerId, key, defaultValue)
-        return persistentCache.snapshotRef(cacheStore, ownerId, key, defaultValue)
+    create = function(cacheStore, ownerId, key, opts)
+        return persistentCache.create(cacheStore, ownerId, key, opts)
     end,
 }
 
@@ -65,6 +72,12 @@ service.shared = {
     end,
     clear = function(ownerId, ownerToken, id)
         return sharedCache.clear(ownerId, ownerToken, id)
+    end,
+    createOwner = function(record, host, id, opts)
+        return sharedCache.createOwner(record, host, id, opts)
+    end,
+    createReader = function(id, opts)
+        return sharedCache.createReader(id, opts)
     end,
 }
 

@@ -1,6 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
+local snapshotObject = deps.snapshotObject
 local persistentCache = {}
 
 local function validateOwnerId(ownerId)
@@ -63,53 +64,38 @@ function persistentCache.has(cacheStore, ownerId, key)
     return cacheStore.has(getBackingKey(ownerId, key))
 end
 
-function persistentCache.snapshotRef(cacheStore, ownerId, key, defaultValue)
+function persistentCache.create(cacheStore, ownerId, key, opts)
     validateOwnerId(ownerId)
-    validateKey("cache.persistent.snapshotRef", key)
-    validateScalar("cache.persistent.snapshotRef default", defaultValue, true)
+    validateKey("cache.persistent.create", key)
+    if opts ~= nil and type(opts) ~= "table" then
+        logging.violate("cache.invalid_args", "cache.persistent.create opts must be a table when provided")
+    end
+    opts = opts or {}
+    validateScalar("cache.persistent.create default", opts.default, true)
 
-    local backingKey = getBackingKey(ownerId, key)
-    local snapshot = cacheStore.read(backingKey)
-    if snapshot == nil then
-        snapshot = defaultValue
-    end
-
-    local ref = {}
-
-    ref.get = function()
-        return snapshot
-    end
-    ref.set = function(selfOrValue, maybeValue)
-        local value = maybeValue
-        if value == nil and selfOrValue ~= ref then
-            value = selfOrValue
-        end
-        validateScalar("cache.persistent.snapshotRef.set", value, false)
-        local ok = cacheStore.write(backingKey, value)
-        if ok then
-            snapshot = value
-        end
-        return ok
-    end
-    ref.clear = function()
-        local ok = cacheStore.clear(backingKey)
-        snapshot = defaultValue
-        return ok
-    end
-    ref.has = function()
-        return cacheStore.has(backingKey)
-    end
-    ref.refresh = function()
-        local value = cacheStore.read(backingKey)
+    local function load()
+        local value = cacheStore.read(getBackingKey(ownerId, key))
         if value == nil then
-            snapshot = defaultValue
-        else
-            snapshot = value
+            return opts.default
         end
-        return snapshot
+        return value
     end
 
-    return ref
+    return snapshotObject.create({
+        load = load,
+        write = function(value)
+            validateScalar("cache.persistent.create.set", value, false)
+            local ok = cacheStore.write(getBackingKey(ownerId, key), value)
+            return ok, value
+        end,
+        clear = function()
+            local ok = cacheStore.clear(getBackingKey(ownerId, key))
+            return ok, opts.default
+        end,
+        has = function()
+            return cacheStore.has(getBackingKey(ownerId, key))
+        end,
+    })
 end
 
 return persistentCache

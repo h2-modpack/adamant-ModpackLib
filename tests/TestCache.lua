@@ -178,6 +178,44 @@ function TestCache:testAuthorHostCurrentRunCacheReturnsEmptyWhenNoCurrentRun()
     lu.assertFalse(host.cache.currentRun.clear("run"))
 end
 
+function TestCache:testAuthorCurrentRunCacheObjectSnapshotsMutableBucket()
+    local currentRun = {}
+    self.harness.game.CurrentRun = currentRun
+
+    local host = self.harness.public.createModule({
+        pluginGuid = "test-cache-current-run-object",
+        config = {},
+        id = "CurrentRunCacheObjectHost",
+        name = "Current Run Cache Object Host",
+        drawTab = function() end,
+    })
+
+    local calls = 0
+    local runState = host.cache.currentRun.create("run", {
+        factory = function()
+            calls = calls + 1
+            return {
+                rows = {},
+            }
+        end,
+    })
+
+    lu.assertNil(runState:peek())
+    lu.assertEquals(calls, 0)
+
+    local state = runState:get()
+    lu.assertEquals(calls, 1)
+    state.rows[1] = "first"
+
+    lu.assertIs(runState:get(), state)
+    lu.assertEquals(host.cache.currentRun.peek("run").rows[1], "first")
+    lu.assertIs(runState:refresh(), state)
+
+    lu.assertTrue(runState:clear())
+    lu.assertNil(runState:peek())
+    lu.assertNil(host.cache.currentRun.peek("run"))
+end
+
 function TestCache:testAuthorHostCurrentRunCacheRejectsInvalidInputsWithoutCurrentRun()
     self.harness.game.CurrentRun = nil
 
@@ -244,47 +282,33 @@ function TestCache:testAuthorPersistentCachePreservesFalseAsPresentValue()
     lu.assertFalse(host.cache.persistent.read("RecordingReady", true))
 end
 
-function TestCache:testAuthorPersistentSnapshotRefProjectsAndWritesThrough()
+function TestCache:testAuthorPersistentCacheObjectProjectsAndWritesThrough()
     local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-snapshot",
+        pluginGuid = "test-cache-persistent-object",
         config = {},
-        id = "PersistentSnapshotCacheHost",
-        name = "Persistent Snapshot Cache Host",
+        id = "PersistentObjectCacheHost",
+        name = "Persistent Object Cache Host",
         drawTab = function() end,
     })
 
-    local ready = host.cache.persistent.snapshotRef("RecordingReady", false)
+    local ready = host.cache.persistent.create("RecordingReady", {
+        default = false,
+    })
     lu.assertFalse(ready:get())
     lu.assertFalse(ready:has())
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
 
     lu.assertTrue(ready:set(true))
     lu.assertTrue(ready:get())
-    lu.assertTrue(ready:has())
     lu.assertTrue(host.cache.persistent.read("RecordingReady", false))
+
+    host.cache.persistent.write("RecordingReady", false)
+    lu.assertTrue(ready:get())
+    lu.assertFalse(ready:refresh())
+    lu.assertFalse(ready:get())
 
     lu.assertTrue(ready:clear())
     lu.assertFalse(ready:get())
     lu.assertFalse(ready:has())
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
-end
-
-function TestCache:testAuthorPersistentSnapshotRefRefreshesAfterExternalWrite()
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-snapshot-refresh",
-        config = {},
-        id = "PersistentSnapshotRefreshCacheHost",
-        name = "Persistent Snapshot Refresh Cache Host",
-        drawTab = function() end,
-    })
-
-    local ready = host.cache.persistent.snapshotRef("RecordingReady", false)
-    lu.assertFalse(ready:get())
-
-    host.cache.persistent.write("RecordingReady", true)
-    lu.assertFalse(ready:get())
-    lu.assertTrue(ready:refresh())
-    lu.assertTrue(ready:get())
 end
 
 function TestCache:testAuthorPersistentCacheNamespacesByOwner()
@@ -367,14 +391,13 @@ function TestCache:testAuthorPersistentCacheRejectsInvalidInputs()
     lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
         host.cache.persistent.write("RecordingReady", {})
     end)
-    lu.assertErrorMsgContains("key must be a non-empty string", function()
-        host.cache.persistent.snapshotRef("")
+    lu.assertErrorMsgContains("opts must be a table", function()
+        host.cache.persistent.create("RecordingReady", true)
     end)
     lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.snapshotRef("RecordingReady", {})
-    end)
-    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.snapshotRef("RecordingReady", false):set({})
+        host.cache.persistent.create("RecordingReady", {
+            default = {},
+        })
     end)
 end
 
@@ -431,6 +454,67 @@ function TestCache:testSharedCachePublishesWritesAndReadsLiveProjection()
 
     lu.assertTrue(publisher.cache.shared.clear("test.shared"))
     lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
+        active = false,
+        available = {},
+    })
+end
+
+function TestCache:testSharedCacheObjectsPublishReadAndWriteSnapshots()
+    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-object-publisher")
+    local readerHost = createSharedCacheHost(self.harness, "test-cache-shared-object-reader")
+
+    local owner = publisher.cache.shared.create("test.shared.object", {
+        access = "owner",
+        default = {
+            active = false,
+            available = {},
+        },
+    })
+    local reader = readerHost.cache.shared.create("test.shared.object", {
+        access = "reader",
+        fallback = {
+            missing = true,
+        },
+    })
+
+    lu.assertNil(reader.set)
+    lu.assertNil(reader.clear)
+    lu.assertEquals(reader:get(), {
+        missing = true,
+    })
+
+    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-object-publisher")
+    lu.assertEquals(reader:refresh(), {
+        active = false,
+        available = {},
+    })
+
+    lu.assertTrue(owner:set({
+        active = true,
+        available = {
+            Apollo = false,
+        },
+    }))
+    lu.assertEquals(owner:get(), {
+        active = true,
+        available = {
+            Apollo = false,
+        },
+    })
+    lu.assertEquals(reader:refresh(), {
+        active = true,
+        available = {
+            Apollo = false,
+        },
+    })
+
+    local ownerSnapshot = owner:get()
+    ownerSnapshot.available.Apollo = true
+    lu.assertEquals(owner:get().available.Apollo, true)
+    lu.assertEquals(reader:refresh().available.Apollo, false)
+
+    lu.assertTrue(owner:clear())
+    lu.assertEquals(reader:refresh(), {
         active = false,
         available = {},
     })
