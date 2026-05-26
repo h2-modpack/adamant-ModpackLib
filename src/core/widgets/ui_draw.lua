@@ -33,6 +33,24 @@ local draw = {
 ---@class DrawNav
 ---@field verticalTabs fun(opts: VerticalTabsOpts|nil): string|number|nil
 
+local function getActiveDrawLogContext()
+    local context = phaseGate.getActiveDrawContext()
+    if type(context) ~= "table" or type(context.logPrefix) ~= "string" then
+        logging.violate("phase.invalid_ui_access", "draw logging can only run during a module draw callback")
+    end
+    return context
+end
+
+function draw.log(fmt, ...)
+    local context = getActiveDrawLogContext()
+    return logging.printWithPrefix(context.logPrefix, fmt, ...)
+end
+
+function draw.logIf(fmt, ...)
+    local context = getActiveDrawLogContext()
+    return logging.printWithPrefixIf(context.debugEnabled == true, context.logPrefix, fmt, ...)
+end
+
 local function resolveField(target, methodName)
     if storage.field.is(target) then
         return target

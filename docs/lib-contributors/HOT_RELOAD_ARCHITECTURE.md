@@ -49,7 +49,7 @@ Expected to persist across reloads:
 - Lib live-host registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.registry.hosts`
 - Lib hook dispatchers that map each capability owner slot to its current owner
   object under `AdamantModpackLib_Runtime.registry.hooks`
-- Lib integration providers, mutation owner slots, retained overlays, and
+- Lib shared event listeners, mutation owner slots, retained overlays, and
   fallback GUI bridges under their scoped `AdamantModpackLib_Runtime.registry`
   buckets
 - Framework pack registry and stable GUI callbacks
@@ -58,7 +58,7 @@ Expected to persist across reloads:
 
 Modules pass `pluginGuid` as their stable lifecycle identity. The committed host
 for that plugin is the structural hot-reload baseline and the owner for managed
-hooks, overlays, integrations, and activation metadata. Capability backends
+hooks, overlays, shared events, and activation metadata. Capability backends
 receive this identity as an `ownerId`; system scopes provide their own scoped
 owner ids. Mutation runtime remains owner-scoped because raw game-table edits
 are process-global.
@@ -101,7 +101,7 @@ Lib owns the shared reload-sensitive plumbing:
 - coordinator registration
 - coordinated module startup/runtime sync
 - stable ModUtil hook dispatch
-- integration provider refresh
+- shared event listener refresh
 - retained overlay registration and refresh
 - mutation runtime tracking for module reloads
 - fallback UI suppression for coordinated modules
@@ -150,7 +150,7 @@ During module creation and activation:
 - the module host closes over the current `definition`, `store`, and staged state
 - `host.activate()` publishes the live host
 - Lib refreshes hook registrations under the module owner id derived from `pluginGuid`; absent hook registrations for that owner are deactivated
-- Lib refreshes integration registrations under the module owner id derived from `pluginGuid`; absent integration providers for that owner are removed
+- Lib refreshes shared event listener registrations under the module owner id derived from `pluginGuid`; absent shared event listeners for that owner are removed
 - if the coordinator for `definition.modpack` is already registered, Lib immediately syncs live mutation state
 
 That means one coordinated module reload refreshes its live runtime behavior immediately without forcing a pack rebuild.
@@ -317,7 +317,7 @@ coordinated path, use a full reload.
 
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
-- keep staged state behind the host; draw callbacks receive restricted `state`, `actions`, and `services` arguments through the host
+- keep staged state behind the host; draw callbacks receive restricted `draw`, `state`, and `actions` arguments through the host
 - register runtime hooks through `host.hooks.*` before activation
 - pass `pluginGuid` to `lib.createModule(...)`
 - call `host.activate()` after construction

@@ -7,23 +7,36 @@ local sharedRegistry = deps.sharedRegistry
 sharedRegistry.records = sharedRegistry.records or {}
 
 local records = sharedRegistry.records
-local sharedCache = {}
+local sharedData = {}
 
 local function validateId(context, id)
     if type(id) ~= "string" or id == "" then
-        logging.violate("cache.invalid_args", "%s id must be a non-empty string", context)
+        logging.violate("shared.invalid_args", "%s id must be a non-empty string", context)
+    end
+end
+
+local function validateName(context, name)
+    if type(name) ~= "string" or name == "" then
+        logging.violate("shared.invalid_args", "%s name must be a non-empty string", context)
     end
 end
 
 local function validateOwnerId(context, ownerId)
     if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("cache.invalid_args", "%s ownerId must be a non-empty string", context)
+        logging.violate("shared.invalid_args", "%s ownerId must be a non-empty string", context)
+    end
+end
+
+local function validateTableKey(context, key)
+    local keyType = type(key)
+    if keyType ~= "number" and keyType ~= "string" then
+        logging.violate("shared.invalid_value", "%s table keys must be strings or numbers", context)
     end
 end
 
 local function validateValue(context, value, seen)
     if value == nil then
-        logging.violate("cache.invalid_value", "%s value must not be nil; use clear instead", context)
+        logging.violate("shared.invalid_value", "%s value must not be nil; use clear instead", context)
     end
 
     local valueType = type(value)
@@ -31,7 +44,7 @@ local function validateValue(context, value, seen)
         return
     end
     if valueType ~= "table" then
-        logging.violate("cache.invalid_value", "%s value must be a scalar or table", context)
+        logging.violate("shared.invalid_value", "%s value must be a scalar or table", context)
     end
 
     seen = seen or {}
@@ -41,7 +54,7 @@ local function validateValue(context, value, seen)
     seen[value] = true
 
     for key, child in pairs(value) do
-        validateValue(context .. " key", key, seen)
+        validateTableKey(context, key)
         validateValue(context, child, seen)
     end
 end
@@ -74,13 +87,13 @@ local function buildReadOnlyView(value, seen)
     seen[value] = proxy
 
     for key, child in pairs(value) do
-        view[buildReadOnlyView(key, seen)] = buildReadOnlyView(child, seen)
+        view[key] = buildReadOnlyView(child, seen)
     end
 
     setmetatable(proxy, {
         __index = view,
         __newindex = function()
-            logging.violate("cache.invalid_value", "shared cache table views are read-only")
+            logging.violate("shared.invalid_value", "shared data table views are read-only")
         end,
         __pairs = function()
             return pairs(view)
@@ -101,14 +114,15 @@ local function protectOptional(value)
     return buildReadOnlyView(value)
 end
 
-local function ensurePublicationSet(record)
-    if not record.sharedCachePublications then
-        record.sharedCachePublications = {
+local function ensureDataDeclarations(record)
+    if not record.sharedDataDeclarations then
+        record.sharedDataDeclarations = {
             entries = {},
-            byId = {},
+            byName = {},
+            ownerIds = {},
         }
     end
-    return record.sharedCachePublications
+    return record.sharedDataDeclarations
 end
 
 local function makeNoopReceipt()
@@ -122,43 +136,77 @@ local function makeNoopReceipt()
     }
 end
 
-local function hasPublicationEntries(publications)
-    return publications and #(publications.entries or {}) > 0
+local function hasOwnerDeclarations(declarations)
+    if not declarations then
+        return false
+    end
+    for _, declaration in ipairs(declarations.entries or {}) do
+        if declaration.access == "owner" then
+            return true
+        end
+    end
+    return false
 end
 
-local function stagePublication(context, record, host, id, opts)
-    validateId(context, id)
+local function stageDataDeclaration(context, access, record, host, name, opts)
+    validateName(context, name)
     if opts ~= nil and type(opts) ~= "table" then
-        logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
+        logging.violate("shared.invalid_args", "%s opts must be a table when provided", context)
     end
     opts = opts or {}
-    validateOptionalValue(context .. " default", opts.default)
+    validateId(context, opts.id)
 
-    local publications = ensurePublicationSet(record)
-    if publications.byId[id] then
-        logging.violate("cache.invalid_args", "%s id '%s' is already published by this host", context, id)
+    local declarations = ensureDataDeclarations(record)
+    if declarations.byName[name] then
+        logging.violate("shared.invalid_args", "%s name '%s' is already declared by this host", context, name)
     end
 
-    local entry = {
-        id = id,
+    if access == "owner" then
+        if declarations.ownerIds[opts.id] then
+            logging.violate("shared.invalid_args", "%s id '%s' is already owned by this host", context, opts.id)
+        end
+        if opts.fallback ~= nil then
+            logging.violate("shared.invalid_args", "%s fallback is only valid for reader declarations", context)
+        end
+        validateOptionalValue(context .. " default", opts.default)
+    else
+        if opts.default ~= nil then
+            logging.violate("shared.invalid_args", "%s default is only valid for owner declarations", context)
+        end
+        validateOptionalValue(context .. " fallback", opts.fallback)
+    end
+
+    local declaration = {
+        name = name,
+        id = opts.id,
+        access = access,
         default = copyOptional(opts.default),
+        fallback = copyOptional(opts.fallback),
         hasDefault = opts.default ~= nil,
+        hasFallback = opts.fallback ~= nil,
         isEnabled = function()
             return host.isEnabled()
         end,
     }
-    publications.byId[id] = entry
-    publications.entries[#publications.entries + 1] = entry
+    declarations.byName[name] = declaration
+    declarations.entries[#declarations.entries + 1] = declaration
+    if access == "owner" then
+        declarations.ownerIds[opts.id] = true
+    end
     return true
 end
 
-function sharedCache.stagePublication(record, host, id, opts)
-    return stagePublication("cache.shared.declared", record, host, id, opts)
+function sharedData.stageOwner(record, host, name, opts)
+    return stageDataDeclaration("host.shared.data.owner", "owner", record, host, name, opts)
 end
 
-function sharedCache.install(ownerId, publications)
-    validateOwnerId("cache.shared.install", ownerId)
-    if not hasPublicationEntries(publications) then
+function sharedData.stageReader(record, host, name, opts)
+    return stageDataDeclaration("host.shared.data.reader", "reader", record, host, name, opts)
+end
+
+function sharedData.install(ownerId, declarations)
+    validateOwnerId("shared.data.install", ownerId)
+    if not hasOwnerDeclarations(declarations) then
         return makeNoopReceipt()
     end
 
@@ -171,8 +219,10 @@ function sharedCache.install(ownerId, publications)
         disposed = false,
     }
 
-    for _, entry in ipairs(publications.entries) do
-        install.entries[#install.entries + 1] = entry
+    for _, entry in ipairs(declarations.entries) do
+        if entry.access == "owner" then
+            install.entries[#install.entries + 1] = entry
+        end
     end
 
     return {
@@ -185,8 +235,8 @@ function sharedCache.install(ownerId, publications)
                 local previous = records[entry.id]
                 if previous and previous.ownerId ~= ownerId then
                     logging.violate(
-                        "cache.shared_duplicate_publisher",
-                        "cache.shared '%s' is already published by '%s'",
+                        "shared.duplicate_publisher",
+                        "shared.data '%s' is already published by '%s'",
                         tostring(entry.id),
                         tostring(previous.ownerId))
                 end
@@ -206,7 +256,7 @@ function sharedCache.install(ownerId, publications)
             end
 
             install.committed = true
-            publications.ownerToken = install.ownerToken
+            declarations.ownerToken = install.ownerToken
             return true, nil
         end,
         dispose = function()
@@ -224,8 +274,8 @@ function sharedCache.install(ownerId, publications)
                         records[entry.id] = install.previous[entry.id]
                     end
                 end
-                if publications.ownerToken == install.ownerToken then
-                    publications.ownerToken = nil
+                if declarations.ownerToken == install.ownerToken then
+                    declarations.ownerToken = nil
                 end
             end
             install.disposed = true
@@ -240,13 +290,13 @@ local function requireOwnerRecord(context, ownerId, ownerToken, id)
 
     local record = records[id]
     if not record or record.ownerId ~= ownerId or record.ownerToken ~= ownerToken then
-        logging.violate("cache.shared_not_owner", "%s '%s' requires the active publishing owner", context, id)
+        logging.violate("shared.not_owner", "%s '%s' requires the active publishing owner", context, id)
     end
     return record
 end
 
 local function readView(id, fallbackView)
-    validateId("cache.shared.read", id)
+    validateId("shared.data.read", id)
     local record = records[id]
     if not record or not (record.isEnabled and record.isEnabled()) then
         return fallbackView
@@ -260,19 +310,24 @@ local function readView(id, fallbackView)
     return fallbackView
 end
 
-local function createOwnerRef(context, record, host, id, defaultValue)
-    local publications = ensurePublicationSet(record)
-    if not publications.byId[id] then
-        logging.violate("cache.invalid_args", "%s requires a declared owner publication", context)
+local function requireDataDeclaration(record, name, source)
+    local declarations = record and record.sharedDataDeclarations or nil
+    local declaration = declarations and declarations.byName and declarations.byName[name] or nil
+    if not declaration then
+        logging.violate("shared.invalid_args", "%s: unknown shared declaration '%s'", source, tostring(name))
     end
+    return declarations, declaration
+end
 
-    local snapshotValue = copyOptional(defaultValue)
+local function createOwnerRef(context, declarations, declaration, host)
+    local snapshotValue = copyOptional(declaration.default)
     local snapshot = protectOptional(snapshotValue)
+    local id = declaration.id
     local ref = {}
     ref.get = function()
         local ownerRecord = records[id]
         if ownerRecord and ownerRecord.ownerId == host.getHostId()
-            and ownerRecord.ownerToken == publications.ownerToken
+            and ownerRecord.ownerToken == declarations.ownerToken
         then
             return readView(id, snapshot)
         end
@@ -280,7 +335,7 @@ local function createOwnerRef(context, record, host, id, defaultValue)
     end
     ref.set = function(_, value)
         validateValue(context .. ".set", value)
-        local ownerRecord = requireOwnerRecord(context .. ".set", host.getHostId(), publications.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".set", host.getHostId(), declarations.ownerToken, id)
         ownerRecord.value = values.deepCopy(value)
         ownerRecord.valueView = protectOptional(ownerRecord.value)
         ownerRecord.hasValue = true
@@ -288,7 +343,7 @@ local function createOwnerRef(context, record, host, id, defaultValue)
         return true
     end
     ref.clear = function()
-        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getHostId(), publications.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getHostId(), declarations.ownerToken, id)
         ownerRecord.value = nil
         ownerRecord.valueView = nil
         ownerRecord.hasValue = false
@@ -298,36 +353,20 @@ local function createOwnerRef(context, record, host, id, defaultValue)
     return ref
 end
 
-function sharedCache.createDeclaredOwner(record, host, id, opts)
-    local context = "cache.shared.declared"
-    validateId(context, id)
-    if opts ~= nil and type(opts) ~= "table" then
-        logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
+function sharedData.createDeclaredRef(record, host, name, source)
+    local declarations, declaration = requireDataDeclaration(record, name, source)
+    if declaration.access == "owner" then
+        return createOwnerRef("shared.data.declared", declarations, declaration, host)
     end
-    opts = opts or {}
-    validateOptionalValue(context .. " default", opts.default)
-    return createOwnerRef(context, record, host, id, opts.default)
-end
 
-function sharedCache.createReader(id, opts)
-    local context = "cache.shared.declared"
-    validateId(context, id)
-    if opts ~= nil and type(opts) ~= "table" then
-        logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
-    end
-    opts = opts or {}
-    if opts.access ~= nil and opts.access ~= "reader" then
-        logging.violate("cache.invalid_args", "%s access must be 'reader'", context)
-    end
-    validateOptionalValue(context .. " fallback", opts.fallback)
-    local fallbackValue = copyOptional(opts.fallback)
+    local fallbackValue = copyOptional(declaration.fallback)
     local fallbackView = protectOptional(fallbackValue)
 
     return {
         get = function()
-            return readView(id, fallbackView)
+            return readView(declaration.id, fallbackView)
         end,
     }
 end
 
-return sharedCache
+return sharedData

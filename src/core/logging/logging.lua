@@ -16,6 +16,16 @@ function logging.formatLogMessage(prefix, fmt, ...)
     return prefix .. (select("#", ...) > 0 and string.format(fmt, ...) or fmt)
 end
 
+function logging.printWithPrefix(prefix, fmt, ...)
+    print(logging.formatLogMessage(prefix, fmt, ...))
+end
+
+function logging.printWithPrefixIf(enabled, prefix, fmt, ...)
+    if enabled then
+        logging.printWithPrefix(prefix, fmt, ...)
+    end
+end
+
 for id, entry in pairs(DefaultViolationPolicy) do
     violationPolicy[id] = {
         severity = entry.severity,

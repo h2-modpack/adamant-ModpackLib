@@ -36,6 +36,24 @@ local function createActivatedHost(h, pluginGuid, opts)
     return host, authorHost, store
 end
 
+local function createSimpleActivatedHost(h, pluginGuid, id)
+    local definition = h.moduleHost.prepareDefinition({}, {
+        id = id or pluginGuid,
+        name = id or pluginGuid,
+        storage = {},
+    })
+    local store, stagedState = h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    return createActivatedHost(h, pluginGuid, {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function() end,
+    })
+end
+
 function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
     local drawCalls = 0
     local pluginGuid = "test-fallback-ui-commit"
@@ -284,8 +302,8 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
         persistentState = store,
         stagedState = stagedState,
         drawTab = function() end,
-        drawQuickContent = function(draw, state, actions, services)
-            quickArgs = { draw = draw, state = state, actions = actions, services = services }
+        drawQuickContent = function(draw, state, actions)
+            quickArgs = { draw = draw, state = state, actions = actions }
         end,
         configureHost = function(authorHost)
             callbackHost = authorHost
@@ -297,9 +315,13 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     host.drawQuickContent()
 
     lu.assertEquals(type(quickArgs.draw.widgets), "table")
+    lu.assertEquals(type(quickArgs.draw.log), "function")
+    lu.assertEquals(type(quickArgs.draw.logIf), "function")
     lu.assertEquals(type(quickArgs.state.get), "function")
     lu.assertEquals(type(quickArgs.actions.get), "function")
-    lu.assertEquals(type(quickArgs.services.log), "function")
+    lu.assertEquals(type(quickArgs.actions.trigger), "function")
+    lu.assertEquals(type(quickArgs.actions.emit), "function")
+    lu.assertNil(quickArgs.actions.hasAny)
     lu.assertEquals(returnedHost, callbackHost)
     lu.assertEquals(callbackHost.getHostId(), "test-author-host")
     lu.assertEquals(callbackHost.getModuleId(), "AuthorHostModule")
@@ -408,98 +430,77 @@ function TestModuleHost:testNestedDrawEntryIsRejected()
     lu.assertEquals(nestedDraws, 1)
 end
 
-function TestModuleHost:testDrawServicesExposeDrawSafeHostSubset()
-    local services = nil
-    local integrationValue = nil
-    local integrationProvider = nil
+function TestModuleHost:testDrawExposesDrawSafeLogging()
+    local drawContext = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
-        modpack = "services-pack",
-        id = "DrawServicesModule",
-        name = "Draw Services Module",
+        modpack = "draw-log-pack",
+        id = "DrawLogModule",
+        name = "Draw Log Module",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = true,
     }, definition)
-    createActivatedHost(self.h, "test-draw-services", {
+    createActivatedHost(self.h, "test-draw-logging", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
-        drawTab = function(_, _, _, drawServices)
-            services = drawServices
-            integrationValue, integrationProvider = services.pollIntegration("test.draw-services", "value",
-                "fallback", "ok")
-            services.log("service %s", "log")
-            services.logIf("service %s", "debug")
-        end,
-        configureHost = function(authorHost)
-            authorHost.integrations.provide("test.draw-services", {
-                providerId = "DrawServicesProvider",
-                methods = {
-                    value = {
-                        handler = function(_, suffix)
-                            return "service:" .. tostring(suffix)
-                        end,
-                    },
-                },
-            })
+        drawTab = function(draw)
+            drawContext = draw
+            draw.log("draw %s", "log")
+            draw.logIf("draw %s", "debug")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-draw-services")
+    local host = self.h.moduleHost.getLiveHost("test-draw-logging")
     local warningCount = #self.h.warnings
 
     host.drawTab()
 
-    lu.assertEquals(type(services), "table")
-    lu.assertEquals(type(services.log), "function")
-    lu.assertEquals(type(services.logIf), "function")
-    lu.assertEquals(type(services.pollIntegration), "function")
-    lu.assertNil(services.integrations)
-    lu.assertNil(services.hooks)
-    lu.assertNil(services.overlays)
-    lu.assertNil(services.mutation)
-    lu.assertNil(services.activate)
-    lu.assertNil(services.setEnabled)
-    lu.assertEquals(integrationValue, "service:ok")
-    lu.assertEquals(integrationProvider, "DrawServicesProvider")
-    lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawServicesModule] service log")
-    lu.assertEquals(self.h.warnings[warningCount + 2], "[DrawServicesModule] service debug")
+    lu.assertEquals(type(drawContext), "table")
+    lu.assertEquals(type(drawContext.log), "function")
+    lu.assertEquals(type(drawContext.logIf), "function")
+    lu.assertNil(drawContext.services)
+    lu.assertNil(drawContext.shared)
+    lu.assertNil(drawContext.hooks)
+    lu.assertNil(drawContext.overlays)
+    lu.assertNil(drawContext.mutation)
+    lu.assertNil(drawContext.activate)
+    lu.assertNil(drawContext.setEnabled)
+    lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawLogModule] draw log")
+    lu.assertEquals(self.h.warnings[warningCount + 2], "[DrawLogModule] draw debug")
     lu.assertEquals(#self.h.warnings, warningCount + 2)
 end
 
-function TestModuleHost:testDrawServicesRejectUseOutsideDrawPhase()
-    local services = nil
+function TestModuleHost:testDrawLoggingRejectsUseOutsideDrawPhase()
+    local drawContext = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
-        id = "DrawServicesPhase",
-        name = "Draw Services Phase",
+        id = "DrawLogPhase",
+        name = "Draw Log Phase",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-draw-services-phase", {
+    createActivatedHost(self.h, "test-draw-logging-phase", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
-        drawTab = function(_, _, _, drawServices)
-            services = drawServices
-            services.pollIntegration("missing", "value", nil)
+        drawTab = function(draw)
+            drawContext = draw
+            draw.log("inside")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-draw-services-phase")
+    local host = self.h.moduleHost.getLiveHost("test-draw-logging-phase")
 
     host.drawTab()
 
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        services.log("outside")
+        drawContext.log("outside")
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        services.logIf("outside")
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        services.pollIntegration("missing", "value", nil)
+        drawContext.logIf("outside")
     end)
 end
 
@@ -528,7 +529,6 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
             actionRef = actions.get("recording")
             actionRef:stage({ kind = "start" })
             observed = {
-                hasAny = actions.hasAny(),
                 has = actionRef:has(),
                 value = actionRef:read(),
             }
@@ -538,14 +538,16 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
 
     host.drawTab()
 
-    lu.assertTrue(observed.hasAny)
     lu.assertTrue(observed.has)
     lu.assertEquals(observed.value, { kind = "start" })
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actions.hasAny()
+        actions.trigger("recording")
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actions.get("recording")
+    end)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        actions.emit("test.events", "changed", {})
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actionRef:read()
@@ -592,7 +594,7 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
             observedConfigChange = commit.hadConfigChanges()
         end,
         drawTab = function(_, _, actions)
-            actions.get("setFlag"):stage(true)
+            actions.trigger("setFlag")
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-declared-draw-actions")
@@ -612,6 +614,55 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
     lu.assertTrue(observedConfigChange)
 end
 
+function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
+    local delivered = nil
+    local sharedId = "test.draw-action-emit"
+    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawActionEmitListener",
+        name = "Draw Action Emit Listener",
+        storage = {},
+    })
+    local listenerStore, listenerState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, listenerDefinition)
+    createActivatedHost(self.h, "test-draw-action-emit-listener", {
+        definition = listenerDefinition,
+        persistentState = listenerStore,
+        stagedState = listenerState,
+        configureHost = function(authorHost)
+            authorHost.shared.listen(sharedId, "changed", function(payload)
+                delivered = payload
+            end)
+        end,
+        drawTab = function() end,
+    })
+
+    local emitterDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawActionEmitEmitter",
+        name = "Draw Action Emit Emitter",
+        storage = {},
+    })
+    local emitterStore, emitterState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, emitterDefinition)
+    createActivatedHost(self.h, "test-draw-action-emit-emitter", {
+        definition = emitterDefinition,
+        persistentState = emitterStore,
+        stagedState = emitterState,
+        drawTab = function(_, _, actions)
+            actions.emit(sharedId, "changed", { value = 42 })
+            lu.assertNil(delivered)
+        end,
+    })
+    local emitter = self.h.moduleHost.getLiveHost("test-draw-action-emit-emitter")
+
+    emitter.drawTab()
+
+    lu.assertEquals(delivered, { value = 42 })
+end
+
 function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "UndeclaredDrawAction",
@@ -628,7 +679,7 @@ function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
         persistentState = store,
         stagedState = stagedState,
         drawTab = function(_, _, actions)
-            actions.get("missing")
+            actions.trigger("missing")
         end,
     })
     local host = self.h.moduleHost.getLiveHost("test-undeclared-draw-action")
@@ -735,15 +786,10 @@ function TestModuleHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFra
     lu.assertEquals(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"), reloadedHost)
 end
 
-function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
+function TestModuleHost:testActivationFailureRestoresLiveHostAndShared()
     local pluginGuid = "test-activation-rollback"
-    local integrationId = "test.activation.rollback"
-    local providerId = "RollbackProvider"
-    local previousApi = {
-        read = function()
-            return "previous"
-        end,
-    }
+    local sharedId = "test.activation.rollback"
+    local previousValue = nil
 
     local firstDefinition = self.h.moduleHost.prepareDefinition({}, {
         id = "ActivationRollback",
@@ -754,19 +800,14 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
-    local firstHost, firstAuthorHost = createActivatedHost(self.h, pluginGuid, {
+    local firstHost = createActivatedHost(self.h, pluginGuid, {
         definition = firstDefinition,
         persistentState = firstStore,
         stagedState = firstStagedState,
         configureHost = function(authorHost)
-            authorHost.integrations.provide(integrationId, {
-                providerId = providerId,
-                methods = {
-                    read = {
-                        handler = previousApi.read,
-                    },
-                },
-            })
+            authorHost.shared.listen(sharedId, "changed", function(payload)
+                previousValue = payload.value
+            end)
         end,
         drawTab = function() end,
     })
@@ -788,24 +829,18 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         drawTab = function() end,
     })
     secondAuthorHost.mutation.patch(function()
-        error("integration boom")
+        error("shared boom")
     end)
-    secondAuthorHost.integrations.provide(integrationId, {
-        providerId = providerId,
-        methods = {
-            read = {
-                handler = function()
-                    return "replacement"
-                end,
-            },
-        },
-    })
+    secondAuthorHost.shared.listen(sharedId, "changed", function(payload)
+        previousValue = "replacement:" .. tostring(payload.value)
+    end)
 
     local ok, err = secondAuthorHost.activate()
-    local value = firstAuthorHost.integrations.poll(integrationId, "read", nil)
+    local _, emitter = createSimpleActivatedHost(self.h, "test-activation-rollback-emitter", "ActivationRollbackEmitter")
+    emitter.shared.emit(sharedId, "changed", { value = "previous" })
 
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "integration boom")
+    lu.assertStrContains(err, "shared boom")
     lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), firstHost)
     lu.assertEquals(self.h.hostRegistry.getPluginInfo(pluginGuid), {
         pluginGuid = pluginGuid,
@@ -813,20 +848,20 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndIntegrations()
         moduleId = "ActivationRollback",
         name = "Activation Rollback",
     })
-    lu.assertEquals(value, "previous")
+    lu.assertEquals(previousValue, "previous")
     lu.assertErrorMsgContains("host.not_activated", function()
         secondHost.flush()
     end)
 end
 
-function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
-    local pluginGuid = "test-activation-new-integration-rollback"
-    local integrationId = "test.activation.new.rollback"
-    local providerId = "NewRollbackProvider"
+function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
+    local pluginGuid = "test-activation-new-shared-rollback"
+    local sharedId = "test.activation.new.rollback"
+    local delivered = 0
 
     local definition = self.h.moduleHost.prepareDefinition({}, {
-        id = "ActivationNewIntegrationRollback",
-        name = "Activation New Integration Rollback",
+        id = "ActivationNewSharedRollback",
+        name = "Activation New Shared Rollback",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
@@ -841,26 +876,26 @@ function TestModuleHost:testActivationFailureDropsNewStagedIntegrationProvider()
         drawTab = function() end,
     })
     authorHost.mutation.patch(function()
-        error("new integration boom")
+        error("new shared boom")
     end)
-    authorHost.integrations.provide(integrationId, {
-        providerId = providerId,
-        methods = {
-            read = {
-                handler = function()
-                    return "candidate"
-                end,
-            },
-        },
-    })
+    authorHost.shared.listen(sharedId, "changed", function()
+        delivered = delivered + 1
+    end)
 
     local ok, err = authorHost.activate()
+    local _, emitter = createSimpleActivatedHost(
+        self.h,
+        "test-activation-new-shared-rollback-emitter",
+        "ActivationNewSharedRollbackEmitter")
+    local emitOk, count = emitter.shared.emit(sharedId, "changed", {})
 
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "new integration boom")
+    lu.assertStrContains(err, "new shared boom")
     lu.assertNil(self.h.moduleHost.getLiveHost(pluginGuid))
     lu.assertNil(self.h.hostRegistry.getPluginInfo(pluginGuid))
-    lu.assertNil(authorHost.integrations.poll(integrationId, "read", nil))
+    lu.assertTrue(emitOk)
+    lu.assertEquals(count, 0)
+    lu.assertEquals(delivered, 0)
     lu.assertErrorMsgContains("host.not_activated", function()
         host.flush()
     end)
@@ -989,13 +1024,13 @@ function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
     lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), host)
 end
 
-function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
-    local pluginGuid = "test-activation-integration-refresh"
-    local integrationId = "test.activation.refresh"
-    local providerId = "ActivationRefresh"
+function TestModuleHost:testActivationRefreshRemovesOmittedShared()
+    local pluginGuid = "test-activation-shared-refresh"
+    local sharedId = "test.activation.refresh"
+    local delivered = 0
 
     local firstDefinition = self.h.moduleHost.prepareDefinition({}, {
-        id = providerId,
+        id = "ActivationRefresh",
         name = "Activation Refresh",
         storage = {},
     })
@@ -1003,29 +1038,26 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
-    local _, firstAuthorHost = createActivatedHost(self.h, pluginGuid, {
+    createActivatedHost(self.h, pluginGuid, {
         definition = firstDefinition,
         persistentState = firstStore,
         stagedState = firstStagedState,
         configureHost = function(authorHost)
-            authorHost.integrations.provide(integrationId, {
-                providerId = providerId,
-                methods = {
-                    read = {
-                        handler = function()
-                            return "first"
-                        end,
-                    },
-                },
-            })
+            authorHost.shared.listen(sharedId, "changed", function()
+                delivered = delivered + 1
+            end)
         end,
         drawTab = function() end,
     })
 
-    lu.assertEquals(firstAuthorHost.integrations.poll(integrationId, "read", nil), "first")
+    local _, emitter = createSimpleActivatedHost(self.h, "test-activation-refresh-emitter", "ActivationRefreshEmitter")
+    local emitOk, firstCount = emitter.shared.emit(sharedId, "changed", {})
+    lu.assertTrue(emitOk)
+    lu.assertEquals(firstCount, 1)
+    lu.assertEquals(delivered, 1)
 
     local secondDefinition = self.h.moduleHost.prepareDefinition({}, {
-        id = providerId,
+        id = "ActivationRefresh",
         name = "Activation Refresh",
         storage = {},
     })
@@ -1040,7 +1072,9 @@ function TestModuleHost:testActivationRefreshRemovesOmittedIntegrations()
         drawTab = function() end,
     })
 
-    lu.assertNil(firstAuthorHost.integrations.poll(integrationId, "read", nil))
+    local _, secondCount = emitter.shared.emit(sharedId, "changed", {})
+    lu.assertEquals(secondCount, 0)
+    lu.assertEquals(delivered, 1)
 end
 
 function TestModuleHost:testActivationRejectsReentrantActivateCalls()

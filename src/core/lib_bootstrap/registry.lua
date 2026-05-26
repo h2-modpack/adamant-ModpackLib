@@ -9,18 +9,19 @@ runtimeRoot.registry = runtimeRoot.registry or {}
 local buckets = runtimeRoot.registry
 buckets.hosts = buckets.hosts or {}
 buckets.hooks = buckets.hooks or {}
-buckets.integrations = buckets.integrations or {}
+buckets.shared = buckets.shared or {}
+buckets.shared.events = buckets.shared.events or {}
+buckets.shared.data = buckets.shared.data or {}
 buckets.mutations = buckets.mutations or {}
 buckets.overlays = buckets.overlays or {}
 buckets.fallback = buckets.fallback or {}
 buckets.coordinators = buckets.coordinators or {}
 buckets.cache = buckets.cache or {}
-buckets.cache.shared = buckets.cache.shared or {}
 
 return {
     hosts = buckets.hosts,
     hooks = buckets.hooks,
-    integrations = buckets.integrations,
+    shared = buckets.shared,
     mutations = buckets.mutations,
     overlays = buckets.overlays,
     fallback = buckets.fallback,

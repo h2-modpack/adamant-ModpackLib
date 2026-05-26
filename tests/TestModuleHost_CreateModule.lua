@@ -16,7 +16,6 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     local drawContext = nil
     local drawImgui = nil
     local capturedState = nil
-    local drawServices = nil
     local capturedActions = nil
     local drawWidgets = nil
     local drawNav = nil
@@ -55,11 +54,10 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
                 },
             },
         },
-        drawTab = function(draw, state, actions, services)
+        drawTab = function(draw, state, actions)
             drawContext = draw
             drawImgui = draw.imgui
             capturedState = state
-            drawServices = services
             capturedActions = actions
             drawWidgets = draw.widgets
             drawNav = draw.nav
@@ -106,11 +104,12 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
 
     lu.assertNotNil(drawImgui)
     lu.assertNotNil(capturedState)
-    lu.assertEquals(type(drawServices.log), "function")
-    lu.assertEquals(type(drawServices.logIf), "function")
-    lu.assertEquals(type(drawServices.pollIntegration), "function")
+    lu.assertEquals(type(drawContext.log), "function")
+    lu.assertEquals(type(drawContext.logIf), "function")
     lu.assertEquals(type(capturedActions.get), "function")
-    lu.assertEquals(type(capturedActions.hasAny), "function")
+    lu.assertEquals(type(capturedActions.trigger), "function")
+    lu.assertEquals(type(capturedActions.emit), "function")
+    lu.assertNil(capturedActions.hasAny)
     lu.assertEquals(type(drawWidgets.checkbox), "function")
     lu.assertNil(drawWidgets.forStagedState)
     lu.assertEquals(type(drawNav.verticalTabs), "function")
@@ -197,13 +196,13 @@ end
 function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
     local calls = {}
     local host = self.h.public.createModule({
-        pluginGuid = "test-create-module-stable-draw-services",
+        pluginGuid = "test-create-module-stable-draw-objects",
         config = {},
         modpack = "create-module-pack",
-        id = "StableDrawServices",
-        name = "Stable Draw Services",
+        id = "StableDrawObjects",
+        name = "Stable Draw Objects",
         storage = {},
-        drawTab = function(draw, state, actions, services)
+        drawTab = function(draw, state, actions)
             calls[#calls + 1] = {
                 draw = draw,
                 imgui = draw.imgui,
@@ -211,13 +210,12 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
                 nav = draw.nav,
                 state = state,
                 actions = actions,
-                services = services,
             }
         end,
     })
 
     host.activate()
-    local liveHost = self.h:liveHost("test-create-module-stable-draw-services")
+    local liveHost = self.h:liveHost("test-create-module-stable-draw-objects")
     liveHost.drawTab()
     liveHost.drawTab()
     liveHost.drawTab()
@@ -236,8 +234,6 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
     lu.assertEquals(calls[1].state, calls[3].state)
     lu.assertEquals(calls[1].actions, calls[2].actions)
     lu.assertEquals(calls[1].actions, calls[3].actions)
-    lu.assertEquals(calls[1].services, calls[2].services)
-    lu.assertEquals(calls[1].services, calls[3].services)
 end
 
 function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases()
@@ -350,9 +346,11 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     lu.assertEquals(type(host.hooks.wrap), "function")
     lu.assertEquals(type(host.hooks.override), "function")
     lu.assertEquals(type(host.hooks.contextWrap), "function")
-    lu.assertEquals(type(host.integrations), "table")
-    lu.assertEquals(type(host.integrations.provide), "function")
-    lu.assertEquals(type(host.integrations.poll), "function")
+    lu.assertEquals(type(host.shared), "table")
+    lu.assertNil(host.shared.provide)
+    lu.assertNil(host.shared.poll)
+    lu.assertEquals(type(host.shared.listen), "function")
+    lu.assertEquals(type(host.shared.emit), "function")
     lu.assertEquals(type(host.mutation), "table")
     lu.assertEquals(type(host.mutation.patch), "function")
     lu.assertEquals(type(host.overlays), "table")
@@ -506,14 +504,14 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterPatchMutation
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterIntegrationsAsUnknownOption()
-    lu.assertErrorMsgContains("unknown option 'registerIntegrations'", function()
+function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterSharedAsUnknownOption()
+    lu.assertErrorMsgContains("unknown option 'registerShared'", function()
         self.h:createModuleOrThrow({
-            pluginGuid = "test-create-module-register-integrations-unknown",
+            pluginGuid = "test-create-module-register-shared-unknown",
             config = {},
-            id = "RegisterIntegrationsUnknown",
-            name = "Register Integrations Unknown",
-            registerIntegrations = function() end,
+            id = "RegisterSharedUnknown",
+            name = "Register Shared Unknown",
+            registerShared = function() end,
             drawTab = function() end,
         })
     end)

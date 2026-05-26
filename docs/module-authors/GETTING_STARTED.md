@@ -48,7 +48,7 @@ Typical module flow:
 
 1. `main.lua` calls `lib.createModule(...)`.
 2. The returned author host is kept local in `main.lua`.
-3. `host.activate()` registers hooks, overlays, integrations, and the live host.
+3. `host.activate()` registers hooks, overlays, shared events, and the live host.
 4. UI code edits staged values through the `state` argument passed into draw callbacks.
 5. Host/framework plumbing commits staged persistent values when appropriate.
 6. Gameplay logic reads persisted state through `store.get(...):read()`.
@@ -62,7 +62,7 @@ Use the right state object for the right job:
 
 If you ignore that boundary, the module will still often "work", but you will create drift between the UI and the persisted state model.
 Lib enforces this at the author-facing surfaces: `state`, `actions`,
-`services`, `draw.widgets`, and `draw.nav` are only valid during the active draw
+`draw`, `draw.widgets`, and `draw.nav` are only valid during the active draw
 callback, while `store` is for runtime code and rejects access during its owning
 module's draw callback.
 
@@ -103,8 +103,8 @@ Use this file to declare module data. UI belongs in `ui.lua`; gameplay behavior 
 
 Owns immediate-mode UI:
 
-- `drawTab(draw, state, actions, services)`
-- optional `drawQuickContent(draw, state, actions, services)`
+- `drawTab(draw, state, actions)`
+- optional `drawQuickContent(draw, state, actions)`
 
 This code should read and write staged values through the `state` argument or
 the bound helpers on `draw.widgets`.
@@ -248,7 +248,7 @@ Example:
 ```lua
 local MODE_VALUES = { "Vanilla", "Chaos" }
 
-local function drawTab(draw, state, actions, services)
+local function drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
@@ -268,7 +268,7 @@ Draw callbacks receive the author-facing `state` API:
 - `state.write(alias, ...)`
 - `state.resetAll(opts?)`
 
-`draw`, `state`, `actions`, and `services` should be treated as callback-local
+`draw`, `state`, and `actions` should be treated as callback-local
 objects. Do not cache them or refs returned from them for runtime use.
 
 Commit and reload operations are handled by host/framework plumbing.
@@ -443,7 +443,7 @@ Keep UI and game mutation separate. UI edits state; logic applies state.
 
 ### Putting UI outside draw functions
 
-Author UI through draw functions such as `drawTab(draw, state, actions, services)`.
+Author UI through draw functions such as `drawTab(draw, state, actions)`.
 
 ## LuaLS Setup
 
@@ -461,26 +461,24 @@ And for local callback declarations:
 ---    draw: AdamantModpackLib.DrawContext,
 ---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
----    services: AdamantModpackLib.DrawServices
 ---)
 local drawTab
 ---@type fun(
 ---    draw: AdamantModpackLib.DrawContext,
 ---    state: AdamantModpackLib.DrawState,
 ---    actions: AdamantModpackLib.DrawActions,
----    services: AdamantModpackLib.DrawServices
 ---)|nil
 local drawQuickContent
 ```
 
 That lets LuaLS infer `draw.imgui`, bound `draw.widgets`, staged `state`,
-draw `actions`, and draw-safe `services`.
+draw `actions`, and draw-safe logging through `draw.log(...)`.
 
 ## Recommended Next Reads
 
 After this guide:
 
 1. Read [MODULE_AUTHORING.md](MODULE_AUTHORING.md) for the fuller authoring contract.
-2. Use [capabilities/README.md](capabilities/README.md) when you need a focused guide for managed state, widgets, hooks, mutations, overlays, integrations, or cache.
+2. Use [capabilities/README.md](capabilities/README.md) when you need a focused guide for managed state, widgets, hooks, mutations, overlays, shared events, or cache.
 3. Use [API.md](../../API.md) when you need exact function names and behavior.
 4. Use the template source files as the concrete code reference.

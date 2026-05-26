@@ -87,6 +87,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field captureSnapshot fun(): table
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
+---@field emitShared fun(id: string, eventName: string, payload: any)
 ---@field executePending fun(host: AuthorHost, state: DrawState)
 
 ---@class PersistentCacheStore
@@ -104,6 +105,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@class Store
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field cache table|nil
+---@field shared table|nil
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
@@ -166,8 +168,8 @@ function moduleState.create(modConfig, definition)
 end
 
 -- Internal API: narrows persistent state to the author-facing runtime store.
-function moduleState.createStore(persistentState, cache)
-    return storeModule.create(persistentState, cache)
+function moduleState.createStore(persistentState, cache, shared)
+    return storeModule.create(persistentState, cache, shared)
 end
 
 function moduleState.createActionBuffer(actionCatalog)

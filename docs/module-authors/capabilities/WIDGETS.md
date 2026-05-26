@@ -2,12 +2,12 @@
 
 This document covers `draw.widgets.*` and `draw.nav.*` from a module draw-code point of view.
 
-Draw callbacks receive `draw, state, actions, services`. Widget authoring
+Draw callbacks receive `draw, state, actions`. Widget authoring
 normally uses `draw.widgets`, which calls the current draw pass `imgui`
 backend without making modules thread `imgui` through widget calls. Navigation
 helpers use `draw.nav` the same way.
 
-`draw`, `state`, `actions`, and `services` are draw-phase objects. Their
+`draw`, `state`, and `actions` are draw-phase objects. Their
 methods are valid only while Lib is executing a module draw callback.
 Do not cache them, storage fields returned by `state.get(...)`, or action refs
 for use after the callback returns.

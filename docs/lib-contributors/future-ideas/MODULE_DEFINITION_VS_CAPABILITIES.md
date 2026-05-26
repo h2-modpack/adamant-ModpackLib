@@ -68,7 +68,7 @@ complete static module definition.
 These remain host declarations between creation and activation:
 
 - hooks
-- integrations
+- shared events
 - overlays
 - mutation patches
 - fallback UI attachment
@@ -78,7 +78,7 @@ continue to be managed by activation/rollback receipts:
 
 ```lua
 host.hooks.wrap(...)
-host.integrations.provide(...)
+host.shared.listen(...)
 host.overlays.add(...)
 host.mutation.patch(...)
 host.activate()
@@ -95,7 +95,7 @@ Structural data-plane declarations:
 - `hashGroupPlan`
 
 These change store/state/cache shape, persistent or managed runtime data
-contracts, cross-module shared-cache publication contracts, hash/profile
+contracts, cross-module shared data publication contracts, hash/profile
 surface, or activation-visible data contracts.
 
 Validated but behavior-hot-reloadable command declarations:

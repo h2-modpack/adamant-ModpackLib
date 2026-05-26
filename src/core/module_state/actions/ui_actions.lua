@@ -10,22 +10,29 @@ local uiActions = {}
 function uiActions.create(actionBuffer)
     local refs = {}
 
-    return {
-        get = function(actionKey)
-            phaseGate.requireAnyDraw()
-            local ref = refs[actionKey]
-            if ref ~= nil then
-                return ref
-            end
-            ref = actionRefs.createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
-            refs[actionKey] = ref
+    local actions = {}
+
+    function actions.get(actionKey)
+        phaseGate.requireAnyDraw()
+        local ref = refs[actionKey]
+        if ref ~= nil then
             return ref
-        end,
-        hasAny = function()
-            phaseGate.requireAnyDraw()
-            return actionBuffer.hasAny()
-        end,
-    }
+        end
+        ref = actionRefs.createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
+        refs[actionKey] = ref
+        return ref
+    end
+
+    function actions.trigger(actionKey, value)
+        actions.get(actionKey):stage(value == nil and true or value)
+    end
+
+    function actions.emit(id, eventName, payload)
+        phaseGate.requireAnyDraw()
+        actionBuffer.emitShared(id, eventName, payload)
+    end
+
+    return actions
 end
 
 return uiActions

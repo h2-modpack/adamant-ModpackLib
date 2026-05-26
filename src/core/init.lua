@@ -68,13 +68,14 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
     coordinator = coordinator,
     hostRegistry = hostRegistry,
 })
-local integrationsBundle = import('core/integrations/00_init.lua', nil, {
+local sharedBundle = import('core/shared/00_init.lua', nil, {
     logging = logging,
-    storage = storage,
-    integrationRegistry = registry.integrations,
+    sharedRegistry = registry.shared,
     hostRegistry = hostRegistry,
+    values = values,
+    phaseGate = phaseGate,
 })
-local integrations = integrationsBundle.service
+local shared = sharedBundle.service
 
 local hooksBundle = import('core/hooks/00_init.lua', nil, {
     modutil = externals.modutil,
@@ -138,7 +139,7 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
 local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
     fallbackUi = fallbackUiBundle.author,
     hooks = hooksBundle.author,
-    integrations = integrationsBundle.author,
+    shared = sharedBundle.author,
     mutation = mutationBundle.author,
     overlays = overlaysBundle.author,
 })
@@ -147,8 +148,9 @@ local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     definition = definition,
     hostRegistry = hostRegistry,
     moduleState = moduleState,
-    integrations = integrations,
+    shared = shared,
     cache = cacheBundle.service,
+    sharedData = sharedBundle.data,
     hooks = hooks,
     overlays = overlays,
     mutation = mutation,

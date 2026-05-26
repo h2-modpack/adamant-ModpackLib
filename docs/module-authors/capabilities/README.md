@@ -11,7 +11,7 @@ Recommended order:
 3. [HOOKS.md](HOOKS.md)
 4. [MUTATIONS.md](MUTATIONS.md)
 5. [OVERLAYS.md](OVERLAYS.md)
-6. [INTEGRATIONS.md](INTEGRATIONS.md)
+6. [SHARED.md](SHARED.md)
 7. [CACHE.md](CACHE.md)
 
 Use [../../../API.md](../../../API.md) when you need the exact public surface.

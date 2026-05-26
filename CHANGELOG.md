@@ -10,12 +10,10 @@ All notable changes to this project will be documented in this file.
 - Removed old `configKey`, `lifetime`, `runtime`, and `stage` storage declaration compatibility in favor of explicit `persist` and `hash` axes.
 - Lib now injects `Enabled` and `DebugMode` as built-in prepared storage aliases instead of requiring module-authored config defaults.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
-- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw, state, actions, services)` and `drawQuickContent(draw, state, actions, services)`, where `draw` contains `imgui` plus bound `widgets` / `nav`.
+- Module callbacks receive the author host consistently: `host.mutation.patch(function(plan, host, store) ... end)` and `onSettingsCommitted(host, store, commit)`. Draw callbacks now receive `drawTab(draw, state, actions)` and `drawQuickContent(draw, state, actions)`, where `draw` contains `imgui`, bound `widgets` / `nav`, and draw-safe logging helpers.
 - Runtime hooks are now declared through `host.hooks.*` before activation; the old ownerless `lib.hooks.*` registration surface and `createModule({ registerHooks = ... })` path have been removed.
-- Integration providers are now declared with `host.integrations.provide(...)` before activation, and consumers call through `host.integrations.poll(...)`; the old global integration surface has been removed.
-- Integration provider methods now declare scoped `reads` and receive a temporary read-only staged-state scope instead of arbitrary provider API callbacks closing over `store`.
-- Integration providers can now declare events and emit runtime notifications through `host.integrations.emit(...)`; consumers can declare lifecycle-owned listeners with `host.integrations.listen(...)`.
-- Lib now emits the reserved integration event `providerChanged` once after a provider host's module enabled state changes; consumers can listen to it and poll again to invalidate cached provider data.
+- Shared events are now event-only: modules declare lifecycle-owned listeners with `host.shared.listen(...)` and emit runtime notifications through `host.shared.emit(...)`.
+- Removed old provider/polling APIs, scoped reads, reserved `providerChanged` events, and draw-time `services.pollIntegration(...)`; declared shared values are now the supported read-sharing path.
 - Retained module overlays are now declared with `host.overlays.*` before activation; the old `createModule({ registerOverlays = ... })` path has been removed.
 - The global `lib.overlays.*` namespace has been removed; use `host.overlays.*`, `lib.createFrameworkRuntime(...).overlays`, or `lib.createFrameworkRuntime(...).ui` depending on the consumer.
 - The global `lib.createSystem(...)` helper has been removed; Framework owns non-module overlays through `lib.createFrameworkRuntime(...).overlays`, while Lib system scopes remain internal.
@@ -28,9 +26,9 @@ All notable changes to this project will be documented in this file.
 - The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetAll(...)` or draw-scoped `state.resetAll(...)`.
 - Cache is now declared through `createModule({ cache = ... })` and accessed through phase-scoped `store.cache` and `state.cache`; the old global and host cache surfaces have been removed.
 - Added declared persistent cache for flat scalar runtime markers that persist outside managed storage/hash/profile flows.
-- Added declared shared cache for owner-published live read-model projections and cheap runtime/draw reads.
-- Shared cache table writes are copied once and reads return recursive read-only views.
-- Modules can now declare managed cache refs in `createModule({ cache = ... })` and access them through phase-scoped `store.cache` and `state.cache`.
+- Added declared shared values for owner-published live read-model projections and cheap runtime/draw reads.
+- Shared value table writes are copied once and reads return recursive read-only views.
+- Modules can now declare managed cache refs in `createModule({ cache = ... })` and access them through phase-scoped `store.cache`, `state.cache`, `store.shared`, and `state.shared`.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw value widgets now target `StorageField` values from `state.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
 - Draw `state` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetAll(opts?)`; older session-shaped helpers such as `state.view`, `state.table`, `state.field`, and schema access have been removed.
@@ -38,13 +36,13 @@ All notable changes to this project will be documented in this file.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
 - Session and commit action compatibility helpers have been removed; draw code stages transient intent through `actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
-- Draw action handlers now receive `(host, state, value)`, making actions the sanctioned UI-to-runtime command bridge instead of passing draw services into post-draw handlers.
-- Integration polling now skips disabled provider hosts before calling provider methods; scoped integration reads and draw services do not expose enabled-state helpers.
-- Store, draw state, draw actions, draw services, widgets, and nav are now phase-gated at their author-facing surfaces.
+- Draw action handlers now receive `(host, state, value)`, making actions the sanctioned UI-to-runtime command bridge for post-draw handlers.
+- Shared event delivery now skips disabled listener hosts, queues nested emits, and continues after listener failures.
+- Store, draw state, draw actions, widgets, nav, and draw-safe logging are now phase-gated at their author-facing surfaces.
 - Fallback UI now matches Framework module tabs by collapsing module draw content while the module is disabled.
 - Module authors now construct through `lib.createModule(...)` and activate through `host.activate()`; lower-level definition/state/host construction is internal.
-- Cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.
-- Host activation now stages and commits hooks, integrations, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
+- Cache, shared events, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.
+- Host activation now stages and commits hooks, shared events, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
 - `host.hooks.override(...)` accepts function replacements only, matching the host-owned dispatcher model.
 - Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/references/KNOWN_LIMITATIONS.md`.
 - Removed storage-backed runtime-cache compatibility; runtime markers now use declared persistent cache.
@@ -56,7 +54,7 @@ All notable changes to this project will be documented in this file.
 ### Added
 
 - Added `lib.prepareDefinition(...)` as the canonical definition-preparation step before store and host creation.
-- Added a LuaLS public definition file at `src/def.lua` for the Lib module export, storage/session types, module host contract, lifecycle helpers, mutation plans, widgets, nav, hooks, integrations, hashing, logging, and ImGui helpers.
+- Added a LuaLS public definition file at `src/def.lua` for the Lib module export, storage/session types, module host contract, lifecycle helpers, mutation plans, widgets, nav, hooks, shared events, hashing, logging, and ImGui helpers.
 - Added Lib-owned live-host publication and lookup through `lib.getLiveModuleHost(...)`.
 - Added reload-stable ModUtil hook registration through `lib.hooks.Wrap(...)`, `lib.hooks.Override(...)`, and `lib.hooks.Context.Wrap(...)`.
 - Added coordinated pack rebuild callbacks through `lib.coordinator.registerRebuild(...)` and `lib.coordinator.requestRebuild(...)`.
@@ -104,13 +102,13 @@ All notable changes to this project will be documented in this file.
 ### Documentation
 
 - Expanded `API.md` to describe the current public Lib surface.
-- Updated module authoring docs around prepared definitions, Lib-owned host publication, fallback UI, lifecycle behavior, hooks, integrations, widgets, and hash helpers.
+- Updated module authoring docs around prepared definitions, Lib-owned host publication, fallback UI, lifecycle behavior, hooks, shared events, widgets, and hash helpers.
 - Updated hot-reload docs around author-facing module reload support and infrastructure reload limitations.
 - Moved known limitations into Lib docs so shared modpack constraints have one home.
 
 ### Tests
 
-- Expanded test coverage for prepared definitions, lifecycle validation, stores/sessions, hooks, hashing, logging, mutation plans, nav, widgets, integrations, fallback UI, and host publication.
+- Expanded test coverage for prepared definitions, lifecycle validation, stores/sessions, hooks, hashing, logging, mutation plans, nav, widgets, shared events, fallback UI, and host publication.
 
 ## [1.0.0] - 2026-04-20
 

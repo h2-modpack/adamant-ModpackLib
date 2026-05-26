@@ -25,14 +25,14 @@ function ui.drawQuickContent(draw)
 end
 ```
 
-The current target callback shape separates rendering, staged state, transient
-actions, and draw-safe services:
+The current target callback shape separates rendering, staged state, and
+transient actions:
 
 ```lua
-function ui.drawTab(draw, state, actions, services)
+function ui.drawTab(draw, state, actions)
 end
 
-function ui.drawQuickContent(draw, state, actions, services)
+function ui.drawQuickContent(draw, state, actions)
 end
 ```
 
@@ -67,7 +67,7 @@ Lib creates the context at the host draw boundary for each render call.
 `imgui`, while value widgets receive explicit storage refs from `state`:
 
 ```lua
-function ui.drawTab(draw, state, actions, services)
+function ui.drawTab(draw, state, actions)
     draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Default", "Custom" },
@@ -111,9 +111,9 @@ draw.widgets.checkbox(state.get("FeatureEnabled"), opts)
 ```
 
 This intentionally differs from a `createDraw(...)` factory. `imgui`, staged
-state, actions, and services are live draw-phase surfaces, not static module
-dependencies. They should enter the module at draw time, not be captured during
-module construction.
+state, and actions are live draw-phase surfaces, not static module dependencies.
+They should enter the module at draw time, not be captured during module
+construction.
 
 ## Related CreateModule Boundary Cleanup
 
@@ -236,7 +236,7 @@ end
 After:
 
 ```lua
-function ui.drawTab(draw, state, actions, services)
+function ui.drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
@@ -254,7 +254,7 @@ components.draw(imgui, session, host)
 After:
 
 ```lua
-components.draw(draw, state, actions, services)
+components.draw(draw, state, actions)
 ```
 
 3. Keep static module dependencies in normal module binding.
@@ -284,10 +284,9 @@ hot reloads, or module activation boundaries.
 - Use `draw.widgets.*` for Lib widgets that bind to `imgui` and staged `state`.
 - Use `draw.nav.*` for Lib navigation helpers that bind to `imgui`.
 - Use `draw.imgui` for raw ImGui layout calls.
+- Use `draw.log(...)` and `draw.logIf(...)` for draw-safe module logging.
 - Use `state` for direct staged-state access.
 - Use `actions` for transient draw intent.
-- Use `services` for draw-safe module services such as logging, enabled
-  checks, or integration queries. `draw.host` is no longer available.
 - Keep static module data, catalogs, and action services in `ui.bind(...)`.
 - Framework `drawPackQuickContent(ctx)` still uses its own coordinator/framework
   context object and is intentionally not part of this draw-object rename. Audit

@@ -8,15 +8,14 @@ related cache shape is still open.
 Draw callbacks currently receive:
 
 ```lua
-drawTab(draw, state, actions, services)
+drawTab(draw, state, actions)
 ```
 
 `actions` stages transient UI intent during draw. Pending action handlers run
 after draw and before staged state flush.
 
-Action handlers intentionally receive the module `host` instead of draw
-`services`, because some UI actions are commands that intentionally cross from
-UI into runtime behavior.
+Action handlers intentionally receive the module `host` because some UI actions
+are commands that intentionally cross from UI into runtime behavior.
 
 Example:
 
@@ -60,7 +59,7 @@ onSettingsCommitted(host, store, commit) runs
   code.
 - If command logic needs committed storage after flush, use
   `onSettingsCommitted(host, store, commit)` instead.
-- `services` should not be passed to action handlers. Services is a draw-safe
+- the draw object should not be passed to action handlers; draw is a render
   surface, while actions are command execution.
 
 ## Example
@@ -116,15 +115,14 @@ The broader cache-access shape is still under discussion. In particular:
 
 - persistent cache should not become directly draw-writable
 - current-run cache should remain runtime/logic scratch state
-- shared cache remains the likely draw-safe read projection
+- shared data remains the likely draw-safe read projection
 - future cache declarations may move cache refs under data access objects
-- `services.cache.*` was a migration bridge, not a permanent data-access
-  surface; draw-safe cache refs should come from `state.cache`
+- draw-safe cache refs should come from `state.cache`
 
 Do not treat this note as a full cache-v2 design.
 
 ## Completed Shape
 
 - Draw action handler invocation is `(host, state, value)`.
-- `services` is not passed to action handlers.
+- `draw` is not passed to action handlers.
 - `commit.actions` is unchanged; it remains the post-flush observation path.

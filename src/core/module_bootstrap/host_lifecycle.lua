@@ -2,7 +2,6 @@ local deps = ...
 local logging = deps.logging
 local mutation = deps.mutation
 local moduleState = deps.moduleState
-local integrations = deps.integrations
 
 local PACK_RESTORE_SNAPSHOT_ALIAS = "AdamantFramework_PackRestoreSnapshot"
 local PACK_RESTORE_NONE = 0
@@ -39,11 +38,8 @@ local function notifySettingsCommitted(def, commitNotifier, commitContext)
     return true, nil
 end
 
-local function notifyCommittedAndProviderChanged(host, def, commitNotifier, commitContext, previousEffective, nextEffective)
+local function notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
     local ok, err = notifySettingsCommitted(def, commitNotifier, commitContext)
-    if ok and previousEffective ~= nextEffective then
-        integrations.notifyProviderChangedForHost(host, nextEffective)
-    end
     return ok, err
 end
 
@@ -113,13 +109,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         and hadConfigChanges
 
     if not shouldSyncMutation then
-        return notifyCommittedAndProviderChanged(
-            host,
-            def,
-            commitNotifier,
-            commitContext,
-            previousEffective,
-            nextEffective)
+        return notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
     end
 
     local ok
@@ -132,13 +122,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         ok, err = true, nil
     end
     if ok then
-        return notifyCommittedAndProviderChanged(
-            host,
-            def,
-            commitNotifier,
-            commitContext,
-            previousEffective,
-            nextEffective)
+        return notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
     end
 
     return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)

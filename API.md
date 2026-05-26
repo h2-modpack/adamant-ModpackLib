@@ -8,7 +8,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `host.fallbackUi.*`
 - `host.hooks.*`
 - `host.overlays.*`
-- `host.integrations.*`
+- `host.shared.*`
 - `host.mutation.*`
 
 Framework-owned live-host discovery, hash/profile, overlay, UI suppression, and
@@ -37,7 +37,7 @@ Optional module callbacks passed to module/host creation:
 Host-owned capabilities can also be declared on the returned author host before
 activation:
 - `host.hooks.*`
-- `host.integrations.*`
+- `host.shared.*`
 - `host.mutation.*`
 - `host.overlays.*`
 - `host.fallbackUi.*`
@@ -49,13 +49,13 @@ That host owns:
 
 Module behavior is hosted through Lib's live host registry.
 
-## `host.integrations`
+## `host.shared`
 
-Small registry for optional cross-module cooperation. Modules can publish
-domain-named integration methods and events, and consumers can use them when
-present while remaining fully functional when absent.
+Small registry for optional cross-module cooperation. Shared has two surfaces:
+event signals and owner-published read models. Both are declared after
+`lib.createModule(...)` returns and before `host.activate()`.
 
-Typical provider declaration before activation:
+Typical listener declaration before activation:
 
 ```lua
 local host, store, err = lib.createModule({
@@ -68,67 +68,115 @@ local host, store, err = lib.createModule({
 })
 if not host then return end
 
-host.integrations.provide("run-director.god-availability", {
-    providerId = MODULE_ID,
-    methods = {
-        isActive = {
-            handler = function()
-                return true
-            end,
-        },
-        isAvailable = {
-            reads = { "ZeusEnabled" },
-            handler = function(scope, godKey)
-                if godKey == "Zeus" then
-                    return scope.read("ZeusEnabled") ~= false
-                end
-                return true
-            end,
-        },
-    },
-    events = {
-        availabilityChanged = true,
+host.shared.listen("run-director.route-state", "routeChanged", function(payload)
+    host.log("route changed: %s", tostring(payload.route))
+end)
+
+host.shared.data.owner("GodAvailability", {
+    id = "run-director.god-availability",
+    default = {
+        active = false,
+        available = {},
     },
 })
 
 host.activate()
 ```
 
-`providerId` is the public provider identity returned to integration consumers.
-Module lifecycle refresh is scoped separately by the module owner id, which Lib
-derives from `pluginGuid`; provider ids do not need to match the module's
-`pluginGuid`.
-
-Typical consumer:
+Typical emitter:
 
 ```lua
-local active = host.integrations.poll("run-director.god-availability", "isActive", false)
-if active then
-    return host.integrations.poll("run-director.god-availability", "isAvailable", true, godKey) ~= false
-end
-return true
+host.shared.emit("run-director.route-state", "routeChanged", {
+    route = "Apollo",
+})
+```
+
+Draw callbacks emit through the post-draw action bridge:
+
+```lua
+actions.emit("run-director.route-state", "routeChanged", {
+    route = state.read("Route"),
+})
 ```
 
 Surface:
-- `host.integrations.provide(id, { providerId = providerId, methods = methods })`
-- `host.integrations.poll(id, methodName, fallback, ...)`
-- `host.integrations.listen(id, eventName, callback)`
-- `host.integrations.emit(id, eventName, payload)`
+- `host.shared.data.owner(name, { id = string, default? = value })`
+- `host.shared.data.reader(name, { id = string, fallback? = value })`
+- `host.shared.listen(id, eventName, callback)`
+- `host.shared.emit(id, eventName, payload)`
+- `actions.emit(id, eventName, payload)` from draw callbacks
 
 Rules:
-- integration ids should describe domain behavior, not consumer names
-- absence means the optional enhancement is inactive
-- provider methods receive a scoped read object, not the provider host or store
-- provider methods can only read aliases listed in that method's `reads`
-- provider read scopes use the provider module's staged state and close after the method returns
-- `reads` must be an array of aliases; declaring a table root allows read-only table access, while packed child reads must declare the child alias
-- consumers should prefer `host.integrations.poll(...)` so Lib resolves active provider behavior at call time
-- when multiple providers exist, `poll(...)` uses the most recently activated enabled provider
-- provider events must be declared in the provider spec before they can be emitted
-- `providerChanged` is a Lib-reserved event emitted once after a provider host's module enabled state changes
+- Shared ids should describe domain behavior, not consumer names
+- shared data declarations do not participate in the module structural fingerprint
+- shared data writes go through `store.shared.*` or `state.shared.*`
+- shared data reads return fallback when no active publisher exists
+- absence means the optional notification has no listeners
 - events are runtime notifications; listener order is unspecified and nested emits are queued
-- listener callbacks receive `payload, providerId`
-- event payloads are not durable state; consumers should poll for current values when needed
+- listener callbacks receive `payload`
+- disabled listener hosts do not receive events
+- disabled emitter hosts do not emit events
+- one failing listener logs and does not stop remaining listeners
+- events are not replayed to late listeners
+- event payloads should be small signals, not durable shared state
+
+Use shared data for synchronous read-sharing and shared events for
+notifications and coordination signals.
+
+Shared data owner:
+
+```lua
+host.shared.data.owner("GodAvailability", {
+    id = "run-director.god-availability",
+    default = {
+        active = false,
+        available = {},
+    },
+})
+
+store.shared.set("GodAvailability", {
+    active = true,
+    available = {
+        Apollo = false,
+    },
+})
+```
+
+Shared data reader:
+
+```lua
+host.shared.data.reader("GodAvailability", {
+    id = "run-director.god-availability",
+    fallback = {
+        active = false,
+        available = {},
+    },
+})
+
+if state.shared.read("GodAvailability").available.Apollo ~= false then
+    -- draw available UI
+end
+```
+
+Shared data surface:
+- `store.shared.read(name)`
+- `store.shared.set(name, value)` for owner declarations
+- `store.shared.clear(name)` for owner declarations
+- `state.shared.read(name)`
+- `state.shared.set(name, value)` for owner declarations
+- `state.shared.clear(name)` for owner declarations
+
+Shared data rules:
+- owner and reader access is declared through `host.shared.data.*` before activation
+- only the publishing module can write or clear a shared data id
+- writes update live memory immediately; there is no flush or persistence
+- reads return the fallback when no active publisher exists or the publisher is disabled
+- values may be scalars or tables with string/number keys
+- table writes are copied once and returned as cached recursive read-only views
+
+For table-shaped shared data, prefer a small domain helper that hides the
+nested table layout and exposes semantic reads. The helper can accept either
+`store` or draw `state`, because both expose `source.shared.read(...)`.
 
 ## Cache
 
@@ -156,12 +204,6 @@ local host, store = lib.createModule({
                 return {}
             end,
         },
-        ApolloAvailable = {
-            domain = "shared",
-            id = "run-director.god-availability.Apollo",
-            access = "reader",
-            fallback = true,
-        },
     },
     drawTab = ui.drawTab,
 })
@@ -180,9 +222,7 @@ runScratch.seen = true
 Draw code reads draw-safe declared cache refs through `state.cache`:
 
 ```lua
-if state.cache.shared.read("ApolloAvailable") then
-    -- draw available UI
-end
+local ready = state.cache.persistent.read("RecordingReady")
 ```
 
 Rules:
@@ -192,9 +232,6 @@ Rules:
 - `state.cache` is valid only during draw callbacks
 - persistent cache is writable from `store.cache`; draw access is read-only
 - current-run cache is only available from `store.cache`
-- shared owner declarations can write through `store.cache.shared.set(...)` or
-  `state.cache.shared.set(...)`
-- shared reader declarations are read-only
 
 Current run cache:
 
@@ -235,48 +272,6 @@ Rules:
 - persistent cache is not staged, hashed, profiled, or reset by Lib
 - draw access is read-only
 
-Shared live cache:
-
-```lua
-store.cache.shared.set("GodAvailability", {
-    active = true,
-    available = {
-        Apollo = false,
-    },
-})
-```
-
-Draw consumers read declared shared refs through `state.cache`:
-
-```lua
-if state.cache.shared.read("GodAvailability").available.Apollo ~= false then
-    -- draw available UI
-end
-```
-
-Surface:
-- `store.cache.shared.read(name)`
-- `store.cache.shared.set(name, value)` for owner declarations
-- `store.cache.shared.clear(name)` for owner declarations
-- `state.cache.shared.read(name)`
-- `state.cache.shared.set(name, value)` for owner declarations
-- `state.cache.shared.clear(name)` for owner declarations
-
-Rules:
-- owner and reader access is declared in `createModule({ cache = ... })`
-- only the publishing module can write or clear a shared cache id
-- writes update live memory immediately; there is no flush or persistence
-- reads return the fallback when no active publisher exists or the publisher is disabled
-- values may be scalars or tables
-- use integrations for cross-module behavior calls; use shared cache for public live read models
-- table writes are copied once and returned as cached recursive read-only views
-
-For table-shaped shared cache, prefer a small domain helper that hides the
-nested table layout and exposes semantic reads. The helper can accept either
-`store` or draw `state`, because both expose `source.cache.shared.read(...)`.
-For repeated inner reads in one function, cache the returned snapshot or inner
-table in a local before checking multiple fields.
-
 ## Store And State
 
 ### `lib.createModule(opts)`
@@ -284,7 +279,7 @@ table in a local before checking multiple fields.
 Canonical safe module-construction helper.
 `pluginGuid` is the stable runtime identity. Lib owns the internal per-plugin
 runtime state used for structural hot-reload tracking, hook refresh ownership,
-overlay ownership, integration refresh, cache, mutation runtime, and
+overlay ownership, shared event refresh, cache, mutation runtime, and
 live-host lookup.
 
 ```lua
@@ -318,15 +313,15 @@ Returns:
 - `nil, nil, err` when construction fails
 
 `createModule(...)` intentionally does not return the prepared definition or
-raw staged state. Draw callbacks receive four draw-phase arguments:
-`draw`, staged `state`, draw `actions`, and draw-safe `services`.
-`draw` owns `imgui`, `widgets`, and `nav`; the other arguments own staged UI state,
-deferred UI intent, and narrow draw-safe services.
+raw staged state. Draw callbacks receive three draw-phase arguments:
+`draw`, staged `state`, and draw `actions`.
+`draw` owns `imgui`, `widgets`, `nav`, and draw-safe logging helpers; the other
+arguments own staged UI state and deferred UI intent.
 
 Declare hooks on `host.hooks.*` before `host.activate()`. Runtime helper
 files should receive the needed `store` or narrowed read/access closures from
-the module's hook-declaration code; draw/UI paths should use the `state`,
-`actions`, and `services` arguments passed to draw callbacks.
+the module's hook-declaration code; draw/UI paths should use the `draw`,
+`state`, and `actions` arguments passed to draw callbacks.
 
 The failure path logs `host.create_failed` and does not activate or publish a
 host. Use this at pack orchestration boundaries when one invalid module should
@@ -489,7 +484,7 @@ restricted author-facing `state` view with:
 - `resetAll(opts?)`
 
 Draw action staging is not exposed on `stagedState`; use
-`actions.get(actionKey)` instead.
+`actions.trigger(actionKey, value?)` or `actions.get(actionKey)` instead.
 
 `stagedState.get(alias)` returns a storage object: scalar and packed aliases return
 `StorageField`; table roots return staged table handles. `state.get(alias)` is
@@ -888,28 +883,24 @@ This is infrastructure API for Framework discovery. Normal module code should
 keep the author host returned by `lib.createModule(...)` and use
 `store` and draw callback arguments for state access.
 
-## Draw Services
+## Draw Logging
 
-Draw-safe module services are available through the draw callback `services`
-argument.
+Draw-safe module logging is available on the draw callback `draw` argument.
 
 Built-ins:
-- `services.log(fmt, ...)`
-- `services.logIf(fmt, ...)`
-- `services.pollIntegration(id, methodName, fallback, ...)`
+- `draw.log(fmt, ...)`
+- `draw.logIf(fmt, ...)`
 
-These helpers are the sanctioned draw-time access path for narrow module
-services. `draw.host` is not available in module UI. `services` is
-intentionally not a full host facade: it does not expose registration,
-activation, lifecycle mutation, storage mutation, hook declaration, overlay
-declaration, or mutation declaration APIs.
+These helpers are the sanctioned draw-time logging path. `draw.host` is not
+available in module UI, and draw callbacks do not receive the author host.
 
 ## Draw Actions
 
 Draw callbacks expose the `actions` argument for transient UI intent:
 
 - `actions.get(actionKey)`
-- `actions.hasAny()`
+- `actions.trigger(actionKey, value?)`
+- `actions.emit(id, eventName, payload?)`
 
 `actions.get(actionKey)` returns a ref:
 
@@ -919,6 +910,9 @@ Draw callbacks expose the `actions` argument for transient UI intent:
 - `action:has()`
 
 Action refs are object handles; call their methods with colon syntax.
+`actions.trigger(actionKey, value?)` is shorthand for staging a declared action;
+when `value` is omitted it stages `true`. `actions.emit(id, eventName, payload?)`
+queues a shared event to emit after the draw callback.
 
 Runtime commit callbacks receive the same action snapshot through
 `commit.actions`:
@@ -932,7 +926,8 @@ Runtime commit callbacks receive the same action snapshot through
 - `action:has()`
 
 The old `session.stageAction(...)` form has been removed. Use
-`actions.get(actionKey):stage(value)` in draw code.
+`actions.trigger(actionKey, value)` in draw code, or `actions.get(actionKey)`
+when a widget needs an action ref.
 
 Declare action handlers on `createModule({ actions = ... })`. Handlers run
 after the draw callback and before staged state flush:
@@ -947,8 +942,7 @@ actions = {
 ```
 
 Handlers receive the author `host` for runtime capabilities, the current draw
-`state` for staged UI data, and the staged action `value`. Draw `services` are
-not passed to action handlers.
+`state` for staged UI data, and the staged action `value`.
 
 ## Draw Widgets
 
@@ -975,7 +969,7 @@ These are direct immediate-mode helpers. `draw.widgets` is bound to the current
 `imgui` for the render call. Value widgets accept `StorageField` refs:
 
 ```lua
-function ui.drawTab(draw, state, actions, services)
+function ui.drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })

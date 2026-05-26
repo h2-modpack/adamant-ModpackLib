@@ -9,7 +9,7 @@ module-authored `owner` tokens.
   `owner`.
 - `pluginGuid` is the stable lookup identity for a module host.
 - The committed host is the managed lifecycle owner for hooks, overlays,
-  integrations, activation metadata, and structural hot-reload comparison.
+  shared events, activation metadata, and structural hot-reload comparison.
 - Mutation runtime is still module-owner scoped because raw game-table edits
   are process-global. For module hosts, that owner id is derived from
   `pluginGuid`.
@@ -78,7 +78,7 @@ ownership, while Framework consumes first-party capability namespaces through
 
 ## Integration Notes
 
-Integration providers are declared with `host.integrations.provide(...)`
-before activation and refreshed by the module's `pluginGuid`. The `providerId`
-inside the registration opts is still the public integration provider identity,
-not the lifecycle owner. It can remain a module/domain id chosen for consumers.
+shared event listeners are declared with `host.shared.listen(...)` before
+activation and refreshed by the module's `pluginGuid`. Listener callbacks
+receive only the event payload; source metadata belongs in the payload contract
+when a domain event needs it.

@@ -17,5 +17,5 @@ Capability guides:
 - [capabilities/HOOKS.md](capabilities/HOOKS.md)
 - [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
-- [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
+- [capabilities/SHARED.md](capabilities/SHARED.md)
 - [capabilities/CACHE.md](capabilities/CACHE.md)

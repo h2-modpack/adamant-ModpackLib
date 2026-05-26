@@ -1,8 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local cache = deps.cache
-local integrations = deps.integrations
+local shared = deps.shared
 local hooks = deps.hooks
 local overlays = deps.overlays
 local mutation = deps.mutation
@@ -122,8 +121,7 @@ function hostActivation.activateOrThrow(host)
     end
 
     local ok, err = pcall(function()
-        addReceipt("sharedCache", cache.shared.install(pluginGuid, record.sharedCachePublications), true)
-        addReceipt("integrations", integrations.installForHost(host), true)
+        addReceipt("shared", shared.installForHost(host), true)
         addReceipt("hooks", hooks.installForHost(host), true)
         addReceipt("overlays", overlays.installForHost(host, authorHost, store), true)
 

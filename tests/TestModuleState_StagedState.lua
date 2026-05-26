@@ -577,12 +577,11 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
     end)
 
     inDraw(self.harness, function()
-        lu.assertFalse(actions.hasAny())
+        lu.assertFalse(actionBuffer.hasAny())
         lu.assertFalse(recording:has())
 
-        recording:stage({ kind = "start" })
+        actions.trigger("recording", { kind = "start" })
 
-        lu.assertTrue(actions.hasAny())
         lu.assertTrue(actionBuffer.hasAny())
         lu.assertFalse(stagedState.isDirty())
         lu.assertTrue(recording:has())
@@ -590,7 +589,7 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
 
         recording:clear()
 
-        lu.assertFalse(actions.hasAny())
+        lu.assertFalse(actionBuffer.hasAny())
     end)
 
     lu.assertFalse(stagedState.isDirty())

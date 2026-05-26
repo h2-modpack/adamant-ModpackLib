@@ -101,6 +101,7 @@ local lib = {}
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
 ---@field cache AdamantModpackLib.StoreCache
+---@field shared AdamantModpackLib.SharedData
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
 ---Internal trusted staged state. Module authors receive `DrawState` during draw callbacks.
@@ -125,6 +126,7 @@ local lib = {}
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field cache AdamantModpackLib.DrawStateCache
+---@field shared AdamantModpackLib.SharedData
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
@@ -132,7 +134,8 @@ local lib = {}
 ---Draw-phase transient action surface. Methods and returned refs are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
----@field hasAny fun(): boolean
+---@field trigger fun(actionKey: string, value?: any) Stage a declared action. Omitted value stages `true`.
+---@field emit fun(id: string, eventName: string, payload?: any) Queue a shared event to emit after the draw callback.
 
 ---Draw-phase action ref. Use colon syntax; methods are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawActionRef
@@ -155,7 +158,7 @@ local lib = {}
 
 ---Module-facing host facade. Declare host-owned capabilities before activation; declaration namespaces reject after activation.
 ---@class AdamantModpackLib.AuthorHost
----Activates module hooks, integrations, live-host registration, and initial runtime sync.
+---Activates module hooks, shared events/values, live-host registration, and initial runtime sync.
 ---Call once after construction.
 ---@field activate fun(): boolean, string? Safely activates the host and returns an error instead of throwing.
 ---@field isEnabled fun(): boolean
@@ -167,15 +170,9 @@ local lib = {}
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line when DebugMode is enabled.
 ---@field fallbackUi AdamantModpackLib.AuthorFallbackUi
 ---@field hooks AdamantModpackLib.AuthorHooks
----@field integrations AdamantModpackLib.AuthorIntegrations
+---@field shared AdamantModpackLib.AuthorShared
 ---@field mutation AdamantModpackLib.AuthorMutation
 ---@field overlays AdamantModpackLib.RetainedOverlayRegistrar
-
----Draw-phase service surface. Methods are valid only during draw callbacks.
----@class AdamantModpackLib.DrawServices
----@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
----@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
----@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Poll a registered integration method.
 
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
@@ -226,25 +223,22 @@ local lib = {}
 ---@field override fun(path: string, keyOrReplacement: string|fun(...: any): any, maybeReplacement?: fun(...: any): any)
 ---@field contextWrap fun(path: string, keyOrContext: string|fun(...: any): any, maybeContext?: fun(...: any): any)
 
----@class AdamantModpackLib.AuthorIntegrationRegistration
----@field providerId string Public provider identity returned to consumers.
----@field methods table<string, AdamantModpackLib.AuthorIntegrationMethod> Provider methods exposed to consumers.
----@field events table<string, true>? Provider events this integration may emit. `providerChanged` is reserved by Lib.
-
----@class AdamantModpackLib.AuthorIntegrationMethod
----@field reads string[]? Storage aliases this provider method may read from the provider's staged state.
----@field handler fun(scope: AdamantModpackLib.IntegrationReadScope, ...): any Provider method implementation.
-
----@class AdamantModpackLib.IntegrationReadScope
----@field read fun(alias: string, ...): any Read a declared alias from the provider's staged state.
----@field get fun(alias: string): AdamantModpackLib.StorageFieldReadOnly|AdamantModpackLib.StorageTableReadOnly|nil
----Get a declared read-only storage ref.
-
----@class AdamantModpackLib.AuthorIntegrations
----@field provide fun(id: string, opts: AdamantModpackLib.AuthorIntegrationRegistration): table
----@field poll fun(id: string, methodName: string, fallback: any, ...): any, string?
----@field listen fun(id: string, eventName: string, callback: fun(payload: any, providerId: string)): table
+---@class AdamantModpackLib.AuthorShared
+---@field data AdamantModpackLib.AuthorSharedData
+---@field listen fun(id: string, eventName: string, callback: fun(payload: any)): table
 ---@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
+
+---@class AdamantModpackLib.AuthorSharedData
+---@field owner fun(name: string, opts: AdamantModpackLib.SharedDataOwnerDeclaration): boolean
+---@field reader fun(name: string, opts: AdamantModpackLib.SharedDataReaderDeclaration): boolean
+
+---@class AdamantModpackLib.SharedDataOwnerDeclaration
+---@field id string
+---@field default? boolean|number|string|table
+
+---@class AdamantModpackLib.SharedDataReaderDeclaration
+---@field id string
+---@field fallback? boolean|number|string|table
 
 ---@class AdamantModpackLib.AuthorMutation
 ---@field patch fun(callback: fun(
@@ -263,33 +257,17 @@ local lib = {}
 ---@field key string
 ---@field factory? fun(): table
 
----@class AdamantModpackLib.CacheDeclarationSharedOwner
----@field domain "shared"
----@field id string
----@field access "owner"
----@field default? boolean|number|string|table
-
----@class AdamantModpackLib.CacheDeclarationSharedReader
----@field domain "shared"
----@field id string
----@field access "reader"
----@field fallback? boolean|number|string|table
-
 ---@alias AdamantModpackLib.CacheDeclaration
 ---| AdamantModpackLib.CacheDeclarationPersistent
 ---| AdamantModpackLib.CacheDeclarationCurrentRun
----| AdamantModpackLib.CacheDeclarationSharedOwner
----| AdamantModpackLib.CacheDeclarationSharedReader
 ---@alias AdamantModpackLib.CacheDeclarationMap table<string, AdamantModpackLib.CacheDeclaration>
 
 ---@class AdamantModpackLib.StoreCache
 ---@field persistent AdamantModpackLib.StorePersistentCache
 ---@field currentRun AdamantModpackLib.StoreCurrentRunCache
----@field shared AdamantModpackLib.StoreSharedCache
 
 ---@class AdamantModpackLib.DrawStateCache
 ---@field persistent AdamantModpackLib.DrawPersistentCache
----@field shared AdamantModpackLib.DrawSharedCache
 
 ---@class AdamantModpackLib.StorePersistentCache
 ---@field read fun(name: string): boolean|number|string?
@@ -303,12 +281,7 @@ local lib = {}
 ---@field get fun(name: string): table?
 ---@field clear fun(name: string): boolean
 
----@class AdamantModpackLib.StoreSharedCache
----@field read fun(name: string): boolean|number|string|table?
----@field set fun(name: string, value: boolean|number|string|table): boolean
----@field clear fun(name: string): boolean
-
----@class AdamantModpackLib.DrawSharedCache
+---@class AdamantModpackLib.SharedData
 ---@field read fun(name: string): boolean|number|string|table?
 ---@field set fun(name: string, value: boolean|number|string|table): boolean
 ---@field clear fun(name: string): boolean
@@ -360,14 +333,12 @@ local lib = {}
 ---@field drawTab fun(
 ---    draw: AdamantModpackLib.DrawContext,
 ---    state: AdamantModpackLib.DrawState,
----    actions: AdamantModpackLib.DrawActions,
----    services: AdamantModpackLib.DrawServices
+---    actions: AdamantModpackLib.DrawActions
 ---)
 ---@field drawQuickContent? fun(
 ---    draw: AdamantModpackLib.DrawContext,
 ---    state: AdamantModpackLib.DrawState,
----    actions: AdamantModpackLib.DrawActions,
----    services: AdamantModpackLib.DrawServices
+---    actions: AdamantModpackLib.DrawActions
 ---)
 
 ---Draw-phase immediate UI surface. `widgets` and `nav` methods require an active draw callback; `imgui` is the raw environment ImGui table.
@@ -375,6 +346,8 @@ local lib = {}
 ---@field imgui table Raw ImGui backend table for custom layout and controls.
 ---@field widgets AdamantModpackLib.DrawWidgetsApi
 ---@field nav AdamantModpackLib.DrawNavApi
+---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
+---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 
 ---@class AdamantModpackLib.ModuleHost
 ---@field getHostId fun(): string

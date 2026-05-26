@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local cache = deps.cache
+local sharedData = deps.sharedData
 local moduleState = deps.moduleState
 local overlays = deps.overlays
 local mutation = deps.mutation
@@ -13,25 +14,19 @@ local moduleHost = {
     prepareDefinition = definition.prepareDefinition,
 }
 local phaseGate = deps.phaseGate
-local uiHost = import('core/module_bootstrap/ui/ui_host.lua', nil, {
-    phaseGate = phaseGate,
-})
 local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
     uiDraw = uiDraw,
     moduleState = moduleState,
-    uiHost = uiHost,
     phaseGate = phaseGate,
 })
 local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
     logging = logging,
     mutation = mutation,
     moduleState = moduleState,
-    integrations = deps.integrations,
 })
 local hostActivation = import('core/module_bootstrap/host_activation.lua', nil, {
     logging = logging,
-    cache = cache,
-    integrations = deps.integrations,
+    shared = deps.shared,
     hooks = deps.hooks,
     overlays = overlays,
     mutation = mutation,
@@ -73,28 +68,26 @@ end
 ---@field stagedState StagedState
 ---@field cacheStore PersistentCacheStore|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
----@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)
----@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)|nil
+---@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions)
+---@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions)|nil
 
 ---@class DrawContext
 ---@field imgui table
 ---@field widgets DrawWidgets
 ---@field nav DrawNav
+---@field log fun(fmt: string, ...): nil
+---@field logIf fun(fmt: string, ...): nil
 
 ---@class DrawActions
 ---@field get fun(actionKey: string): DrawActionRef
----@field hasAny fun(): boolean
+---@field trigger fun(actionKey: string, value: any|nil)
+---@field emit fun(id: string, eventName: string, payload: any)
 
 ---@class DrawActionRef
 ---@field stage fun(self: DrawActionRef, value: any)
 ---@field read fun(self: DrawActionRef): any
 ---@field clear fun(self: DrawActionRef)
 ---@field has fun(self: DrawActionRef): boolean
-
----@class DrawServices
----@field log fun(fmt: string, ...): nil
----@field logIf fun(fmt: string, ...): nil
----@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
 
 ---@class ModuleHost
 ---@field getHostId fun(): string
@@ -364,13 +357,11 @@ function moduleHost.create(opts)
     local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
 
     function host.log(fmt, ...)
-        print(logging.formatLogMessage(logPrefix, fmt, ...))
+        logging.printWithPrefix(logPrefix, fmt, ...)
     end
 
     function host.logIf(fmt, ...)
-        if persistentState.read("DebugMode") == true then
-            host.log(fmt, ...)
-        end
+        logging.printWithPrefixIf(persistentState.read("DebugMode") == true, logPrefix, fmt, ...)
     end
 
     function host.applyMutation()
@@ -403,7 +394,6 @@ function moduleHost.create(opts)
         activated = false,
     }
     hostRegistry.setRecord(host, record)
-    cache.data.stageSharedOwnerPublications(record, host, def)
 
     store = moduleState.createStore(persistentState, cache.data.create({
         definition = def,
@@ -414,6 +404,11 @@ function moduleHost.create(opts)
         persistentRefs = record.persistentCacheRefs,
         phase = "runtime",
         source = "store.cache",
+    }), sharedData.create({
+        host = host,
+        record = record,
+        phase = "runtime",
+        source = "store.shared",
     }))
     record.store = store
 
@@ -432,8 +427,18 @@ function moduleHost.create(opts)
             phase = "draw",
             source = "state.cache",
         }),
+        shared = sharedData.create({
+            host = host,
+            record = record,
+            phase = "draw",
+            source = "state.shared",
+        }),
         actionBuffer = actionBuffer,
         authorHost = authorHost,
+        logPrefix = logPrefix,
+        isDebugEnabled = function()
+            return persistentState.read("DebugMode") == true
+        end,
     })
 
     function host.drawTab()

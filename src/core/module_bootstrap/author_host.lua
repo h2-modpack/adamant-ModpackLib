@@ -2,7 +2,7 @@ local deps = ...
 
 local fallbackUi = deps.fallbackUi
 local hooks = deps.hooks
-local integrations = deps.integrations
+local shared = deps.shared
 local mutation = deps.mutation
 local overlays = deps.overlays
 
@@ -18,7 +18,7 @@ local authorHost = {}
 ---@field logIf fun(fmt: string, ...): nil
 ---@field fallbackUi AuthorFallbackUi
 ---@field hooks AuthorHooks
----@field integrations AuthorIntegrations
+---@field shared AuthorShared
 ---@field mutation AuthorMutation
 ---@field overlays AuthorOverlays
 ---@field activate fun(): boolean, string|nil
@@ -28,24 +28,14 @@ local authorHost = {}
 ---@field override fun(path: string, keyOrReplacement: string|function, maybeReplacement: function|nil): nil
 ---@field contextWrap fun(path: string, keyOrContext: string|function, maybeContext: function|nil): nil
 
----@class AuthorIntegrationRegistration
----@field providerId string
----@field methods table<string, AuthorIntegrationMethod>
----@field events table<string, true>|nil
-
----@class AuthorIntegrationMethod
----@field reads string[]|nil
----@field handler fun(scope: IntegrationReadScope, ...): any
-
----@class IntegrationReadScope
----@field read fun(alias: string, ...): any
----@field get fun(alias: string): StorageField|StorageTableStagedState|nil
-
----@class AuthorIntegrations
----@field provide fun(id: string, opts: AuthorIntegrationRegistration): table
----@field poll fun(id: string, methodName: string, fallback: any, ...): any, string|nil
----@field listen fun(id: string, eventName: string, callback: fun(payload: any, providerId: string)): table
+---@class AuthorShared
+---@field data AuthorSharedData
+---@field listen fun(id: string, eventName: string, callback: fun(payload: any)): table
 ---@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
+
+---@class AuthorSharedData
+---@field owner fun(name: string, opts: table): boolean
+---@field reader fun(name: string, opts: table): boolean
 
 ---@class AuthorMutation
 ---@field patch fun(callback: fun(plan: table, host: AuthorHost, store: Store)): nil
@@ -73,7 +63,7 @@ function authorHost.create(host)
         activate = host.activate,
         fallbackUi = fallbackUi.create(host),
         hooks = hooks.create(host),
-        integrations = integrations.create(host),
+        shared = shared.create(host),
         mutation = mutation.create(host),
         overlays = overlays.create(host),
         log = function(fmt, ...)

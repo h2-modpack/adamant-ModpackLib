@@ -114,6 +114,7 @@ local function createBuffer(actionCatalog)
     local catalog = actionCatalog and createActionCatalog(actionCatalog.actions, actionCatalog.order) or nil
     local slots = {}
     local pending = {}
+    local pendingEvents = {}
     local refs = {}
     local buffer = {}
 
@@ -149,7 +150,7 @@ local function createBuffer(actionCatalog)
     end
 
     function buffer.hasAny()
-        return next(slots) ~= nil
+        return next(slots) ~= nil or #pendingEvents > 0
     end
 
     function buffer.captureSnapshot()
@@ -159,6 +160,7 @@ local function createBuffer(actionCatalog)
     function buffer.clearAll()
         slots = {}
         pending = {}
+        pendingEvents = {}
     end
 
     function buffer.getRef(actionKey)
@@ -172,14 +174,29 @@ local function createBuffer(actionCatalog)
         return ref
     end
 
+    function buffer.emitShared(id, eventName, payload)
+        pendingEvents[#pendingEvents + 1] = {
+            id = id,
+            eventName = eventName,
+            payload = CloneValue(payload),
+        }
+    end
+
     function buffer.executePending(host, state)
-        if catalog == nil then
-            return
+        if catalog ~= nil then
+            for _, actionKey in ipairs(catalog.order) do
+                if pending[actionKey] then
+                    pending[actionKey] = nil
+                    catalog.handlers[actionKey](host, state, CloneValue(slots[actionKey]))
+                end
+            end
         end
-        for _, actionKey in ipairs(catalog.order) do
-            if pending[actionKey] then
-                pending[actionKey] = nil
-                catalog.handlers[actionKey](host, state, CloneValue(slots[actionKey]))
+
+        if #pendingEvents > 0 then
+            local events = pendingEvents
+            pendingEvents = {}
+            for _, event in ipairs(events) do
+                host.shared.emit(event.id, event.eventName, event.payload)
             end
         end
     end

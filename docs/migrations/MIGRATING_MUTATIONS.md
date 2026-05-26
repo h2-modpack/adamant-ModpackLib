@@ -119,6 +119,6 @@ Use the lifecycle surface that owns the side effect:
 
 - hooks: `host.hooks.*` declarations before activation
 - overlays: `host.overlays.*` declarations before activation
-- integrations: `host.integrations.provide(...)` before activation
+- shared events: `host.shared.listen(...)` before activation; emit runtime events after activation
 - persistent runtime values: declared persistent cache
 - unrepresented run-data edits: add a patch-plan operation

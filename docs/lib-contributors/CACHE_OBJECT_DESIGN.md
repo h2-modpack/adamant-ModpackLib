@@ -30,17 +30,8 @@ Current-run cache:
 - inaccessible from draw state
 - backed by one Lib-owned root on `CurrentRun`
 
-Shared cache:
-
-- live cross-module read models
-- owner and reader access are declared on module definitions
-- owner writes are immediate and non-persistent
-- reader access is runtime/draw safe
-- tables are copied once on write and exposed as cached recursive read-only
-  views on object reads
-- table-shaped shared cache should be wrapped by module-level semantic helpers
-  when consumers need repeated inner reads, so nested layout does not leak
-  across call sites
+Cross-module read models are not cache domains. They are declared through
+`host.shared.data.*` and implemented by the shared subsystem.
 
 ## Access Shape
 
@@ -60,15 +51,6 @@ cache = {
             return {}
         end,
     },
-    GodAvailability = {
-        domain = "shared",
-        id = "run-director.god-availability",
-        access = "reader",
-        fallback = {
-            active = false,
-            available = {},
-        },
-    },
 }
 ```
 
@@ -80,14 +62,12 @@ local recordingReady = store.cache.persistent.read("RecordingReady")
 
 local runScratch = store.cache.currentRun.get("RunScratch")
 runScratch.seen = true
-
-local availability = store.cache.shared.read("GodAvailability")
 ```
 
 Draw access:
 
 ```lua
-local availability = state.cache.shared.read("GodAvailability")
+local recordingReady = state.cache.persistent.read("RecordingReady")
 ```
 
 ## Implementation Rule
@@ -96,7 +76,6 @@ Keep domain logic in the cache-domain files:
 
 - `persistent_cache.lua`
 - `current_run_cache.lua`
-- `shared_cache.lua`
 
 Keep author-facing phase adapters in:
 
@@ -106,12 +85,9 @@ Do not reintroduce root string dispatchers or host-level cache helpers. If a
 new cache operation is needed, add it to the specific domain facade where the
 phase and ownership rules are obvious.
 
-## Shared Cache Notes
+## Shared Data Boundary
 
-Shared owner declarations are staged during host construction and installed
-during activation. Installation returns a receipt so activation rollback and hot
-reload replacement stay transaction-shaped with the other host capabilities.
-
-Same-frame shared-cache visibility follows host draw order. A write during one
-module's draw may be visible to later modules in that same frame and not visible
-to earlier modules until the next frame.
+Shared data uses the same `store`/draw `state` access model, but its
+declaration and activation lifecycle belong to `core/shared`. Keep that
+boundary intact so cache remains module-local runtime storage and shared remains
+cross-module cooperation.

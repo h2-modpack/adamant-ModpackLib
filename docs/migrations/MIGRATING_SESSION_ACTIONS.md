@@ -16,15 +16,17 @@ actions = {
 }
 ```
 
-Use draw action refs for transient UI intent:
+Use `actions.trigger(...)` for direct transient UI intent:
 
 ```lua
 -- Before
 session.stageAction("ClearCache", { scope = "run" })
 
 -- After
-actions.get("ClearCache"):stage({ scope = "run" })
+actions.trigger("ClearCache", { scope = "run" })
 ```
+
+Use `actions.get(...)` when a widget needs an action ref:
 
 Widget `action` options require action refs now. The widget still performs its
 normal data edit; the action is an optional staged intent for commit observers.

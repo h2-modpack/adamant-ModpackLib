@@ -4,13 +4,13 @@ This guide describes the supported module contract in Lib:
 - namespaced public API
 - managed storage and explicit draw/runtime data surfaces
 - immediate-mode widgets
-- direct draw-function authoring through `drawTab(draw, state, actions, services)`
+- direct draw-function authoring through `drawTab(draw, state, actions)`
 
 ## Lib Surface
 
 Common module author surfaces:
 - `lib.createModule(...)`
-- `host.integrations.*`
+- `host.shared.*`
 
 Fallback UI modules also use:
 - `host.fallbackUi.attachGuiOnce(...)`
@@ -35,7 +35,7 @@ Use focused capability guides for feature-level authoring details:
 - [capabilities/HOOKS.md](capabilities/HOOKS.md)
 - [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
-- [capabilities/INTEGRATIONS.md](capabilities/INTEGRATIONS.md)
+- [capabilities/SHARED.md](capabilities/SHARED.md)
 - [capabilities/CACHE.md](capabilities/CACHE.md)
 
 ## Basic Module Shape
@@ -43,7 +43,7 @@ Use focused capability guides for feature-level authoring details:
 Typical coordinated module:
 
 ```lua
-local function drawTab(draw, state, actions, services)
+local function drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("EnabledFlag"), {
         label = "Enabled",
     })
@@ -55,7 +55,7 @@ local function drawTab(draw, state, actions, services)
     })
 end
 
-local function drawQuickContent(draw, state, actions, services)
+local function drawQuickContent(draw, state, actions)
     draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos" },
@@ -97,10 +97,10 @@ If the module does not register runtime hooks, skip the hook declaration call.
 `lib.createModule(...)` is the supported module construction path.
 For `createModule(...)`, `pluginGuid` is the single stable lifecycle identity.
 Lib owns the internal per-plugin runtime state for structural hot-reload
-tracking, hook refresh ownership, overlays, integrations, mutation runtime, and
+tracking, hook refresh ownership, overlays, shared events, mutation runtime, and
 live-host lookup.
 Call `host.activate()` after construction. That activation step publishes the
-live host, installs declared integrations, registers hooks and overlays, and
+live host, installs declared shared events, registers hooks and overlays, and
 syncs initial runtime behavior.
 `lib.createModule(...)` returns `nil, nil, err` when construction fails, so an
 invalid module can be logged and skipped rather than stopping sibling modules.
@@ -130,10 +130,10 @@ end
 
 Callback argument order follows a stable convention:
 - work surface first when a callback has one, such as `draw` for draw callbacks or `plan` for patch mutation callbacks
-- state/context handles next, using `state`, `actions`, and `services` for draw and `host` for runtime/module context
+- state/context handles next, using `draw`, `state`, and `actions` for draw and `host` for runtime/module context
 - `store` last when persisted runtime values are needed
 
-Examples: `drawTab(draw, state, actions, services)`, local
+Examples: `drawTab(draw, state, actions)`, local
 `registerHooks(host, store)` helpers, local overlay declaration helpers that
 call `host.overlays.*`, and
 `host.mutation.patch(function(plan, host, store) ... end)`.
@@ -174,7 +174,7 @@ Module construction creates two author-facing state handles:
 - draw code receives `state` for staged UI reads and writes
 - runtime callbacks receive `store` for committed gameplay reads
 
-The public surfaces are phase-gated. `state`, `actions`, `services`,
+The public surfaces are phase-gated. `draw`, `state`, `actions`,
 `draw.widgets`, and `draw.nav` are valid only inside the active draw callback.
 `store` is valid for runtime/helper code and rejects access while any module
 draw callback is running.
@@ -218,7 +218,7 @@ Lib widgets cover common controls. Use raw ImGui for custom structure and layout
 
 Framework Quick Setup reads:
 - coordinator `drawPackQuickContent(ctx)`
-- module `drawQuickContent(draw, state, actions, services)`
+- module `drawQuickContent(draw, state, actions)`
 
 `drawQuickContent` is a Framework Quick Setup hook.
 
@@ -263,8 +263,8 @@ Framework behavior:
 - each coordinated module gets its own top-level tab
 - `ModuleHost.drawTab()` is the normal rendering contract
 - `ModuleHost.drawQuickContent()` participates only in Quick Setup
-- authored draw callbacks receive `drawTab(draw, state, actions, services)` and
-  `drawQuickContent(draw, state, actions, services)`
+- authored draw callbacks receive `drawTab(draw, state, actions)` and
+  `drawQuickContent(draw, state, actions)`
 
 ## Fallback UI Modules
 
@@ -375,7 +375,7 @@ local function init()
     host.activate()
 end
 
-function drawTab(draw, state, actions, services)
+function drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
         tooltip = "Turns the feature logic on for this module.",
@@ -399,7 +399,7 @@ function drawTab(draw, state, actions, services)
     })
 end
 
-function drawQuickContent(draw, state, actions, services)
+function drawQuickContent(draw, state, actions)
     draw.widgets.dropdown(state.get("Mode"), {
         label = "Mode",
         values = { "Vanilla", "Chaos", "Custom" },

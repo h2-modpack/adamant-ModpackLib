@@ -3,8 +3,8 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to module draw code:
-- `drawTab(draw, state, actions, services)`
-- optional `drawQuickContent(draw, state, actions, services)`
+- `drawTab(draw, state, actions)`
+- optional `drawQuickContent(draw, state, actions)`
 - `draw.widgets.*`
 - `draw.nav.*`
 - raw ImGui for structure
@@ -12,8 +12,8 @@ This guidance applies to module draw code:
 ## Why Draw Paths Need Care
 
 Module UI is immediate-mode:
-- `drawTab(draw, state, actions, services)`
-- optional `drawQuickContent(draw, state, actions, services)`
+- `drawTab(draw, state, actions)`
+- optional `drawQuickContent(draw, state, actions)`
 
 These run every imgui frame.
 Any unnecessary allocation or repeated C-boundary call inside those paths shows up immediately.

@@ -6,7 +6,7 @@ configuration-heavy mods, or coordinated feature bundles.
 ModpackLib provides the common plumbing that those projects usually need:
 
 - typed storage definitions for module settings
-- draw-phase `state`, `actions`, and `services` for responsive ImGui config screens
+- draw-phase `state` and `actions` for responsive ImGui config screens
 - a persistent `store` model for runtime hook logic
 - profile and hash helpers for saving, loading, and identifying settings
 - mutation helpers for modules that patch run data
@@ -37,7 +37,7 @@ host.activate()
 ```
 
 `pluginGuid` is the stable runtime identity; Lib owns the internal hot-reload
-state for hooks, overlays, integrations, cache, mutation runtime, and
+state for hooks, overlays, shared events, cache, mutation runtime, and
 structural reload tracking. Declare runtime hooks on `host.hooks.*` before activation.
 `host.activate()` registers the live host for coordinated discovery and installs requested fallback UI.
 Every module definition must declare a stable `id` and display `name`; `modpack`
@@ -53,7 +53,7 @@ Module authors:
 - [docs/module-authors/MODULE_AUTHORING.md](docs/module-authors/MODULE_AUTHORING.md)
   Full authoring contract for managed state, lifecycle, hooks, overlays, mutations, and hosting.
 - [docs/module-authors/capabilities/README.md](docs/module-authors/capabilities/README.md)
-  Focused guides for managed state, widgets, hooks, mutations, overlays, integrations, and cache.
+  Focused guides for managed state, widgets, hooks, mutations, overlays, shared events, and cache.
 - [API.md](API.md)
   Public namespaces, functions, and data contracts.
 
@@ -77,7 +77,7 @@ Reference and historical notes:
 
 - `host.hooks`
 - `host.overlays`
-- `host.integrations`
+- `host.shared`
 - `host.fallbackUi`
 
 Common top-level helpers:

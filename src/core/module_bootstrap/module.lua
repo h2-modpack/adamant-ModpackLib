@@ -18,8 +18,8 @@ local modulePublic = {}
 ---@field actions table<string, fun(host: AuthorHost, state: DrawState, value: any)>|nil
 ---@field hashGroupPlan HashGroupPlan|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
----@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)
----@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)|nil
+---@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions)
+---@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions)|nil
 
 local KnownModuleOpts = {
     pluginGuid = true,

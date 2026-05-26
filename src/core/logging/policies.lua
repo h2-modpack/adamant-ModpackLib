@@ -53,15 +53,6 @@ return {
         severity = "error",
         description = "Cache values must match the value shape supported by their cache domain.",
     },
-    ["cache.shared_duplicate_publisher"] = {
-        severity = "error",
-        description = "Shared cache ids can only have one active publishing owner.",
-    },
-    ["cache.shared_not_owner"] = {
-        severity = "error",
-        description = "Shared cache writes require the active publishing owner.",
-    },
-
     ["game_deps.invalid_boundary"] = {
         severity = "error",
         description = "Game dependency reads must match the expected game-global or ROM function shape.",
@@ -133,37 +124,29 @@ return {
         description = "Hook registration requires SGG_Modding-ModUtil to be available.",
     },
 
-    ["integrations.invalid_args"] = {
+    ["shared.invalid_args"] = {
         severity = "error",
-        description = "Integration registry calls require non-empty ids and valid scoped provider methods.",
+        description = "Shared event/value calls require valid ids, event names, listener callbacks, and declarations.",
     },
-    ["integrations.provider_failed"] = {
+    ["shared.invalid_value"] = {
+        severity = "error",
+        description = "Shared values must be scalars or tables with supported read-only view semantics.",
+    },
+    ["shared.duplicate_publisher"] = {
+        severity = "error",
+        description = "Shared value ids can only have one active publishing owner.",
+    },
+    ["shared.not_owner"] = {
+        severity = "error",
+        description = "Shared value writes require the active publishing owner.",
+    },
+    ["shared.listener_failed"] = {
         severity = "warn",
-        description = "An integration provider method failed; Lib returned the caller fallback.",
+        description = "A shared event listener failed; Lib continued delivering the event to other listeners.",
     },
-    ["integrations.listener_failed"] = {
+    ["shared.event_cycle"] = {
         severity = "warn",
-        description = "An integration event listener failed; Lib continued delivering the event to other listeners.",
-    },
-    ["integrations.undeclared_event"] = {
-        severity = "error",
-        description = "Integration providers can only emit events declared by their provider spec.",
-    },
-    ["integrations.event_cycle"] = {
-        severity = "warn",
-        description = "Integration event delivery stopped because queued nested events exceeded the cycle guard.",
-    },
-    ["integrations.closed_scope"] = {
-        severity = "error",
-        description = "Integration read scopes are valid only while their provider method is running.",
-    },
-    ["integrations.undeclared_read"] = {
-        severity = "error",
-        description = "Integration provider methods can only read aliases declared in their read scope.",
-    },
-    ["integrations.nested_scope"] = {
-        severity = "error",
-        description = "Integration provider method scopes cannot be re-entered while active.",
+        description = "Shared event delivery stopped because queued nested events exceeded the cycle guard.",
     },
 
     ["system_scope.invalid_owner"] = {

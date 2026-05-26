@@ -15,7 +15,7 @@ local function createModuleHostHarness(harnessOpts)
         registry = base.registry,
         hostRegistry = base.hostRegistry,
         coordinator = base.coordinator,
-        integrations = base.integrations,
+        shared = base.shared,
         overlays = base.overlays,
         fallbackUi = base.fallbackUi,
         warnings = {},

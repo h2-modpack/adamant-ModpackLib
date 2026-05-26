@@ -87,7 +87,7 @@ The projection context exposes:
 
 Use `ctx.read(alias)` for committed store values. Do not capture UI state in overlay callbacks.
 Projection callbacks are runtime projections, not draw callbacks. They do not
-receive `draw`, `state`, `actions`, or `services`, and should not cache their
+receive `draw`, `state`, or `actions`, and should not cache their
 `ctx` object outside the callback.
 
 ## Visibility And UI Suppression

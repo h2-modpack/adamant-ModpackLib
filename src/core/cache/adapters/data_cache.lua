@@ -103,22 +103,6 @@ local function createCurrentRunRef(opts, declaration)
     }))
 end
 
-local function createSharedRef(opts, declaration)
-    if declaration.access == "owner" then
-        return wrapSetClearRef(
-            opts.phase,
-            service.shared.createDeclaredOwner(opts.record, opts.host, declaration.id, {
-                default = declaration.default,
-            })
-        )
-    end
-
-    return wrapReaderRef(opts.phase, service.shared.createReader(declaration.id, {
-        access = "reader",
-        fallback = declaration.fallback,
-    }))
-end
-
 local function createRef(opts, declaration)
     if declaration.domain == "persistent" then
         return createPersistentRef(opts, createPersistentRawRef(opts, declaration))
@@ -126,22 +110,7 @@ local function createRef(opts, declaration)
     if declaration.domain == "currentRun" then
         return createCurrentRunRef(opts, declaration)
     end
-    if declaration.domain == "shared" then
-        return createSharedRef(opts, declaration)
-    end
     logging.violate("cache.invalid_args", "%s: invalid prepared cache domain", opts.source)
-end
-
-function dataCache.stageSharedOwnerPublications(record, host, definitions)
-    local declarations = definitions and definitions.cache or {}
-    for _, name in ipairs(definitions and definitions._cacheOrder or {}) do
-        local declaration = declarations[name]
-        if declaration and declaration.domain == "shared" and declaration.access == "owner" then
-            service.shared.stagePublication(record, host, declaration.id, {
-                default = declaration.default,
-            })
-        end
-    end
 end
 
 function dataCache.create(opts)
@@ -189,19 +158,6 @@ function dataCache.create(opts)
     }
 
     local currentRun
-    local shared = {
-        read = function(name)
-            return ref(name, "shared"):get()
-        end,
-        set = function(name, value)
-            local cacheRef = ref(name, "shared")
-            return requireMethod(cacheRef, "set", name, source)(value)
-        end,
-        clear = function(name)
-            local cacheRef = ref(name, "shared")
-            return requireMethod(cacheRef, "clear", name, source)()
-        end,
-    }
 
     if opts.phase ~= "draw" then
         persistent.set = function(name, value)
@@ -226,7 +182,6 @@ function dataCache.create(opts)
     return {
         persistent = persistent,
         currentRun = currentRun,
-        shared = shared,
     }
 end
 

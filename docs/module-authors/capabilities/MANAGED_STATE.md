@@ -18,14 +18,14 @@ Use each state surface for one job:
 | Surface | Use it for | Where it appears |
 | --- | --- | --- |
 | `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
-| `state` | staged UI reads/writes | `drawTab(draw, state, actions, services)`, `drawQuickContent(...)` |
+| `state` | staged UI reads/writes | `drawTab(draw, state, actions)`, `drawQuickContent(...)` |
 | `store.cache` | declared runtime cache refs | runtime code and post-commit observers |
 | `state.cache` | declared draw-safe cache refs | draw callbacks |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
 Draw code should stage changes through `state`. Gameplay, hooks, overlays,
-and mutations should read committed values through `store`. Integration provider
-methods receive their own scoped read object over the provider's staged state.
+shared event callbacks, and mutations should read committed values through
+`store`.
 The runtime store exposes `store.get(alias)` for read-only storage objects and
 `store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
 draw `state` exposes the same convenience shape for custom raw ImGui code:
@@ -35,12 +35,12 @@ staged object returned by `state.get(alias)`.
 These surfaces are phase-gated:
 
 - `store` is for runtime code and rejects access while any module draw callback is running.
-- `state`, `actions`, `services`, and refs returned from them are for the active draw callback and reject access outside that callback.
+- `draw`, `state`, `actions`, and refs returned from them are for the active draw callback and reject access outside that callback.
 - `state.cache` is draw-scoped. `store.cache` is runtime-scoped.
 - Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
 
 ```lua
-function ui.drawTab(draw, state, actions, services)
+function ui.drawTab(draw, state, actions)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
@@ -172,7 +172,8 @@ Packed widgets can write child aliases through the same staged state. Lib handle
 Draw callbacks expose action staging through the `actions` argument:
 
 - `actions.get(actionKey)`
-- `actions.hasAny()`
+- `actions.trigger(actionKey, value?)`
+- `actions.emit(id, eventName, payload?)`
 
 `actions.get(actionKey)` returns an action ref:
 
@@ -182,6 +183,9 @@ Draw callbacks expose action staging through the `actions` argument:
 - `action:has()`
 
 Action refs are object handles; call their methods with colon syntax.
+`actions.trigger(actionKey, value?)` stages a declared action directly; omitted
+`value` stages `true`. `actions.emit(id, eventName, payload?)` queues an
+shared event to emit after the draw callback.
 
 Use actions for one-shot UI intent and UI-triggered runtime commands, not for
 ordinary persistent settings. Stage actions through `actions`, not through
@@ -201,7 +205,7 @@ actions = {
 ```
 
 Handlers receive the author `host`, the current draw `state`, and the staged
-action payload. They do not receive draw `services`.
+action payload. They do not receive the draw object.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`.
 This callback runs after staged state commits, so it reads committed values

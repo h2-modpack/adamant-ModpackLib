@@ -85,3 +85,16 @@ function TestPhaseGate:testRunDrawPassesArgsAndReturnValues()
     lu.assertNil(b)
     lu.assertEquals(c, 9)
 end
+
+function TestPhaseGate:testRunDrawWithContextExposesContextOnlyDuringDraw()
+    local observed = nil
+
+    self.phase.runDrawWithContext({ marker = "active" }, function()
+        observed = self.phase.getActiveDrawContext().marker
+    end)
+
+    lu.assertEquals(observed, "active")
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        self.phase.getActiveDrawContext()
+    end)
+end

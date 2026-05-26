@@ -159,31 +159,6 @@ local function ValidateScalar(context, value, optional)
     end
 end
 
-local function ValidateCacheValue(context, value, optional, seen)
-    if value == nil and optional then
-        return
-    end
-
-    local valueType = type(value)
-    if valueType == "boolean" or valueType == "number" or valueType == "string" then
-        return
-    end
-    if valueType ~= "table" then
-        logging.violate("definition.invalid_field_type", "%s must be boolean, number, string, or table", context)
-    end
-
-    seen = seen or {}
-    if seen[value] then
-        return
-    end
-    seen[value] = true
-
-    for key, child in pairs(value) do
-        ValidateCacheValue(context .. " key", key, false, seen)
-        ValidateCacheValue(context, child, false, seen)
-    end
-end
-
 local function ValidateCacheKey(prefix, name)
     if type(name) ~= "string" or name == "" then
         logging.violate("definition.invalid_field_type", "%s: cache declaration keys must be non-empty strings", prefix)
@@ -220,7 +195,6 @@ local function PrepareCache(definition, prefix)
     end
 
     local cacheOrder = {}
-    local ownerSharedIds = {}
     for name, declaration in pairs(cache) do
         ValidateCacheKey(prefix, name)
         if type(declaration) ~= "table" then
@@ -249,40 +223,9 @@ local function PrepareCache(definition, prefix)
                 logging.violate("definition.invalid_field_type", "%s: %s.factory should be function, got %s",
                     prefix, path, type(declaration.factory))
             end
-        elseif domain == "shared" then
-            ValidateKnownCacheKeys(prefix, path, declaration, {
-                domain = true,
-                id = true,
-                access = true,
-                default = true,
-                fallback = true,
-            })
-            ValidateCacheString(prefix, path .. ".id", declaration.id)
-            if declaration.access ~= "owner" and declaration.access ~= "reader" then
-                logging.violate("definition.invalid_field_type",
-                    "%s: %s.access must be 'owner' or 'reader'", prefix, path)
-            end
-            if declaration.access == "owner" then
-                if ownerSharedIds[declaration.id] then
-                    logging.violate("definition.invalid_field_type",
-                        "%s: duplicate owner shared cache id '%s'", prefix, declaration.id)
-                end
-                ownerSharedIds[declaration.id] = true
-                if declaration.fallback ~= nil then
-                    logging.violate("definition.invalid_field_type",
-                        "%s: %s.fallback is only valid for reader shared cache declarations", prefix, path)
-                end
-                ValidateCacheValue(prefix .. ": " .. path .. ".default", declaration.default, true)
-            else
-                if declaration.default ~= nil then
-                    logging.violate("definition.invalid_field_type",
-                        "%s: %s.default is only valid for owner shared cache declarations", prefix, path)
-                end
-                ValidateCacheValue(prefix .. ": " .. path .. ".fallback", declaration.fallback, true)
-            end
         else
             logging.violate("definition.invalid_field_type",
-                "%s: %s.domain must be 'persistent', 'currentRun', or 'shared'", prefix, path)
+                "%s: %s.domain must be 'persistent' or 'currentRun'", prefix, path)
         end
 
         cacheOrder[#cacheOrder + 1] = name

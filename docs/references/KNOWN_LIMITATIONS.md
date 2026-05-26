@@ -64,7 +64,7 @@ Lib host activation is designed to keep the old live host active until the repla
 What this means in practice:
 
 - failed activation preserves the old live host when rollback succeeds
-- Lib-managed hooks, integrations, overlays, patch mutation state, and live-host publication participate in activation cleanup
+- Lib-managed hooks, shared events, overlays, patch mutation state, and live-host publication participate in activation cleanup
 - omitted managed registrations are cleaned up during successful module reload
 - direct module writes to game globals, ROM APIs, ModUtil APIs, or other public environment state are outside Lib rollback
 - system overlays are trusted first-party infrastructure, not a general transactional owner surface
@@ -213,7 +213,7 @@ What would remove it:
 
 ## Trusted Runtime Boundaries Are Not Locally Revalidated
 
-The stack treats established runtime systems as trusted boundaries after startup-time integration has succeeded. This includes the base game function reached through `base(...)`, ROM APIs, ImGui, ModUtil, Chalk, ENVY, and ReLoad.
+The stack treats established runtime systems as trusted boundaries after startup-time runtime binding has succeeded. This includes the base game function reached through `base(...)`, ROM APIs, ImGui, ModUtil, Chalk, ENVY, and ReLoad.
 
 What this means in practice:
 
