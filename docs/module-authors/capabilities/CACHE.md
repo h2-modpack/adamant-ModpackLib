@@ -11,48 +11,97 @@ Three domains exist today:
 - `shared`: owner-published live read models that other modules can read
 
 No cache domain participates in staging, hashes, profiles, or whole-state
-resets. `currentRun` and `persistent` live on the author `host`.
-`shared` also has a draw-services read/write surface so owner UI code can
-publish live projections from draw-visible staged state.
+resets.
+
+Declare managed cache on `createModule({ cache = ... })` and access it through
+`store.cache` or draw `state.cache`.
+
+## Declaration
+
+Declare Lib-managed cache refs next to storage/actions:
+
+```lua
+local host, store = lib.createModule({
+    pluginGuid = PLUGIN_GUID,
+    config = config,
+    id = MODULE_ID,
+    name = "Example",
+    cache = {
+        RecordingReady = {
+            domain = "persistent",
+            key = "RecordingReady",
+            default = false,
+        },
+        RunScratch = {
+            domain = "currentRun",
+            key = "run",
+            factory = function()
+                return {}
+            end,
+        },
+        GodAvailability = {
+            domain = "shared",
+            id = "run-director.god-availability",
+            access = "reader",
+            fallback = {
+                active = false,
+                available = {},
+            },
+        },
+    },
+    drawTab = ui.drawTab,
+})
+```
+
+Runtime code uses `store.cache`:
+
+```lua
+store.cache.persistent.set("RecordingReady", true)
+local ready = store.cache.persistent.read("RecordingReady")
+
+local runScratch = store.cache.currentRun.get("RunScratch")
+runScratch.seen = true
+```
+
+Draw code uses `state.cache` for draw-safe cache refs:
+
+```lua
+local availability = state.cache.shared.read("GodAvailability")
+if availability.active and availability.available.Apollo ~= false then
+    -- draw available UI
+end
+```
+
+Rules:
+
+- cache declaration names must be stable identifiers
+- declared cache is part of the structural definition fingerprint
+- `store.cache` is valid outside draw callbacks
+- `state.cache` is valid only during draw callbacks
+- persistent cache is writable from `store.cache`; draw access is read-only
+- current-run cache is only available from `store.cache`
+- shared owner declarations can write through `store.cache.shared.set(...)` or
+  `state.cache.shared.set(...)`
+- shared reader declarations are read-only
 
 ## Current Run
 
+Current-run cache is for per-run mutable table buckets attached to the active
+`CurrentRun`.
+
 ```lua
-local runState = host.cache.currentRun.get("run", function()
-    return {
-        ForcedNPCPending = {},
-        NPCEncounterSeen = {},
-    }
-end)
+local runState = store.cache.currentRun.get("RunScratch")
+runState.ForcedNPCPending = runState.ForcedNPCPending or {}
 ```
 
-`currentRun.get(...)` returns `nil` when there is no active `CurrentRun`.
+Surface:
 
-The author-host namespace binds the module's host id, which is backed by the
-module's `pluginGuid`. Module code supplies only the cache domain and local key.
-Internally, cache storage has three parts:
+- `store.cache.currentRun.get(name)`
+- `store.cache.currentRun.clear(name)`
 
-- `CurrentRun`: the live game run table
-- owner id: the module's runtime owner identity, derived from `pluginGuid`
-- `key`: cache bucket inside the owner namespace
-
-Lib stores the bucket under one private root on `CurrentRun` so modules do not
-attach ad hoc top-level keys. Pack and module ids remain Lib/Framework domain
-metadata; `pluginGuid` is the module lifecycle identity that Lib maps to cache
-ownership.
-
-Current-run surface:
-
-- `host.cache.currentRun.get(key, factory?)`
-- `host.cache.currentRun.peek(key)`
-- `host.cache.currentRun.clear(key)`
-
-`get(...)` creates the cache bucket when missing. The optional factory runs
-only on first creation and must return a table.
-
-`peek(...)` returns an existing cache bucket without creating it.
-
-`clear(...)` removes one cache bucket and prunes empty namespace tables.
+`get(...)` creates the cache bucket when missing. The declaration factory runs
+only on first creation and must return a table. `clear(...)` removes one cache
+bucket and prunes empty namespace tables.
 
 ## Persistent
 
@@ -60,28 +109,19 @@ Persistent cache is flat and scalar. It is intended for small runtime markers
 such as "recording is ready", not nested state.
 
 ```lua
-local ready = host.cache.persistent.read("RecordingReady", false)
+store.cache.persistent.set("RecordingReady", true)
+local ready = store.cache.persistent.read("RecordingReady")
+store.cache.persistent.clear("RecordingReady")
 
-host.cache.persistent.write("RecordingReady", true)
-
-if host.cache.persistent.has("RecordingReady") then
-    host.cache.persistent.clear("RecordingReady")
-end
-
-local recordingReady = host.cache.persistent.create("RecordingReady", {
-    default = false,
-})
-recordingReady:set(true)
-local drawSafeReady = recordingReady:get()
+local drawSafeReady = state.cache.persistent.read("RecordingReady")
 ```
 
-Persistent surface:
+Surface:
 
-- `host.cache.persistent.read(key, default?)`
-- `host.cache.persistent.write(key, value)`
-- `host.cache.persistent.clear(key)`
-- `host.cache.persistent.has(key)`
-- `host.cache.persistent.create(key, opts?)`
+- `store.cache.persistent.read(name)`
+- `store.cache.persistent.set(name, value)`
+- `store.cache.persistent.clear(name)`
+- `state.cache.persistent.read(name)`
 
 Allowed persistent value types:
 
@@ -89,26 +129,34 @@ Allowed persistent value types:
 - number
 - string
 
-`read(...)` returns the stored value when present, otherwise the optional
-default. It does not create a stored value. `write(nil)` is invalid; use
+`read(...)` returns the stored value when present, otherwise the declaration
+default. It does not create a stored value. `set(nil)` is invalid; use
 `clear(...)` to remove a stored value.
-
-`create(...)` returns a small write-through projection of one persistent
-cache key. `get()` reads the in-memory snapshot, while `set(...)` and
-`clear()` update persistent cache immediately and then update the snapshot.
 
 ## Shared
 
-Shared cache is for cross-module read models. The owner module publishes a
-stable id before activation, writes the current projection when it changes, and
-other modules read that projection cheaply from runtime or draw code.
+Shared cache is for cross-module read models. The owner module declares a
+stable id and writes the current projection when it changes. Other modules read
+that projection cheaply from runtime or draw code.
+
+Owner declaration:
 
 ```lua
-host.cache.shared.publish("run-director.god-availability", {
-    default = { active = false, available = {} },
-})
+GodAvailability = {
+    domain = "shared",
+    id = "run-director.god-availability",
+    access = "owner",
+    default = {
+        active = false,
+        available = {},
+    },
+}
+```
 
-host.cache.shared.write("run-director.god-availability", {
+Owner write:
+
+```lua
+store.cache.shared.set("GodAvailability", {
     active = true,
     available = {
         Apollo = false,
@@ -116,37 +164,66 @@ host.cache.shared.write("run-director.god-availability", {
 })
 ```
 
-Draw consumers can read:
+Reader declaration:
 
 ```lua
-local snapshot = services.cache.shared.read("run-director.god-availability", {
-    active = false,
-    available = {},
-})
+GodAvailability = {
+    domain = "shared",
+    id = "run-director.god-availability",
+    access = "reader",
+    fallback = {
+        active = false,
+        available = {},
+    },
+}
 ```
 
-Shared surface:
+Surface:
 
-- `host.cache.shared.publish(id, opts?)`
-- `host.cache.shared.read(id, fallback?)`
-- `host.cache.shared.write(id, value)`
-- `host.cache.shared.clear(id)`
-- `services.cache.shared.read(id, fallback?)`
-- `services.cache.shared.write(id, value)`
-- `services.cache.shared.clear(id)`
+- `store.cache.shared.read(name)`
+- `store.cache.shared.set(name, value)` for owner declarations
+- `store.cache.shared.clear(name)` for owner declarations
+- `state.cache.shared.read(name)`
+- `state.cache.shared.set(name, value)` for owner declarations
+- `state.cache.shared.clear(name)` for owner declarations
 
-`publish(...)` is declaration-time only and must run before activation. Only
-the publishing host can write or clear that id. Other modules can only read.
+Shared cache does not persist and does not flush. Reads return the declaration
+fallback when no active publisher exists or when the publisher is disabled. If
+an active publisher exists but has not written a value, reads return the
+publisher default when one was declared.
 
-`write(...)` updates live memory immediately. `clear(...)` resets the projection
-to the publisher default. Shared cache does not persist and does not flush.
+Values may be scalars or tables. Table writes are copied once and reads return
+recursive read-only views.
 
-Reads return the caller fallback when no active publisher exists or when the
-publisher is disabled. If an active publisher exists but has not written a
-value, reads return the publisher default when one was declared.
+For table-shaped shared cache, prefer a small domain helper around the raw
+table path instead of spreading nested lookups through module code:
 
-Values may be scalars or tables. Lib deep-copies on write and read so consumers
-cannot mutate the publisher's cached projection.
+```lua
+local function readAvailability(source)
+    return source.cache.shared.read("GodAvailability")
+end
+
+local function isGodAvailable(source, godKey)
+    local availability = readAvailability(source)
+    if availability.active ~= true then
+        return true
+    end
+    return not availability.available or availability.available[godKey] ~= false
+end
+```
+
+The helper can accept either `store` or draw `state` because both expose
+`source.cache.shared.read(...)`. For repeated inner reads in one function,
+cache the returned snapshot or inner table in a local:
+
+```lua
+local availability = state.cache.shared.read("GodAvailability")
+local available = availability.available or {}
+
+if available.Apollo ~= false then
+    -- draw Apollo UI
+end
+```
 
 ## When To Use It
 
@@ -162,25 +239,11 @@ Use persistent cache for:
 
 Use shared cache for:
 
-- public live read models owned by one module and consumed by other modules
-- immediate-mode UI filters that should read a cheap current projection instead
-  of polling another module repeatedly
+- public read models shared between modules
+- low-cost runtime/draw reads where integrations would be too heavy
 
-Use managed storage instead when the value is module configuration.
+Do not use cache for:
 
-## Common Mistakes
-
-- Do not store config settings in cache.
-- Do not attach module keys directly to `CurrentRun`.
-- Do not use cache for values that must participate in hashes or profiles.
-- Do not let the factory return non-table values.
-- Do not put tables in persistent cache. Serialize to a string yourself if a
-  complex value is truly needed.
-- Do not publish shared cache ids from draw code. Declare them before
-  activation, then write from host or draw services later.
-- Do not use shared cache for behavior calls. Use integrations for cross-module
-  behavior APIs.
-
-See also:
-- [MANAGED_STATE.md](MANAGED_STATE.md)
-- [../../../API.md](../../../API.md)
+- user-editable settings: use managed storage
+- hash/profile state: use managed storage
+- behavior callbacks: use integrations

@@ -92,18 +92,9 @@ end
 ---@field has fun(self: DrawActionRef): boolean
 
 ---@class DrawServices
----@field cache DrawServicesCache
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
 ---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string|nil
-
----@class DrawServicesCache
----@field shared DrawServicesSharedCache
-
----@class DrawServicesSharedCache
----@field read fun(id: string, fallback: any): any
----@field write fun(id: string, value: any): boolean
----@field clear fun(id: string): boolean
 
 ---@class ModuleHost
 ---@field getHostId fun(): string
@@ -204,7 +195,7 @@ function moduleHost.create(opts)
     })
     local mutationBundle = CreateMutationBundle()
     local settingsObserver = ValidateSettingsObserver(opts)
-    local store = moduleState.createStore(persistentState)
+    local store
 
     if type(drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
@@ -396,10 +387,48 @@ function moduleHost.create(opts)
         return moduleHost.activate(host)
     end
 
+    local record = {
+        definition = def,
+        mutationBundle = mutationBundle,
+        pluginGuid = pluginGuid,
+        persistentState = persistentState,
+        stagedState = stagedState,
+        store = nil,
+        actionBuffer = actionBuffer,
+        cacheStore = cacheStore,
+        authorHost = nil,
+        effectReceipts = {},
+        fallbackUiRequested = false,
+        activated = false,
+    }
+    hostRegistry.setRecord(host, record)
+    cache.data.stageSharedOwnerPublications(record, host, def)
+
+    store = moduleState.createStore(persistentState, cache.data.create({
+        definition = def,
+        host = host,
+        record = record,
+        ownerId = pluginGuid,
+        cacheStore = cacheStore,
+        phase = "runtime",
+        source = "store.cache",
+    }))
+    record.store = store
+
     authorHost = authorHostService.create(host)
+    record.authorHost = authorHost
     local uiPhase = uiPhaseModule.create({
         definition = def,
         stagedState = stagedState,
+        cache = cache.data.create({
+            definition = def,
+            host = host,
+            record = record,
+            ownerId = pluginGuid,
+            cacheStore = cacheStore,
+            phase = "draw",
+            source = "state.cache",
+        }),
         actionBuffer = actionBuffer,
         authorHost = authorHost,
     })
@@ -415,21 +444,6 @@ function moduleHost.create(opts)
             return uiPhase.run(drawQuickContent)
         end
     end
-
-    hostRegistry.setRecord(host, {
-        definition = def,
-        mutationBundle = mutationBundle,
-        pluginGuid = pluginGuid,
-        persistentState = persistentState,
-        stagedState = stagedState,
-        store = store,
-        actionBuffer = actionBuffer,
-        cacheStore = cacheStore,
-        authorHost = authorHost,
-        effectReceipts = {},
-        fallbackUiRequested = false,
-        activated = false,
-    })
 
     return host, authorHost, store
 end

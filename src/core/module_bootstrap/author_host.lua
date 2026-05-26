@@ -1,6 +1,5 @@
 local deps = ...
 
-local cache = deps.cache
 local fallbackUi = deps.fallbackUi
 local hooks = deps.hooks
 local integrations = deps.integrations
@@ -18,7 +17,6 @@ local authorHost = {}
 ---@field log fun(fmt: string, ...): nil
 ---@field logIf fun(fmt: string, ...): nil
 ---@field fallbackUi AuthorFallbackUi
----@field cache AuthorCache
 ---@field hooks AuthorHooks
 ---@field integrations AuthorIntegrations
 ---@field mutation AuthorMutation
@@ -63,28 +61,6 @@ local authorHost = {}
 ---@class AuthorFallbackUi
 ---@field attachGuiOnce fun(register: fun(ui: FallbackUiBridge)): boolean
 
----@class AuthorCache
----@field currentRun AuthorCurrentRunCache
----@field persistent AuthorPersistentCache
----@field shared AuthorSharedCache
-
----@class AuthorCurrentRunCache
----@field get fun(key: string, factory: (fun(): table)|nil): table|nil
----@field peek fun(key: string): table|nil
----@field clear fun(key: string): boolean
-
----@class AuthorPersistentCache
----@field read fun(key: string, defaultValue: boolean|number|string|nil): boolean|number|string|nil
----@field write fun(key: string, value: boolean|number|string): boolean
----@field clear fun(key: string): boolean
----@field has fun(key: string): boolean
-
----@class AuthorSharedCache
----@field publish fun(id: string, opts: table|nil): boolean
----@field read fun(id: string, fallback: any): any
----@field write fun(id: string, value: any): boolean
----@field clear fun(id: string): boolean
-
 ---@param host ModuleHost
 ---@return AuthorHost host Module-safe projection of the ModuleHost surface.
 function authorHost.create(host)
@@ -96,7 +72,6 @@ function authorHost.create(host)
         getMeta = host.getMeta,
         activate = host.activate,
         fallbackUi = fallbackUi.create(host),
-        cache = cache.create(host),
         hooks = hooks.create(host),
         integrations = integrations.create(host),
         mutation = mutation.create(host),

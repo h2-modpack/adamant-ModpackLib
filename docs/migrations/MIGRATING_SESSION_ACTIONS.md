@@ -4,6 +4,18 @@ Session action helpers have been removed from the old module-author `session`
 surface. The current draw callback receives staged storage through `state` and
 transient action refs through `actions`.
 
+Action handlers declared on `createModule({ actions = ... })` now receive
+`host, state, value`. They run after the draw callback and before staged state
+flush:
+
+```lua
+actions = {
+    ClearCache = function(host, state, value)
+        host.logIf("Clear cache: %s", tostring(value and value.scope))
+    end,
+}
+```
+
 Use draw action refs for transient UI intent:
 
 ```lua

@@ -7,6 +7,7 @@ local uiState = {}
 
 ---@class DrawState
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
+---@field cache table|nil
 ---@field read fun(alias: string, ...): any
 ---@field write fun(alias: string, ...): boolean|nil
 ---@field resetAll fun(opts: table|nil): boolean, number
@@ -14,8 +15,9 @@ local uiState = {}
 --- Narrows full staged state to the module author UI surface.
 --- Host internals keep the private commit/reload/snapshot methods.
 ---@param stagedState StagedState
+---@param cache table|nil
 ---@return DrawState
-function uiState.create(stagedState)
+function uiState.create(stagedState, cache)
     local refs = storageRefAdapter.create({
         root = stagedState,
         phase = "draw",
@@ -25,6 +27,7 @@ function uiState.create(stagedState)
 
     return {
         get = refs.get,
+        cache = cache,
         read = function(alias, ...)
             phaseGate.requireAnyDraw()
             local ref = stagedState.get(alias)

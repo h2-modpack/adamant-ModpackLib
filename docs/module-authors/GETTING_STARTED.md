@@ -217,7 +217,7 @@ Rules:
 - `Enabled` and `DebugMode` are reserved Lib-owned aliases; do not declare them
 
 For persistent runtime markers that should not appear in UI staging, profiles,
-or hashes, use `host.cache.persistent.*`.
+or hashes, use declared persistent cache.
 
 ### 3. Create the module with storage and callbacks in `main.lua`
 
@@ -396,8 +396,8 @@ Examples:
 
 ### Runtime cache values
 
-Runtime markers that gameplay code needs across reloads should use
-`host.cache.persistent.*`.
+Runtime markers that gameplay code needs across reloads should use declared
+persistent cache.
 
 ### Packed values
 

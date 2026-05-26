@@ -14,7 +14,8 @@ local modulePublic = {}
 ---@field shortName string|nil
 ---@field tooltip string|nil
 ---@field storage StorageSchema|nil
----@field actions table<string, fun(state: DrawState, services: DrawServices, value: any)>|nil
+---@field cache table|nil
+---@field actions table<string, fun(host: AuthorHost, state: DrawState, value: any)>|nil
 ---@field hashGroupPlan HashGroupPlan|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
 ---@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions, services: DrawServices)
@@ -29,6 +30,7 @@ local KnownModuleOpts = {
     shortName = true,
     tooltip = true,
     storage = true,
+    cache = true,
     actions = true,
     hashGroupPlan = true,
     onSettingsCommitted = true,
@@ -58,6 +60,7 @@ local function BuildDefinitionInput(opts)
         shortName = opts.shortName,
         tooltip = opts.tooltip,
         storage = opts.storage,
+        cache = opts.cache,
         actions = opts.actions,
         hashGroupPlan = opts.hashGroupPlan,
     }

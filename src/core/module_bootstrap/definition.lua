@@ -16,6 +16,7 @@ local KnownDefinitionKeys = {
     shortName = true,
     tooltip = true,
     storage = true,
+    cache = true,
     actions = true,
     hashGroupPlan = true,
 }
@@ -146,6 +147,149 @@ local function PrepareActions(definition, prefix)
 
     table.sort(actionOrder, CompareStrings)
     definition._actionOrder = actionOrder
+end
+
+local function ValidateScalar(context, value, optional)
+    if value == nil and optional then
+        return
+    end
+    local valueType = type(value)
+    if valueType ~= "boolean" and valueType ~= "number" and valueType ~= "string" then
+        logging.violate("definition.invalid_field_type", "%s must be boolean, number, or string", context)
+    end
+end
+
+local function ValidateCacheValue(context, value, optional, seen)
+    if value == nil and optional then
+        return
+    end
+
+    local valueType = type(value)
+    if valueType == "boolean" or valueType == "number" or valueType == "string" then
+        return
+    end
+    if valueType ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s must be boolean, number, string, or table", context)
+    end
+
+    seen = seen or {}
+    if seen[value] then
+        return
+    end
+    seen[value] = true
+
+    for key, child in pairs(value) do
+        ValidateCacheValue(context .. " key", key, false, seen)
+        ValidateCacheValue(context, child, false, seen)
+    end
+end
+
+local function ValidateCacheKey(prefix, name)
+    if type(name) ~= "string" or name == "" then
+        logging.violate("definition.invalid_field_type", "%s: cache declaration keys must be non-empty strings", prefix)
+    elseif not IsStableIdentifier(name) then
+        logging.violate("definition.invalid_field_type", "%s: cache declaration key '%s' %s",
+            prefix, name, StableIdentifierDescription)
+    end
+end
+
+local function ValidateCacheString(prefix, path, value)
+    if type(value) ~= "string" or value == "" then
+        logging.violate("definition.invalid_field_type", "%s: %s must be a non-empty string", prefix, path)
+    end
+end
+
+local function ValidateKnownCacheKeys(prefix, path, declaration, knownKeys)
+    for key in pairs(declaration) do
+        if not knownKeys[key] then
+            logging.violate("definition.unknown_key", "%s: unknown %s field '%s'", prefix, path, tostring(key))
+        end
+    end
+end
+
+local function PrepareCache(definition, prefix)
+    local cache = definition.cache
+    if cache == nil then
+        definition.cache = {}
+        definition._cacheOrder = {}
+        return
+    end
+    if type(cache) ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s: definition.cache should be table, got %s",
+            prefix, type(cache))
+    end
+
+    local cacheOrder = {}
+    local ownerSharedIds = {}
+    for name, declaration in pairs(cache) do
+        ValidateCacheKey(prefix, name)
+        if type(declaration) ~= "table" then
+            logging.violate("definition.invalid_field_type", "%s: cache.%s should be table, got %s",
+                prefix, tostring(name), type(declaration))
+        end
+
+        local path = "cache." .. tostring(name)
+        local domain = declaration.domain
+        if domain == "persistent" then
+            ValidateKnownCacheKeys(prefix, path, declaration, {
+                domain = true,
+                key = true,
+                default = true,
+            })
+            ValidateCacheString(prefix, path .. ".key", declaration.key)
+            ValidateScalar(prefix .. ": " .. path .. ".default", declaration.default, true)
+        elseif domain == "currentRun" then
+            ValidateKnownCacheKeys(prefix, path, declaration, {
+                domain = true,
+                key = true,
+                factory = true,
+            })
+            ValidateCacheString(prefix, path .. ".key", declaration.key)
+            if declaration.factory ~= nil and type(declaration.factory) ~= "function" then
+                logging.violate("definition.invalid_field_type", "%s: %s.factory should be function, got %s",
+                    prefix, path, type(declaration.factory))
+            end
+        elseif domain == "shared" then
+            ValidateKnownCacheKeys(prefix, path, declaration, {
+                domain = true,
+                id = true,
+                access = true,
+                default = true,
+                fallback = true,
+            })
+            ValidateCacheString(prefix, path .. ".id", declaration.id)
+            if declaration.access ~= "owner" and declaration.access ~= "reader" then
+                logging.violate("definition.invalid_field_type",
+                    "%s: %s.access must be 'owner' or 'reader'", prefix, path)
+            end
+            if declaration.access == "owner" then
+                if ownerSharedIds[declaration.id] then
+                    logging.violate("definition.invalid_field_type",
+                        "%s: duplicate owner shared cache id '%s'", prefix, declaration.id)
+                end
+                ownerSharedIds[declaration.id] = true
+                if declaration.fallback ~= nil then
+                    logging.violate("definition.invalid_field_type",
+                        "%s: %s.fallback is only valid for reader shared cache declarations", prefix, path)
+                end
+                ValidateCacheValue(prefix .. ": " .. path .. ".default", declaration.default, true)
+            else
+                if declaration.default ~= nil then
+                    logging.violate("definition.invalid_field_type",
+                        "%s: %s.default is only valid for owner shared cache declarations", prefix, path)
+                end
+                ValidateCacheValue(prefix .. ": " .. path .. ".fallback", declaration.fallback, true)
+            end
+        else
+            logging.violate("definition.invalid_field_type",
+                "%s: %s.domain must be 'persistent', 'currentRun', or 'shared'", prefix, path)
+        end
+
+        cacheOrder[#cacheOrder + 1] = name
+    end
+
+    table.sort(cacheOrder, CompareStrings)
+    definition._cacheOrder = cacheOrder
 end
 
 local function ValidateHashGroupPlan(definition, prefix)
@@ -520,8 +664,10 @@ local function ValidateDefinition(definition, label)
         checkType(key, "string")
     end
     checkType("storage", "table")
+    checkType("cache", "table")
     checkType("actions", "table")
     checkType("hashGroupPlan", "table")
+    PrepareCache(definition, prefix)
     PrepareActions(definition, prefix)
     ValidateHashGroupPlan(definition, prefix)
 end
@@ -535,6 +681,7 @@ local function GetStructuralFingerprint(definition, structuralSurface)
         tooltip = definition and definition.tooltip or nil,
         hasQuickContent = structuralSurface and structuralSurface.hasQuickContent == true or false,
         storage = definition and definition.storage or nil,
+        cache = definition and definition.cache or nil,
         hashGroupPlan = definition and definition.hashGroupPlan or nil,
     }
     return SerializeStructuralValue(structuralState)

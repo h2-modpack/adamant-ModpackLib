@@ -60,9 +60,9 @@ Do not add `draw.field(...)`.
 Do not reorganize module catalogs or storage just to make declarative field
 rendering fit.
 
-Keep storage as data, actions as post-draw intent, and draw code as the owner of
-UI projection. Authors should cache option tables near module UI code and render
-with `draw.widgets.*` or `draw.imgui`.
+Keep storage as data, actions as post-draw command intent, and draw code as the
+owner of UI projection. Authors should cache option tables near module UI code
+and render with `draw.widgets.*` or `draw.imgui`.
 
 ## Revisit Only If
 

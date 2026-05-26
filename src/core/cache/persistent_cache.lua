@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local snapshotObject = deps.snapshotObject
 local persistentCache = {}
 
 local function validateOwnerId(ownerId)
@@ -42,36 +41,14 @@ function persistentCache.read(cacheStore, ownerId, key, defaultValue)
     return value
 end
 
-function persistentCache.write(cacheStore, ownerId, key, value)
-    validateOwnerId(ownerId)
-    validateKey("cache.persistent.write", key)
-    validateScalar("cache.persistent.write", value, false)
-
-    return cacheStore.write(getBackingKey(ownerId, key), value)
-end
-
-function persistentCache.clear(cacheStore, ownerId, key)
-    validateOwnerId(ownerId)
-    validateKey("cache.persistent.clear", key)
-
-    return cacheStore.clear(getBackingKey(ownerId, key))
-end
-
-function persistentCache.has(cacheStore, ownerId, key)
-    validateOwnerId(ownerId)
-    validateKey("cache.persistent.has", key)
-
-    return cacheStore.has(getBackingKey(ownerId, key))
-end
-
 function persistentCache.create(cacheStore, ownerId, key, opts)
     validateOwnerId(ownerId)
-    validateKey("cache.persistent.create", key)
+    validateKey("cache.persistent.ref", key)
     if opts ~= nil and type(opts) ~= "table" then
-        logging.violate("cache.invalid_args", "cache.persistent.create opts must be a table when provided")
+        logging.violate("cache.invalid_args", "cache.persistent.ref opts must be a table when provided")
     end
     opts = opts or {}
-    validateScalar("cache.persistent.create default", opts.default, true)
+    validateScalar("cache.persistent.ref default", opts.default, true)
 
     local function load()
         local value = cacheStore.read(getBackingKey(ownerId, key))
@@ -81,21 +58,27 @@ function persistentCache.create(cacheStore, ownerId, key, opts)
         return value
     end
 
-    return snapshotObject.create({
-        load = load,
-        write = function(value)
-            validateScalar("cache.persistent.create.set", value, false)
-            local ok = cacheStore.write(getBackingKey(ownerId, key), value)
-            return ok, value
-        end,
-        clear = function()
-            local ok = cacheStore.clear(getBackingKey(ownerId, key))
-            return ok, opts.default
-        end,
-        has = function()
-            return cacheStore.has(getBackingKey(ownerId, key))
-        end,
-    })
+    local snapshot = load()
+    local ref = {}
+    ref.get = function()
+        return snapshot
+    end
+    ref.set = function(_, value)
+        validateScalar("cache.persistent.ref.set", value, false)
+        local ok = cacheStore.write(getBackingKey(ownerId, key), value)
+        if ok then
+            snapshot = value
+        end
+        return ok
+    end
+    ref.clear = function()
+        local ok = cacheStore.clear(getBackingKey(ownerId, key))
+        if ok then
+            snapshot = opts.default
+        end
+        return ok
+    end
+    return ref
 end
 
 return persistentCache

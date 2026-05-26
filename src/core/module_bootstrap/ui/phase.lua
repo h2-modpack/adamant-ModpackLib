@@ -29,6 +29,7 @@ end
 ---@class UiPhaseCreateOpts
 ---@field definition ModuleDefinition
 ---@field stagedState StagedState
+---@field cache table|nil
 ---@field actionBuffer ActionBuffer
 ---@field authorHost AuthorHost
 
@@ -37,7 +38,7 @@ end
 function uiPhase.create(opts)
     local objects = {
         draw = uiDraw.get(),
-        state = moduleState.uiState.create(opts.stagedState),
+        state = moduleState.uiState.create(opts.stagedState, opts.cache),
         actions = moduleState.uiActions.create(opts.actionBuffer),
         services = uiHost.create(opts.authorHost),
     }
@@ -45,7 +46,7 @@ function uiPhase.create(opts)
     function objects.run(callback)
         return phaseGate.runDraw(function(draw, state, actions, services)
             local results = packResults(callback(draw, state, actions, services))
-            opts.actionBuffer.executePending(state, services)
+            opts.actionBuffer.executePending(opts.authorHost, state)
             return table.unpack(results, 1, results.n)
         end, objects.draw, objects.state, objects.actions, objects.services)
     end

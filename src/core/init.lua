@@ -51,6 +51,7 @@ local cacheBundle = import('core/cache/00_init.lua', nil, {
     hostRegistry = hostRegistry,
     cacheRegistry = registry.cache,
     values = values,
+    phaseGate = phaseGate,
 })
 
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
@@ -136,7 +137,6 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
 })
 local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
     fallbackUi = fallbackUiBundle.author,
-    cache = cacheBundle.author,
     hooks = hooksBundle.author,
     integrations = integrationsBundle.author,
     mutation = mutationBundle.author,

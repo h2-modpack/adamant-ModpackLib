@@ -19,6 +19,8 @@ Use each state surface for one job:
 | --- | --- | --- |
 | `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
 | `state` | staged UI reads/writes | `drawTab(draw, state, actions, services)`, `drawQuickContent(...)` |
+| `store.cache` | declared runtime cache refs | runtime code and post-commit observers |
+| `state.cache` | declared draw-safe cache refs | draw callbacks |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
 Draw code should stage changes through `state`. Gameplay, hooks, overlays,
@@ -34,6 +36,7 @@ These surfaces are phase-gated:
 
 - `store` is for runtime code and rejects access while any module draw callback is running.
 - `state`, `actions`, `services`, and refs returned from them are for the active draw callback and reject access outside that callback.
+- `state.cache` is draw-scoped. `store.cache` is runtime-scoped.
 - Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
 
 ```lua
@@ -89,7 +92,7 @@ Do not declare `Enabled` or `DebugMode` yourself.
 ## Runtime Cache Values
 
 Runtime markers that should survive reloads or restarts but should not appear
-in UI staging, profiles, or hashes should use `host.cache.persistent.*`.
+in UI staging, profiles, or hashes should use declared persistent cache.
 
 ## Tables
 
@@ -180,9 +183,25 @@ Draw callbacks expose action staging through the `actions` argument:
 
 Action refs are object handles; call their methods with colon syntax.
 
-Use actions for one-shot UI intent that should be observed by runtime commit
-plumbing, not for ordinary persistent settings. Stage actions through
-`actions`, not through `state`.
+Use actions for one-shot UI intent and UI-triggered runtime commands, not for
+ordinary persistent settings. Stage actions through `actions`, not through
+`state`.
+
+Declare action handlers on `createModule({ actions = ... })`. Handlers run
+after the draw callback and before staged state flush:
+
+```lua
+actions = {
+    ClearCache = function(host, state, value)
+        local scope = value and value.scope or "run"
+        host.logIf("Clearing cache for %s", tostring(scope))
+        state.write("CacheCleared", true)
+    end,
+}
+```
+
+Handlers receive the author `host`, the current draw `state`, and the staged
+action payload. They do not receive draw `services`.
 
 Observe committed actions with `onSettingsCommitted(host, store, commit)`.
 This callback runs after staged state commits, so it reads committed values

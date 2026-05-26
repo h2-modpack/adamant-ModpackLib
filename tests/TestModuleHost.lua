@@ -310,7 +310,7 @@ function TestModuleHost:testCreateModuleHostPassesAuthorHostToCallbacks()
     lu.assertEquals(type(callbackHost.log), "function")
     lu.assertEquals(type(callbackHost.logIf), "function")
     lu.assertEquals(type(callbackHost.fallbackUi), "table")
-    lu.assertEquals(type(callbackHost.cache), "table")
+    lu.assertNil(callbackHost.cache)
     lu.assertEquals(type(callbackHost.hooks), "table")
     lu.assertEquals(type(callbackHost.activate), "function")
     lu.assertNil(callbackHost.read)
@@ -562,6 +562,7 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
 end
 
 function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
+    local observedActionHost = nil
     local observedCommitAction = nil
     local observedConfigChange = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
@@ -571,7 +572,8 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
             { type = "bool", alias = "Flag", default = false },
         },
         actions = {
-            setFlag = function(state, _, value)
+            setFlag = function(host, state, value)
+                observedActionHost = host
                 state.write("Flag", value == true)
             end,
         },
@@ -597,6 +599,7 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
 
     host.drawTab()
 
+    lu.assertEquals(observedActionHost.getHostId(), "test-declared-draw-actions")
     lu.assertTrue(stagedState.read("Flag"))
     lu.assertFalse(store.read("Flag"))
 

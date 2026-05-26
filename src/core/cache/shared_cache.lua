@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local snapshotObject = deps.snapshotObject
 local values = deps.values
 local sharedRegistry = deps.sharedRegistry
 
@@ -47,11 +46,59 @@ local function validateValue(context, value, seen)
     end
 end
 
+local function validateOptionalValue(context, value)
+    if value ~= nil then
+        validateValue(context, value)
+    end
+end
+
 local function copyOptional(value)
     if value == nil then
         return nil
     end
     return values.deepCopy(value)
+end
+
+local function buildReadOnlyView(value, seen)
+    if type(value) ~= "table" then
+        return value
+    end
+
+    seen = seen or {}
+    if seen[value] then
+        return seen[value]
+    end
+
+    local view = {}
+    local proxy = {}
+    seen[value] = proxy
+
+    for key, child in pairs(value) do
+        view[buildReadOnlyView(key, seen)] = buildReadOnlyView(child, seen)
+    end
+
+    setmetatable(proxy, {
+        __index = view,
+        __newindex = function()
+            logging.violate("cache.invalid_value", "shared cache table views are read-only")
+        end,
+        __pairs = function()
+            return pairs(view)
+        end,
+        __len = function()
+            return #view
+        end,
+        __metatable = false,
+    })
+
+    return proxy
+end
+
+local function protectOptional(value)
+    if value == nil then
+        return nil
+    end
+    return buildReadOnlyView(value)
 end
 
 local function ensurePublicationSet(record)
@@ -79,16 +126,13 @@ local function hasPublicationEntries(publications)
     return publications and #(publications.entries or {}) > 0
 end
 
-function sharedCache.stagePublication(record, host, id, opts)
-    local context = "host.cache.shared.publish"
+local function stagePublication(context, record, host, id, opts)
     validateId(context, id)
     if opts ~= nil and type(opts) ~= "table" then
         logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
     end
     opts = opts or {}
-    if opts.default ~= nil then
-        validateValue(context .. " default", opts.default)
-    end
+    validateOptionalValue(context .. " default", opts.default)
 
     local publications = ensurePublicationSet(record)
     if publications.byId[id] then
@@ -106,6 +150,10 @@ function sharedCache.stagePublication(record, host, id, opts)
     publications.byId[id] = entry
     publications.entries[#publications.entries + 1] = entry
     return true
+end
+
+function sharedCache.stagePublication(record, host, id, opts)
+    return stagePublication("cache.shared.declared", record, host, id, opts)
 end
 
 function sharedCache.install(ownerId, publications)
@@ -148,8 +196,10 @@ function sharedCache.install(ownerId, publications)
                     ownerId = ownerId,
                     ownerToken = install.ownerToken,
                     default = copyOptional(entry.default),
+                    defaultView = protectOptional(entry.default),
                     hasDefault = entry.hasDefault == true,
                     value = nil,
+                    valueView = nil,
                     hasValue = false,
                     isEnabled = entry.isEnabled,
                 }
@@ -195,71 +245,72 @@ local function requireOwnerRecord(context, ownerId, ownerToken, id)
     return record
 end
 
-function sharedCache.write(ownerId, ownerToken, id, value)
-    local record = requireOwnerRecord("cache.shared.write", ownerId, ownerToken, id)
-    validateValue("cache.shared.write", value)
-    record.value = values.deepCopy(value)
-    record.hasValue = true
-    return true
-end
-
-function sharedCache.clear(ownerId, ownerToken, id)
-    local record = requireOwnerRecord("cache.shared.clear", ownerId, ownerToken, id)
-    record.value = nil
-    record.hasValue = false
-    return true
-end
-
-function sharedCache.read(id, fallback)
+local function readView(id, fallbackView)
     validateId("cache.shared.read", id)
     local record = records[id]
     if not record or not (record.isEnabled and record.isEnabled()) then
-        return values.deepCopy(fallback)
+        return fallbackView
     end
     if record.hasValue then
-        return values.deepCopy(record.value)
+        return record.valueView
     end
     if record.hasDefault then
-        return values.deepCopy(record.default)
+        return record.defaultView
     end
-    return values.deepCopy(fallback)
+    return fallbackView
 end
 
-function sharedCache.createOwner(record, host, id, opts)
-    local context = "host.cache.shared.create"
+local function createOwnerRef(context, record, host, id, defaultValue)
+    local publications = ensurePublicationSet(record)
+    if not publications.byId[id] then
+        logging.violate("cache.invalid_args", "%s requires a declared owner publication", context)
+    end
+
+    local snapshotValue = copyOptional(defaultValue)
+    local snapshot = protectOptional(snapshotValue)
+    local ref = {}
+    ref.get = function()
+        local ownerRecord = records[id]
+        if ownerRecord and ownerRecord.ownerId == host.getHostId()
+            and ownerRecord.ownerToken == publications.ownerToken
+        then
+            return readView(id, snapshot)
+        end
+        return snapshot
+    end
+    ref.set = function(_, value)
+        validateValue(context .. ".set", value)
+        local ownerRecord = requireOwnerRecord(context .. ".set", host.getHostId(), publications.ownerToken, id)
+        ownerRecord.value = values.deepCopy(value)
+        ownerRecord.valueView = protectOptional(ownerRecord.value)
+        ownerRecord.hasValue = true
+        snapshot = ownerRecord.valueView
+        return true
+    end
+    ref.clear = function()
+        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getHostId(), publications.ownerToken, id)
+        ownerRecord.value = nil
+        ownerRecord.valueView = nil
+        ownerRecord.hasValue = false
+        snapshot = ownerRecord.defaultView or protectOptional(snapshotValue)
+        return true
+    end
+    return ref
+end
+
+function sharedCache.createDeclaredOwner(record, host, id, opts)
+    local context = "cache.shared.declared"
+    validateId(context, id)
     if opts ~= nil and type(opts) ~= "table" then
         logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
     end
     opts = opts or {}
-    if opts.access ~= nil and opts.access ~= "owner" then
-        logging.violate("cache.invalid_args", "%s access must be 'owner'", context)
-    end
-
-    sharedCache.stagePublication(record, host, id, {
-        default = opts.default,
-    })
-
-    local publications = ensurePublicationSet(record)
-    return snapshotObject.create({
-        load = function()
-            return copyOptional(opts.default)
-        end,
-        write = function(value)
-            local ok = sharedCache.write(host.getHostId(), publications.ownerToken, id, value)
-            return ok, copyOptional(value)
-        end,
-        clear = function()
-            local ok = sharedCache.clear(host.getHostId(), publications.ownerToken, id)
-            return ok, copyOptional(opts.default)
-        end,
-        refresh = function()
-            return sharedCache.read(id, opts.default)
-        end,
-    })
+    validateOptionalValue(context .. " default", opts.default)
+    return createOwnerRef(context, record, host, id, opts.default)
 end
 
 function sharedCache.createReader(id, opts)
-    local context = "host.cache.shared.create"
+    local context = "cache.shared.declared"
     validateId(context, id)
     if opts ~= nil and type(opts) ~= "table" then
         logging.violate("cache.invalid_args", "%s opts must be a table when provided", context)
@@ -268,12 +319,15 @@ function sharedCache.createReader(id, opts)
     if opts.access ~= nil and opts.access ~= "reader" then
         logging.violate("cache.invalid_args", "%s access must be 'reader'", context)
     end
+    validateOptionalValue(context .. " fallback", opts.fallback)
+    local fallbackValue = copyOptional(opts.fallback)
+    local fallbackView = protectOptional(fallbackValue)
 
-    return snapshotObject.create({
-        load = function()
-            return sharedCache.read(id, opts.fallback)
+    return {
+        get = function()
+            return readView(id, fallbackView)
         end,
-    })
+    }
 end
 
 return sharedCache

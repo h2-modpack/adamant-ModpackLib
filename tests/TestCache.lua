@@ -5,7 +5,6 @@ TestCache = {}
 
 function TestCache:setUp()
     self.harness = createLibHarness()
-    self.cache = self.harness.cache
 end
 
 local function makeChalkConfig(harness)
@@ -52,307 +51,86 @@ local function makeChalkConfig(harness)
     end
 end
 
-function TestCache:testCurrentRunCreatesNamespacedStateOnce()
-    local currentRun = {}
-    self.harness.game.CurrentRun = currentRun
-    local calls = 0
-
-    local first = self.cache.currentRun.get("owner-a", "run", function()
-        calls = calls + 1
-        return { Count = 1 }
-    end)
-    first.Count = 2
-
-    local second = self.cache.currentRun.get("owner-a", "run", function()
-        calls = calls + 1
-        return { Count = 99 }
-    end)
-
-    lu.assertEquals(calls, 1)
-    lu.assertIs(first, second)
-    lu.assertEquals(second.Count, 2)
-    lu.assertNotNil(currentRun._AdamantModpackLibCache)
+local function activateAndEnableHost(harness, host, pluginGuid)
+    lu.assertTrue(host.activate())
+    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    lu.assertNotNil(fullHost)
+    lu.assertTrue(fullHost.setEnabled(true))
+    return fullHost
 end
 
-function TestCache:testCurrentRunNamespacesPreventOwnerCollisions()
-    self.harness.game.CurrentRun = {}
-
-    local a = self.cache.currentRun.get("owner-a", "run")
-    local b = self.cache.currentRun.get("owner-b", "run")
-
-    a.Value = "a"
-    b.Value = "b"
-
-    lu.assertEquals(self.cache.currentRun.peek("owner-a", "run").Value, "a")
-    lu.assertEquals(self.cache.currentRun.peek("owner-b", "run").Value, "b")
+local function createCacheModule(harness, pluginGuid, opts)
+    opts = opts or {}
+    local host, store = harness.public.createModule({
+        pluginGuid = pluginGuid,
+        config = opts.config or {},
+        modpack = "test-pack",
+        id = opts.id or ("Cache" .. tostring(pluginGuid):gsub("[^%w_]", "")),
+        name = opts.name or pluginGuid,
+        cache = opts.cache,
+        drawTab = opts.drawTab or function() end,
+    })
+    return host, store
 end
 
-function TestCache:testCurrentRunPeekAndClearDoNotCreateBuckets()
-    local currentRun = {}
-    self.harness.game.CurrentRun = currentRun
-
-    lu.assertNil(self.cache.currentRun.peek("owner", "run"))
-    lu.assertNil(currentRun._AdamantModpackLibCache)
-    lu.assertFalse(self.cache.currentRun.clear("owner", "run"))
-
-    self.cache.currentRun.get("owner", "run")
-    lu.assertNotNil(self.cache.currentRun.peek("owner", "run"))
-    lu.assertTrue(self.cache.currentRun.clear("owner", "run"))
-    lu.assertNil(self.cache.currentRun.peek("owner", "run"))
-    lu.assertNil(currentRun._AdamantModpackLibCache)
-end
-
-function TestCache:testCurrentRunRejectsInvalidInputs()
-    self.harness.game.CurrentRun = {}
-
-    lu.assertErrorMsgContains("ownerId must be a non-empty string", function()
-        self.cache.currentRun.get("", "run")
-    end)
-    lu.assertErrorMsgContains("key must be a non-empty string", function()
-        self.cache.currentRun.get("owner", "")
-    end)
-    lu.assertErrorMsgContains("factory must be a function", function()
-        self.cache.currentRun.get("owner", "run", true)
-    end)
-    lu.assertErrorMsgContains("factory must return a table", function()
-        self.cache.currentRun.get("owner", "run", function()
-            return true
-        end)
-    end)
-end
-
-function TestCache:testCurrentRunRejectsCorruptedNamespaceBuckets()
-    lu.assertErrorMsgContains("root bucket is not a table", function()
-        self.harness.game.CurrentRun = { _AdamantModpackLibCache = true }
-        self.cache.currentRun.get("owner", "run")
-    end)
-
-    lu.assertErrorMsgContains("owner bucket is not a table", function()
-        self.harness.game.CurrentRun = {
-            _AdamantModpackLibCache = {
-                owner = true,
+function TestCache:testDeclaredPersistentCacheIsAvailableOnStore()
+    local _, store = createCacheModule(self.harness, "test-cache-declared-persistent", {
+        id = "DeclaredPersistentCacheHost",
+        name = "Declared Persistent Cache Host",
+        cache = {
+            RecordingReady = {
+                domain = "persistent",
+                key = "RecordingReady",
+                default = false,
             },
-        }
-        self.cache.currentRun.get("owner", "run")
-    end)
+        },
+    })
+
+    lu.assertFalse(store.cache.persistent.read("RecordingReady"))
+    lu.assertTrue(store.cache.persistent.set("RecordingReady", true))
+    lu.assertTrue(store.cache.persistent.read("RecordingReady"))
+    lu.assertTrue(store.cache.persistent.clear("RecordingReady"))
+    lu.assertFalse(store.cache.persistent.read("RecordingReady"))
 end
 
-function TestCache:testAuthorHostCurrentRunCacheBindsOwnerIdentity()
-    local currentRun = {}
-    self.harness.game.CurrentRun = currentRun
-
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-host",
-        config = {},
-        modpack = "test-pack",
-        id = "CacheHost",
-        name = "Cache Host",
-        drawTab = function() end,
+function TestCache:testDeclaredPersistentCachePreservesFalseAsPresentValue()
+    local _, store = createCacheModule(self.harness, "test-cache-declared-persistent-false", {
+        cache = {
+            RecordingReady = {
+                domain = "persistent",
+                key = "RecordingReady",
+                default = true,
+            },
+        },
     })
 
-    local state = host.cache.currentRun.get("run", function()
-        return { Count = 1 }
-    end)
-    state.Count = 2
-
-    lu.assertEquals(self.cache.currentRun.peek("test-cache-host", "run").Count, 2)
-    lu.assertIs(host.cache.currentRun.peek("run"), state)
-    lu.assertTrue(host.cache.currentRun.clear("run"))
-    lu.assertNil(self.cache.currentRun.peek("test-cache-host", "run"))
+    lu.assertTrue(store.cache.persistent.set("RecordingReady", false))
+    lu.assertFalse(store.cache.persistent.read("RecordingReady"))
 end
 
-function TestCache:testAuthorHostCurrentRunCacheReturnsEmptyWhenNoCurrentRun()
-    self.harness.game.CurrentRun = nil
-
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-no-run",
-        config = {},
-        modpack = "test-pack",
-        id = "NoRunCacheHost",
-        name = "No Run Cache Host",
-        drawTab = function() end,
-    })
-
-    lu.assertNil(host.cache.currentRun.get("run"))
-    lu.assertNil(host.cache.currentRun.peek("run"))
-    lu.assertFalse(host.cache.currentRun.clear("run"))
-end
-
-function TestCache:testAuthorCurrentRunCacheObjectSnapshotsMutableBucket()
-    local currentRun = {}
-    self.harness.game.CurrentRun = currentRun
-
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-current-run-object",
-        config = {},
-        id = "CurrentRunCacheObjectHost",
-        name = "Current Run Cache Object Host",
-        drawTab = function() end,
-    })
-
-    local calls = 0
-    local runState = host.cache.currentRun.create("run", {
-        factory = function()
-            calls = calls + 1
-            return {
-                rows = {},
-            }
-        end,
-    })
-
-    lu.assertNil(runState:peek())
-    lu.assertEquals(calls, 0)
-
-    local state = runState:get()
-    lu.assertEquals(calls, 1)
-    state.rows[1] = "first"
-
-    lu.assertIs(runState:get(), state)
-    lu.assertEquals(host.cache.currentRun.peek("run").rows[1], "first")
-    lu.assertIs(runState:refresh(), state)
-
-    lu.assertTrue(runState:clear())
-    lu.assertNil(runState:peek())
-    lu.assertNil(host.cache.currentRun.peek("run"))
-end
-
-function TestCache:testAuthorHostCurrentRunCacheRejectsInvalidInputsWithoutCurrentRun()
-    self.harness.game.CurrentRun = nil
-
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-invalid-host",
-        config = {},
-        id = "InvalidCacheHost",
-        name = "Invalid Cache Host",
-        drawTab = function() end,
-    })
-
-    lu.assertErrorMsgContains("key must be a non-empty string", function()
-        host.cache.currentRun.get("")
-    end)
-    lu.assertErrorMsgContains("factory must be a function", function()
-        host.cache.currentRun.get("run", true)
-    end)
-end
-
-function TestCache:testAuthorCurrentRunCacheRejectsUnmanagedHost()
-    local host = self.harness.cacheBundle.author.create({})
-
-    lu.assertErrorMsgContains("expected managed module host record", function()
-        host.currentRun.get("run")
-    end)
-end
-
-function TestCache:testAuthorPersistentCacheReadsWritesAndClearsScalarValues()
-    local config = {}
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent",
-        config = config,
-        modpack = "test-pack",
-        id = "PersistentCacheHost",
-        name = "Persistent Cache Host",
-        drawTab = function() end,
-    })
-
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
-    lu.assertEquals(host.cache.persistent.read("RecordingReady", false), false)
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
-
-    lu.assertTrue(host.cache.persistent.write("RecordingReady", true))
-    lu.assertTrue(host.cache.persistent.has("RecordingReady"))
-    lu.assertTrue(host.cache.persistent.read("RecordingReady", false))
-
-    lu.assertTrue(host.cache.persistent.clear("RecordingReady"))
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
-    lu.assertEquals(host.cache.persistent.read("RecordingReady", false), false)
-end
-
-function TestCache:testAuthorPersistentCachePreservesFalseAsPresentValue()
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-false",
-        config = {},
-        id = "PersistentFalseCacheHost",
-        name = "Persistent False Cache Host",
-        drawTab = function() end,
-    })
-
-    host.cache.persistent.write("RecordingReady", false)
-
-    lu.assertTrue(host.cache.persistent.has("RecordingReady"))
-    lu.assertFalse(host.cache.persistent.read("RecordingReady", true))
-end
-
-function TestCache:testAuthorPersistentCacheObjectProjectsAndWritesThrough()
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-object",
-        config = {},
-        id = "PersistentObjectCacheHost",
-        name = "Persistent Object Cache Host",
-        drawTab = function() end,
-    })
-
-    local ready = host.cache.persistent.create("RecordingReady", {
-        default = false,
-    })
-    lu.assertFalse(ready:get())
-    lu.assertFalse(ready:has())
-
-    lu.assertTrue(ready:set(true))
-    lu.assertTrue(ready:get())
-    lu.assertTrue(host.cache.persistent.read("RecordingReady", false))
-
-    host.cache.persistent.write("RecordingReady", false)
-    lu.assertTrue(ready:get())
-    lu.assertFalse(ready:refresh())
-    lu.assertFalse(ready:get())
-
-    lu.assertTrue(ready:clear())
-    lu.assertFalse(ready:get())
-    lu.assertFalse(ready:has())
-end
-
-function TestCache:testAuthorPersistentCacheNamespacesByOwner()
-    local config = {}
-    local first = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-owner-a",
-        config = config,
-        id = "PersistentOwnerA",
-        name = "Persistent Owner A",
-        drawTab = function() end,
-    })
-    local second = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-owner-b",
-        config = config,
-        id = "PersistentOwnerB",
-        name = "Persistent Owner B",
-        drawTab = function() end,
-    })
-
-    first.cache.persistent.write("RecordingReady", true)
-    second.cache.persistent.write("RecordingReady", false)
-
-    lu.assertTrue(first.cache.persistent.read("RecordingReady", false))
-    lu.assertFalse(second.cache.persistent.read("RecordingReady", true))
-end
-
-function TestCache:testAuthorPersistentCacheUsesChalkCacheSection()
+function TestCache:testDeclaredPersistentCacheUsesChalkCacheSection()
     local config, raw, restoreChalk = makeChalkConfig(self.harness)
-    local ok, host, _, err = pcall(function()
-        return self.harness.public.createModule({
-            pluginGuid = "test-cache-persistent-chalk",
+    local ok, storeOrErr = pcall(function()
+        local _, store = createCacheModule(self.harness, "test-cache-declared-persistent-chalk", {
             config = config,
             id = "PersistentChalkCacheHost",
             name = "Persistent Chalk Cache Host",
-            drawTab = function() end,
+            cache = {
+                RecordingReady = {
+                    domain = "persistent",
+                    key = "RecordingReady",
+                    default = true,
+                },
+            },
         })
+        return store
     end)
     restoreChalk()
 
-    lu.assertTrue(ok)
-    lu.assertNotNil(host, tostring(err))
-
-    lu.assertTrue(host.cache.persistent.write("RecordingReady", false))
-    lu.assertFalse(host.cache.persistent.read("RecordingReady", true))
+    lu.assertTrue(ok, tostring(storeOrErr))
+    local store = storeOrErr
+    lu.assertTrue(store.cache.persistent.set("RecordingReady", false))
+    lu.assertFalse(store.cache.persistent.read("RecordingReady"))
 
     local cacheEntryCount = 0
     local cacheKey
@@ -365,313 +143,402 @@ function TestCache:testAuthorPersistentCacheUsesChalkCacheSection()
     end
 
     lu.assertEquals(cacheEntryCount, 1)
-    lu.assertStrContains(cacheKey, "test-cache-persistent-chalk")
-    lu.assertTrue(host.cache.persistent.clear("RecordingReady"))
-    lu.assertFalse(host.cache.persistent.has("RecordingReady"))
+    lu.assertStrContains(cacheKey, "test-cache-declared-persistent-chalk")
 end
 
-function TestCache:testAuthorPersistentCacheRejectsInvalidInputs()
-    local host = self.harness.public.createModule({
-        pluginGuid = "test-cache-persistent-invalid",
-        config = {},
-        id = "PersistentInvalidCacheHost",
-        name = "Persistent Invalid Cache Host",
-        drawTab = function() end,
+function TestCache:testDeclaredPersistentCacheRejectsInvalidInputs()
+    local _, store = createCacheModule(self.harness, "test-cache-declared-persistent-invalid", {
+        cache = {
+            RecordingReady = {
+                domain = "persistent",
+                key = "RecordingReady",
+                default = false,
+            },
+        },
     })
 
-    lu.assertErrorMsgContains("key must be a non-empty string", function()
-        host.cache.persistent.read("")
+    lu.assertErrorMsgContains("unknown cache declaration", function()
+        store.cache.persistent.read("Missing")
     end)
     lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.read("RecordingReady", {})
+        store.cache.persistent.set("RecordingReady", {})
     end)
-    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.write("RecordingReady", nil)
+end
+
+function TestCache:testDeclaredCacheSurfacesArePhaseGated()
+    local capturedState = nil
+    local drawReadValue = nil
+    local host, store
+    host, store = createCacheModule(self.harness, "test-cache-declared-phase-gating", {
+        cache = {
+            RecordingReady = {
+                domain = "persistent",
+                key = "RecordingReady",
+                default = false,
+            },
+        },
+        drawTab = function(_, state)
+            capturedState = state
+            drawReadValue = state.cache.persistent.read("RecordingReady")
+            lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
+                store.cache.persistent.read("RecordingReady")
+            end)
+        end,
+    })
+
+    lu.assertTrue(store.cache.persistent.set("RecordingReady", true))
+    local fullHost = activateAndEnableHost(self.harness, host, "test-cache-declared-phase-gating")
+    fullHost.drawTab()
+
+    lu.assertTrue(drawReadValue)
+    lu.assertNotNil(capturedState)
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        capturedState.cache.persistent.read("RecordingReady")
     end)
-    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.write("RecordingReady", {})
-    end)
-    lu.assertErrorMsgContains("opts must be a table", function()
-        host.cache.persistent.create("RecordingReady", true)
-    end)
-    lu.assertErrorMsgContains("value must be a boolean, number, or string", function()
-        host.cache.persistent.create("RecordingReady", {
-            default = {},
+end
+
+function TestCache:testDeclaredCurrentRunCacheCreatesNamespacedStateOnce()
+    self.harness.game.CurrentRun = {}
+    local calls = 0
+    local _, store = createCacheModule(self.harness, "test-cache-declared-current-run-once", {
+        cache = {
+            RunScratch = {
+                domain = "currentRun",
+                key = "run",
+                factory = function()
+                    calls = calls + 1
+                    return {
+                        Count = 1,
+                    }
+                end,
+            },
+        },
+    })
+
+    local first = store.cache.currentRun.get("RunScratch")
+    first.Count = 2
+    local second = store.cache.currentRun.get("RunScratch")
+
+    lu.assertEquals(calls, 1)
+    lu.assertIs(first, second)
+    lu.assertEquals(second.Count, 2)
+    lu.assertNotNil(self.harness.game.CurrentRun._AdamantModpackLibCache)
+end
+
+function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
+    self.harness.game.CurrentRun = {}
+    local drawHasCurrentRunCache = nil
+    local host, store = createCacheModule(self.harness, "test-cache-declared-current-run", {
+        id = "DeclaredCurrentRunCacheHost",
+        name = "Declared Current Run Cache Host",
+        cache = {
+            RunScratch = {
+                domain = "currentRun",
+                key = "run",
+                factory = function()
+                    return {
+                        Count = 0,
+                    }
+                end,
+            },
+        },
+        drawTab = function(_, state)
+            drawHasCurrentRunCache = state.cache.currentRun ~= nil
+        end,
+    })
+
+    store.cache.currentRun.get("RunScratch").Count = 2
+    lu.assertTrue(store.cache.currentRun.clear("RunScratch"))
+    lu.assertEquals(store.cache.currentRun.get("RunScratch").Count, 0)
+
+    activateAndEnableHost(self.harness, host, "test-cache-declared-current-run")
+    self.harness.moduleHost.getLiveHost("test-cache-declared-current-run").drawTab()
+    lu.assertFalse(drawHasCurrentRunCache)
+end
+
+function TestCache:testDeclaredCurrentRunCacheRejectsInvalidInputs()
+    self.harness.game.CurrentRun = {}
+
+    local host = createCacheModule(self.harness, "test-cache-current-run-invalid-factory", {
+        cache = {
+            RunScratch = {
+                domain = "currentRun",
+                key = "run",
+                factory = true,
+            },
+        },
+    })
+    lu.assertNil(host)
+
+    lu.assertErrorMsgContains("factory must return a table", function()
+        local _, store = createCacheModule(self.harness, "test-cache-current-run-invalid-return", {
+            cache = {
+                RunScratch = {
+                    domain = "currentRun",
+                    key = "run",
+                    factory = function()
+                        return true
+                    end,
+                },
+            },
         })
+        store.cache.currentRun.get("RunScratch")
     end)
 end
 
-local function createSharedCacheHost(harness, pluginGuid, opts)
-    opts = opts or {}
-    local moduleId = opts.id or ("SharedCache" .. tostring(pluginGuid):gsub("[^%w_]", ""))
-    return harness.public.createModule({
-        pluginGuid = pluginGuid,
-        config = opts.config or {},
-        modpack = "test-pack",
-        id = moduleId,
-        name = opts.name or pluginGuid,
-        drawTab = opts.drawTab or function() end,
+function TestCache:testDeclaredSharedCachePublishesOwnerAndDrawWrites()
+    local publisher = createCacheModule(self.harness, "test-cache-declared-shared-publisher", {
+        id = "DeclaredSharedPublisher",
+        name = "Declared Shared Publisher",
+        cache = {
+            Active = {
+                domain = "shared",
+                id = "test.declared.shared.active",
+                access = "owner",
+                default = false,
+            },
+        },
+        drawTab = function(_, state)
+            state.cache.shared.set("Active", true)
+        end,
     })
+    local _, readerStore = createCacheModule(self.harness, "test-cache-declared-shared-reader", {
+        id = "DeclaredSharedReader",
+        name = "Declared Shared Reader",
+        cache = {
+            Active = {
+                domain = "shared",
+                id = "test.declared.shared.active",
+                access = "reader",
+                fallback = false,
+            },
+        },
+    })
+
+    activateAndEnableHost(self.harness, publisher, "test-cache-declared-shared-publisher")
+    lu.assertFalse(readerStore.cache.shared.read("Active"))
+
+    self.harness.moduleHost.getLiveHost("test-cache-declared-shared-publisher").drawTab()
+    lu.assertTrue(readerStore.cache.shared.read("Active"))
+    lu.assertErrorMsgContains("does not support set", function()
+        readerStore.cache.shared.set("Active", false)
+    end)
 end
 
-local function activateAndEnableSharedCacheHost(harness, host, pluginGuid)
-    lu.assertTrue(host.activate())
-    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
-    lu.assertNotNil(fullHost)
-    lu.assertTrue(fullHost.setEnabled(true))
-    return fullHost
+function TestCache:testDeclaredSharedCacheReadsTableViews()
+    local publisher = createCacheModule(self.harness, "test-cache-declared-shared-table-publisher", {
+        id = "DeclaredSharedTablePublisher",
+        name = "Declared Shared Table Publisher",
+        cache = {
+            Availability = {
+                domain = "shared",
+                id = "test.declared.shared.availability",
+                access = "owner",
+                default = {
+                    active = false,
+                    available = {},
+                },
+            },
+        },
+        drawTab = function(_, state)
+            state.cache.shared.set("Availability", {
+                active = true,
+                available = {
+                    Apollo = false,
+                },
+            })
+        end,
+    })
+    local _, readerStore = createCacheModule(self.harness, "test-cache-declared-shared-table-reader", {
+        id = "DeclaredSharedTableReader",
+        name = "Declared Shared Table Reader",
+        cache = {
+            Availability = {
+                domain = "shared",
+                id = "test.declared.shared.availability",
+                access = "reader",
+                fallback = {
+                    active = false,
+                    available = {},
+                },
+            },
+        },
+    })
+
+    activateAndEnableHost(self.harness, publisher, "test-cache-declared-shared-table-publisher")
+    lu.assertFalse(readerStore.cache.shared.read("Availability").active)
+
+    self.harness.moduleHost.getLiveHost("test-cache-declared-shared-table-publisher").drawTab()
+    local availability = readerStore.cache.shared.read("Availability")
+    lu.assertTrue(availability.active)
+    lu.assertFalse(availability.available.Apollo)
+    lu.assertErrorMsgContains("read-only", function()
+        availability.available.Apollo = true
+    end)
 end
 
-function TestCache:testSharedCachePublishesWritesAndReadsLiveProjection()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-publisher")
-    local reader = createSharedCacheHost(self.harness, "test-cache-shared-reader")
-
-    publisher.cache.shared.publish("test.shared", {
-        default = { active = false, available = {} },
-    })
-
-    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), { missing = true })
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-publisher")
-
-    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
-        active = false,
-        available = {},
-    })
-
-    lu.assertTrue(publisher.cache.shared.write("test.shared", {
-        active = true,
-        available = {
-            Apollo = false,
-        },
-    }))
-
-    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
-        active = true,
-        available = {
-            Apollo = false,
+function TestCache:testDeclaredSharedCacheOwnerWritesCopyTables()
+    local publisher, publisherStore = createCacheModule(self.harness, "test-cache-declared-shared-copy-publisher", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.declared.shared.copy",
+                access = "owner",
+                default = {},
+            },
         },
     })
-
-    lu.assertTrue(publisher.cache.shared.clear("test.shared"))
-    lu.assertEquals(reader.cache.shared.read("test.shared", { missing = true }), {
-        active = false,
-        available = {},
-    })
-end
-
-function TestCache:testSharedCacheObjectsPublishReadAndWriteSnapshots()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-object-publisher")
-    local readerHost = createSharedCacheHost(self.harness, "test-cache-shared-object-reader")
-
-    local owner = publisher.cache.shared.create("test.shared.object", {
-        access = "owner",
-        default = {
-            active = false,
-            available = {},
+    local _, readerStore = createCacheModule(self.harness, "test-cache-declared-shared-copy-reader", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.declared.shared.copy",
+                access = "reader",
+                fallback = {},
+            },
         },
     })
-    local reader = readerHost.cache.shared.create("test.shared.object", {
-        access = "reader",
-        fallback = {
-            missing = true,
-        },
-    })
-
-    lu.assertNil(reader.set)
-    lu.assertNil(reader.clear)
-    lu.assertEquals(reader:get(), {
-        missing = true,
-    })
-
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-object-publisher")
-    lu.assertEquals(reader:refresh(), {
-        active = false,
-        available = {},
-    })
-
-    lu.assertTrue(owner:set({
-        active = true,
-        available = {
-            Apollo = false,
-        },
-    }))
-    lu.assertEquals(owner:get(), {
-        active = true,
-        available = {
-            Apollo = false,
-        },
-    })
-    lu.assertEquals(reader:refresh(), {
-        active = true,
-        available = {
-            Apollo = false,
-        },
-    })
-
-    local ownerSnapshot = owner:get()
-    ownerSnapshot.available.Apollo = true
-    lu.assertEquals(owner:get().available.Apollo, true)
-    lu.assertEquals(reader:refresh().available.Apollo, false)
-
-    lu.assertTrue(owner:clear())
-    lu.assertEquals(reader:refresh(), {
-        active = false,
-        available = {},
-    })
-end
-
-function TestCache:testSharedCacheCopiesOnWriteAndRead()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-copy-publisher")
-    local reader = createSharedCacheHost(self.harness, "test-cache-shared-copy-reader")
-    publisher.cache.shared.publish("test.shared.copy")
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-copy-publisher")
 
     local snapshot = {
         nested = {
             value = 1,
         },
     }
-    publisher.cache.shared.write("test.shared.copy", snapshot)
+    activateAndEnableHost(self.harness, publisher, "test-cache-declared-shared-copy-publisher")
+    lu.assertTrue(publisherStore.cache.shared.set("Snapshot", snapshot))
     snapshot.nested.value = 2
 
-    local firstRead = reader.cache.shared.read("test.shared.copy", {})
+    local firstRead = readerStore.cache.shared.read("Snapshot")
     lu.assertEquals(firstRead.nested.value, 1)
-    firstRead.nested.value = 3
+    lu.assertErrorMsgContains("read-only", function()
+        firstRead.nested.value = 3
+    end)
 
-    local secondRead = reader.cache.shared.read("test.shared.copy", {})
+    local secondRead = readerStore.cache.shared.read("Snapshot")
     lu.assertEquals(secondRead.nested.value, 1)
 end
 
-function TestCache:testSharedCacheRejectsInvalidPublicationAndValues()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-invalid")
-
-    lu.assertErrorMsgContains("id must be a non-empty string", function()
-        publisher.cache.shared.publish("")
-    end)
-    lu.assertErrorMsgContains("value must be a scalar or table", function()
-        publisher.cache.shared.publish("test.shared.invalid", {
-            default = function() end,
-        })
-    end)
-
-    publisher.cache.shared.publish("test.shared.invalid")
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-invalid")
+function TestCache:testDeclaredSharedCacheRejectsInvalidValues()
+    local _, store = createCacheModule(self.harness, "test-cache-declared-shared-invalid", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.declared.shared.invalid",
+                access = "owner",
+            },
+        },
+    })
 
     lu.assertErrorMsgContains("value must not be nil", function()
-        publisher.cache.shared.write("test.shared.invalid", nil)
+        store.cache.shared.set("Snapshot", nil)
     end)
     lu.assertErrorMsgContains("value must be a scalar or table", function()
-        publisher.cache.shared.write("test.shared.invalid", function() end)
+        store.cache.shared.set("Snapshot", function() end)
     end)
 end
 
-function TestCache:testSharedCacheRequiresOwnerForWrites()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-owner")
-    local other = createSharedCacheHost(self.harness, "test-cache-shared-other")
+function TestCache:testDeclaredSharedCacheDifferentOwnerDuplicateFailsActivation()
+    local first = createCacheModule(self.harness, "test-cache-shared-dupe-a", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.dupe",
+                access = "owner",
+            },
+        },
+    })
+    local second = createCacheModule(self.harness, "test-cache-shared-dupe-b", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.dupe",
+                access = "owner",
+            },
+        },
+    })
 
-    publisher.cache.shared.publish("test.shared.owner")
-
-    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
-        publisher.cache.shared.write("test.shared.owner", true)
-    end)
-
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-owner")
-
-    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
-        other.cache.shared.write("test.shared.owner", true)
-    end)
-    lu.assertTrue(publisher.cache.shared.write("test.shared.owner", true))
-end
-
-function TestCache:testSharedCacheRejectsPublishAfterActivationBegins()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-late")
-    lu.assertTrue(publisher.activate())
-
-    lu.assertErrorMsgContains("cannot publish after activation begins", function()
-        publisher.cache.shared.publish("test.shared.late")
-    end)
-end
-
-function TestCache:testSharedCacheDifferentOwnerDuplicateFailsActivation()
-    local first = createSharedCacheHost(self.harness, "test-cache-shared-dupe-a")
-    local second = createSharedCacheHost(self.harness, "test-cache-shared-dupe-b")
-
-    first.cache.shared.publish("test.shared.dupe")
-    second.cache.shared.publish("test.shared.dupe")
-
-    activateAndEnableSharedCacheHost(self.harness, first, "test-cache-shared-dupe-a")
+    activateAndEnableHost(self.harness, first, "test-cache-shared-dupe-a")
     local ok, err = second.activate()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "already published")
 end
 
-function TestCache:testSharedCacheSameOwnerHotReloadReplacesPublication()
-    local first = createSharedCacheHost(self.harness, "test-cache-shared-reload", {
+function TestCache:testDeclaredSharedCacheSameOwnerHotReloadReplacesPublication()
+    local first, firstStore = createCacheModule(self.harness, "test-cache-shared-reload", {
         id = "SharedReload",
         name = "Shared Reload",
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.reload",
+                access = "owner",
+                default = "first-default",
+            },
+        },
     })
-    local reader = createSharedCacheHost(self.harness, "test-cache-shared-reload-reader")
-    first.cache.shared.publish("test.shared.reload", {
-        default = "first-default",
+    local _, readerStore = createCacheModule(self.harness, "test-cache-shared-reload-reader", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.reload",
+                access = "reader",
+                fallback = "fallback",
+            },
+        },
     })
-    activateAndEnableSharedCacheHost(self.harness, first, "test-cache-shared-reload")
-    first.cache.shared.write("test.shared.reload", "first-value")
+    activateAndEnableHost(self.harness, first, "test-cache-shared-reload")
+    firstStore.cache.shared.set("Snapshot", "first-value")
 
-    local second = createSharedCacheHost(self.harness, "test-cache-shared-reload", {
+    local second, secondStore = createCacheModule(self.harness, "test-cache-shared-reload", {
         id = "SharedReload",
         name = "Shared Reload",
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.reload",
+                access = "owner",
+                default = "second-default",
+            },
+        },
     })
-    second.cache.shared.publish("test.shared.reload", {
-        default = "second-default",
-    })
-    activateAndEnableSharedCacheHost(self.harness, second, "test-cache-shared-reload")
+    activateAndEnableHost(self.harness, second, "test-cache-shared-reload")
 
-    lu.assertEquals(reader.cache.shared.read("test.shared.reload", "fallback"), "second-default")
-    lu.assertTrue(second.cache.shared.write("test.shared.reload", "second-value"))
-    lu.assertEquals(reader.cache.shared.read("test.shared.reload", "fallback"), "second-value")
-    lu.assertErrorMsgContains("requires an activated shared cache publication", function()
-        first.cache.shared.write("test.shared.reload", "stale")
+    lu.assertEquals(readerStore.cache.shared.read("Snapshot"), "second-default")
+    lu.assertTrue(secondStore.cache.shared.set("Snapshot", "second-value"))
+    lu.assertEquals(readerStore.cache.shared.read("Snapshot"), "second-value")
+    lu.assertErrorMsgContains("requires the active publishing owner", function()
+        firstStore.cache.shared.set("Snapshot", "stale")
     end)
 end
 
-function TestCache:testSharedCacheDisabledOwnerIsInvisibleToReads()
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-disabled")
-    local reader = createSharedCacheHost(self.harness, "test-cache-shared-disabled-reader")
-    publisher.cache.shared.publish("test.shared.disabled", {
-        default = "default",
+function TestCache:testDeclaredSharedCacheDisabledOwnerIsInvisibleToReads()
+    local publisher, publisherStore = createCacheModule(self.harness, "test-cache-shared-disabled", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.disabled",
+                access = "owner",
+                default = "default",
+            },
+        },
     })
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-disabled")
-    publisher.cache.shared.write("test.shared.disabled", "visible")
+    local _, readerStore = createCacheModule(self.harness, "test-cache-shared-disabled-reader", {
+        cache = {
+            Snapshot = {
+                domain = "shared",
+                id = "test.shared.disabled",
+                access = "reader",
+                fallback = "fallback",
+            },
+        },
+    })
+    activateAndEnableHost(self.harness, publisher, "test-cache-shared-disabled")
+    publisherStore.cache.shared.set("Snapshot", "visible")
 
     local fullHost = self.harness.moduleHost.getLiveHost("test-cache-shared-disabled")
-    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "visible")
+    lu.assertEquals(readerStore.cache.shared.read("Snapshot"), "visible")
     lu.assertTrue(fullHost.setEnabled(false))
-    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "fallback")
+    lu.assertEquals(readerStore.cache.shared.read("Snapshot"), "fallback")
     lu.assertTrue(fullHost.setEnabled(true))
-    lu.assertEquals(reader.cache.shared.read("test.shared.disabled", "fallback"), "visible")
-end
-
-function TestCache:testDrawServicesCanReadAndOwnerCanWriteSharedCache()
-    local capturedServices
-    local publisher = createSharedCacheHost(self.harness, "test-cache-shared-draw", {
-        drawTab = function(_, _, _, services)
-            capturedServices = services
-            local value = services.cache.shared.read("test.shared.draw", "fallback")
-            services.cache.shared.write("test.shared.draw", value .. "-draw")
-        end,
-    })
-    local reader = createSharedCacheHost(self.harness, "test-cache-shared-draw-reader")
-    publisher.cache.shared.publish("test.shared.draw", {
-        default = "default",
-    })
-    activateAndEnableSharedCacheHost(self.harness, publisher, "test-cache-shared-draw")
-
-    self.harness.moduleHost.getLiveHost("test-cache-shared-draw").drawTab()
-
-    lu.assertNotNil(capturedServices)
-    lu.assertEquals(reader.cache.shared.read("test.shared.draw", "fallback"), "default-draw")
-
-    lu.assertErrorMsgContains("draw-phase object can only run during a draw callback", function()
-        capturedServices.cache.shared.read("test.shared.draw", "fallback")
-    end)
+    lu.assertEquals(readerStore.cache.shared.read("Snapshot"), "visible")
 end

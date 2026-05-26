@@ -100,6 +100,7 @@ local lib = {}
 ---Committed runtime state facade. Store methods are valid outside draw callbacks and reject while any module draw callback is running.
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
+---@field cache AdamantModpackLib.StoreCache
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
 ---Internal trusted staged state. Module authors receive `DrawState` during draw callbacks.
@@ -123,6 +124,7 @@ local lib = {}
 ---Draw-phase staged UI state facade. Methods and returned refs are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
+---@field cache AdamantModpackLib.DrawStateCache
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
@@ -164,7 +166,6 @@ local lib = {}
 ---@field log fun(fmt: string, ...) Print a module-scoped log line.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line when DebugMode is enabled.
 ---@field fallbackUi AdamantModpackLib.AuthorFallbackUi
----@field cache AdamantModpackLib.AuthorCache
 ---@field hooks AdamantModpackLib.AuthorHooks
 ---@field integrations AdamantModpackLib.AuthorIntegrations
 ---@field mutation AdamantModpackLib.AuthorMutation
@@ -172,18 +173,9 @@ local lib = {}
 
 ---Draw-phase service surface. Methods are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawServices
----@field cache AdamantModpackLib.DrawServicesCache
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 ---@field pollIntegration fun(id: string, methodName: string, fallback: any, ...): any, string? Poll a registered integration method.
-
----@class AdamantModpackLib.DrawServicesCache
----@field shared AdamantModpackLib.DrawServicesSharedCache
-
----@class AdamantModpackLib.DrawServicesSharedCache
----@field read fun(id: string, fallback: any): any Read an owner-published shared cache projection.
----@field write fun(id: string, value: any): boolean Write an owned shared cache projection from draw code.
----@field clear fun(id: string): boolean Clear an owned shared cache projection from draw code.
 
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
@@ -261,72 +253,65 @@ local lib = {}
 ---    store: AdamantModpackLib.Store
 ---))
 
----@class AdamantModpackLib.AuthorCache
----@field currentRun AdamantModpackLib.AuthorCurrentRunCache
----@field persistent AdamantModpackLib.AuthorPersistentCache
----@field shared AdamantModpackLib.AuthorSharedCache
-
----@class AdamantModpackLib.AuthorCurrentRunCache
----@field get fun(key: string, factory?: fun(): table): table?
----@field peek fun(key: string): table?
----@field clear fun(key: string): boolean
----@field create fun(key: string, opts?: AdamantModpackLib.CurrentRunCacheCreateOpts): AdamantModpackLib.CurrentRunCacheObject
-
----@class AdamantModpackLib.AuthorPersistentCache
----@field read fun(key: string, defaultValue?: boolean|number|string): boolean|number|string?
----@field write fun(key: string, value: boolean|number|string): boolean
----@field clear fun(key: string): boolean
----@field has fun(key: string): boolean
----@field create fun(key: string, opts?: AdamantModpackLib.PersistentCacheCreateOpts): AdamantModpackLib.PersistentCacheObject
-
----@class AdamantModpackLib.PersistentCacheCreateOpts
+---@class AdamantModpackLib.CacheDeclarationPersistent
+---@field domain "persistent"
+---@field key string
 ---@field default? boolean|number|string
 
----@class AdamantModpackLib.PersistentCacheObject
----@field get fun(self?: AdamantModpackLib.PersistentCacheObject): boolean|number|string?
----@field set fun(self: AdamantModpackLib.PersistentCacheObject, value: boolean|number|string): boolean
----@field clear fun(self?: AdamantModpackLib.PersistentCacheObject): boolean
----@field has fun(self?: AdamantModpackLib.PersistentCacheObject): boolean
----@field refresh fun(self?: AdamantModpackLib.PersistentCacheObject): boolean|number|string?
-
----@class AdamantModpackLib.CurrentRunCacheCreateOpts
+---@class AdamantModpackLib.CacheDeclarationCurrentRun
+---@field domain "currentRun"
+---@field key string
 ---@field factory? fun(): table
 
----@class AdamantModpackLib.CurrentRunCacheObject
----@field get fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
----@field peek fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
----@field clear fun(self?: AdamantModpackLib.CurrentRunCacheObject): boolean
----@field refresh fun(self?: AdamantModpackLib.CurrentRunCacheObject): table?
-
----@class AdamantModpackLib.AuthorSharedCache
----@field publish fun(id: string, opts?: table): boolean Declare an owner-published shared cache projection before activation.
----@field read fun(id: string, fallback: any): any Read an owner-published shared cache projection.
----@field write fun(id: string, value: any): boolean Write an owned shared cache projection after activation.
----@field clear fun(id: string): boolean Clear an owned shared cache projection after activation.
----@field create fun(
----    id: string,
----    opts: AdamantModpackLib.SharedCacheCreateOpts
----): AdamantModpackLib.SharedOwnerCacheObject|AdamantModpackLib.SharedReaderCacheObject
-
----@class AdamantModpackLib.SharedOwnerCacheCreateOpts
+---@class AdamantModpackLib.CacheDeclarationSharedOwner
+---@field domain "shared"
+---@field id string
 ---@field access "owner"
----@field default? any
+---@field default? boolean|number|string|table
 
----@class AdamantModpackLib.SharedReaderCacheCreateOpts
+---@class AdamantModpackLib.CacheDeclarationSharedReader
+---@field domain "shared"
+---@field id string
 ---@field access "reader"
----@field fallback? any
+---@field fallback? boolean|number|string|table
 
----@alias AdamantModpackLib.SharedCacheCreateOpts AdamantModpackLib.SharedOwnerCacheCreateOpts|AdamantModpackLib.SharedReaderCacheCreateOpts
+---@alias AdamantModpackLib.CacheDeclaration
+---| AdamantModpackLib.CacheDeclarationPersistent
+---| AdamantModpackLib.CacheDeclarationCurrentRun
+---| AdamantModpackLib.CacheDeclarationSharedOwner
+---| AdamantModpackLib.CacheDeclarationSharedReader
+---@alias AdamantModpackLib.CacheDeclarationMap table<string, AdamantModpackLib.CacheDeclaration>
 
----@class AdamantModpackLib.SharedOwnerCacheObject
----@field get fun(self?: AdamantModpackLib.SharedOwnerCacheObject): any
----@field set fun(self: AdamantModpackLib.SharedOwnerCacheObject, value: any): boolean
----@field clear fun(self?: AdamantModpackLib.SharedOwnerCacheObject): boolean
----@field refresh fun(self?: AdamantModpackLib.SharedOwnerCacheObject): any
+---@class AdamantModpackLib.StoreCache
+---@field persistent AdamantModpackLib.StorePersistentCache
+---@field currentRun AdamantModpackLib.StoreCurrentRunCache
+---@field shared AdamantModpackLib.StoreSharedCache
 
----@class AdamantModpackLib.SharedReaderCacheObject
----@field get fun(self?: AdamantModpackLib.SharedReaderCacheObject): any
----@field refresh fun(self?: AdamantModpackLib.SharedReaderCacheObject): any
+---@class AdamantModpackLib.DrawStateCache
+---@field persistent AdamantModpackLib.DrawPersistentCache
+---@field shared AdamantModpackLib.DrawSharedCache
+
+---@class AdamantModpackLib.StorePersistentCache
+---@field read fun(name: string): boolean|number|string?
+---@field set fun(name: string, value: boolean|number|string): boolean
+---@field clear fun(name: string): boolean
+
+---@class AdamantModpackLib.DrawPersistentCache
+---@field read fun(name: string): boolean|number|string?
+
+---@class AdamantModpackLib.StoreCurrentRunCache
+---@field get fun(name: string): table?
+---@field clear fun(name: string): boolean
+
+---@class AdamantModpackLib.StoreSharedCache
+---@field read fun(name: string): boolean|number|string|table?
+---@field set fun(name: string, value: boolean|number|string|table): boolean
+---@field clear fun(name: string): boolean
+
+---@class AdamantModpackLib.DrawSharedCache
+---@field read fun(name: string): boolean|number|string|table?
+---@field set fun(name: string, value: boolean|number|string|table): boolean
+---@field clear fun(name: string): boolean
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.
@@ -335,12 +320,13 @@ local lib = {}
 ---@field shortName? string Short UI label.
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
+---@field cache? AdamantModpackLib.CacheDeclarationMap Managed runtime cache declarations.
 ---@field actions? table<string, AdamantModpackLib.DrawActionHandler> Module draw-action handlers keyed by action id.
 ---@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Hash compaction hints.
 
 ---@alias AdamantModpackLib.DrawActionHandler fun(
+---    host: AdamantModpackLib.AuthorHost,
 ---    state: AdamantModpackLib.DrawState,
----    services: AdamantModpackLib.DrawServices,
 ---    value: any
 ---)
 
@@ -362,6 +348,7 @@ local lib = {}
 ---@field shortName? string Short display name.
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Raw storage schema.
+---@field cache? AdamantModpackLib.CacheDeclarationMap Raw managed runtime cache declarations.
 ---@field actions? table<string, AdamantModpackLib.DrawActionHandler> Draw-action handlers keyed by action id.
 ---@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Raw hash/profile group plan.
 --- Post-commit observer for rebuilding derived runtime/UI structures.

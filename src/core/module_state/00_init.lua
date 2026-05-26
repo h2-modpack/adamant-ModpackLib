@@ -87,7 +87,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field captureSnapshot fun(): table
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
----@field executePending fun(state: DrawState, services: DrawServices)
+---@field executePending fun(host: AuthorHost, state: DrawState)
 
 ---@class PersistentCacheStore
 ---@field read fun(key: string): any
@@ -103,6 +103,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 
 ---@class Store
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
+---@field cache table|nil
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
@@ -130,7 +131,8 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field tooltip string|nil
 ---@field default boolean|nil
 ---@field storage StorageSchema|nil
----@field actions table<string, fun(state: DrawState, services: DrawServices, value: any)>|nil
+---@field cache table|nil
+---@field actions table<string, fun(host: AuthorHost, state: DrawState, value: any)>|nil
 ---@field _actionOrder string[]|nil
 ---@field hashGroupPlan table|nil
 
@@ -164,8 +166,8 @@ function moduleState.create(modConfig, definition)
 end
 
 -- Internal API: narrows persistent state to the author-facing runtime store.
-function moduleState.createStore(persistentState)
-    return storeModule.create(persistentState)
+function moduleState.createStore(persistentState, cache)
+    return storeModule.create(persistentState, cache)
 end
 
 function moduleState.createActionBuffer(actionCatalog)

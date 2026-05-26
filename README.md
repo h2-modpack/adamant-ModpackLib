@@ -78,7 +78,6 @@ Reference and historical notes:
 - `host.hooks`
 - `host.overlays`
 - `host.integrations`
-- `host.cache`
 - `host.fallbackUi`
 
 Common top-level helpers:

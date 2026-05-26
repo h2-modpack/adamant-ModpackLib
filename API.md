@@ -9,7 +9,6 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `host.hooks.*`
 - `host.overlays.*`
 - `host.integrations.*`
-- `host.cache.*`
 - `host.mutation.*`
 
 Framework-owned live-host discovery, hash/profile, overlay, UI suppression, and
@@ -39,7 +38,6 @@ Host-owned capabilities can also be declared on the returned author host before
 activation:
 - `host.hooks.*`
 - `host.integrations.*`
-- `host.cache.*`
 - `host.mutation.*`
 - `host.overlays.*`
 - `host.fallbackUi.*`
@@ -132,83 +130,115 @@ Rules:
 - listener callbacks receive `payload, providerId`
 - event payloads are not durable state; consumers should poll for current values when needed
 
-## `host.cache`
+## Cache
 
-Namespaced runtime cache owned by the module host.
+Declared runtime cache owned by the module. Use this for module runtime state
+that is not staged UI config, hashed/profiled config, or mutation state.
 
-Use this for module-owned runtime cache that is not staged UI config,
-hashed/profiled config, or mutation state.
+Declarative cache:
 
-The normal author path is the author host returned by `lib.createModule(...)`.
-It binds the module's host id, backed by `pluginGuid`, so module code only
-supplies the cache domain and key.
+```lua
+local host, store = lib.createModule({
+    pluginGuid = PLUGIN_GUID,
+    config = config,
+    id = "Example",
+    name = "Example",
+    cache = {
+        RecordingReady = {
+            domain = "persistent",
+            key = "RecordingReady",
+            default = false,
+        },
+        RunScratch = {
+            domain = "currentRun",
+            key = "run",
+            factory = function()
+                return {}
+            end,
+        },
+        ApolloAvailable = {
+            domain = "shared",
+            id = "run-director.god-availability.Apollo",
+            access = "reader",
+            fallback = true,
+        },
+    },
+    drawTab = ui.drawTab,
+})
+```
+
+Runtime code reads declared cache refs through `store.cache`:
+
+```lua
+store.cache.persistent.set("RecordingReady", true)
+local ready = store.cache.persistent.read("RecordingReady")
+
+local runScratch = store.cache.currentRun.get("RunScratch")
+runScratch.seen = true
+```
+
+Draw code reads draw-safe declared cache refs through `state.cache`:
+
+```lua
+if state.cache.shared.read("ApolloAvailable") then
+    -- draw available UI
+end
+```
+
+Rules:
+- cache declaration names must be stable identifiers
+- declared cache participates in structural definition fingerprinting
+- `store.cache` is valid outside draw callbacks
+- `state.cache` is valid only during draw callbacks
+- persistent cache is writable from `store.cache`; draw access is read-only
+- current-run cache is only available from `store.cache`
+- shared owner declarations can write through `store.cache.shared.set(...)` or
+  `state.cache.shared.set(...)`
+- shared reader declarations are read-only
 
 Current run cache:
 
 ```lua
-local state = host.cache.currentRun.get("run", function()
-    return {
-        ForcedNPCPending = {},
-        NPCEncounterSeen = {},
-    }
-end)
+local runScratch = store.cache.currentRun.get("RunScratch")
+runScratch.seen = true
 ```
 
-`currentRun.get(...)` returns `nil` when there is no active `CurrentRun`.
-
 Surface:
-- `host.cache.currentRun.get(key, factory?)`
-- `host.cache.currentRun.peek(key)`
-- `host.cache.currentRun.clear(key)`
+- `store.cache.currentRun.get(name)`
+- `store.cache.currentRun.clear(name)`
 
 Rules:
-- `key` must be a non-empty string
-- `factory` runs only when the bucket is missing
-- `factory` must return a table when provided
+- the declaration name must be a stable identifier
+- the declaration factory runs only when the bucket is missing
+- the factory must return a table when provided
 - cache is namespaced under one Lib-owned root on `CurrentRun`
+- current-run cache is unavailable from draw `state.cache`
 
 Persistent scalar cache:
 
 ```lua
-local ready = host.cache.persistent.read("RecordingReady", false)
-
-host.cache.persistent.write("RecordingReady", true)
-
-if host.cache.persistent.has("RecordingReady") then
-    host.cache.persistent.clear("RecordingReady")
-end
-
-local recordingReady = host.cache.persistent.create("RecordingReady", {
-    default = false,
-})
-recordingReady:set(true)
-local drawSafeReady = recordingReady:get()
+store.cache.persistent.set("RecordingReady", true)
+local ready = store.cache.persistent.read("RecordingReady")
+local drawSafeReady = state.cache.persistent.read("RecordingReady")
 ```
 
 Surface:
-- `host.cache.persistent.read(key, default?)`
-- `host.cache.persistent.write(key, value)`
-- `host.cache.persistent.clear(key)`
-- `host.cache.persistent.has(key)`
-- `host.cache.persistent.create(key, opts?)`
+- `store.cache.persistent.read(name)`
+- `store.cache.persistent.set(name, value)`
+- `store.cache.persistent.clear(name)`
+- `state.cache.persistent.read(name)`
 
 Rules:
-- `key` must be a non-empty string
-- `value` and `default` must be boolean, number, string, or `nil` for the default only
-- `read(...)` does not create a stored value
-- `write(nil)` is invalid; use `clear(...)`
+- declaration defaults and set values must be boolean, number, or string
+- `read(...)` returns the declaration default when no value is stored
+- `set(nil)` is invalid; use `clear(...)`
 - persistent cache is not staged, hashed, profiled, or reset by Lib
-- `create(...)` returns a write-through in-memory projection for repeated
-  reads; writes and clears persist immediately
+- draw access is read-only
 
 Shared live cache:
 
 ```lua
-host.cache.shared.publish("run-director.god-availability", {
-    default = { active = false, available = {} },
-})
-
-host.cache.shared.write("run-director.god-availability", {
+store.cache.shared.set("GodAvailability", {
     active = true,
     available = {
         Apollo = false,
@@ -216,31 +246,36 @@ host.cache.shared.write("run-director.god-availability", {
 })
 ```
 
-Draw consumers can read the same live projection:
+Draw consumers read declared shared refs through `state.cache`:
 
 ```lua
-local snapshot = services.cache.shared.read("run-director.god-availability", {
-    active = false,
-    available = {},
-})
+if state.cache.shared.read("GodAvailability").available.Apollo ~= false then
+    -- draw available UI
+end
 ```
 
 Surface:
-- `host.cache.shared.publish(id, opts?)`
-- `host.cache.shared.read(id, fallback?)`
-- `host.cache.shared.write(id, value)`
-- `host.cache.shared.clear(id)`
-- `services.cache.shared.read(id, fallback?)`
-- `services.cache.shared.write(id, value)`
-- `services.cache.shared.clear(id)`
+- `store.cache.shared.read(name)`
+- `store.cache.shared.set(name, value)` for owner declarations
+- `store.cache.shared.clear(name)` for owner declarations
+- `state.cache.shared.read(name)`
+- `state.cache.shared.set(name, value)` for owner declarations
+- `state.cache.shared.clear(name)` for owner declarations
 
 Rules:
-- `publish(...)` is declaration-time only and must run before activation
-- only the publishing host can write or clear a shared cache id
+- owner and reader access is declared in `createModule({ cache = ... })`
+- only the publishing module can write or clear a shared cache id
 - writes update live memory immediately; there is no flush or persistence
 - reads return the fallback when no active publisher exists or the publisher is disabled
-- values may be scalars or tables and are deep-copied on write/read
+- values may be scalars or tables
 - use integrations for cross-module behavior calls; use shared cache for public live read models
+- table writes are copied once and returned as cached recursive read-only views
+
+For table-shaped shared cache, prefer a small domain helper that hides the
+nested table layout and exposes semantic reads. The helper can accept either
+`store` or draw `state`, because both expose `source.cache.shared.read(...)`.
+For repeated inner reads in one function, cache the returned snapshot or inner
+table in a local before checking multiple fields.
 
 ## Store And State
 
@@ -334,7 +369,7 @@ path arguments as `tableHandle:read(...)`.
 Rules:
 - widgets and draw code should usually read staged values through `state.get(...)`
 - runtime/gameplay code should read persisted values through `store.get(...):read()` or `store.read(...)`
-- new flat runtime markers should prefer `host.cache.persistent.*`
+- new flat runtime markers should prefer declared persistent cache
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
@@ -862,9 +897,6 @@ Built-ins:
 - `services.log(fmt, ...)`
 - `services.logIf(fmt, ...)`
 - `services.pollIntegration(id, methodName, fallback, ...)`
-- `services.cache.shared.read(id, fallback?)`
-- `services.cache.shared.write(id, value)`
-- `services.cache.shared.clear(id)`
 
 These helpers are the sanctioned draw-time access path for narrow module
 services. `draw.host` is not available in module UI. `services` is
@@ -901,6 +933,22 @@ Runtime commit callbacks receive the same action snapshot through
 
 The old `session.stageAction(...)` form has been removed. Use
 `actions.get(actionKey):stage(value)` in draw code.
+
+Declare action handlers on `createModule({ actions = ... })`. Handlers run
+after the draw callback and before staged state flush:
+
+```lua
+actions = {
+    StartRecording = function(host, state, value)
+        host.logIf("Starting recording")
+        state.write("RecordingEnabled", value == true)
+    end,
+}
+```
+
+Handlers receive the author `host` for runtime capabilities, the current draw
+`state` for staged UI data, and the staged action `value`. Draw `services` are
+not passed to action handlers.
 
 ## Draw Widgets
 

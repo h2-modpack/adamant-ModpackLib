@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local snapshotObject = deps.snapshotObject
 local currentRunCache = {}
 
 local ROOT_KEY = "_AdamantModpackLibCache"
@@ -67,7 +66,7 @@ local function getFromCurrentRun(currentRun, ownerId, key, factory)
             state = {}
         end
         if type(state) ~= "table" then
-            logging.violate("cache.invalid_factory", "cache.currentRun.get factory must return a table")
+            logging.violate("cache.invalid_factory", "cache.currentRun factory must return a table")
         end
         ownerBucket[key] = state
     end
@@ -75,15 +74,6 @@ local function getFromCurrentRun(currentRun, ownerId, key, factory)
         logging.violate("cache.invalid_bucket", "cache.currentRun cache bucket is not a table")
     end
     return state
-end
-
-local function peekFromCurrentRun(currentRun, ownerId, key)
-    local ownerBucket = getOwnerBucket(currentRun, ownerId, false)
-    local state = ownerBucket and ownerBucket[key] or nil
-    if type(state) == "table" then
-        return state
-    end
-    return nil
 end
 
 local function clearFromCurrentRun(currentRun, ownerId, key)
@@ -101,34 +91,6 @@ local function clearFromCurrentRun(currentRun, ownerId, key)
     return true
 end
 
-currentRunCache.get = function(currentRun, ownerId, key, factory)
-    validateOwnerId(ownerId)
-    validateKey("cache.currentRun.get", key)
-    validateFactory("cache.currentRun.get", factory)
-    if currentRun == nil then
-        return nil
-    end
-    return getFromCurrentRun(currentRun, ownerId, key, factory)
-end
-
-currentRunCache.peek = function(currentRun, ownerId, key)
-    validateOwnerId(ownerId)
-    validateKey("cache.currentRun.peek", key)
-    if currentRun == nil then
-        return nil
-    end
-    return peekFromCurrentRun(currentRun, ownerId, key)
-end
-
-currentRunCache.clear = function(currentRun, ownerId, key)
-    validateOwnerId(ownerId)
-    validateKey("cache.currentRun.clear", key)
-    if currentRun == nil then
-        return false
-    end
-    return clearFromCurrentRun(currentRun, ownerId, key)
-end
-
 currentRunCache.create = function(getCurrentRun, ownerId, key, opts)
     validateOwnerId(ownerId)
     validateKey("cache.currentRun.create", key)
@@ -138,21 +100,40 @@ currentRunCache.create = function(getCurrentRun, ownerId, key, opts)
     opts = opts or {}
     validateFactory("cache.currentRun.create", opts.factory)
 
-    return snapshotObject.create({
-        load = function()
-            return currentRunCache.peek(getCurrentRun(), ownerId, key)
-        end,
+    local lastRun = nil
+    local bucket = nil
+
+    local function syncRun()
+        local currentRun = getCurrentRun()
+        if currentRun ~= lastRun then
+            lastRun = currentRun
+            bucket = nil
+        end
+        return currentRun
+    end
+
+    return {
         get = function()
-            return currentRunCache.get(getCurrentRun(), ownerId, key, opts.factory)
-        end,
-        peek = function()
-            return currentRunCache.peek(getCurrentRun(), ownerId, key)
+            local currentRun = syncRun()
+            if currentRun == nil then
+                return nil
+            end
+            if bucket == nil then
+                bucket = getFromCurrentRun(currentRun, ownerId, key, opts.factory)
+            end
+            return bucket
         end,
         clear = function()
-            local ok = currentRunCache.clear(getCurrentRun(), ownerId, key)
-            return ok, nil
+            local currentRun = syncRun()
+            if currentRun == nil then
+                bucket = nil
+                return false
+            end
+            local ok = clearFromCurrentRun(currentRun, ownerId, key)
+            bucket = nil
+            return ok
         end,
-    })
+    }
 end
 
 return currentRunCache

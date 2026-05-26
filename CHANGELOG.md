@@ -26,9 +26,11 @@ All notable changes to this project will be documented in this file.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
 - The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetAll(...)` or draw-scoped `state.resetAll(...)`.
-- Cache is now exposed to module authors through `host.cache.currentRun.*`; the old global cache surface has been removed.
-- Added `host.cache.persistent.*` for flat scalar runtime markers that persist outside managed storage/hash/profile flows.
-- Added `host.cache.shared.*` and `services.cache.shared.*` for owner-published live read-model projections that other modules can read cheaply from runtime or draw code.
+- Cache is now declared through `createModule({ cache = ... })` and accessed through phase-scoped `store.cache` and `state.cache`; the old global and host cache surfaces have been removed.
+- Added declared persistent cache for flat scalar runtime markers that persist outside managed storage/hash/profile flows.
+- Added declared shared cache for owner-published live read-model projections and cheap runtime/draw reads.
+- Shared cache table writes are copied once and reads return recursive read-only views.
+- Modules can now declare managed cache refs in `createModule({ cache = ... })` and access them through phase-scoped `store.cache` and `state.cache`.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw value widgets now target `StorageField` values from `state.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
 - Draw `state` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetAll(opts?)`; older session-shaped helpers such as `state.view`, `state.table`, `state.field`, and schema access have been removed.
@@ -36,16 +38,16 @@ All notable changes to this project will be documented in this file.
 - The global `lib.widgets.*` and `lib.nav.*` namespaces have been removed; module draw callbacks use `draw.widgets.*` and `draw.nav.*`.
 - The global `lib.imguiHelpers.*` namespace has been removed; Framework and Lib keep their low-level ImGui binding helpers private.
 - Session and commit action compatibility helpers have been removed; draw code stages transient intent through `actions.get(...)`, and commit observers read through `commit.actions.get(...)`.
+- Draw action handlers now receive `(host, state, value)`, making actions the sanctioned UI-to-runtime command bridge instead of passing draw services into post-draw handlers.
 - Integration polling now skips disabled provider hosts before calling provider methods; scoped integration reads and draw services do not expose enabled-state helpers.
 - Store, draw state, draw actions, draw services, widgets, and nav are now phase-gated at their author-facing surfaces.
 - Fallback UI now matches Framework module tabs by collapsing module draw content while the module is disabled.
 - Module authors now construct through `lib.createModule(...)` and activate through `host.activate()`; lower-level definition/state/host construction is internal.
-- Author hosts now expose `host.cache.currentRun.*` as a bound cache helper.
 - Cache, integrations, hooks, and similar capability modules now return named service/author/public bundles where applicable so backend services, host facades, and remaining `lib.*` exports stay separated.
 - Host activation now stages and commits hooks, integrations, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
 - `host.hooks.override(...)` accepts function replacements only, matching the host-owned dispatcher model.
 - Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/references/KNOWN_LIMITATIONS.md`.
-- Removed storage-backed runtime-cache declarations; runtime markers now use `host.cache.persistent.*`.
+- Removed storage-backed runtime-cache compatibility; runtime markers now use declared persistent cache.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
 - Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 

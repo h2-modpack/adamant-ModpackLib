@@ -11,7 +11,6 @@ This guide describes the supported module contract in Lib:
 Common module author surfaces:
 - `lib.createModule(...)`
 - `host.integrations.*`
-- `host.cache.*`
 
 Fallback UI modules also use:
 - `host.fallbackUi.attachGuiOnce(...)`
@@ -185,7 +184,7 @@ commit, reload, hash/profile import, and config flush behavior.
 
 Storage roots live on `definition.storage`. Normal roots persist and hash by
 default. Use `persist = false, hash = false` for transient staged-only UI
-state. Runtime markers should prefer `host.cache.persistent.*`.
+state. Runtime markers should prefer declared persistent cache.
 
 Lib injects `Enabled` and `DebugMode` into every prepared definition. Do not
 declare them in module storage or `config.lua`.

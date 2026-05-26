@@ -6,8 +6,9 @@ local storageRefAdapter = deps.storageRefAdapter
 local store = {}
 
 ---@param persistentState PersistentState
+---@param cache table|nil
 ---@return Store
-function store.create(persistentState)
+function store.create(persistentState, cache)
     local refs = storageRefAdapter.create({
         root = persistentState,
         phase = "runtime",
@@ -17,6 +18,7 @@ function store.create(persistentState)
 
     return {
         get = refs.get,
+        cache = cache,
         read = function(alias, ...)
             phaseGate.requireRuntime()
             local ref = persistentState.get(alias)

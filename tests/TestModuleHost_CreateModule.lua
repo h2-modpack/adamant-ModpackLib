@@ -346,8 +346,6 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     lu.assertEquals(type(host.getMeta), "function")
     lu.assertEquals(type(host.log), "function")
     lu.assertEquals(type(host.logIf), "function")
-    lu.assertEquals(type(host.cache), "table")
-    lu.assertEquals(type(host.cache.currentRun.get), "function")
     lu.assertEquals(type(host.hooks), "table")
     lu.assertEquals(type(host.hooks.wrap), "function")
     lu.assertEquals(type(host.hooks.override), "function")
@@ -364,12 +362,6 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyAuthorHostSurfac
     lu.assertEquals(type(host.overlays.onCommit), "function")
     lu.assertEquals(type(host.overlays.onInterval), "function")
     lu.assertEquals(type(host.overlays.afterHook), "function")
-    local cacheSurfaceCount = 0
-    for key in pairs(host.cache) do
-        cacheSurfaceCount = cacheSurfaceCount + 1
-        lu.assertTrue(key == "currentRun" or key == "persistent" or key == "shared", key)
-    end
-    lu.assertEquals(cacheSurfaceCount, 3)
     lu.assertEquals(type(host.activate), "function")
     lu.assertNil(host.tryActivate)
     lu.assertNil(host.read)

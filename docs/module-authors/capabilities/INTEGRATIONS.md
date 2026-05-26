@@ -138,8 +138,7 @@ Event delivery rules:
 - events are not replayed to late listeners
 
 Listeners are runtime callbacks. Do not write managed settings from listeners.
-Use module-local runtime cache, `host.cache.currentRun`, or
-`host.cache.persistent` for explicit cache writes.
+Use module-local runtime cache or declared cache refs for explicit cache writes.
 
 ## Public Surface
 
