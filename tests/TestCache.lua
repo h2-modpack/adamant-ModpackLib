@@ -23,8 +23,10 @@ local function makeChalkConfig(harness)
         local entry = {
             value = defaultValue,
             description = description or "",
+            gets = 0,
         }
         function entry.get(entrySelf)
+            entrySelf.gets = entrySelf.gets + 1
             return entrySelf.value
         end
         function entry.set(entrySelf, value)
@@ -49,6 +51,21 @@ local function makeChalkConfig(harness)
     return wrapper, raw, function()
         chalk.original = previousOriginal
     end
+end
+
+local function findSingleCacheEntry(raw)
+    local cacheEntryCount = 0
+    local cacheKey
+    local cacheEntry
+    for descriptor, entry in pairs(raw.entries) do
+        if descriptor.section == "cache" then
+            cacheEntryCount = cacheEntryCount + 1
+            cacheKey = descriptor.key
+            cacheEntry = entry
+        end
+    end
+    lu.assertEquals(cacheEntryCount, 1)
+    return cacheEntry, cacheKey
 end
 
 local function activateAndEnableHost(harness, host, pluginGuid)
@@ -132,18 +149,42 @@ function TestCache:testDeclaredPersistentCacheUsesChalkCacheSection()
     lu.assertTrue(store.cache.persistent.set("RecordingReady", false))
     lu.assertFalse(store.cache.persistent.read("RecordingReady"))
 
-    local cacheEntryCount = 0
-    local cacheKey
-    for descriptor, entry in pairs(raw.entries) do
-        if descriptor.section == "cache" then
-            cacheEntryCount = cacheEntryCount + 1
-            cacheKey = descriptor.key
-            lu.assertFalse(entry:get())
-        end
-    end
-
-    lu.assertEquals(cacheEntryCount, 1)
+    local entry, cacheKey = findSingleCacheEntry(raw)
+    lu.assertFalse(entry:get())
     lu.assertStrContains(cacheKey, "test-cache-declared-persistent-chalk")
+end
+
+function TestCache:testDeclaredPersistentCacheDrawReadsRuntimeSnapshot()
+    local config, raw, restoreChalk = makeChalkConfig(self.harness)
+    local capturedDrawValue = nil
+    local ok, host, store = pcall(function()
+        return createCacheModule(self.harness, "test-cache-declared-persistent-shared-ref", {
+            config = config,
+            id = "PersistentSharedRefCacheHost",
+            name = "Persistent Shared Ref Cache Host",
+            cache = {
+                RecordingReady = {
+                    domain = "persistent",
+                    key = "RecordingReady",
+                    default = false,
+                },
+            },
+            drawTab = function(_, state)
+                capturedDrawValue = state.cache.persistent.read("RecordingReady")
+            end,
+        })
+    end)
+    restoreChalk()
+
+    lu.assertTrue(ok, tostring(host))
+    lu.assertTrue(store.cache.persistent.set("RecordingReady", true))
+    local entry = findSingleCacheEntry(raw)
+    lu.assertEquals(entry.gets, 0)
+
+    activateAndEnableHost(self.harness, host, "test-cache-declared-persistent-shared-ref").drawTab()
+
+    lu.assertTrue(capturedDrawValue)
+    lu.assertEquals(entry.gets, 0)
 end
 
 function TestCache:testDeclaredPersistentCacheRejectsInvalidInputs()

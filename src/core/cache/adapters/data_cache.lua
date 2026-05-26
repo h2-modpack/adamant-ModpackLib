@@ -38,15 +38,6 @@ local function requireMethod(ref, methodName, name, source)
     return method
 end
 
-local function wrapReadOnlyGet(phase, load)
-    return {
-        get = function()
-            requirePhase(phase)
-            return load()
-        end,
-    }
-end
-
 local function wrapSetClearRef(phase, rawRef)
     local ref
     ref = {
@@ -88,16 +79,18 @@ local function wrapReaderRef(phase, rawRef)
     }
 end
 
-local function createPersistentRef(opts, declaration)
+local function createPersistentRawRef(opts, declaration)
+    return service.persistent.create(opts.cacheStore, opts.ownerId, declaration.key, {
+        default = declaration.default,
+    })
+end
+
+local function createPersistentRef(opts, rawRef)
     if opts.phase == "draw" then
-        return wrapReadOnlyGet("draw", function()
-            return service.persistent.read(opts.cacheStore, opts.ownerId, declaration.key, declaration.default)
-        end)
+        return wrapReaderRef("draw", rawRef)
     end
 
-    return wrapSetClearRef("runtime", service.persistent.create(opts.cacheStore, opts.ownerId, declaration.key, {
-        default = declaration.default,
-    }))
+    return wrapSetClearRef("runtime", rawRef)
 end
 
 local function createCurrentRunRef(opts, declaration)
@@ -128,7 +121,7 @@ end
 
 local function createRef(opts, declaration)
     if declaration.domain == "persistent" then
-        return createPersistentRef(opts, declaration)
+        return createPersistentRef(opts, createPersistentRawRef(opts, declaration))
     end
     if declaration.domain == "currentRun" then
         return createCurrentRunRef(opts, declaration)
@@ -152,9 +145,20 @@ function dataCache.stageSharedOwnerPublications(record, host, definitions)
 end
 
 function dataCache.create(opts)
+    local persistentRawRefs = opts.persistentRefs or {}
     local refs = {}
     local declarations = opts.definition and opts.definition.cache or {}
     local source = opts.source
+
+    local function persistentRawRef(name, declaration)
+        local cached = persistentRawRefs[name]
+        if cached ~= nil then
+            return cached
+        end
+        cached = createPersistentRawRef(opts, declaration)
+        persistentRawRefs[name] = cached
+        return cached
+    end
 
     local function ref(name, domain)
         local cached = refs[name]
@@ -169,7 +173,11 @@ function dataCache.create(opts)
         if domain ~= nil then
             requireDomain(declaration, domain, name, source)
         end
-        cached = createRef(opts, declaration)
+        if declaration.domain == "persistent" then
+            cached = createPersistentRef(opts, persistentRawRef(name, declaration))
+        else
+            cached = createRef(opts, declaration)
+        end
         refs[name] = cached
         return cached
     end

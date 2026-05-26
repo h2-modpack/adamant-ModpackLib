@@ -396,6 +396,7 @@ function moduleHost.create(opts)
         store = nil,
         actionBuffer = actionBuffer,
         cacheStore = cacheStore,
+        persistentCacheRefs = {},
         authorHost = nil,
         effectReceipts = {},
         fallbackUiRequested = false,
@@ -410,6 +411,7 @@ function moduleHost.create(opts)
         record = record,
         ownerId = pluginGuid,
         cacheStore = cacheStore,
+        persistentRefs = record.persistentCacheRefs,
         phase = "runtime",
         source = "store.cache",
     }))
@@ -426,6 +428,7 @@ function moduleHost.create(opts)
             record = record,
             ownerId = pluginGuid,
             cacheStore = cacheStore,
+            persistentRefs = record.persistentCacheRefs,
             phase = "draw",
             source = "state.cache",
         }),
