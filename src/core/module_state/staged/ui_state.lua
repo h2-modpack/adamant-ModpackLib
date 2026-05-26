@@ -1,5 +1,6 @@
 local deps = ...
 
+local logging = deps.logging
 local phaseGate = deps.phaseGate
 local storageRefAdapter = deps.storageRefAdapter
 
@@ -40,6 +41,13 @@ function uiState.create(stagedState, shared)
             phaseGate.requireAnyDraw()
             local ref = stagedState.get(alias)
             if ref == nil then
+                return nil
+            end
+            if type(ref.write) ~= "function" then
+                logging.violate(
+                    "staged_state.invalid_surface",
+                    "state.write: alias '%s' is not writable from draw state",
+                    tostring(alias))
                 return nil
             end
             return ref:write(...)

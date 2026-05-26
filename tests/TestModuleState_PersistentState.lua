@@ -83,6 +83,25 @@ function TestModuleState_PersistentState:testRuntimeStorageSetAndClearUpdatesCom
     end)
 end
 
+function TestModuleState_PersistentState:testRuntimeTableReadReturnsCopy()
+    local config = {
+        RuntimeRows = {
+            { Enabled = false },
+        },
+    }
+    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+
+    local rows = persistentState.runtime.read("RuntimeRows")
+    rows[1].Enabled = true
+    rows[2] = { Enabled = true }
+
+    local nextRows = persistentState.runtime.read("RuntimeRows")
+    lu.assertFalse(nextRows[1].Enabled)
+    lu.assertNil(nextRows[2])
+    lu.assertFalse(config.RuntimeRows[1].Enabled)
+    lu.assertNil(config.RuntimeRows[2])
+end
+
 function TestModuleState_PersistentState:testNonPersistentRuntimeStorageKeepsCommittedMemoryOnly()
     local config = {}
     local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness, {

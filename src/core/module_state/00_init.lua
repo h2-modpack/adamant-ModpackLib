@@ -44,6 +44,7 @@ local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', ni
 })
 
 local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
+    logging = logging,
     phaseGate = phaseGate,
     storageRefAdapter = storageRefAdapter,
 })

@@ -171,10 +171,15 @@ local function create(storageConfig, storage)
 
     persistentState.runtime = {
         read = function(alias)
-            if not getRuntimeNode(alias, "store.runtime.read", true) then
+            local node = getRuntimeNode(alias, "store.runtime.read", true)
+            if not node then
                 return nil
             end
-            return persistentState.read(alias)
+            local value = persistentState.read(alias)
+            if node.type == "table" and not node._isBitAlias then
+                return ClonePersistedValue(value)
+            end
+            return value
         end,
         set = writeRuntimeRoot,
         clear = clearRuntimeRoot,

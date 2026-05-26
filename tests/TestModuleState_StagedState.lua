@@ -143,6 +143,17 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     lu.assertNil(runtimeRows.append)
 end
 
+function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsSemantically()
+    local _, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local state = self.harness.moduleState.uiState.create(stagedState)
+
+    lu.assertErrorMsgContains("staged_state.invalid_surface", function()
+        inDraw(self.harness, function()
+            state.write("RuntimeRows", 1, "Enabled", true)
+        end)
+    end)
+end
+
 function TestModuleState_StagedState:testInternalReloadFromConfigResetsTransientAliasesToDefaults()
     local config = { Enabled = true }
     local _, stagedState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
