@@ -77,6 +77,36 @@ function helpers.makeTransientDefinition(harness)
     })
 end
 
+function helpers.makeRuntimeDefinition(harness, opts)
+    opts = opts or {}
+    return helpers.prepareDefinition(harness, {
+        storage = {
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", persist = opts.persist, default = false },
+            { type = "int", alias = "RuntimeCount", mode = "runtime", persist = opts.persist, default = 0, min = 0, max = 5 },
+            {
+                type = "packedInt",
+                alias = "RuntimePacked",
+                mode = "runtime",
+                persist = opts.persist,
+                bits = {
+                    { alias = "RuntimeBit", offset = 0, width = 1, type = "bool", default = false },
+                },
+            },
+            {
+                type = "table",
+                alias = "RuntimeRows",
+                mode = "runtime",
+                persist = opts.persist,
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = false },
+                },
+            },
+            { type = "bool", alias = "SettingFlag", default = false },
+        },
+    })
+end
+
 function helpers.makeTableDefinition(harness)
     return helpers.prepareDefinition(harness, {
         storage = {

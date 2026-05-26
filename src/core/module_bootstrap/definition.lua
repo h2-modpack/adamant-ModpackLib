@@ -149,16 +149,6 @@ local function PrepareActions(definition, prefix)
     definition._actionOrder = actionOrder
 end
 
-local function ValidateScalar(context, value, optional)
-    if value == nil and optional then
-        return
-    end
-    local valueType = type(value)
-    if valueType ~= "boolean" and valueType ~= "number" and valueType ~= "string" then
-        logging.violate("definition.invalid_field_type", "%s must be boolean, number, or string", context)
-    end
-end
-
 local function ValidateCacheKey(prefix, name)
     if type(name) ~= "string" or name == "" then
         logging.violate("definition.invalid_field_type", "%s: cache declaration keys must be non-empty strings", prefix)
@@ -204,15 +194,7 @@ local function PrepareCache(definition, prefix)
 
         local path = "cache." .. tostring(name)
         local domain = declaration.domain
-        if domain == "persistent" then
-            ValidateKnownCacheKeys(prefix, path, declaration, {
-                domain = true,
-                key = true,
-                default = true,
-            })
-            ValidateCacheString(prefix, path .. ".key", declaration.key)
-            ValidateScalar(prefix .. ": " .. path .. ".default", declaration.default, true)
-        elseif domain == "currentRun" then
+        if domain == "currentRun" then
             ValidateKnownCacheKeys(prefix, path, declaration, {
                 domain = true,
                 key = true,
@@ -225,7 +207,7 @@ local function PrepareCache(definition, prefix)
             end
         else
             logging.violate("definition.invalid_field_type",
-                "%s: %s.domain must be 'persistent' or 'currentRun'", prefix, path)
+                "%s: %s.domain must be 'currentRun'", prefix, path)
         end
 
         cacheOrder[#cacheOrder + 1] = name

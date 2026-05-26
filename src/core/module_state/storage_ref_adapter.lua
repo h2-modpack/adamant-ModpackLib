@@ -157,7 +157,7 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
         return rawTable:snapshots()
     end
 
-    if isWritable then
+    if isWritable and type(rawTable.write) == "function" then
         function handle.write(self, rowIndex, rowAlias, value)
             requireMethodSelf(writeContext, self, handle)
             gate()

@@ -182,7 +182,7 @@ local function createBuffer(actionCatalog)
         }
     end
 
-    function buffer.executePending(host, state)
+    function buffer.executePendingActions(host, state)
         if catalog ~= nil then
             for _, actionKey in ipairs(catalog.order) do
                 if pending[actionKey] then
@@ -191,7 +191,9 @@ local function createBuffer(actionCatalog)
                 end
             end
         end
+    end
 
+    function buffer.flushPendingSharedEvents(host)
         if #pendingEvents > 0 then
             local events = pendingEvents
             pendingEvents = {}

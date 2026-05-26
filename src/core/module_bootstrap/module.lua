@@ -100,13 +100,11 @@ local function createModuleOrThrow(opts)
     local state = moduleState.create(opts.config, definition)
     local persistentState = state.persistentState
     local stagedState = state.stagedState
-    local cacheStore = state.cacheStore
     local _, authorHost, store = moduleHost.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
         persistentState = persistentState,
         stagedState = stagedState,
-        cacheStore = cacheStore,
         onSettingsCommitted = opts.onSettingsCommitted,
         drawTab = opts.drawTab,
         drawQuickContent = opts.drawQuickContent,

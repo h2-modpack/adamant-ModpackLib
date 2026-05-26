@@ -180,8 +180,9 @@ nested table layout and exposes semantic reads. The helper can accept either
 
 ## Cache
 
-Declared runtime cache owned by the module. Use this for module runtime state
-that is not staged UI config, hashed/profiled config, or mutation state.
+Declared runtime cache owned by the module. Use cache only for module scratch
+state with a game-lifetime owner, not for UI settings, hashes, profiles, or
+runtime-write/UI-read values.
 
 Declarative cache:
 
@@ -192,11 +193,6 @@ local host, store = lib.createModule({
     id = "Example",
     name = "Example",
     cache = {
-        RecordingReady = {
-            domain = "persistent",
-            key = "RecordingReady",
-            default = false,
-        },
         RunScratch = {
             domain = "currentRun",
             key = "run",
@@ -212,25 +208,14 @@ local host, store = lib.createModule({
 Runtime code reads declared cache refs through `store.cache`:
 
 ```lua
-store.cache.persistent.set("RecordingReady", true)
-local ready = store.cache.persistent.read("RecordingReady")
-
 local runScratch = store.cache.currentRun.get("RunScratch")
 runScratch.seen = true
-```
-
-Draw code reads draw-safe declared cache refs through `state.cache`:
-
-```lua
-local ready = state.cache.persistent.read("RecordingReady")
 ```
 
 Rules:
 - cache declaration names must be stable identifiers
 - declared cache participates in structural definition fingerprinting
 - `store.cache` is valid outside draw callbacks
-- `state.cache` is valid only during draw callbacks
-- persistent cache is writable from `store.cache`; draw access is read-only
 - current-run cache is only available from `store.cache`
 
 Current run cache:
@@ -249,28 +234,10 @@ Rules:
 - the declaration factory runs only when the bucket is missing
 - the factory must return a table when provided
 - cache is namespaced under one Lib-owned root on `CurrentRun`
-- current-run cache is unavailable from draw `state.cache`
+- current-run cache is unavailable from draw `state`
 
-Persistent scalar cache:
-
-```lua
-store.cache.persistent.set("RecordingReady", true)
-local ready = store.cache.persistent.read("RecordingReady")
-local drawSafeReady = state.cache.persistent.read("RecordingReady")
-```
-
-Surface:
-- `store.cache.persistent.read(name)`
-- `store.cache.persistent.set(name, value)`
-- `store.cache.persistent.clear(name)`
-- `state.cache.persistent.read(name)`
-
-Rules:
-- declaration defaults and set values must be boolean, number, or string
-- `read(...)` returns the declaration default when no value is stored
-- `set(nil)` is invalid; use `clear(...)`
-- persistent cache is not staged, hashed, profiled, or reset by Lib
-- draw access is read-only
+For runtime-owned values that UI needs to read, declare managed storage with
+`mode = "runtime"` and access it through `store.runtime` plus draw `state`.
 
 ## Store And State
 
@@ -340,6 +307,9 @@ end
 The runtime store surface provides:
 - `store.get(alias)`
 - `store.read(alias, ...)`
+- `store.runtime.read(alias)`
+- `store.runtime.set(alias, value)`
+- `store.runtime.clear(alias)`
 
 Persisted writes happen through host-owned semantic helpers or staged-state flushes:
 
@@ -363,8 +333,9 @@ path arguments as `tableHandle:read(...)`.
 
 Rules:
 - widgets and draw code should usually read staged values through `state.get(...)`
-- runtime/gameplay code should read persisted values through `store.get(...):read()` or `store.read(...)`
-- new flat runtime markers should prefer declared persistent cache
+- runtime/gameplay code should read committed setting/runtime values through `store.get(...):read()` or `store.read(...)`
+- runtime-owned storage declares `mode = "runtime"` and writes through `store.runtime`
+- runtime-owned storage cannot participate in hashes
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
@@ -422,7 +393,7 @@ local field = tiers:get(1, "ChoiceMode")
 ```
 
 Table handles:
-- `store.get(alias)` returns a read-only field or table handle for persisted aliases
+- `store.get(alias)` returns a read-only field or table handle for committed setting or runtime-owned aliases
 - `state.get(alias)` returns a writable staged field or table handle
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - full internal stores expose `store.table(alias)` for framework plumbing

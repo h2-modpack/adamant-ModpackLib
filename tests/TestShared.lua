@@ -397,6 +397,49 @@ function TestShared:testDeclaredDataReadsTableViews()
     end)
 end
 
+function TestShared:testDeclaredDataTableViewsSupportIpairs()
+    local publisher, publisherStore = createSharedModule(self.harness, "test-shared-data-list-publisher", {
+        shared = {
+            Snapshot = {
+                id = "test.declared.shared.list",
+                access = "owner",
+                default = {},
+            },
+        },
+    })
+    local _, readerStore = createSharedModule(self.harness, "test-shared-data-list-reader", {
+        shared = {
+            Snapshot = {
+                id = "test.declared.shared.list",
+                access = "reader",
+                fallback = {},
+            },
+        },
+    })
+
+    activateAndEnableHost(self.harness, publisher, "test-shared-data-list-publisher")
+    lu.assertTrue(publisherStore.shared.set("Snapshot", {
+        "Apollo",
+        "Athena",
+        nested = {
+            "Zeus",
+        },
+    }))
+
+    local snapshot = readerStore.shared.read("Snapshot")
+    local names = {}
+    for _, name in ipairs(snapshot) do
+        names[#names + 1] = name
+    end
+    lu.assertEquals(names, { "Apollo", "Athena" })
+
+    local nestedNames = {}
+    for _, name in ipairs(snapshot.nested) do
+        nestedNames[#nestedNames + 1] = name
+    end
+    lu.assertEquals(nestedNames, { "Zeus" })
+end
+
 function TestShared:testDeclaredDataOwnerWritesCopyTables()
     local publisher, publisherStore = createSharedModule(self.harness, "test-shared-data-copy-publisher", {
         shared = {

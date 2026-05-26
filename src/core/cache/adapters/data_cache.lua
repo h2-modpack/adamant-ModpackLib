@@ -6,14 +6,6 @@ local service = deps.service
 
 local dataCache = {}
 
-local function requirePhase(phase)
-    if phase == "draw" then
-        phaseGate.requireAnyDraw()
-    else
-        phaseGate.requireRuntime()
-    end
-end
-
 local function requireDeclaration(declarations, name, source)
     local declaration = declarations and declarations[name] or nil
     if declaration == nil then
@@ -38,75 +30,26 @@ local function requireMethod(ref, methodName, name, source)
     return method
 end
 
-local function wrapSetClearRef(phase, rawRef)
-    local ref
-    ref = {
-        get = function()
-            requirePhase(phase)
-            return rawRef:get()
-        end,
-        set = function(value)
-            requirePhase(phase)
-            return rawRef:set(value)
-        end,
-        clear = function()
-            requirePhase(phase)
-            return rawRef:clear()
-        end,
-    }
-    return ref
-end
-
-local function wrapGetClearRef(phase, rawRef)
+local function wrapGetClearRef(rawRef)
     return {
         get = function()
-            requirePhase(phase)
+            phaseGate.requireRuntime()
             return rawRef:get()
         end,
         clear = function()
-            requirePhase(phase)
+            phaseGate.requireRuntime()
             return rawRef:clear()
         end,
     }
-end
-
-local function wrapReaderRef(phase, rawRef)
-    return {
-        get = function()
-            requirePhase(phase)
-            return rawRef:get()
-        end,
-    }
-end
-
-local function createPersistentRawRef(opts, declaration)
-    return service.persistent.create(opts.cacheStore, opts.ownerId, declaration.key, {
-        default = declaration.default,
-    })
-end
-
-local function createPersistentRef(opts, rawRef)
-    if opts.phase == "draw" then
-        return wrapReaderRef("draw", rawRef)
-    end
-
-    return wrapSetClearRef("runtime", rawRef)
 end
 
 local function createCurrentRunRef(opts, declaration)
-    if opts.phase == "draw" then
-        logging.violate("cache.invalid_args", "%s: currentRun cache is not available during draw", opts.source)
-    end
-
-    return wrapGetClearRef("runtime", service.currentRun.create(opts.ownerId, declaration.key, {
+    return wrapGetClearRef(service.currentRun.create(opts.ownerId, declaration.key, {
         factory = declaration.factory,
     }))
 end
 
 local function createRef(opts, declaration)
-    if declaration.domain == "persistent" then
-        return createPersistentRef(opts, createPersistentRawRef(opts, declaration))
-    end
     if declaration.domain == "currentRun" then
         return createCurrentRunRef(opts, declaration)
     end
@@ -114,20 +57,9 @@ local function createRef(opts, declaration)
 end
 
 function dataCache.create(opts)
-    local persistentRawRefs = opts.persistentRefs or {}
     local refs = {}
     local declarations = opts.definition and opts.definition.cache or {}
     local source = opts.source
-
-    local function persistentRawRef(name, declaration)
-        local cached = persistentRawRefs[name]
-        if cached ~= nil then
-            return cached
-        end
-        cached = createPersistentRawRef(opts, declaration)
-        persistentRawRefs[name] = cached
-        return cached
-    end
 
     local function ref(name, domain)
         local cached = refs[name]
@@ -142,32 +74,12 @@ function dataCache.create(opts)
         if domain ~= nil then
             requireDomain(declaration, domain, name, source)
         end
-        if declaration.domain == "persistent" then
-            cached = createPersistentRef(opts, persistentRawRef(name, declaration))
-        else
-            cached = createRef(opts, declaration)
-        end
+        cached = createRef(opts, declaration)
         refs[name] = cached
         return cached
     end
 
-    local persistent = {
-        read = function(name)
-            return ref(name, "persistent"):get()
-        end,
-    }
-
-    local currentRun
-
-    if opts.phase ~= "draw" then
-        persistent.set = function(name, value)
-            local cacheRef = ref(name, "persistent")
-            return requireMethod(cacheRef, "set", name, source)(value)
-        end
-        persistent.clear = function(name)
-            local cacheRef = ref(name, "persistent")
-            return requireMethod(cacheRef, "clear", name, source)()
-        end
+    return {
         currentRun = {
             get = function(name)
                 return ref(name, "currentRun"):get()
@@ -176,12 +88,7 @@ function dataCache.create(opts)
                 local cacheRef = ref(name, "currentRun")
                 return requireMethod(cacheRef, "clear", name, source)()
             end,
-        }
-    end
-
-    return {
-        persistent = persistent,
-        currentRun = currentRun,
+        },
     }
 end
 

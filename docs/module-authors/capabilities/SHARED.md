@@ -153,7 +153,8 @@ not durable replicated state. For live read models, use shared data.
 - listener callbacks receive `payload`
 
 Listeners are runtime callbacks. Do not write managed settings from listeners.
-Use module-local runtime cache or declared cache refs for explicit cache writes.
+Use current-run cache or `mode = "runtime"` storage for explicit runtime state
+writes.
 
 ## Public Surface
 

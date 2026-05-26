@@ -111,7 +111,7 @@ Lib owns the shared reload-sensitive plumbing:
 Modules own their local rebuild:
 - recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
 - keep `chalk`, `reload`, and raw config local to `main.lua`
-- keep persisted runtime reads on `store`
+- keep committed runtime reads on `store`
 - keep staged UI edits on the author-facing draw `state`
 - declare runtime hooks on `host.hooks.*` before activation
 - declare retained overlays on `host.overlays.*` before activation

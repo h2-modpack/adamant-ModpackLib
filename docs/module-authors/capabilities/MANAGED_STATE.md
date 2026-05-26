@@ -3,7 +3,7 @@
 Managed state is the core Lib feature most module code builds on. It gives each module:
 
 - a validated storage schema
-- a persisted runtime `store`
+- a committed runtime `store`
 - a staged UI `state`
 - built-in `Enabled` and `DebugMode` aliases
 - hash/profile participation for stable settings
@@ -17,10 +17,10 @@ Use each state surface for one job:
 
 | Surface | Use it for | Where it appears |
 | --- | --- | --- |
-| `store` | persisted runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
+| `store` | committed setting/runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
+| `store.runtime` | runtime writes to declared runtime-owned storage | hooks, shared event listeners, runtime helpers |
 | `state` | staged UI reads/writes | `drawTab(draw, state, actions)`, `drawQuickContent(...)` |
-| `store.cache` | declared runtime cache refs | runtime code and post-commit observers |
-| `state.cache` | declared draw-safe cache refs | draw callbacks |
+| `store.cache` | declared current-run cache refs | runtime code and post-commit observers |
 | `config` | Chalk-owned backing table | local to `main.lua` |
 
 Draw code should stage changes through `state`. Gameplay, hooks, overlays,
@@ -28,6 +28,9 @@ shared event callbacks, and mutations should read committed values through
 `store`.
 The runtime store exposes `store.get(alias)` for read-only storage objects and
 `store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
+Runtime-owned storage uses the narrow `store.runtime` lane:
+`store.runtime.read(alias)`, `store.runtime.set(alias, value)`, and
+`store.runtime.clear(alias)`.
 draw `state` exposes the same convenience shape for custom raw ImGui code:
 `state.read(alias, ...)` and `state.write(alias, ...)` forward through the
 staged object returned by `state.get(alias)`.
@@ -36,7 +39,7 @@ These surfaces are phase-gated:
 
 - `store` is for runtime code and rejects access while any module draw callback is running.
 - `draw`, `state`, `actions`, and refs returned from them are for the active draw callback and reject access outside that callback.
-- `state.cache` is draw-scoped. `store.cache` is runtime-scoped.
+- `store.cache` is runtime-scoped and currently exposes only current-run cache.
 - Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
 
 ```lua
@@ -74,11 +77,13 @@ end
 
 Rules:
 
-- `alias` is the storage, state, widget, and persisted config key.
+- `alias` is the storage, state, widget, and managed storage key.
 - Normal roots persist and hash by default.
 - `persist = false, hash = false` creates staged-only transient UI state.
 - `hash = false` keeps a persisted staged value out of hash/profile serialization.
 - `hash = true` requires `persist = true`.
+- `mode = "runtime"` creates runtime-owned storage. It is written through
+  `store.runtime`, read through `store` or draw `state`, and cannot hash.
 
 Lib injects these aliases into every prepared module:
 
@@ -89,10 +94,38 @@ Lib injects these aliases into every prepared module:
 
 Do not declare `Enabled` or `DebugMode` yourself.
 
-## Runtime Cache Values
+## Runtime-Owned Storage
 
-Runtime markers that should survive reloads or restarts but should not appear
-in UI staging, profiles, or hashes should use declared persistent cache.
+Runtime markers that should be updated by hooks, shared event listeners, or
+other runtime code should use runtime-owned storage:
+
+```lua
+{
+    type = "bool",
+    alias = "RecordingReady",
+    mode = "runtime",
+    persist = true,
+    hash = false,
+    default = false,
+}
+```
+
+Runtime code writes through `store.runtime`:
+
+```lua
+store.runtime.set("RecordingReady", true)
+local ready = store.runtime.read("RecordingReady")
+```
+
+Draw code reads the same alias through draw `state`:
+
+```lua
+local ready = state.read("RecordingReady")
+```
+
+Runtime-owned storage is not user-editable staged UI state. Widgets and
+`state.write(...)` should be used for normal setting storage, not runtime-owned
+aliases.
 
 ## Tables
 

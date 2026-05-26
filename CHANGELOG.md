@@ -24,11 +24,11 @@ All notable changes to this project will be documented in this file.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
 - The global `lib.resetStorageToDefaults(...)` helper has been removed; use `host.resetAll(...)` or draw-scoped `state.resetAll(...)`.
-- Cache is now declared through `createModule({ cache = ... })` and accessed through phase-scoped `store.cache` and `state.cache`; the old global and host cache surfaces have been removed.
-- Added declared persistent cache for flat scalar runtime markers that persist outside managed storage/hash/profile flows.
+- Cache is now declared through `createModule({ cache = ... })` and accessed through phase-scoped `store.cache`; the old global and host cache surfaces have been removed.
+- Added `mode = "runtime"` storage for runtime-owned values that draw state can read while staying outside staged writes and hash/profile flows.
 - Added declared shared values for owner-published live read-model projections and cheap runtime/draw reads.
 - Shared value table writes are copied once and reads return recursive read-only views.
-- Modules can now declare managed cache refs in `createModule({ cache = ... })` and access them through phase-scoped `store.cache`, `state.cache`, `store.shared`, and `state.shared`.
+- Modules can now declare managed cache refs in `createModule({ cache = ... })` and access them through phase-scoped `store.cache`; shared values remain available through `store.shared` and `state.shared`.
 - `lib.createModule(...)` now accepts module definition fields directly; the old nested `definition = { ... }` option has been removed.
 - Bound draw value widgets now target `StorageField` values from `state.get(...)` or table handles; root alias string targets and widget rebinding helpers have been removed.
 - Draw `state` now exposes `get(alias)`, `read(alias, ...)`, `write(alias, ...)`, and `resetAll(opts?)`; older session-shaped helpers such as `state.view`, `state.table`, `state.field`, and schema access have been removed.
@@ -45,7 +45,7 @@ All notable changes to this project will be documented in this file.
 - Host activation now stages and commits hooks, shared events, overlays, and mutation sync through host-owned receipts, so omitted registrations are removed on reload and activation failures roll back candidate effects.
 - `host.hooks.override(...)` accepts function replacements only, matching the host-owned dispatcher model.
 - Retired separate internal lifecycle design notes; accepted lifecycle tradeoffs now live in `docs/references/KNOWN_LIMITATIONS.md`.
-- Removed storage-backed runtime-cache compatibility; runtime markers now use declared persistent cache.
+- Removed persistent cache; runtime markers now use `mode = "runtime"` storage and `store.runtime`.
 - Added first-class table storage roots with row-scoped aliases, staged table handles, read-only store table handles, packed child row access, and hash/profile serialization.
 - Table storage handles use colon method syntax, such as `tiers:read(rowIndex, alias)`.
 

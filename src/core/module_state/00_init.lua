@@ -12,7 +12,6 @@ local persistenceBackend = import('core/module_state/persistent/backend.lua', ni
     chalk = chalk,
 })
 local storageConfigAdapter = import('core/module_state/persistent/storage_config_adapter.lua')
-local persistentCacheStore = import('core/module_state/persistent/persistent_cache_store.lua')
 
 local persistentStateModule = import('core/module_state/persistent/persistent_state.lua', nil, {
     logging = logging,
@@ -76,7 +75,6 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@class ModuleState
 ---@field persistentState PersistentState
 ---@field stagedState StagedState
----@field cacheStore PersistentCacheStore
 
 ---@class ActionBuffer
 ---@field stage fun(actionKey: string, value: any)
@@ -88,13 +86,8 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
 ---@field emitShared fun(id: string, eventName: string, payload: any)
----@field executePending fun(host: AuthorHost, state: DrawState)
-
----@class PersistentCacheStore
----@field read fun(key: string): any
----@field has fun(key: string): boolean
----@field write fun(key: string, value: any): boolean
----@field clear fun(key: string): boolean
+---@field executePendingActions fun(host: AuthorHost, state: DrawState)
+---@field flushPendingSharedEvents fun(host: AuthorHost)
 
 ---@class PersistentState
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
@@ -106,6 +99,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field cache table|nil
 ---@field shared table|nil
+---@field runtime table|nil
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
@@ -157,13 +151,11 @@ function moduleState.create(modConfig, definition)
     local backend = persistenceBackend.create(modConfig)
     local storageConfig = storageConfigAdapter.create(modConfig, backend)
     local persistentState = persistentStateModule.create(storageConfig, storage)
-    local stagedState = stagedStateModule.createStagedState(storageConfig, storage)
-    local cacheStore = persistentCacheStore.create(modConfig, backend)
+    local stagedState = stagedStateModule.createStagedState(storageConfig, storage, persistentState)
 
     return {
         persistentState = persistentState,
         stagedState = stagedState,
-        cacheStore = cacheStore,
     }
 end
 

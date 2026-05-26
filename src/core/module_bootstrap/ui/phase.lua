@@ -26,7 +26,6 @@ end
 ---@class UiPhaseCreateOpts
 ---@field definition ModuleDefinition
 ---@field stagedState StagedState
----@field cache table|nil
 ---@field shared table|nil
 ---@field actionBuffer ActionBuffer
 ---@field authorHost AuthorHost
@@ -38,19 +37,22 @@ end
 function uiPhase.create(opts)
     local objects = {
         draw = uiDraw.get(),
-        state = moduleState.uiState.create(opts.stagedState, opts.cache, opts.shared),
+        state = moduleState.uiState.create(opts.stagedState, opts.shared),
         actions = moduleState.uiActions.create(opts.actionBuffer),
     }
 
     function objects.run(callback)
-        return phaseGate.runDrawWithContext({
+        local results = packResults(phaseGate.runDrawWithContext({
             logPrefix = opts.logPrefix,
             debugEnabled = opts.isDebugEnabled() == true,
         }, function(draw, state, actions)
             local results = packResults(callback(draw, state, actions))
-            opts.actionBuffer.executePending(opts.authorHost, state)
+            opts.actionBuffer.executePendingActions(opts.authorHost, state)
             return table.unpack(results, 1, results.n)
-        end, objects.draw, objects.state, objects.actions)
+        end, objects.draw, objects.state, objects.actions))
+
+        opts.actionBuffer.flushPendingSharedEvents(opts.authorHost)
+        return table.unpack(results, 1, results.n)
     end
 
     return objects

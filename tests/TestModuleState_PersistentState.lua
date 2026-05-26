@@ -8,6 +8,7 @@ local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
 local makePackedDefinition = helpers.makePackedDefinition
 local makeTransientDefinition = helpers.makeTransientDefinition
+local makeRuntimeDefinition = helpers.makeRuntimeDefinition
 local makeTableDefinition = helpers.makeTableDefinition
 
 TestModuleState_PersistentState = {}
@@ -37,6 +38,67 @@ function TestModuleState_PersistentState:testCreatePersistentStateReadsAndWrites
     lu.assertTrue(config.Enabled)
     lu.assertEquals(config.MaxGods, 9)
     lu.assertEquals(persistentState.read("MaxGods"), 9)
+end
+
+function TestModuleState_PersistentState:testPersistentStateReadsCommittedSnapshotUntilReload()
+    local config = { MaxGods = 4 }
+    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+
+    lu.assertEquals(persistentState.read("MaxGods"), 4)
+    config.MaxGods = 8
+    lu.assertEquals(persistentState.read("MaxGods"), 4)
+
+    stagedState._reloadFromConfig()
+    lu.assertEquals(persistentState.read("MaxGods"), 8)
+end
+
+function TestModuleState_PersistentState:testRuntimeStorageSetAndClearUpdatesCommittedSnapshot()
+    local config = { RuntimeFlag = false, RuntimeCount = 1, RuntimePacked = 0 }
+    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+
+    lu.assertFalse(persistentState.runtime.read("RuntimeFlag"))
+    lu.assertEquals(persistentState.runtime.read("RuntimeCount"), 1)
+    lu.assertFalse(persistentState.runtime.read("RuntimeBit"))
+
+    lu.assertTrue(persistentState.runtime.set("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtime.set("RuntimeCount", 10))
+    lu.assertTrue(persistentState.runtime.set("RuntimePacked", 1))
+    lu.assertTrue(persistentState.read("RuntimeFlag"))
+    lu.assertEquals(persistentState.read("RuntimeCount"), 5)
+    lu.assertTrue(persistentState.read("RuntimeBit"))
+    lu.assertTrue(config.RuntimeFlag)
+    lu.assertEquals(config.RuntimeCount, 5)
+    lu.assertEquals(config.RuntimePacked, 1)
+
+    lu.assertTrue(persistentState.runtime.clear("RuntimeFlag"))
+    lu.assertFalse(persistentState.read("RuntimeFlag"))
+    lu.assertFalse(config.RuntimeFlag)
+
+    lu.assertErrorMsgContains("packed child", function()
+        persistentState.runtime.set("RuntimeBit", true)
+    end)
+
+    lu.assertErrorMsgContains("not runtime-owned", function()
+        persistentState.runtime.set("SettingFlag", true)
+    end)
+end
+
+function TestModuleState_PersistentState:testNonPersistentRuntimeStorageKeepsCommittedMemoryOnly()
+    local config = {}
+    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness, {
+        persist = false,
+    }))
+
+    lu.assertFalse(persistentState.runtime.read("RuntimeFlag"))
+    lu.assertTrue(persistentState.runtime.set("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtime.read("RuntimeFlag"))
+    lu.assertNil(config.RuntimeFlag)
+    persistentState._reloadFromConfig()
+    lu.assertTrue(persistentState.runtime.read("RuntimeFlag"))
+
+    lu.assertTrue(persistentState.runtime.clear("RuntimeFlag"))
+    lu.assertFalse(persistentState.runtime.read("RuntimeFlag"))
+    lu.assertNil(config.RuntimeFlag)
 end
 
 function TestModuleState_PersistentState:testPersistentStateGetReturnsReadOnlyFieldOrTableHandle()

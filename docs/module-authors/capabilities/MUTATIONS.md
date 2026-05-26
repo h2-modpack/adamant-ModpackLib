@@ -81,7 +81,7 @@ Do not use mutation plans for:
 
 - transient UI state
 - optional cross-module shared events
-- state that belongs in declared current-run cache or another owned runtime cache
+- state that belongs in declared current-run cache or `mode = "runtime"` storage
 - arbitrary side effects that cannot be restored
 
 If a real run-data edit cannot be expressed by the current plan surface, add a first-class plan operation instead of bypassing the tracked lifecycle.

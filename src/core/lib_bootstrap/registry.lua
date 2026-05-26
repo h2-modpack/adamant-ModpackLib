@@ -16,7 +16,6 @@ buckets.mutations = buckets.mutations or {}
 buckets.overlays = buckets.overlays or {}
 buckets.fallback = buckets.fallback or {}
 buckets.coordinators = buckets.coordinators or {}
-buckets.cache = buckets.cache or {}
 
 return {
     hosts = buckets.hosts,
@@ -26,5 +25,4 @@ return {
     overlays = buckets.overlays,
     fallback = buckets.fallback,
     coordinators = buckets.coordinators,
-    cache = buckets.cache,
 }

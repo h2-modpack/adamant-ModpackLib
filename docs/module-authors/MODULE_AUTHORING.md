@@ -121,7 +121,7 @@ local function registerHooks(host, store)
             return base(...)
         end
         if featureEnabled:read() then
-            -- Runtime behavior reads persisted state through store.
+            -- Runtime behavior reads committed state through store.
         end
         return base(...)
     end)
@@ -131,7 +131,7 @@ end
 Callback argument order follows a stable convention:
 - work surface first when a callback has one, such as `draw` for draw callbacks or `plan` for patch mutation callbacks
 - state/context handles next, using `draw`, `state`, and `actions` for draw and `host` for runtime/module context
-- `store` last when persisted runtime values are needed
+- `store` last when committed runtime values are needed
 
 Examples: `drawTab(draw, state, actions)`, local
 `registerHooks(host, store)` helpers, local overlay declaration helpers that
@@ -184,7 +184,7 @@ commit, reload, hash/profile import, and config flush behavior.
 
 Storage roots live on `definition.storage`. Normal roots persist and hash by
 default. Use `persist = false, hash = false` for transient staged-only UI
-state. Runtime markers should prefer declared persistent cache.
+state. Runtime-owned markers should use `mode = "runtime"` storage.
 
 Lib injects `Enabled` and `DebugMode` into every prepared definition. Do not
 declare them in module storage or `config.lua`.

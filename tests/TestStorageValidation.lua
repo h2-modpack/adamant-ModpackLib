@@ -154,6 +154,50 @@ function TestStorageValidation:testPersistFalseRootRegistersStagedStateAliasButN
     lu.assertEquals(#self.storage.getStagedRoots(storage), 2)
 end
 
+function TestStorageValidation:testRuntimeModeDefaultsToNonHashedStorage()
+    local storage = {
+        { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
+    }
+
+    self.storage.validate(storage, "RuntimeRoot")
+
+    local node = self.storage.getAliases(storage).RuntimeFlag
+    lu.assertEquals(node._mode, "runtime")
+    lu.assertTrue(node._persist)
+    lu.assertFalse(node._hash)
+    lu.assertEquals(#self.storage.getRoots(storage), 0)
+    lu.assertEquals(#self.storage.getPersistRoots(storage), 1)
+    lu.assertEquals(#self.storage.getStagedRoots(storage), 1)
+end
+
+function TestStorageValidation:testRuntimeModeIsInheritedByPackedChildren()
+    local storage = {
+        {
+            type = "packedInt",
+            alias = "RuntimePacked",
+            mode = "runtime",
+            bits = {
+                { alias = "RuntimeBit", offset = 0, width = 1, type = "bool", default = false },
+            },
+        },
+    }
+
+    self.storage.validate(storage, "RuntimePacked")
+
+    local aliases = self.storage.getAliases(storage)
+    lu.assertEquals(aliases.RuntimePacked._mode, "runtime")
+    lu.assertEquals(aliases.RuntimeBit._mode, "runtime")
+    lu.assertFalse(aliases.RuntimeBit._hash)
+end
+
+function TestStorageValidation:testRuntimeModeRejectsHashTrue()
+    lu.assertErrorMsgContains("mode='runtime' requires hash=false", function()
+        self.storage.validate({
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", hash = true, default = false },
+        }, "RuntimeHash")
+    end)
+end
+
 function TestStorageValidation:testStageFieldFailsAsUnknownStorageField()
     lu.assertErrorMsgContains("unknown storage field 'stage'", function()
         self.storage.validate({
@@ -210,6 +254,21 @@ function TestStorageValidation:testUnknownTableRowFieldFails()
                 },
             },
         }, "UnknownTableRowField")
+    end)
+end
+
+function TestStorageValidation:testTableRowCannotDeclareMode()
+    lu.assertErrorMsgContains("row storage cannot declare mode", function()
+        self.storage.validate({
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", mode = "runtime", default = false },
+                },
+            },
+        }, "TableRowMode")
     end)
 end
 

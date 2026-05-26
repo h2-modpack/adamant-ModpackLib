@@ -2,25 +2,16 @@
 
 Contributor note for the managed cache implementation.
 
-Cache is declared on module definition and exposed through the same phase
-surfaces as managed storage:
+Cache is declared on module definition and exposed through the runtime store
+surface:
 
 - runtime code uses `store.cache`
-- draw code uses `state.cache`
+- draw code does not receive cache domains
 
-The author host does not expose a separate cache namespace. This keeps cache
-under the data-access model instead of creating a second host capability for
-the same state.
+The author host does not expose a separate cache namespace. Cache stays under
+the data-access model instead of becoming a host capability.
 
 ## Domains
-
-Persistent cache:
-
-- flat scalar values only
-- survives reloads and restarts
-- runtime writable through `store.cache.persistent`
-- draw readable through `state.cache.persistent`
-- backed by the module persistent cache store
 
 Current-run cache:
 
@@ -29,6 +20,10 @@ Current-run cache:
 - runtime-only through `store.cache.currentRun`
 - inaccessible from draw state
 - backed by one Lib-owned root on `CurrentRun`
+
+Runtime-owned storage replaces the old persistent-cache use case. If a module
+needs a value that runtime writes and UI reads, declare managed storage with
+`mode = "runtime"` and access it through `store.runtime` plus draw `state`.
 
 Cross-module read models are not cache domains. They are declared through
 `host.shared.data.*` and implemented by the shared subsystem.
@@ -39,11 +34,6 @@ Declarations:
 
 ```lua
 cache = {
-    RecordingReady = {
-        domain = "persistent",
-        key = "RecordingReady",
-        default = false,
-    },
     RunScratch = {
         domain = "currentRun",
         key = "run",
@@ -57,27 +47,17 @@ cache = {
 Runtime access:
 
 ```lua
-store.cache.persistent.set("RecordingReady", true)
-local recordingReady = store.cache.persistent.read("RecordingReady")
-
 local runScratch = store.cache.currentRun.get("RunScratch")
 runScratch.seen = true
-```
-
-Draw access:
-
-```lua
-local recordingReady = state.cache.persistent.read("RecordingReady")
 ```
 
 ## Implementation Rule
 
 Keep domain logic in the cache-domain files:
 
-- `persistent_cache.lua`
 - `current_run_cache.lua`
 
-Keep author-facing phase adapters in:
+Keep author-facing runtime adapters in:
 
 - `adapters/data_cache.lua`
 
@@ -89,5 +69,5 @@ phase and ownership rules are obvious.
 
 Shared data uses the same `store`/draw `state` access model, but its
 declaration and activation lifecycle belong to `core/shared`. Keep that
-boundary intact so cache remains module-local runtime storage and shared remains
-cross-module cooperation.
+boundary intact so cache remains module-local runtime scratch state and shared
+remains cross-module cooperation.

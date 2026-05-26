@@ -49,10 +49,6 @@ return {
         severity = "error",
         description = "Cache factories must be functions that return tables.",
     },
-    ["cache.invalid_value"] = {
-        severity = "error",
-        description = "Cache values must match the value shape supported by their cache domain.",
-    },
     ["game_deps.invalid_boundary"] = {
         severity = "error",
         description = "Game dependency reads must match the expected game-global or ROM function shape.",
@@ -256,6 +252,10 @@ return {
         severity = "error",
         description = "Staged state table access requires a table root alias, not scalar or packed-bit aliases.",
     },
+    ["staged_state.invalid_surface"] = {
+        severity = "error",
+        description = "Staged state writes cannot mutate runtime-owned storage.",
+    },
     ["staged_state.readonly_view_write"] = {
         severity = "error",
         description = "Staged state view is read-only; writes must go through stagedState.write.",
@@ -308,6 +308,10 @@ return {
     ["storage.hash_requires_persist"] = {
         severity = "error",
         description = "Hash/profile storage must be persisted so values can round-trip.",
+    },
+    ["storage.hash_requires_setting"] = {
+        severity = "error",
+        description = "Runtime-owned storage cannot participate in hashes.",
     },
     ["storage.invalid_axis_type"] = {
         severity = "error",

@@ -140,6 +140,9 @@ local function PrepareTableNode(node, prefix)
             if rowNode.hash ~= nil then
                 logging.violate("storage.invalid_table_row", "%s: row storage cannot declare hash; table root owns hashing", rowPrefix)
             end
+            if rowNode.mode ~= nil then
+                logging.violate("storage.invalid_table_row", "%s: row storage cannot declare mode; table root owns mode", rowPrefix)
+            end
         end
     end
 

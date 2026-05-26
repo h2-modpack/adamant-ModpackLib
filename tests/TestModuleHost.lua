@@ -620,18 +620,23 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
     local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
         id = "DrawActionEmitListener",
         name = "Draw Action Emit Listener",
-        storage = {},
+        storage = {
+            { type = "bool", alias = "ListenerFlag", default = true },
+        },
     })
     local listenerStore, listenerState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
+        ListenerFlag = true,
     }, listenerDefinition)
+    local listenerStoreRead = nil
     createActivatedHost(self.h, "test-draw-action-emit-listener", {
         definition = listenerDefinition,
         persistentState = listenerStore,
         stagedState = listenerState,
-        configureHost = function(authorHost)
+        configureHost = function(authorHost, store)
             authorHost.shared.listen(sharedId, "changed", function(payload)
+                listenerStoreRead = store.read("ListenerFlag")
                 delivered = payload
             end)
         end,
@@ -661,6 +666,8 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
     emitter.drawTab()
 
     lu.assertEquals(delivered, { value = 42 })
+    lu.assertTrue(listenerStoreRead)
+    lu.assertEquals(#self.h.warnings, 0)
 end
 
 function TestModuleHost:testDrawActionsRejectUndeclaredKeys()

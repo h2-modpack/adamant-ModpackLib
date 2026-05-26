@@ -66,7 +66,6 @@ end
 ---@field pluginGuid string
 ---@field persistentState PersistentState
 ---@field stagedState StagedState
----@field cacheStore PersistentCacheStore|nil
 ---@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
 ---@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions)
 ---@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions)|nil
@@ -123,7 +122,6 @@ local KnownHostOpts = {
     pluginGuid = true,
     persistentState = true,
     stagedState = true,
-    cacheStore = true,
     onSettingsCommitted = true,
     drawTab = true,
     drawQuickContent = true,
@@ -165,7 +163,6 @@ function moduleHost.create(opts)
     local pluginGuid = opts.pluginGuid
     local persistentState = opts.persistentState
     local stagedState = opts.stagedState
-    local cacheStore = opts.cacheStore
     if type(def) ~= "table" or def._preparedDefinition ~= true then
         logging.violate("host.invalid_create_opts", "moduleHost.create: prepared definition is required")
     end
@@ -386,8 +383,6 @@ function moduleHost.create(opts)
         stagedState = stagedState,
         store = nil,
         actionBuffer = actionBuffer,
-        cacheStore = cacheStore,
-        persistentCacheRefs = {},
         authorHost = nil,
         effectReceipts = {},
         fallbackUiRequested = false,
@@ -397,12 +392,7 @@ function moduleHost.create(opts)
 
     store = moduleState.createStore(persistentState, cache.data.create({
         definition = def,
-        host = host,
-        record = record,
         ownerId = pluginGuid,
-        cacheStore = cacheStore,
-        persistentRefs = record.persistentCacheRefs,
-        phase = "runtime",
         source = "store.cache",
     }), sharedData.create({
         host = host,
@@ -417,16 +407,6 @@ function moduleHost.create(opts)
     local uiPhase = uiPhaseModule.create({
         definition = def,
         stagedState = stagedState,
-        cache = cache.data.create({
-            definition = def,
-            host = host,
-            record = record,
-            ownerId = pluginGuid,
-            cacheStore = cacheStore,
-            persistentRefs = record.persistentCacheRefs,
-            phase = "draw",
-            source = "state.cache",
-        }),
         shared = sharedData.create({
             host = host,
             record = record,

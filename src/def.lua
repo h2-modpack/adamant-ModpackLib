@@ -19,7 +19,8 @@ local lib = {}
 
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
----@field alias string Public alias used by store/state/widget APIs and as the persisted backing key.
+---@field alias string Public alias used by store/state/widget APIs and as the managed storage key.
+---@field mode? "setting"|"runtime" Storage ownership mode. Defaults to "setting"; "runtime" is written through `store.runtime`.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
@@ -92,17 +93,23 @@ local lib = {}
 
 ---Internal trusted persistent state. Module authors receive `Store`.
 ---@class AdamantModpackLib.PersistentState
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a storage object for a persisted alias.
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting/runtime storage object.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
 ---Committed runtime state facade. Store methods are valid outside draw callbacks and reject while any module draw callback is running.
 ---@class AdamantModpackLib.Store
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return a read-only storage object for a persisted alias.
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting/runtime storage object.
 ---@field cache AdamantModpackLib.StoreCache
 ---@field shared AdamantModpackLib.SharedData
+---@field runtime AdamantModpackLib.StoreRuntimeState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
+
+---@class AdamantModpackLib.StoreRuntimeState
+---@field read fun(alias: string): any Read a declared `mode = "runtime"` storage alias.
+---@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
+---@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
 
 ---Internal trusted staged state. Module authors receive `DrawState` during draw callbacks.
 ---@class AdamantModpackLib.StagedState
@@ -125,7 +132,6 @@ local lib = {}
 ---Draw-phase staged UI state facade. Methods and returned refs are valid only during draw callbacks.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
----@field cache AdamantModpackLib.DrawStateCache
 ---@field shared AdamantModpackLib.SharedData
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
@@ -247,35 +253,16 @@ local lib = {}
 ---    store: AdamantModpackLib.Store
 ---))
 
----@class AdamantModpackLib.CacheDeclarationPersistent
----@field domain "persistent"
----@field key string
----@field default? boolean|number|string
-
 ---@class AdamantModpackLib.CacheDeclarationCurrentRun
 ---@field domain "currentRun"
 ---@field key string
 ---@field factory? fun(): table
 
----@alias AdamantModpackLib.CacheDeclaration
----| AdamantModpackLib.CacheDeclarationPersistent
----| AdamantModpackLib.CacheDeclarationCurrentRun
+---@alias AdamantModpackLib.CacheDeclaration AdamantModpackLib.CacheDeclarationCurrentRun
 ---@alias AdamantModpackLib.CacheDeclarationMap table<string, AdamantModpackLib.CacheDeclaration>
 
 ---@class AdamantModpackLib.StoreCache
----@field persistent AdamantModpackLib.StorePersistentCache
 ---@field currentRun AdamantModpackLib.StoreCurrentRunCache
-
----@class AdamantModpackLib.DrawStateCache
----@field persistent AdamantModpackLib.DrawPersistentCache
-
----@class AdamantModpackLib.StorePersistentCache
----@field read fun(name: string): boolean|number|string?
----@field set fun(name: string, value: boolean|number|string): boolean
----@field clear fun(name: string): boolean
-
----@class AdamantModpackLib.DrawPersistentCache
----@field read fun(name: string): boolean|number|string?
 
 ---@class AdamantModpackLib.StoreCurrentRunCache
 ---@field get fun(name: string): table?

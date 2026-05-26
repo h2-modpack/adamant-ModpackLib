@@ -38,7 +38,7 @@ A module is built from four main pieces:
 - `definition`
   Declares required module identity/display metadata, optional storage, and hash layout hints.
 - `store`
-  Persisted runtime state. Read this from gameplay and hook code.
+  Committed runtime state. Read this from gameplay and hook code.
 - `state`
   Staged UI state passed to draw callbacks. Draw code edits this and host/framework plumbing commits it later.
 - `host`
@@ -51,7 +51,7 @@ Typical module flow:
 3. `host.activate()` registers hooks, overlays, shared events, and the live host.
 4. UI code edits staged values through the `state` argument passed into draw callbacks.
 5. Host/framework plumbing commits staged persistent values when appropriate.
-6. Gameplay logic reads persisted state through `store.get(...):read()`.
+6. Gameplay logic reads committed setting/runtime state through `store.get(...):read()`.
 
 ## The Most Important Rule
 
@@ -60,7 +60,7 @@ Use the right state object for the right job:
 - draw/UI code uses `state`
 - gameplay/runtime logic uses `store`
 
-If you ignore that boundary, the module will still often "work", but you will create drift between the UI and the persisted state model.
+If you ignore that boundary, the module will still often "work", but you will create drift between the UI and committed runtime state model.
 Lib enforces this at the author-facing surfaces: `state`, `actions`,
 `draw`, `draw.widgets`, and `draw.nav` are only valid during the active draw
 callback, while `store` is for runtime code and rejects access during its owning
@@ -116,7 +116,7 @@ Owns gameplay and mutation behavior:
 - local hook declaration helpers such as `registerHooks(host, store)`
 - optional `buildPatchPlan(...)`
 
-This code should read persisted state through the `store` passed to
+This code should read committed state through the `store` passed to
 hook declaration helpers, patch mutation callbacks, or narrower access/read
 closures derived from that store.
 
@@ -207,7 +207,7 @@ host.activate()
 
 Rules:
 
-- `alias` is the store/state key and the persisted backing key
+- `alias` is the store/state key and managed storage key
 - aliases are direct flat storage identifiers
 - normal values persist and hash by default
 - transient values use `persist = false, hash = false`
@@ -216,8 +216,8 @@ Rules:
 - draw code should access staged values through the draw `state` argument
 - `Enabled` and `DebugMode` are reserved Lib-owned aliases; do not declare them
 
-For persistent runtime markers that should not appear in UI staging, profiles,
-or hashes, use declared persistent cache.
+For runtime-owned markers that should not be UI-writable or appear in profiles
+or hashes, use managed storage with `mode = "runtime"`.
 
 ### 3. Create the module with storage and callbacks in `main.lua`
 
@@ -369,11 +369,13 @@ Fallback UI automatically suppresses itself when the module is coordinated.
 
 This is the part most new authors get wrong.
 
-### Persisted values
+### Committed values
 
 Persisted storage roots live in Chalk config and are exposed through
-`store.get(...)`. Use `store.read(alias, ...)` when you only need the committed
-value; it forwards to `store.get(alias):read(...)`.
+`store.get(...)`. Runtime-owned roots are exposed through the same committed
+read surface and write through `store.runtime`. Use `store.read(alias, ...)`
+when you only need the committed value; it forwards to
+`store.get(alias):read(...)`.
 
 The UI stages edits in `state`, then host/framework plumbing commits those edits later.
 
@@ -394,10 +396,11 @@ Examples:
 - temporary selection state
 - ephemeral editor helpers
 
-### Runtime cache values
+### Runtime-owned values
 
-Runtime markers that gameplay code needs across reloads should use declared
-persistent cache.
+Runtime markers that gameplay code writes and UI code reads should use managed
+storage with `mode = "runtime"`. Runtime storage is written through
+`store.runtime` and read through normal `store`/draw `state` access.
 
 ### Packed values
 

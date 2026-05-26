@@ -18,6 +18,7 @@ local NormalizeInteger = storage.NormalizeInteger
 --   persist=true,  hash=true   -> config-backed UI/profile/hash state.
 --   persist=true,  hash=false  -> config-backed UI state excluded from hashes.
 --   persist=false, hash=false  -> transient staged-only UI state.
+--   mode=runtime               -> runtime-owned state; hash=false required.
 --
 -- hash=true requires persist=true. Table rows inherit their table root axes.
 
@@ -57,6 +58,7 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field _isRoot boolean|nil
 ---@field _persist boolean|nil
 ---@field _hash boolean|nil
+---@field _mode "setting"|"runtime"|nil
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
 ---@field _bitAliases PackedBitNode[]|nil
@@ -72,6 +74,7 @@ local CommonNodeFields = {
     default = true,
     hash = true,
     label = true,
+    mode = true,
     persist = true,
     tooltip = true,
     type = true,
@@ -122,6 +125,16 @@ local function PrepareRootNodeMetadata(node)
     node._storageKey = node.alias
 end
 
+local function NormalizeMode(prefix, mode)
+    if mode == nil then
+        return "setting"
+    end
+    if mode ~= "setting" and mode ~= "runtime" then
+        logging.violate("storage.invalid_axis_type", "%s: mode must be 'setting' or 'runtime'", prefix)
+    end
+    return mode
+end
+
 local function ValidateAliasIdentifier(alias, prefix)
     if not IsStableIdentifier(alias) then
         logging.violate("storage.invalid_node", "%s: alias '%s' %s",
@@ -157,6 +170,7 @@ local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases
         _isBitAlias = true,
         _persist = root._persist,
         _hash = root._hash,
+        _mode = root._mode,
         _storageKey = root._storageKey .. "." .. bitNode.alias,
         _valueKind = storageType and storageType.valueKind or bitNode.type,
     }
@@ -210,14 +224,22 @@ function schema.validate(storageSchema, label)
             logging.violate("storage.invalid_node", "%s: missing type", prefix)
         else
             local storageType = StorageTypes[node.type]
+            local mode = NormalizeMode(prefix, node.mode)
             local persist = node.persist ~= false
-            local hash = persist and node.hash ~= false or node.hash == true
+            local hash
+            if mode == "runtime" then
+                hash = false
+            else
+                hash = persist and node.hash ~= false or node.hash == true
+            end
             if not storageType then
                 logging.violate("storage.invalid_node", "%s: unknown storage type '%s'", prefix, tostring(node.type))
             elseif node.persist ~= nil and type(node.persist) ~= "boolean" then
                 logging.violate("storage.invalid_axis_type", "%s: persist must be boolean when provided", prefix)
             elseif node.hash ~= nil and type(node.hash) ~= "boolean" then
                 logging.violate("storage.invalid_axis_type", "%s: hash must be boolean when provided", prefix)
+            elseif mode == "runtime" and node.hash == true then
+                logging.violate("storage.hash_requires_setting", "%s: mode='runtime' requires hash=false", prefix)
             elseif type(node.alias) ~= "string" or node.alias == "" then
                 logging.violate("storage.invalid_node", "%s: missing alias", prefix)
             elseif hash and not persist then
@@ -230,6 +252,7 @@ function schema.validate(storageSchema, label)
                 node._isRoot = true
                 node._persist = persist
                 node._hash = hash
+                node._mode = mode
                 node._valueKind = storageType.valueKind
                 node._bitAliases = {}
 

@@ -1,7 +1,7 @@
 # UI Action Runtime Bridge
 
 Contributor note. The action-handler part of this design is implemented; the
-related cache shape is still open.
+runtime-owned storage shape replaced the cache bridge discussed here.
 
 ## Problem
 
@@ -21,7 +21,7 @@ Example:
 
 - UI button starts recording the next `N` game events.
 - Runtime hooks consume and update recording progress as events happen.
-- Persistent cache is the natural runtime-owned state for this marker.
+- Runtime-owned storage is the natural state for this marker.
 
 That flow needs a bridge from draw intent to runtime capability access.
 
@@ -77,12 +77,12 @@ end
 local actions = {
     StartRecording = function(_, state, value)
         local count = value and value.count or state.read("RecordingCount")
-        -- Future bridge would need an explicit runtime cache writer here.
+        -- Future bridge would need an explicit runtime-owned storage writer here.
     end,
 }
 ```
 
-Runtime hooks can then consume and update the persistent cache marker.
+Runtime hooks can then consume and update the runtime-owned marker.
 
 ## Why Host Belongs Here
 
@@ -101,23 +101,23 @@ that are not necessarily settings commits.
 
 ## Cache Relationship
 
-This design makes the recording-style scenario realizable with persistent
-cache:
+This design makes the recording-style scenario realizable with runtime-owned
+storage:
 
 ```text
 UI stages StartRecording
-action handler writes persistent runtime marker through host
+action handler writes runtime-owned marker through store.runtime
 runtime hook updates marker after each game event
 UI can later read a sanctioned draw-safe projection
 ```
 
 The broader cache-access shape is still under discussion. In particular:
 
-- persistent cache should not become directly draw-writable
+- runtime-owned storage should not become directly draw-writable
 - current-run cache should remain runtime/logic scratch state
 - shared data remains the likely draw-safe read projection
-- future cache declarations may move cache refs under data access objects
-- draw-safe cache refs should come from `state.cache`
+- current-run cache remains under `store.cache`
+- draw-safe runtime-owned values should come from draw `state`
 
 Do not treat this note as a full cache-v2 design.
 

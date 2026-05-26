@@ -48,9 +48,6 @@ local moduleState = import('core/module_state/00_init.lua', nil, {
 local cacheBundle = import('core/cache/00_init.lua', nil, {
     logging = logging,
     gameDeps = gameDeps,
-    hostRegistry = hostRegistry,
-    cacheRegistry = registry.cache,
-    values = values,
     phaseGate = phaseGate,
 })
 

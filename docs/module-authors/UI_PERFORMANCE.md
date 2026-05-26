@@ -24,7 +24,7 @@ This document assumes:
 - raw `config` stays local to `main.lua`
 - `lib.createModule(...)` owns the definition and state construction boundary
 - draw code reads staged values through `state.get(...)`
-- runtime/gameplay code reads persisted values through `store.get(...)`
+- runtime/gameplay code reads committed setting/runtime values through `store.get(...)`
 - draw-phase objects and refs are callback-local; do not cache them for runtime use
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks

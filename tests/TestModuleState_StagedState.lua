@@ -10,6 +10,7 @@ local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
 local makePackedDefinition = helpers.makePackedDefinition
 local makeTransientDefinition = helpers.makeTransientDefinition
+local makeRuntimeDefinition = helpers.makeRuntimeDefinition
 local makeTableDefinition = helpers.makeTableDefinition
 local makeMinRowsTableDefinition = helpers.makeMinRowsTableDefinition
 
@@ -117,6 +118,29 @@ function TestModuleState_StagedState:testTransientAliasesLiveOnlyInStagedState()
     stagedState._flushToConfig()
     lu.assertFalse(stagedState.isDirty())
     lu.assertNil(config.FilterText)
+end
+
+function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState()
+    local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+
+    lu.assertFalse(stagedState.view.RuntimeFlag)
+    lu.assertTrue(persistentState.runtime.set("RuntimeFlag", true))
+    lu.assertTrue(stagedState.view.RuntimeFlag)
+    lu.assertTrue(stagedState.read("RuntimeFlag"))
+    lu.assertTrue(stagedState.get("RuntimeFlag"):read())
+    lu.assertErrorMsgContains("runtime-owned", function()
+        stagedState.write("RuntimeFlag", false)
+    end)
+    lu.assertErrorMsgContains("runtime-owned", function()
+        stagedState.write("RuntimeBit", true)
+    end)
+    lu.assertTrue(stagedState.view.RuntimeFlag)
+
+    local runtimeRows = stagedState.get("RuntimeRows")
+    lu.assertEquals(runtimeRows:count(), 1)
+    lu.assertFalse(runtimeRows:read(1, "Enabled"))
+    lu.assertNil(runtimeRows.write)
+    lu.assertNil(runtimeRows.append)
 end
 
 function TestModuleState_StagedState:testInternalReloadFromConfigResetsTransientAliasesToDefaults()

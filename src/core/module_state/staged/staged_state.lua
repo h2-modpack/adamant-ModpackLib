@@ -9,8 +9,9 @@ local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
 ---@param storageConfig StorageConfigAdapter
 ---@param storage StorageSchema
+---@param persistentState PersistentState|nil
 ---@return StagedState
-local function createStagedState(storageConfig, storage)
+local function createStagedState(storageConfig, storage, persistentState)
     local stagedRootNodes = storageInternal.getStagedRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
@@ -26,7 +27,7 @@ local function createStagedState(storageConfig, storage)
         end
     end
 
-    local function readConfigValue(root)
+    local function readPersistedConfigValue(root)
         if not root._persist then
             return nil
         end
@@ -37,6 +38,19 @@ local function createStagedState(storageConfig, storage)
         return storageConfig.readValue(root._storageKey)
     end
 
+    local function readConfigValue(root)
+        if not root._persist then
+            if root._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
+                return persistentState._readRoot(root)
+            end
+            return nil
+        end
+        if persistentState and type(persistentState._readRoot) == "function" then
+            return persistentState._readRoot(root)
+        end
+        return readPersistedConfigValue(root)
+    end
+
     local function writeConfigValue(root, value)
         if not root._persist then
             return
@@ -44,9 +58,15 @@ local function createStagedState(storageConfig, storage)
         local entry = configEntries and configEntries[root.alias] or nil
         if entry then
             entry:set(value)
+            if persistentState and type(persistentState._replaceRoot) == "function" then
+                persistentState._replaceRoot(root, value)
+            end
             return
         end
         storageConfig.writeValue(root._storageKey, value)
+        if persistentState and type(persistentState._replaceRoot) == "function" then
+            persistentState._replaceRoot(root, value)
+        end
     end
 
     local function syncPackedChildren(root, packedValue)
@@ -124,6 +144,9 @@ local function createStagedState(storageConfig, storage)
 
     local stagedReadBackend = {
         readRoot = function(root)
+            if root._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
+                return persistentState._readRoot(root)
+            end
             return staging[root.alias]
         end,
         onUnknownRead = function(alias)
@@ -138,6 +161,16 @@ local function createStagedState(storageConfig, storage)
             end
             return staging[root.alias]
         end,
+        canWrite = function(node, alias)
+            if node._mode == "runtime" then
+                logging.violate(
+                    "staged_state.invalid_surface",
+                    "stagedState.write: alias '%s' is runtime-owned; use store.runtime.set",
+                    tostring(alias))
+                return false
+            end
+            return true
+        end,
         writeRoot = writeRootToStaging,
         writeAliasValue = function(node, aliasValue)
             staging[node.alias] = aliasValue
@@ -151,6 +184,9 @@ local function createStagedState(storageConfig, storage)
         __index = function(_, key)
             local value = staging[key]
             local node = aliasNodes[key]
+            if node and node._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
+                value = persistentState._readRoot(node)
+            end
             if node and node.type == "table" then
                 return ClonePersistedValue(value)
             end
@@ -163,6 +199,9 @@ local function createStagedState(storageConfig, storage)
             return function(_, key)
                 local nextKey, value = next(staging, key)
                 local node = aliasNodes[nextKey]
+                if node and node._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
+                    value = persistentState._readRoot(node)
+                end
                 if node and node.type == "table" then
                     value = ClonePersistedValue(value)
                 end
@@ -185,16 +224,23 @@ local function createStagedState(storageConfig, storage)
             return cached
         end
 
-        local handle = storageInternal.table.CreateTableHandle(node, {
+        local tableOpts = {
             readRoot = function(root)
+                if root._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
+                    return persistentState._readRoot(root)
+                end
                 if staging[root.alias] == nil then
                     loadRootIntoStaging(root)
                 end
                 return staging[root.alias]
             end,
-            writeRoot = writeRootToStaging,
             normalizedRoot = true,
-        })
+        }
+        if node._mode ~= "runtime" then
+            tableOpts.writeRoot = writeRootToStaging
+        end
+
+        local handle = storageInternal.table.CreateTableHandle(node, tableOpts)
         tableHandles[alias] = handle
         return handle
     end
@@ -229,7 +275,7 @@ local function createStagedState(storageConfig, storage)
 
         for _, root in ipairs(stagedRootNodes) do
             local alias = root.alias
-            if root._persist and alias ~= nil and not exclude[alias] then
+            if root._persist and root._mode ~= "runtime" and alias ~= nil and not exclude[alias] then
                 local current = readStagingValue(alias)
                 if not storageInternal.valuesEqual(root, current, root.default) then
                     resetAliasValue(alias)
@@ -293,6 +339,9 @@ local function createStagedState(storageConfig, storage)
         end,
         resetAll = resetAll,
         _reloadFromConfig = function()
+            if persistentState and type(persistentState._reloadFromConfig) == "function" then
+                persistentState._reloadFromConfig()
+            end
             copyConfigToStaging()
             clearDirty()
         end,
@@ -311,10 +360,10 @@ local function createStagedState(storageConfig, storage)
         auditMismatches = function()
             local mismatches = {}
             for _, root in ipairs(stagedRootNodes) do
-                if not root._persist then
+                if not root._persist or root._mode == "runtime" then
                     goto continue_root
                 end
-                local persistedValue = readConfigValue(root)
+                local persistedValue = readPersistedConfigValue(root)
                 if persistedValue == nil then
                     persistedValue = ClonePersistedValue(root.default)
                 end

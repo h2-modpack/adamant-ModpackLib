@@ -17,10 +17,26 @@ function store.create(persistentState, cache, shared)
         writable = false,
     })
 
+    local runtime = persistentState.runtime
+
     return {
         get = refs.get,
         cache = cache,
         shared = shared,
+        runtime = runtime and {
+            read = function(alias)
+                phaseGate.requireRuntime()
+                return runtime.read(alias)
+            end,
+            set = function(alias, value)
+                phaseGate.requireRuntime()
+                return runtime.set(alias, value)
+            end,
+            clear = function(alias)
+                phaseGate.requireRuntime()
+                return runtime.clear(alias)
+            end,
+        } or nil,
         read = function(alias, ...)
             phaseGate.requireRuntime()
             local ref = persistentState.get(alias)

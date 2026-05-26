@@ -98,6 +98,9 @@ local function buildReadOnlyView(value, seen)
         __pairs = function()
             return pairs(view)
         end,
+        __ipairs = function()
+            return ipairs(view)
+        end,
         __len = function()
             return #view
         end,
