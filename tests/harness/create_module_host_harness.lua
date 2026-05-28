@@ -13,11 +13,13 @@ local function createModuleHostHarness(harnessOpts)
         moduleState = base.moduleState,
         hostLifecycle = base.hostLifecycle,
         registry = base.registry,
-        hostRegistry = base.hostRegistry,
+        moduleRegistry = base.moduleRegistry,
         coordinator = base.coordinator,
+        sharedBundle = base.sharedBundle,
         shared = base.shared,
         overlays = base.overlays,
         fallbackUi = base.fallbackUi,
+        fallbackUiBundle = base.fallbackUiBundle,
         warnings = {},
     }
 
@@ -49,27 +51,54 @@ local function createModuleHostHarness(harnessOpts)
         return self.moduleBundle.createModuleOrThrow(opts)
     end
 
+    local function adaptDrawCallback(callback)
+        if type(callback) ~= "function" then
+            return callback
+        end
+        return function(callbackHost, ui)
+            return callback(ui.draw, ui.data, ui.actions, ui, callbackHost)
+        end
+    end
+
+    local function adaptCommitCallback(callback)
+        if type(callback) ~= "function" then
+            return callback
+        end
+        return function(callbackHost, runtime, commit)
+            return callback(runtime, callbackHost, commit)
+        end
+    end
+
+    local function adaptPatchMutation(callback)
+        if type(callback) ~= "function" then
+            return callback
+        end
+        return function(callbackHost, runtime, plan)
+            return callback(plan, callbackHost, runtime.data, runtime, callbackHost)
+        end
+    end
+
     function h:createHost(pluginGuid, hostOpts)
         hostOpts = hostOpts or {}
-        local host, authorHost, store = self.moduleHost.create({
+        local host, store = self.moduleHost.create({
             pluginGuid = pluginGuid,
             definition = hostOpts.definition,
             persistentState = hostOpts.persistentState,
             stagedState = hostOpts.stagedState,
-            onSettingsCommitted = hostOpts.onSettingsCommitted,
-            drawTab = hostOpts.drawTab,
-            drawQuickContent = hostOpts.drawQuickContent,
+            mutationBundle = {
+                patchMutation = adaptPatchMutation(hostOpts.patchMutation),
+            },
+            onCommit = adaptCommitCallback(hostOpts.onCommit),
+            drawTab = adaptDrawCallback(hostOpts.drawTab),
+            drawQuickContent = adaptDrawCallback(hostOpts.drawQuickContent),
         })
-        if hostOpts.patchMutation ~= nil then
-            authorHost.mutation.patch(hostOpts.patchMutation)
-        end
-        return host, authorHost, store
+        return host, host, store
     end
 
     function h:createActivatedHost(pluginGuid, hostOpts)
-        local host, authorHost, store = self:createHost(pluginGuid, hostOpts)
-        local ok, err = authorHost.activate()
-        return host, authorHost, ok, err, store
+        local host, _, store = self:createHost(pluginGuid, hostOpts)
+        local ok, err = host.activate()
+        return host, host, ok, err, store
     end
 
     function h:liveHost(pluginGuid)

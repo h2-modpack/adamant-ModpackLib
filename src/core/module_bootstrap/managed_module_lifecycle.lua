@@ -19,27 +19,27 @@ local function makeCommitContext(actionSnapshot, hadConfigChanges)
     }
 end
 
-local function notifySettingsCommitted(def, commitNotifier, commitContext)
+local function notifyCommit(def, commitNotifier, commitContext)
     if commitNotifier == nil then
         return true, nil
     end
 
     local ok, result = pcall(commitNotifier, commitContext or makeCommitContext(nil, false))
     if not ok then
-        logging.violate("lifecycle.on_settings_committed_failed", "%s: onSettingsCommitted failed: %s",
+        logging.violate("lifecycle.on_commit_failed", "%s: onCommit failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(result))
         return true, nil
     end
     if result == false then
-        logging.violate("lifecycle.on_settings_committed_false", "%s: onSettingsCommitted returned false",
+        logging.violate("lifecycle.on_commit_false", "%s: onCommit returned false",
             tostring(def.name or def.id or "module"))
     end
     return true, nil
 end
 
-local function notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
-    local ok, err = notifySettingsCommitted(def, commitNotifier, commitContext)
+local function notifyCommitAfterFlush(def, commitNotifier, commitContext)
+    local ok, err = notifyCommit(def, commitNotifier, commitContext)
     return ok, err
 end
 
@@ -109,7 +109,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         and hadConfigChanges
 
     if not shouldSyncMutation then
-        return notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
+        return notifyCommitAfterFlush(def, commitNotifier, commitContext)
     end
 
     local ok
@@ -122,7 +122,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         ok, err = true, nil
     end
     if ok then
-        return notifySettingsCommittedAfterFlush(def, commitNotifier, commitContext)
+        return notifyCommitAfterFlush(def, commitNotifier, commitContext)
     end
 
     return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)

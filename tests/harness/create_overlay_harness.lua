@@ -129,21 +129,62 @@ local function createOverlayHarness(opts)
                 Enabled = true,
                 DebugMode = false,
             }, definition)
-            local host, authorHost = base.moduleHost.create({
+            local overlayDeclarations = base.overlaysBundle.declarations.create()
+            local overlayRegistrar = {
+                order = base.overlaysBundle.order,
+                createLine = function(name, spec)
+                    return base.overlaysBundle.declarations.declareLine(
+                        overlayDeclarations,
+                        "module.overlays.createLine",
+                        name,
+                        spec)
+                end,
+                createTable = function(name, spec)
+                    return base.overlaysBundle.declarations.declareTable(
+                        overlayDeclarations,
+                        "module.overlays.createTable",
+                        name,
+                        spec)
+                end,
+                onCommit = function(callback)
+                    return base.overlaysBundle.declarations.declareCommit(
+                        overlayDeclarations,
+                        "module.overlays.onCommit",
+                        callback)
+                end,
+                onInterval = function(name, seconds, callback, opts)
+                    return base.overlaysBundle.declarations.declareInterval(
+                        overlayDeclarations,
+                        "module.overlays.onInterval",
+                        name,
+                        seconds,
+                        callback,
+                        opts)
+                end,
+                afterHook = function(path, callback)
+                    return base.overlaysBundle.declarations.declareAfterHook(
+                        overlayDeclarations,
+                        "module.overlays.afterHook",
+                        path,
+                        callback)
+                end,
+            }
+            if type(declareOverlays) == "function" then
+                declareOverlays(overlayRegistrar, nil, store)
+            end
+            local host = base.moduleHost.create({
                 pluginGuid = pluginGuid,
                 definition = definition,
                 persistentState = store,
                 stagedState = stagedState,
-                onSettingsCommitted = hostOpts.onSettingsCommitted,
+                mutationBundle = {
+                    patchMutation = hostOpts.patchMutation,
+                },
+                overlayDeclarations = overlayDeclarations,
+                onCommit = hostOpts.onCommit,
                 drawTab = function() end,
             })
-            if hostOpts.patchMutation ~= nil then
-                authorHost.mutation.patch(hostOpts.patchMutation)
-            end
-            if type(declareOverlays) == "function" then
-                declareOverlays(authorHost.overlays, authorHost, store)
-            end
-            return host, authorHost, store, stagedState, definition
+            return host, host, store, stagedState, definition
         end,
     }
 end

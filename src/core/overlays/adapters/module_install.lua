@@ -1,32 +1,32 @@
 local deps = ...
 
 local logging = deps.logging
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 local hooks = deps.hooks
 local retained = deps.retained
 local declarations = deps.declarations
-local hostAdapter = {}
+local moduleAdapter = {}
 
-local function requireHostRecord(host, apiName)
-    local record = hostRegistry.getRecord(host)
+local function requireModuleRecord(module, apiName)
+    local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("overlays.invalid_registration", "%s: expected managed module host record", apiName)
+        logging.violate("overlays.invalid_registration", "%s: expected managed module record", apiName)
     end
     return record
 end
 
-local function createAfterHookReceipt(host, paths)
+local function createAfterHookReceipt(module, paths)
     if #paths == 0 then
         return nil
     end
 
-    return hooks.installForHost(host, function(declare)
+    return hooks.installForModule(module, function(declare)
         for _, path in ipairs(paths) do
             local hookPath = path
             declare.wrap(hookPath, "overlay.after:" .. hookPath, function(base, ...)
                 local args = table.pack(...)
                 local results = table.pack(base(...))
-                retained.dispatchAfterHook(host, hookPath, args, results)
+                retained.dispatchAfterHook(module, hookPath, args, results)
                 return table.unpack(results, 1, results.n)
             end)
         end
@@ -40,11 +40,11 @@ local function disposeReceipt(receipt)
     return receipt.dispose()
 end
 
-function hostAdapter.installForHost(host, authorHost, store)
-    local record = requireHostRecord(host, "overlays.installForHost")
-    local ownerId = host.getHostId()
+function moduleAdapter.installForModule(module, store)
+    local record = requireModuleRecord(module, "overlays.installForModule")
+    local ownerId = module.getHostId()
     if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("overlays.invalid_registration", "overlays.installForHost: host ownerId is required")
+        logging.violate("overlays.invalid_registration", "overlays.installForModule: module ownerId is required")
     end
 
     local stagingOwner = {}
@@ -58,10 +58,10 @@ function hostAdapter.installForHost(host, authorHost, store)
     local disposed = false
 
     local ok, err = pcall(function()
-        retained.refresh(stagingOwner, pendingOwnerId, authorHost, store, function(registrar)
+        retained.refresh(stagingOwner, pendingOwnerId, module, store, function(registrar)
             declarations.replay(overlayDeclarations, registrar)
         end, { hidden = true })
-        afterHookReceipt = createAfterHookReceipt(host, retained.getAfterHookPaths(stagingOwner))
+        afterHookReceipt = createAfterHookReceipt(module, retained.getAfterHookPaths(stagingOwner))
     end)
 
     if not ok then
@@ -81,7 +81,7 @@ function hostAdapter.installForHost(host, authorHost, store)
                 end
                 afterHookReceiptCommitted = true
             end
-            local clearOk, clearErr = retained.clearTableRegistriesByOwnerId(currentOwnerId, host)
+            local clearOk, clearErr = retained.clearTableRegistriesByOwnerId(currentOwnerId, module)
             if not clearOk then
                 if afterHookReceiptCommitted then
                     disposeReceipt(afterHookReceipt)
@@ -90,7 +90,7 @@ function hostAdapter.installForHost(host, authorHost, store)
                 return false, clearErr
             end
             transaction.commit()
-            retained.promoteTableRegistry(stagingOwner, host, currentOwnerId, authorHost, store)
+            retained.promoteTableRegistry(stagingOwner, module, currentOwnerId, module, store)
             committed = true
             return true, nil
         end,
@@ -108,9 +108,9 @@ function hostAdapter.installForHost(host, authorHost, store)
                 return true, nil
             end
 
-            local disposeTransaction = retained.beginTransaction(host)
+            local disposeTransaction = retained.beginTransaction(module)
             local disposeOk, disposeErr = pcall(function()
-                retained.refresh(host, currentOwnerId, nil, nil, function() end)
+                retained.refresh(module, currentOwnerId, nil, nil, function() end)
             end)
             local hookOk, hookErr = disposeReceipt(afterHookReceipt)
             afterHookReceiptCommitted = false
@@ -130,4 +130,4 @@ function hostAdapter.installForHost(host, authorHost, store)
     }
 end
 
-return hostAdapter
+return moduleAdapter

@@ -6,40 +6,40 @@ configuration-heavy mods, or coordinated feature bundles.
 ModpackLib provides the common plumbing that those projects usually need:
 
 - typed storage definitions for module settings
-- draw-phase `state` and `actions` for responsive ImGui config screens
-- a persistent `store` model for runtime hook logic
+- draw-phase `ui.data` and `ui.actions` for responsive ImGui config screens
+- runtime `runtime.data` for committed hook, mutation, overlay, and shared-event logic
 - profile and hash helpers for saving, loading, and identifying settings
 - mutation helpers for modules that patch run data
 - module host helpers for coordinated and fallback UI usage
 - reusable ImGui widgets and navigation helpers
 
 The library is designed around immediate-mode UI. Module authors write normal
-draw functions, then expose them through a module host:
+draw functions, then expose them through a module declaration facade:
 
 ```lua
 local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = "ExampleModule",
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
-    drawQuickContent = ui.drawQuickContent,
 })
-if not host then return end
+if not module then return end
 
-logic.registerHooks(host, store)
-host.activate()
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+module.ui.quickContent(ui.drawQuickContent)
+logic.registerHooks(module)
+module.activate()
 ```
 
 `pluginGuid` is the stable runtime identity; Lib owns the internal hot-reload
 state for hooks, overlays, shared events, cache, mutation runtime, and
-structural reload tracking. Declare runtime hooks on `host.hooks.*` before activation.
-`host.activate()` registers the live host for coordinated discovery and installs requested fallback UI.
+structural reload tracking. Declare runtime hooks on `module.hooks.*` before activation.
+`module.activate()` registers the live host for coordinated discovery and installs requested fallback UI.
 Every module definition must declare a stable `id` and display `name`; `modpack`
 is optional and marks modules that participate in Framework coordination.
 
@@ -75,19 +75,19 @@ Reference and historical notes:
 
 ## Public Surface
 
-- `host.hooks`
-- `host.overlays`
-- `host.shared`
-- `host.fallbackUi`
+- `module.hooks`
+- `module.overlays`
+- `module.shared`
+- `module.fallbackUi`
 
 Common top-level helpers:
 - `lib.createModule(...)`
 - `lib.createFrameworkRuntime(...)`
 
-Most authors start with `lib.createModule(...)`. It returns `nil, nil, err`
+Most authors start with `lib.createModule(...)`. It returns `nil, err`
 instead of throwing when construction fails, so invalid modules can be logged
 and skipped without stopping sibling modules. Activation remains explicit
-through `host.activate()`.
+through `module.activate()`.
 See [docs/module-authors/GETTING_STARTED.md](docs/module-authors/GETTING_STARTED.md) for the recommended project shape.
 
 ## Validation

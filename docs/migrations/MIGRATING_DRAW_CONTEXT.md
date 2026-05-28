@@ -149,7 +149,7 @@ public config. `createModule(...)` should derive it from the callback surface
 and pass it to `prepareDefinition(...)` as structural metadata:
 
 ```lua
-local preparedDefinition = moduleHost.prepareDefinition(
+local preparedDefinition = managedModule.prepareDefinition(
     GetStructuralBaseline(opts.pluginGuid),
     definitionInput,
     {

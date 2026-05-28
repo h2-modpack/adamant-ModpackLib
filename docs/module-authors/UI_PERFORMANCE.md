@@ -29,8 +29,8 @@ This document assumes:
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own staged-state commit timing
-- fallback UI registers ROM callbacks through `host.fallbackUi.attachGuiOnce(...)`
-  and installs the active runtime during `host.activate()`
+- fallback UI registers ROM callbacks through `module.fallbackUi.attachGuiOnce(...)`
+  and installs the active runtime during `module.activate()`
 
 ## Per-Frame Checklist
 
@@ -106,7 +106,7 @@ Do not hand-roll flush logic inside draw code.
 Ownership:
 - framework-hosted modules commit after `drawTab` / `drawQuickContent`
 - fallback UI modules should register GUI callbacks through
-  `host.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
+  `module.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 
 The module's job is:
 - render from `state`

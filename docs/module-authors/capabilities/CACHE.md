@@ -13,31 +13,34 @@ semantics, use managed storage with `mode = "runtime"` instead of cache.
 
 ## Declaration
 
-Declare current-run cache refs next to storage/actions:
+Declare current-run cache refs before activation:
 
 ```lua
-local host, store = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example",
-    cache = {
-        RunScratch = {
-            domain = "currentRun",
-            key = "run",
-            factory = function()
-                return {}
-            end,
-        },
-    },
-    drawTab = ui.drawTab,
 })
+if not module then return end
+
+module.cache.define({
+    RunScratch = {
+        domain = "currentRun",
+        key = "run",
+        factory = function()
+            return {}
+        end,
+    },
+})
+module.ui.tab(ui.drawTab)
+module.activate()
 ```
 
-Runtime code uses `store.cache`:
+Runtime callbacks use `runtime.data.cache`:
 
 ```lua
-local runScratch = store.cache.currentRun.get("RunScratch")
+local runScratch = runtime.data.cache.currentRun.get("RunScratch")
 runScratch.seen = true
 ```
 
@@ -49,8 +52,8 @@ Rules:
 
 - cache declaration names must be stable identifiers
 - declared cache is part of the structural definition fingerprint
-- `store.cache` is valid outside draw callbacks
-- current-run cache is only available from `store.cache`
+- `runtime.data.cache` is valid outside draw callbacks
+- current-run cache is only available from runtime data
 
 ## Current Run
 
@@ -58,14 +61,14 @@ Current-run cache is for per-run mutable table buckets attached to the active
 `CurrentRun`.
 
 ```lua
-local runState = store.cache.currentRun.get("RunScratch")
+local runState = runtime.data.cache.currentRun.get("RunScratch")
 runState.ForcedNPCPending = runState.ForcedNPCPending or {}
 ```
 
 Surface:
 
-- `store.cache.currentRun.get(name)`
-- `store.cache.currentRun.clear(name)`
+- `runtime.data.cache.currentRun.get(name)`
+- `runtime.data.cache.currentRun.clear(name)`
 
 `get(...)` creates the cache bucket when missing. The declaration factory runs
 only on first creation and must return a table. `clear(...)` removes one cache

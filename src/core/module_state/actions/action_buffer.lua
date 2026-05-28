@@ -182,12 +182,12 @@ local function createBuffer(actionCatalog)
         }
     end
 
-    function buffer.executePendingActions(host, state)
+    function buffer.executePendingActions(host, uiData, actionRuntime)
         if catalog ~= nil then
             for _, actionKey in ipairs(catalog.order) do
                 if pending[actionKey] then
                     pending[actionKey] = nil
-                    catalog.handlers[actionKey](host, state, CloneValue(slots[actionKey]))
+                    catalog.handlers[actionKey](host, uiData, actionRuntime, CloneValue(slots[actionKey]))
                 end
             end
         end

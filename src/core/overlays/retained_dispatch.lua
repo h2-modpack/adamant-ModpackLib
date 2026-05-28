@@ -5,7 +5,7 @@ local logging = deps.logging
 local renderer = deps.renderer
 
 local function createProjectionContext(registry)
-    local authorHost = registry.authorHost
+    local host = registry.host
     local store = registry.store
     local ctx = {}
 
@@ -17,22 +17,22 @@ local function createProjectionContext(registry)
     end
 
     function ctx.isEnabled()
-        if authorHost and type(authorHost.isEnabled) == "function" then
-            return authorHost.isEnabled()
+        if host and type(host.isEnabled) == "function" then
+            return host.isEnabled()
         end
         return true
     end
 
     function ctx.log(fmt, ...)
-        if authorHost and type(authorHost.log) == "function" then
-            return authorHost.log(fmt, ...)
+        if host and type(host.log) == "function" then
+            return host.log(fmt, ...)
         end
         print(logging.formatLogMessage("[overlays:" .. tostring(registry.ownerId) .. "] ", fmt, ...))
     end
 
     function ctx.logIf(fmt, ...)
-        if authorHost and type(authorHost.logIf) == "function" then
-            return authorHost.logIf(fmt, ...)
+        if host and type(host.logIf) == "function" then
+            return host.logIf(fmt, ...)
         end
     end
 

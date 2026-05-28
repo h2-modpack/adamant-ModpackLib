@@ -128,18 +128,21 @@ end
 function TestHooks:createHostWithHooks(pluginGuid, registerHooks, activationOpts)
     activationOpts = activationOpts or {}
     local store = createStore(activationOpts.enabled == true)
-    local host, authorHost = self.moduleHost.create({
+    local hookDeclarations = self.harness.hooksBundle.declarations.create()
+    local mutationBundle = {
+        patchMutation = activationOpts.patchMutation,
+    }
+    local host = self.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
         persistentState = store,
         stagedState = createStagedState(),
+        hookDeclarations = hookDeclarations,
+        mutationBundle = mutationBundle,
         drawTab = function() end,
     })
-    if activationOpts.patchMutation ~= nil then
-        authorHost.mutation.patch(activationOpts.patchMutation)
-    end
     if registerHooks ~= nil then
-        registerHooks(authorHost, store)
+        registerHooks(self.harness.hooksBundle.declarations.createRegistrar(hookDeclarations, "module.hooks"), store)
     end
     return self.moduleHost.activateOrThrow(host)
 end
@@ -150,10 +153,10 @@ function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
     end
 
     self:createHostWithHooks("hook-test-wrap-update", function(host)
-        host.hooks.wrap("AdamantHookTestWrap", function(base, value)
+        host.wrap("AdamantHookTestWrap", function(base, value)
             return "first:" .. base(value)
         end)
-        host.hooks.wrap("AdamantHookTestWrap", function(base, value)
+        host.wrap("AdamantHookTestWrap", function(base, value)
             return "second:" .. base(value)
         end)
     end)
@@ -169,7 +172,7 @@ function TestHooks:testWrapUsesInjectedModUtilWhenGlobalIsMissing()
     end
 
     self:createHostWithHooks("hook-test-wrap-injected-modutil", function(host)
-        host.hooks.wrap("AdamantHookTestWrapInjected", function(base, value)
+        host.wrap("AdamantHookTestWrapInjected", function(base, value)
             return "wrapped:" .. base(value)
         end)
     end)
@@ -185,7 +188,7 @@ function TestHooks:testWrapRefreshOmissionFallsBackToBase()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap("AdamantHookTestWrapRefresh", function(base, value)
+        host.wrap("AdamantHookTestWrapRefresh", function(base, value)
             return "wrapped:" .. base(value)
         end)
     end)
@@ -204,7 +207,7 @@ function TestHooks:testMissingRegisterHooksRefreshRemovesPreviousHooks()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap("AdamantHookTestMissingRegisterHooks", function(base, value)
+        host.wrap("AdamantHookTestMissingRegisterHooks", function(base, value)
             return "wrapped:" .. base(value)
         end)
     end)
@@ -225,7 +228,7 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap(path, function(base, value)
+        host.wrap(path, function(base, value)
             return "first:" .. base(value)
         end)
     end)
@@ -245,7 +248,7 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     lu.assertNil(self.hookRegistry.ownerSlots[ownerId])
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap(path, function(base, value)
+        host.wrap(path, function(base, value)
             return "second:" .. base(value)
         end)
     end)
@@ -255,20 +258,23 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(self.env[path]("x"), "second:base:x")
 end
 
-function TestHooks:testHostHookDeclarationsAreStoredOnHostRegistry()
-    local host, authorHost = self.moduleHost.create({
+function TestHooks:testHostHookDeclarationsAreStoredOnModuleRegistry()
+    local hookDeclarations = self.harness.hooksBundle.declarations.create()
+    local host = self.moduleHost.create({
         pluginGuid = "hook-test-state-declarations",
         definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
         persistentState = createStore(false),
         stagedState = createStagedState(),
+        hookDeclarations = hookDeclarations,
         drawTab = function() end,
     })
 
-    authorHost.hooks.wrap("AdamantHookTestStateDeclarations", function(base)
+    self.harness.hooksBundle.declarations.declareWrap(hookDeclarations, "module.hooks.wrap",
+        "AdamantHookTestStateDeclarations", function(base)
         return base()
     end)
 
-    local record = self.harness.hostRegistry.getRecord(host)
+    local record = self.harness.moduleRegistry.getRecord(host)
     lu.assertNotNil(record.hookDeclarations)
     lu.assertNotNil(record.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
 end
@@ -281,7 +287,7 @@ function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.override(path, function()
+        host.override(path, function()
             return "override"
         end)
     end)
@@ -295,14 +301,14 @@ function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
     lu.assertNil(self.hookRegistry.dispatchers.override[path])
 end
 
-function TestHooks:testHostHooksDeclareAgainstAuthorHost()
+function TestHooks:testHostHooksDeclareAgainstAuthorModule()
     local pluginGuid = "hook-test-host-wrap"
     self.env.AdamantHookTestHostWrap = function(value)
         return "base:" .. value
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap("AdamantHookTestHostWrap", function(base, value)
+        host.wrap("AdamantHookTestHostWrap", function(base, value)
             return "scoped:" .. base(value)
         end)
     end)
@@ -317,7 +323,7 @@ end
 function TestHooks:testServiceSurfaceOnlyExposesHostInstallation()
     local hooks = self.harness.hooks
 
-    lu.assertEquals(type(hooks.installForHost), "function")
+    lu.assertEquals(type(hooks.installForModule), "function")
     lu.assertNil(hooks.installModUtilWrap)
     lu.assertNil(hooks.installModUtilContextWrap)
     lu.assertNil(hooks.installPhysicalWrap)
@@ -361,17 +367,20 @@ function TestHooks:testSystemHooksDefineRemovesOmittedDeclarations()
 end
 
 function TestHooks:testHostHookDeclarationsRejectAfterActivation()
-    local host, authorHost = self.moduleHost.create({
+    local authorModule = self.public.createModule({
         pluginGuid = "hook-test-declare-after-activation",
-        definition = self.moduleHost.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        persistentState = createStore(false),
-        stagedState = createStagedState(),
-        drawTab = function() end,
+        config = {
+            Enabled = false,
+            DebugMode = false,
+        },
+        id = "HookTest",
+        name = "Hook Test",
     })
-    self.moduleHost.activateOrThrow(host)
+    authorModule.ui.tab(function() end)
+    lu.assertTrue(authorModule.activate())
 
-    lu.assertErrorMsgContains("cannot be called after host activation", function()
-        authorHost.hooks.wrap("AdamantHookTestNoContext", function(base)
+    lu.assertErrorMsgContains("cannot be called after module activation begins", function()
+        authorModule.hooks.wrap("AdamantHookTestNoContext", function(_, _, base)
             return base()
         end)
     end)
@@ -380,7 +389,7 @@ end
 function TestHooks:testExplicitHookKeysMustBeNonEmptyStrings()
     lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
         self:createHostWithHooks("hook-test-invalid-wrap-key", function(host)
-            host.hooks.wrap("AdamantHookTestInvalidWrapKey", {}, function(base)
+            host.wrap("AdamantHookTestInvalidWrapKey", {}, function(base)
                 return base()
             end)
         end)
@@ -388,7 +397,7 @@ function TestHooks:testExplicitHookKeysMustBeNonEmptyStrings()
 
     lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
         self:createHostWithHooks("hook-test-invalid-override-key", function(host)
-            host.hooks.override("AdamantHookTestInvalidOverrideKey", "", function()
+            host.override("AdamantHookTestInvalidOverrideKey", "", function()
                 return "override"
             end)
         end)
@@ -396,7 +405,7 @@ function TestHooks:testExplicitHookKeysMustBeNonEmptyStrings()
 
     lu.assertErrorMsgContains("explicit key must be a non-empty string", function()
         self:createHostWithHooks("hook-test-invalid-context-key", function(host)
-            host.hooks.contextWrap("AdamantHookTestInvalidContextKey", function() end, function() end)
+            host.contextWrap("AdamantHookTestInvalidContextKey", function() end, function() end)
         end)
     end)
 end
@@ -408,7 +417,7 @@ function TestHooks:testOverrideRequiresFunctionReplacement()
 
     local ok = pcall(function()
         self:createHostWithHooks("hook-test-override-function-required", function(host)
-            host.hooks.override("AdamantHookTestOverrideFunctionRequired", "not-a-function")
+            host.override("AdamantHookTestOverrideFunctionRequired", "not-a-function")
         end)
     end)
 
@@ -422,10 +431,10 @@ function TestHooks:testOverrideFunctionRegistersOnceAndUpdatesReplacement()
     end
 
     self:createHostWithHooks("hook-test-override-update", function(host)
-        host.hooks.override("AdamantHookTestOverride", function()
+        host.override("AdamantHookTestOverride", function()
             return "first"
         end)
-        host.hooks.override("AdamantHookTestOverride", function()
+        host.override("AdamantHookTestOverride", function()
             return "second"
         end)
     end)
@@ -441,7 +450,7 @@ function TestHooks:testOverrideRefreshOmissionRestoresOriginal()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.override("AdamantHookTestOverrideRefresh", function()
+        host.override("AdamantHookTestOverrideRefresh", function()
             return "override"
         end)
     end)
@@ -462,10 +471,10 @@ function TestHooks:testContextWrapRegistersOnceAndUpdatesContext()
     end
 
     self:createHostWithHooks("hook-test-context-update", function(host)
-        host.hooks.contextWrap("AdamantHookTestContext", function()
+        host.contextWrap("AdamantHookTestContext", function()
             table.insert(observed, "first")
         end)
-        host.hooks.contextWrap("AdamantHookTestContext", function()
+        host.contextWrap("AdamantHookTestContext", function()
             table.insert(observed, "second")
         end)
     end)
@@ -485,7 +494,7 @@ function TestHooks:testContextWrapRefreshOmissionBecomesInert()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.contextWrap("AdamantHookTestContextRefresh", function()
+        host.contextWrap("AdamantHookTestContextRefresh", function()
             table.insert(observed, "context")
         end)
     end)
@@ -514,29 +523,29 @@ function TestHooks:testRefreshFailureKeepsPreviousLiveHookState()
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap("AdamantHookTestFailureWrap", function(base, value)
+        host.wrap("AdamantHookTestFailureWrap", function(base, value)
             return "first:" .. base(value)
         end)
-        host.hooks.override("AdamantHookTestFailureOverride", function()
+        host.override("AdamantHookTestFailureOverride", function()
             return "first-override"
         end)
-        host.hooks.contextWrap("AdamantHookTestFailureContext", function()
+        host.contextWrap("AdamantHookTestFailureContext", function()
             table.insert(observed, "first-context")
         end)
     end)
 
     local ok = pcall(function()
         self:createHostWithHooks(pluginGuid, function(host)
-            host.hooks.wrap("AdamantHookTestFailureWrap", function(base, value)
+            host.wrap("AdamantHookTestFailureWrap", function(base, value)
                 return "second:" .. base(value)
             end)
-            host.hooks.override("AdamantHookTestFailureOverride", function()
+            host.override("AdamantHookTestFailureOverride", function()
                 return "second-override"
             end)
-            host.hooks.contextWrap("AdamantHookTestFailureContext", function()
+            host.contextWrap("AdamantHookTestFailureContext", function()
                 table.insert(observed, "second-context")
             end)
-            host.hooks.wrap("AdamantHookTestFailureNew", function(base, value)
+            host.wrap("AdamantHookTestFailureNew", function(base, value)
                 return "new:" .. base(value)
             end)
             error("boom")
@@ -563,7 +572,7 @@ function TestHooks:testActivationFailureAfterHookRefreshRestoresPreviousLiveHook
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap("AdamantHookTestActivationRollback", function(base, value)
+        host.wrap("AdamantHookTestActivationRollback", function(base, value)
             return "first:" .. base(value)
         end)
     end)
@@ -572,7 +581,7 @@ function TestHooks:testActivationFailureAfterHookRefreshRestoresPreviousLiveHook
 
     local ok = pcall(function()
         self:createHostWithHooks(pluginGuid, function(host)
-            host.hooks.wrap("AdamantHookTestActivationRollback", function(base, value)
+            host.wrap("AdamantHookTestActivationRollback", function(base, value)
                 return "second:" .. base(value)
             end)
         end, {
@@ -599,7 +608,7 @@ function TestHooks:testHookCommitFailureRemovesPartiallyInstalledCandidateSlots(
     end
 
     self:createHostWithHooks(pluginGuid, function(host)
-        host.hooks.wrap(wrapPath, function(base, value)
+        host.wrap(wrapPath, function(base, value)
             return "first:" .. base(value)
         end)
     end)
@@ -610,10 +619,10 @@ function TestHooks:testHookCommitFailureRemovesPartiallyInstalledCandidateSlots(
 
     local ok = pcall(function()
         self:createHostWithHooks(pluginGuid, function(host)
-            host.hooks.wrap(wrapPath, function(base, value)
+            host.wrap(wrapPath, function(base, value)
                 return "candidate:" .. base(value)
             end)
-            host.hooks.override(overridePath, function()
+            host.override(overridePath, function()
                 return "candidate-override"
             end)
         end)
@@ -635,17 +644,20 @@ function TestHooks:testCreateModuleHostSyncsCoordinatedRuntimeImmediately()
         name = "Alpha",
         storage = {},
     })
-    local host, authorHost = self.moduleHost.create({
+    local mutationBundle = {
+        patchMutation = function(_, _, plan)
+            buildCalls = buildCalls + 1
+            plan:set(target, "Value", "patched")
+        end,
+    }
+    local host = self.moduleHost.create({
         pluginGuid = "hook-pack.Alpha",
         definition = definition,
         persistentState = createStore(true),
         stagedState = createStagedState(),
+        mutationBundle = mutationBundle,
         drawTab = function() end,
     })
-    authorHost.mutation.patch(function(plan)
-        buildCalls = buildCalls + 1
-        plan:set(target, "Value", "patched")
-    end)
     self.moduleHost.activateOrThrow(host)
 
     lu.assertEquals(buildCalls, 1)
@@ -667,17 +679,19 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
         name = "Alpha",
         storage = {},
     })
-    local firstHost, firstAuthorHost = self.moduleHost.create({
+    local firstHost = self.moduleHost.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = firstDefinition,
         persistentState = store,
         stagedState = createStagedState(),
+        mutationBundle = {
+            patchMutation = function(_, _, plan)
+                firstBuildCalls = firstBuildCalls + 1
+                plan:set(target, "Value", "first")
+            end,
+        },
         drawTab = function() end,
     })
-    firstAuthorHost.mutation.patch(function(plan)
-        firstBuildCalls = firstBuildCalls + 1
-        plan:set(target, "Value", "first")
-    end)
     self.moduleHost.activateOrThrow(firstHost)
 
     local secondDefinition = self.moduleHost.prepareDefinition({}, {
@@ -686,17 +700,19 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
         name = "Alpha",
         storage = {},
     })
-    local secondHost, secondAuthorHost = self.moduleHost.create({
+    local secondHost = self.moduleHost.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = secondDefinition,
         persistentState = store,
         stagedState = createStagedState(),
+        mutationBundle = {
+            patchMutation = function(_, _, plan)
+                secondBuildCalls = secondBuildCalls + 1
+                plan:set(target, "Value", "second")
+            end,
+        },
         drawTab = function() end,
     })
-    secondAuthorHost.mutation.patch(function(plan)
-        secondBuildCalls = secondBuildCalls + 1
-        plan:set(target, "Value", "second")
-    end)
     self.moduleHost.activateOrThrow(secondHost)
 
     lu.assertEquals(firstBuildCalls, 1)
@@ -708,7 +724,7 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
             return "hook-reload-pack.Alpha"
         end,
     }
-    self.harness.hostRegistry.setRecord(mutationHost, {
+    self.harness.moduleRegistry.setRecord(mutationHost, {
         pluginGuid = "hook-reload-pack.Alpha",
         definition = {
             modpack = packId,
@@ -717,11 +733,10 @@ function TestHooks:testCreateModuleHostHotReloadReplacesCoordinatedRuntimeState(
             storage = {},
         },
         mutationBundle = {
-            patchMutation = function(plan)
+            patchMutation = function(_, _, plan)
                 plan:set(target, "Value", "second")
             end,
         },
-        authorHost = nil,
         store = store,
     })
 

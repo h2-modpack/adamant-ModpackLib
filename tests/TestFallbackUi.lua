@@ -138,8 +138,8 @@ end
 
 local function createBridge(h, pluginGuid)
     local bridge = nil
-    local _, authorHost = h:createLibHost(pluginGuid or PLUGIN_GUID)
-    authorHost.fallbackUi.attachGuiOnce(function(ui)
+    local host = h:createLibHost(pluginGuid or PLUGIN_GUID)
+    h.fallbackUi.attachGuiOnce(host, function(ui)
         bridge = ui
     end)
     return bridge
@@ -155,22 +155,22 @@ function TestFallbackUi:tearDown()
 end
 
 function TestFallbackUi:testAttachGuiOnceRequiresManagedHost()
-    lu.assertErrorMsgContains("expected managed module host", function()
+    lu.assertErrorMsgContains("expected managed module", function()
         self.h.fallbackUi.attachGuiOnce(nil, function() end)
     end)
 end
 
 function TestFallbackUi:testAttachGuiOnceRequiresRegisterCallback()
-    local _, authorHost = self.h:createLibHost(PLUGIN_GUID)
+    local host = self.h:createLibHost(PLUGIN_GUID)
     lu.assertErrorMsgContains("register must be a function", function()
-        authorHost.fallbackUi.attachGuiOnce()
+        self.h.fallbackUi.attachGuiOnce(host)
     end)
 end
 
 function TestFallbackUi:testBridgeCallbacksNoOpBeforeRuntimeExists()
     local bridge = nil
-    local _, authorHost = self.h:createLibHost(PLUGIN_GUID)
-    authorHost.fallbackUi.attachGuiOnce(function(ui)
+    local host = self.h:createLibHost(PLUGIN_GUID)
+    self.h.fallbackUi.attachGuiOnce(host, function(ui)
         bridge = ui
     end)
 
@@ -285,7 +285,7 @@ function TestFallbackUi:testFallbackRuntimeRollbackRestoresPreviousRuntime()
     self.h.coordinator.register("fallback-pack", nil)
 
     local firstRuntime = self.h:installFallbackRuntime(firstHost)
-    local secondReceipt = self.h.fallbackUi.installForHost(secondHost)
+    local secondReceipt = self.h.fallbackUi.installForModule(secondHost)
 
     lu.assertTrue(secondReceipt.commit())
     lu.assertNotEquals(self.h:getFallbackUiRuntime(PLUGIN_GUID), firstRuntime)

@@ -44,19 +44,12 @@ local declarations = import('core/overlays/declarations.lua', nil, {
     logging = deps.logging,
 })
 
-local hostAdapter = import('core/overlays/adapters/host_install.lua', nil, {
+local moduleAdapter = import('core/overlays/adapters/module_install.lua', nil, {
     logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
+    moduleRegistry = deps.moduleRegistry,
     hooks = deps.hooks,
     retained = retained,
     declarations = declarations,
-})
-
-local author = import('core/overlays/adapters/author_declarations.lua', nil, {
-    logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
-    declarations = declarations,
-    order = overlayOrder,
 })
 
 local system = import('core/overlays/adapters/system_retained.lua', nil, {
@@ -71,7 +64,7 @@ local suppression = import('core/overlays/suppression.lua', nil, {
     isUiSuppressed = isUiSuppressed,
 })
 
-service.installForHost = hostAdapter.installForHost
+service.installForModule = moduleAdapter.installForModule
 service.suppressForUi = suppression.suppressForUi
 service.isUiSuppressed = suppression.isUiSuppressed
 
@@ -99,7 +92,8 @@ end
 
 return {
     service = service,
-    author = author,
+    declarations = declarations,
     system = system,
     framework = framework,
+    order = overlayOrder,
 }

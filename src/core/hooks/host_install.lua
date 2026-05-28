@@ -6,7 +6,7 @@ local hostInstall = {}
 
 function hostInstall.createReceipt(ownerId, owner, hookDeclarations)
     if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("hooks.invalid_registration", "hooks.installForHost: ownerId is required")
+        logging.violate("hooks.invalid_registration", "hooks.installForModule: ownerId is required")
     end
 
     local install = {

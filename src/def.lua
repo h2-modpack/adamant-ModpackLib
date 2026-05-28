@@ -162,23 +162,69 @@ local lib = {}
 ---@field actions AdamantModpackLib.CommitActions
 ---@field hadConfigChanges fun(): boolean
 
----Module-facing host facade. Declare host-owned capabilities before activation; declaration namespaces reject after activation.
----@class AdamantModpackLib.AuthorHost
----Activates module hooks, shared events/values, live-host registration, and initial runtime sync.
----Call once after construction.
----@field activate fun(): boolean, string? Safely activates the host and returns an error instead of throwing.
----@field isEnabled fun(): boolean
+---@class AdamantModpackLib.Host
 ---@field getHostId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string?
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
----@field log fun(fmt: string, ...) Print a module-scoped log line.
----@field logIf fun(fmt: string, ...) Print a module-scoped log line when DebugMode is enabled.
----@field fallbackUi AdamantModpackLib.AuthorFallbackUi
----@field hooks AdamantModpackLib.AuthorHooks
+---@field isEnabled fun(): boolean
+---@field log fun(fmt: string, ...)
+---@field logIf fun(fmt: string, ...)
+
+---@class AdamantModpackLib.RuntimeContext
+---@field data AdamantModpackLib.Store
+---@field cache AdamantModpackLib.StoreCache?
+---@field shared AdamantModpackLib.SharedData?
+
+---Narrow runtime bridge available to draw-action handlers after a draw pass.
+---@class AdamantModpackLib.ActionRuntimeBridge
+---@field read fun(alias: string, ...): any Read committed setting/runtime storage through the underlying persistent state.
+---@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
+---@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
+
+---@class AdamantModpackLib.UiContext
+---@field draw AdamantModpackLib.DrawContext
+---@field data AdamantModpackLib.DrawState
+---@field actions AdamantModpackLib.DrawActions
+---@field shared AdamantModpackLib.SharedData?
+
+---@alias AdamantModpackLib.UiCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): nil
+---@alias AdamantModpackLib.CommitCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    commit: AdamantModpackLib.CommitContext
+---): nil
+---@alias AdamantModpackLib.SharedListener fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    payload: any
+---): nil
+---@alias AdamantModpackLib.MutationPatchCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    plan: AdamantModpackLib.MutationPlan
+---): nil
+
+---@class AdamantModpackLib.AuthorModule
+---@field data { define: fun(storage: AdamantModpackLib.StorageSchema): nil }
+---@field actions { define: fun(actions: table<string, AdamantModpackLib.DrawActionHandler>): nil }
+---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
+---@field hashGroups { define: fun(hashGroupPlan: AdamantModpackLib.HashGroupPlan): nil }
+---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
+---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
+---@field fallbackUi AuthorFallbackUi
+---@field hooks AdamantModpackLib.ModuleHooks
 ---@field shared AdamantModpackLib.AuthorShared
----@field mutation AdamantModpackLib.AuthorMutation
----@field overlays AdamantModpackLib.RetainedOverlayRegistrar
+---@field mutation { patch: fun(callback: AdamantModpackLib.MutationPatchCallback): nil }
+---@field overlays AuthorOverlays
+---@field activate fun(): boolean, string?
+---@field getHostId fun(): string
+---@field getModuleId fun(): string
+---@field getPackId fun(): string?
+---@field getMeta fun(): AdamantModpackLib.ModuleMeta
+---@field isEnabled fun(): boolean
+---@field log fun(fmt: string, ...)
+---@field logIf fun(fmt: string, ...)
 
 ---@class AdamantModpackLib.FrameworkRuntime
 ---@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
@@ -198,7 +244,7 @@ local lib = {}
 ---@field isRegistered fun(packId: string?): boolean
 
 ---@class AdamantModpackLib.FrameworkModulesRuntime
----@field getLiveHost fun(pluginGuid: string?): AdamantModpackLib.ModuleHost?
+---@field getLiveHost fun(pluginGuid: string?): AdamantModpackLib.ManagedModule?
 
 ---@class AdamantModpackLib.FrameworkOverlaysRuntime
 ---@field order table<string, integer> Shared overlay order bands.
@@ -224,14 +270,31 @@ local lib = {}
 ---@class AdamantModpackLib.AuthorFallbackUi
 ---@field attachGuiOnce fun(register: fun(ui: AdamantModpackLib.FallbackUiBridge)): boolean
 
+---@alias AdamantModpackLib.HookWrapCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    base: function,
+---    ...: any
+---): any
+---@alias AdamantModpackLib.HookCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    ...: any
+---): any
+
 ---@class AdamantModpackLib.AuthorHooks
----@field wrap fun(path: string, keyOrHandler: string|fun(base: function, ...: any): any, maybeHandler?: fun(base: function, ...: any): any)
----@field override fun(path: string, keyOrReplacement: string|fun(...: any): any, maybeReplacement?: fun(...: any): any)
----@field contextWrap fun(path: string, keyOrContext: string|fun(...: any): any, maybeContext?: fun(...: any): any)
+---@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback, maybeHandler?: AdamantModpackLib.HookWrapCallback)
+---@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback, maybeCallback?: AdamantModpackLib.HookCallback)
+---@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookCallback, maybeContext?: AdamantModpackLib.HookCallback)
+
+---@class AdamantModpackLib.ModuleHooks
+---@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback, maybeHandler?: AdamantModpackLib.HookWrapCallback)
+---@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback, maybeCallback?: AdamantModpackLib.HookCallback)
+---@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookCallback, maybeContext?: AdamantModpackLib.HookCallback)
 
 ---@class AdamantModpackLib.AuthorShared
 ---@field data AdamantModpackLib.AuthorSharedData
----@field listen fun(id: string, eventName: string, callback: fun(payload: any)): table
+---@field listen fun(id: string, eventName: string, callback: AdamantModpackLib.SharedListener): table
 ---@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
 
 ---@class AdamantModpackLib.AuthorSharedData
@@ -248,9 +311,9 @@ local lib = {}
 
 ---@class AdamantModpackLib.AuthorMutation
 ---@field patch fun(callback: fun(
----    plan: AdamantModpackLib.MutationPlan,
----    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.Store
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    plan: AdamantModpackLib.MutationPlan
 ---))
 
 ---@class AdamantModpackLib.CacheDeclarationCurrentRun
@@ -285,8 +348,9 @@ local lib = {}
 ---@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Hash compaction hints.
 
 ---@alias AdamantModpackLib.DrawActionHandler fun(
----    host: AdamantModpackLib.AuthorHost,
----    state: AdamantModpackLib.DrawState,
+---    host: AdamantModpackLib.Host,
+---    uiData: AdamantModpackLib.DrawState,
+---    actionRuntime: AdamantModpackLib.ActionRuntimeBridge,
 ---    value: any
 ---)
 
@@ -294,9 +358,9 @@ local lib = {}
 
 ---@class AdamantModpackLib.MutationBundle
 ---@field patchMutation? fun(
----    plan: AdamantModpackLib.MutationPlan,
----    host: AdamantModpackLib.AuthorHost?,
----    store: AdamantModpackLib.Store
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    plan: AdamantModpackLib.MutationPlan
 ---)
 
 ---@class AdamantModpackLib.ModuleCreateOpts
@@ -307,26 +371,6 @@ local lib = {}
 ---@field name string Display name.
 ---@field shortName? string Short display name.
 ---@field tooltip? string UI tooltip.
----@field storage? AdamantModpackLib.StorageSchema Raw storage schema.
----@field cache? AdamantModpackLib.CacheDeclarationMap Raw managed runtime cache declarations.
----@field actions? table<string, AdamantModpackLib.DrawActionHandler> Draw-action handlers keyed by action id.
----@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Raw hash/profile group plan.
---- Post-commit observer for rebuilding derived runtime/UI structures.
----@field onSettingsCommitted? fun(
----    host: AdamantModpackLib.AuthorHost,
----    store: AdamantModpackLib.Store,
----    commit: AdamantModpackLib.CommitContext
----)
----@field drawTab fun(
----    draw: AdamantModpackLib.DrawContext,
----    state: AdamantModpackLib.DrawState,
----    actions: AdamantModpackLib.DrawActions
----)
----@field drawQuickContent? fun(
----    draw: AdamantModpackLib.DrawContext,
----    state: AdamantModpackLib.DrawState,
----    actions: AdamantModpackLib.DrawActions
----)
 
 ---Draw-phase immediate UI surface. `widgets` and `nav` methods require an active draw callback; `imgui` is the raw environment ImGui table.
 ---@class AdamantModpackLib.DrawContext
@@ -336,7 +380,7 @@ local lib = {}
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 
----@class AdamantModpackLib.ModuleHost
+---@class AdamantModpackLib.ManagedModule
 ---@field getHostId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string?
@@ -619,8 +663,7 @@ local lib = {}
 ---@field stagedState AdamantModpackLib.StagedState
 
 ---@param opts AdamantModpackLib.ModuleCreateOpts
----@return AdamantModpackLib.AuthorHost? host
----@return AdamantModpackLib.Store? store
+---@return AdamantModpackLib.AuthorModule? module
 ---@return string? err
 function lib.createModule(opts)
 end

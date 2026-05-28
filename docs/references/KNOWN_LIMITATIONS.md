@@ -11,7 +11,7 @@ When a coordinated module changes its structural contract during hot reload, Lib
 The module rebuild path is:
 
 - `lib.createModule(...)`
-- `host.activate()`
+- `module.activate()`
 - requested fallback UI when running outside Framework coordination
 
 The Framework rebuild is correct, but it is not coalesced across a multi-module reload wave.
@@ -40,7 +40,7 @@ Author-facing module hot reload is the supported fast path. Lib and Framework ho
 
 What this means in practice:
 
-- existing module hosts may close over prior Lib implementation closures until the owning module reloads
+- existing managed modules may close over prior Lib implementation closures until the owning module reloads
 - active mutation runtime is durable across module reload, not arbitrary Lib implementation reload
 - a Framework file reload does not update an existing pack object until Core or a coordinator rebuild calls `Framework.createPack(...)` again
 - retained HUD layout changes may require HUD recreation or a game HUD refresh
@@ -54,17 +54,17 @@ Why this exists:
 What would remove it:
 
 - persistent Lib mutation runtime across Lib implementation reloads
-- host methods routed through stable late-bound Lib dispatch
+- managed-module methods routed through stable late-bound Lib dispatch
 - an explicit infrastructure reload protocol that forces module and Framework convergence
 
-## Host Activation Rollback Covers Managed Effects Only
+## Module Activation Rollback Covers Managed Effects Only
 
-Lib host activation is designed to keep the old live host active until the replacement host has usable managed runtime effects.
+Lib module activation is designed to keep the old live module active until the replacement module has usable managed runtime effects.
 
 What this means in practice:
 
-- failed activation preserves the old live host when rollback succeeds
-- Lib-managed hooks, shared events, overlays, patch mutation state, and live-host publication participate in activation cleanup
+- failed activation preserves the old live module when rollback succeeds
+- Lib-managed hooks, shared events, overlays, patch mutation state, and live-module publication participate in activation cleanup
 - omitted managed registrations are cleaned up during successful module reload
 - direct module writes to game globals, ROM APIs, ModUtil APIs, or other public environment state are outside Lib rollback
 - system overlays are trusted first-party infrastructure, not a general transactional owner surface
@@ -84,12 +84,12 @@ What would remove it:
 
 ## Fallback UI Attachment Is Callsite-Bound
 
-Fallback module UI uses stable callbacks from `host.fallbackUi.attachGuiOnce(...)`, but the ROM GUI callback attachment still belongs in module code.
+Fallback module UI uses stable callbacks from `module.fallbackUi.attachGuiOnce(...)`, but the ROM GUI callback attachment still belongs in module code.
 
 What this means in practice:
 
 - `rom.gui.add_imgui(...)` and `rom.gui.add_to_menu_bar(...)` must run from the module's own callsite
-- Lib can swap the runtime behind the bridge after `host.activate()`
+- Lib can swap the runtime behind the bridge after `module.activate()`
 - Lib cannot fully fold ROM GUI callback attachment into host activation
 - fallback UI runtime cleanup is host-owned after activation, but the original ROM callback attachment is not an activation receipt
 
@@ -111,7 +111,7 @@ What this means in practice:
 
 - v1 has no mutation batch mode; each activation, profile load, enable/disable, or staged-state/runtime transition owns its own recompute
 - `SetupRunData()` is treated as a trusted base-game recompute boundary, not an atomic commit primitive
-- if candidate mutation activation fails, Lib attempts to restore the prior raw patch state and keep the old host live
+- if candidate mutation activation fails, Lib attempts to restore the prior raw patch state and keep the old module live
 - if the base-game recompute or rollback recompute fails, derived game state can be uncertain until restart or another clean game recompute
 
 Why this exists:

@@ -7,11 +7,11 @@ local overlays = deps.overlays
 local mutation = deps.mutation
 local fallbackUi = deps.fallbackUi
 local coordinator = deps.coordinator
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 
-local hostActivation = {}
+local moduleActivation = {}
 
-local function CreatePluginInfo(pluginGuid, def)
+local function createPluginInfo(pluginGuid, def)
     return {
         pluginGuid = pluginGuid,
         packId = def.modpack,
@@ -66,43 +66,41 @@ local function commitReceipt(entry)
     return true, nil
 end
 
-local function retireOldHost(previousHost, replacementLabel)
-    local oldRecord = hostRegistry.getRecord(previousHost)
+local function retireOldModule(previousModule, replacementLabel)
+    local oldRecord = moduleRegistry.getRecord(previousModule)
     local receipts = oldRecord and oldRecord.effectReceipts or nil
     if type(receipts) ~= "table" or #receipts == 0 then
         return
     end
-    disposeReceipts(receipts, "host.retire_failed", tostring(replacementLabel) .. " old host retirement failed")
+    disposeReceipts(receipts, "host.retire_failed", tostring(replacementLabel) .. " old module retirement failed")
     oldRecord.effectReceipts = {}
 end
 
---- Activates a constructed module host by registering external side effects.
----@param host ModuleHost
----@return AuthorHost host Module author host view.
-function hostActivation.activateOrThrow(host)
-    local record = hostRegistry.getRecord(host)
+--- Activates a constructed managed module by registering external side effects.
+---@param module ManagedModule
+function moduleActivation.activateOrThrow(module)
+    local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("host.invalid_activate_opts", "moduleHost.activateOrThrow: host is required")
+        logging.violate("host.invalid_activate_opts", "managedModule.activateOrThrow: module is required")
     end
 
-    local pluginGuid = host.getHostId()
+    local pluginGuid = module.getHostId()
     local store = record.store
-    local authorHost = record.authorHost
     local def = record.definition
 
     if record.activated == true then
-        logging.violate("host.already_activated", "moduleHost.activateOrThrow: host is already activated")
+        logging.violate("host.already_activated", "managedModule.activateOrThrow: module is already activated")
     end
     if record.activating == true then
-        logging.violate("host.activation_in_progress", "moduleHost.activateOrThrow: host activation is already in progress")
+        logging.violate("host.activation_in_progress", "managedModule.activateOrThrow: module activation is already in progress")
     end
-    local meta = host.getMeta()
-    local moduleId = host.getModuleId()
-    local packId = host.getPackId()
-    local pendingCoordinatorRebuild = hostRegistry.getPendingCoordinatorRebuild(def)
+    local meta = module.getMeta()
+    local moduleId = module.getModuleId()
+    local packId = module.getPackId()
+    local pendingCoordinatorRebuild = moduleRegistry.getPendingCoordinatorRebuild(def)
     local hasPendingCoordinatorRebuild = pendingCoordinatorRebuild ~= nil
-    local previousHost = hostRegistry.getLiveHost(pluginGuid)
-    local previousPluginInfo = hostRegistry.getPluginInfo(pluginGuid)
+    local previousModule = moduleRegistry.getLiveModule(pluginGuid)
+    local previousPluginInfo = moduleRegistry.getPluginInfo(pluginGuid)
     local candidateReceipts = {}
     local retireReceipts = {}
     local published = false
@@ -121,16 +119,16 @@ function hostActivation.activateOrThrow(host)
     end
 
     local ok, err = pcall(function()
-        addReceipt("shared", shared.installForHost(host), true)
-        addReceipt("hooks", hooks.installForHost(host), true)
-        addReceipt("overlays", overlays.installForHost(host, authorHost, store), true)
+        addReceipt("shared", shared.installForModule(module), true)
+        addReceipt("hooks", hooks.installForModule(module), true)
+        addReceipt("overlays", overlays.installForModule(module, store), true)
 
         if not hasPendingCoordinatorRebuild then
-            addReceipt("mutation", mutation.syncForHost(host), false)
+            addReceipt("mutation", mutation.syncForHost(module), false)
         elseif hasPendingCoordinatorRebuild then
             local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
             if requested then
-                hostRegistry.setPendingCoordinatorRebuild(def, nil)
+                moduleRegistry.setPendingCoordinatorRebuild(def, nil)
             else
                 logging.violate(
                     "host.structural_rebuild_unavailable",
@@ -139,7 +137,7 @@ function hostActivation.activateOrThrow(host)
             end
         end
         if record.fallbackUiRequested == true then
-            addReceipt("fallbackUi", fallbackUi.installForHost(host), true)
+            addReceipt("fallbackUi", fallbackUi.installForModule(module), true)
         end
 
         for _, entry in ipairs(candidateReceipts) do
@@ -163,8 +161,8 @@ function hostActivation.activateOrThrow(host)
         record.effectReceipts = retireReceipts
         record.activating = false
         record.activated = true
-        hostRegistry.setLiveHost(pluginGuid, host)
-        hostRegistry.setPluginInfo(pluginGuid, CreatePluginInfo(pluginGuid, def))
+        moduleRegistry.setLiveModule(pluginGuid, module)
+        moduleRegistry.setPluginInfo(pluginGuid, createPluginInfo(pluginGuid, def))
         published = true
     end)
 
@@ -174,30 +172,30 @@ function hostActivation.activateOrThrow(host)
         disposeReceipts(candidateReceipts, "host.activation_rollback_failed",
             tostring(meta.name or moduleId or "module") .. " activation rollback failed")
         if published then
-            hostRegistry.setLiveHost(pluginGuid, previousHost)
-            hostRegistry.setPluginInfo(pluginGuid, previousPluginInfo)
+            moduleRegistry.setLiveModule(pluginGuid, previousModule)
+            moduleRegistry.setPluginInfo(pluginGuid, previousPluginInfo)
         end
         error(err, 0)
     end
 
-    retireOldHost(previousHost, meta.name or moduleId or "module")
-    return authorHost
+    retireOldModule(previousModule, meta.name or moduleId or "module")
+    return true, nil
 end
 
---- Safely activates a constructed module host by registering external side effects.
+--- Safely activates a constructed managed module by registering external side effects.
 --- Returns false plus the activation error instead of throwing.
----@param host ModuleHost
+---@param module ManagedModule
 ---@return boolean ok
 ---@return string|nil err
-function hostActivation.activate(host)
-    local ok, err = pcall(hostActivation.activateOrThrow, host)
+function moduleActivation.activate(module)
+    local ok, err = pcall(moduleActivation.activateOrThrow, module)
     if ok then
         return true, nil
     end
 
     err = tostring(err)
-    logging.violate("host.activate_failed", "host.activate failed; skipping module: %s", err)
+    logging.violate("host.activate_failed", "module.activate failed; skipping module: %s", err)
     return false, err
 end
 
-return hostActivation
+return moduleActivation

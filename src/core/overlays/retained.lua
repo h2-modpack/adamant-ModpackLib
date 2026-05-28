@@ -460,7 +460,7 @@ local function beginTransaction(owner)
     }
 end
 
-local function refresh(owner, ownerId, authorHost, store, register, opts)
+local function refresh(owner, ownerId, host, store, register, opts)
     if type(register) ~= "function" then
         logging.violate("overlays.invalid_registration", "overlay refresh: register must be a function")
     end
@@ -470,7 +470,7 @@ local function refresh(owner, ownerId, authorHost, store, register, opts)
         registry.ownerId = ownerId
     end
     registry.hidden = opts and opts.hidden == true
-    registry.authorHost = authorHost
+    registry.host = host
     registry.store = store
     registry.refreshPass = registry.refreshPass + 1
     registry.refreshing = true
@@ -542,7 +542,7 @@ local function recreateElementSlots(registry)
     end
 end
 
-local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, authorHost, store)
+local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, store)
     local registry = getRegistry(sourceOwner, false)
     if not registry then
         return
@@ -562,7 +562,7 @@ local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, authorHos
         registry.ownerId = ownerId
     end
     registry.hidden = false
-    registry.authorHost = authorHost
+    registry.host = host
     registry.store = store
     recreateElementSlots(registry)
 end

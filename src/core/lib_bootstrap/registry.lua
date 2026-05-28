@@ -7,7 +7,7 @@ local runtimeRoot = deps.runtimeRoot
 runtimeRoot.registry = runtimeRoot.registry or {}
 
 local buckets = runtimeRoot.registry
-buckets.hosts = buckets.hosts or {}
+buckets.modules = buckets.modules or {}
 buckets.hooks = buckets.hooks or {}
 buckets.shared = buckets.shared or {}
 buckets.shared.events = buckets.shared.events or {}
@@ -18,7 +18,7 @@ buckets.fallback = buckets.fallback or {}
 buckets.coordinators = buckets.coordinators or {}
 
 return {
-    hosts = buckets.hosts,
+    modules = buckets.modules,
     hooks = buckets.hooks,
     shared = buckets.shared,
     mutations = buckets.mutations,

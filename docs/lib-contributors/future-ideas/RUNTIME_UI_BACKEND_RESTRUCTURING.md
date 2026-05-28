@@ -8,24 +8,27 @@ Controls may benefit from this cleanup later, but they are out of scope here.
 
 ## Status
 
-Proposed future design.
+Lib-side implementation complete.
 
-The current implementation remains valid:
+The implementation now uses the clean breaking API shape:
 
-- `createModule(...)` accepts identity, storage, cache, actions, draw callbacks,
-  and commit callbacks.
-- `createModule(...)` returns `host, store`.
-- Runtime author code uses `host` and `store`.
-- Draw author code receives `draw, state, actions`.
-- Internally, Lib already has the core split: persistent runtime data,
-  staged draw data, action buffering, phase gating, and activation receipts.
+- `createModule(...)` accepts identity fields only.
+- `createModule(...)` returns `module, err`.
+- Runtime author callbacks receive explicit runtime data through callback
+  arguments instead of using the old returned store.
+- Draw author callbacks receive `ui, host`.
+- Storage, cache, actions, hash groups, commit observers, shared declarations,
+  mutations, overlays, hooks, and draw callbacks are declared on `module`
+  before activation.
+- Definition preparation and structural fingerprinting happen during
+  `module.activate()`, after declarations are complete.
 
-The cleanup goal is not to rewrite those mechanics. The goal is to align the
-public and internal language around the phase model that already exists.
+The remaining work is first-party module migration and public author-doc
+updates after those module ports provide final examples.
 
 ## Current Tension
 
-`createModule(...)` currently does two different jobs:
+The old `createModule(...)` API did two different jobs:
 
 1. It creates the module identity and lifecycle object.
 2. It accepts the module's declarative capability surfaces:
@@ -44,8 +47,8 @@ authority. This has several second-order effects:
 - The author-facing words `store` and `state` expose implementation history
   more than the runtime/UI phase distinction.
 
-None of this is a correctness bug. It is an API coherence issue that becomes
-more visible as Lib grows.
+None of this was a correctness bug. It was an API coherence issue that became
+more visible as Lib grew.
 
 ## Goals
 
@@ -116,17 +119,17 @@ module.shared.data.owner("Availability", {
     default = {},
 })
 
-module.shared.listen("example.events", "changed", function(runtime, host, payload)
+module.shared.listen("example.events", "changed", function(host, runtime, payload)
     host.log("changed: %s", tostring(payload))
 end)
 
-module.mutation.patch(function(plan, runtime, host)
+module.mutation.patch(function(host, runtime, plan)
     if runtime.data.read("Enabled") then
         -- build plan
     end
 end)
 
-module.ui.tab(function(ui, host)
+module.ui.tab(function(host, ui)
     ui.draw.widgets.checkbox(ui.data.get("EnabledFeature"))
     ui.actions.trigger("Reset")
 end)
@@ -137,9 +140,9 @@ module.activate()
 The exact names are provisional. The important shape is:
 
 - declarations live on `module`
-- runtime execution gets a `runtime` phase object
-- draw execution gets a `ui` phase object
-- callbacks also receive a small unphased `host` utility projection
+- callbacks receive the small unphased `host` utility projection first
+- runtime execution gets a `runtime` phase object after `host`
+- draw execution gets a `ui` phase object after `host`
 - long-lived returned `store` is no longer the main author concept
 
 ## Module And Host Roles
@@ -226,7 +229,7 @@ authors can cache escaped references:
 ```lua
 local escapedUi
 
-module.ui.tab(function(ui)
+module.ui.tab(function(host, ui)
     escapedUi = ui
 end)
 
@@ -380,19 +383,12 @@ onCommit runs
 Target shape:
 
 ```lua
-module.onCommit(function(runtime, host, commit)
+module.onCommit(function(host, runtime, commit)
 end)
 ```
 
-Compatibility shape:
-
-```lua
-onSettingsCommitted = function(oldHost, store, commit, runtime, host)
-end
-```
-
-If both `onSettingsCommitted` and `onCommit` are supplied during the migration
-window, reject the module definition rather than guessing ordering.
+The previous `onSettingsCommitted` spelling is retired. Do not add new
+compatibility paths for it; route commit observers through `module.onCommit`.
 
 ## Cache Declarations
 
@@ -424,10 +420,10 @@ Current cache scope:
 Draw callbacks should move out of `createModule(...)` into:
 
 ```lua
-module.ui.tab(function(ui, host)
+module.ui.tab(function(host, ui)
 end)
 
-module.ui.quickContent(function(ui, host)
+module.ui.quickContent(function(host, ui)
 end)
 ```
 
@@ -451,7 +447,7 @@ end)
 Target:
 
 ```lua
-module.mutation.patch(function(plan, runtime, host)
+module.mutation.patch(function(host, runtime, plan)
 end)
 ```
 
@@ -475,7 +471,7 @@ end)
 Target:
 
 ```lua
-module.shared.listen(id, eventName, function(runtime, host, payload)
+module.shared.listen(id, eventName, function(host, runtime, payload)
 end)
 ```
 
@@ -501,7 +497,7 @@ Hooks currently use callback shapes dictated by game/ModUtil call signatures.
 A future shape might be:
 
 ```lua
-module.hooks.wrap(path, key, function(runtime, host, base, ...)
+module.hooks.wrap(path, key, function(host, runtime, base, ...)
 end)
 ```
 
@@ -524,16 +520,16 @@ Moving declarations out of `createModule(...)` means structural fingerprinting
 must move from creation to activation finalization.
 
 This is not a Framework discovery blocker. Framework already resolves modules
-through the live-host registry, and the live-host registry only publishes
+through the live-module registry, and the live-module registry only publishes
 activated hosts. The invariant to preserve is:
 
 ```text
-only finalized, activated hosts are published as live hosts
+only finalized, activated modules are published as live modules
 ```
 
 So the fingerprint comparison can move fully into the activation path. Activation
 should finalize declarations, compute the candidate structural fingerprint,
-compare it against the previous live host's finalized fingerprint, then either
+compare it against the previous live module's finalized fingerprint, then either
 continue with receipt installation or request/reject the structural reload.
 
 Current flow:
@@ -543,8 +539,8 @@ createModule(opts)
   build definition input
   prepare definition
   create persistent/staged state
-  create ModuleHost and AuthorHost
-AuthorHost.activate()
+  create ManagedModule
+module.activate()
   install receipts
 ```
 
@@ -600,13 +596,13 @@ Activation should own:
 - mutation sync
 - fallback UI installation
 - rollback receipts
-- old-host retirement
+- old-module retirement
 
-The current `host_activation.lua` already acts as an installation transaction.
+The current `managed_module_activation.lua` already acts as an installation transaction.
 The future shape should expand it into the central finalization boundary rather
 than adding declaration finalization to scattered subsystems.
 
-`host.lua` should remain the facade and lifecycle object. It should not become
+`managed_module.lua` should remain the facade and lifecycle object. It should not become
 the place where every subsystem finalizes itself inline.
 
 ## Internal Naming Direction
@@ -618,7 +614,7 @@ Internal names should make the phase split clear:
 - author-facing runtime facade should become `runtimeData` or `runtime.data`
 - author-facing draw facade should become `uiData` or `ui.data`
 - action queue/buffer naming should stay implementation-facing
-- host registry should stay a hot-reload registry, not a dependency bus
+- module registry should stay a hot-reload registry, not a dependency bus
 - author-facing declaration facade should move toward `module`
 - callback utility projection should use `host`
 
@@ -631,60 +627,32 @@ surfaces. Prefer:
 - `host_*` only when the file models the internal lifecycle host or the small
   callback host projection; do not blur those two in new code
 
-## Compatibility Strategy
+## Compatibility Status
 
-This should be a staged migration.
+The lib-side implementation now uses the breaking target shape rather than the
+temporary compatibility shape:
 
-Compatibility for the first implementation slices:
+- `createModule(opts)` accepts identity fields only.
+- `createModule(opts)` returns `module, err`.
+- `storage`, `cache`, `actions`, `hashGroupPlan`, `drawTab`,
+  `drawQuickContent`, and commit observers are declared on `module`.
+- Definition preparation and structural fingerprinting happen during
+  `module.activate()`, after declarations are complete.
+- `onSettingsCommitted` has been retired at the host lifecycle boundary;
+  `module.onCommit(...)` is the supported spelling.
 
-- `createModule(opts)` keeps accepting `storage`, `cache`, `actions`,
-  `drawTab`, `drawQuickContent`, `onSettingsCommitted`, and `onCommit`.
-- The old opts are internally replayed into the new declaration buckets before
-  activation.
-- `createModule(opts)` may continue returning `host, store` temporarily.
-- Existing draw callbacks keep `(draw, state, actions)` until modules are ready
-  to move to `(ui)`.
-- Existing mutation callbacks keep `(plan, host, store)` until a compatibility
-  shim can detect or route the new shape.
-- Existing shared listeners keep payload-only callbacks until the new runtime
-  argument is documented.
-- `onSettingsCommitted` remains a legacy spelling for one migration window.
-  `onCommit` is the target name.
-
-Prefer suffix shims for simple Lib-owned callback shapes. The shim should append
-the new phase object after the old arguments:
+Current callback shapes:
 
 ```lua
-drawTab(draw, state, actions, ui, host)
-module.mutation.patch(function(plan, oldHost, store, runtime, host) end)
-module.shared.listen(id, eventName, function(payload, runtime, host) end)
-module.actions.define({
-    Reset = function(oldHost, state, value, host, uiData, runtimeData) end,
-})
-```
-
-This avoids clever arity detection and lets first-party modules migrate
-mechanically:
-
-```lua
-local draw = ui.draw
-local state = ui.data
-local actions = ui.actions
-```
-
-After callers are migrated, the final breaking cleanup can remove the old
-leading arguments:
-
-```lua
-module.ui.tab(function(ui, host) end)
-module.mutation.patch(function(plan, runtime, host) end)
-module.shared.listen(id, eventName, function(runtime, host, payload) end)
+module.ui.tab(function(host, ui) end)
+module.mutation.patch(function(host, runtime, plan) end)
+module.shared.listen(id, eventName, function(host, runtime, payload) end)
 module.actions.define({
     Reset = function(host, uiData, runtimeData, value) end,
 })
 ```
 
-Do not blindly use suffix shims for callbacks whose trailing varargs are part of
+Do not use suffix shims for callbacks whose trailing varargs are part of
 the domain contract. Hooks are the main example: game callbacks often forward
 arbitrary `...`, so adding runtime as a suffix would change the game callback
 shape. Overlays also have callback shapes that are tied to retained projection
@@ -694,10 +662,10 @@ The likely endgame for hooks and overlays is prefixing Lib phase/context objects
 before the domain callback args:
 
 ```lua
-module.hooks.wrap(path, key, function(runtime, host, base, ...)
+module.hooks.wrap(path, key, function(host, runtime, base, ...)
 end)
 
-module.overlays.onInterval(name, seconds, function(runtime, host, overlay)
+module.overlays.onInterval(name, seconds, function(host, runtime, overlay)
 end)
 ```
 
@@ -705,27 +673,29 @@ That keeps the game/framework callback tail intact while still making the Lib
 execution context explicit. Migrate hooks and overlays after the simpler
 runtime/UI callback model proves itself.
 
-The compatibility layer must be intentionally temporary. It should be tracked
-with tests and removed only in a major API cleanup.
-
 ## Suggested Migration Slices
 
+Completed lib-side:
+
 1. Introduce internal `runtime` and `ui` phase object factories.
-2. Route existing callbacks through those objects internally while preserving
-   old callback parameters.
-3. Add module declaration buckets for data, actions, cache, and draw callbacks.
-4. Replay current `createModule(...)` options into those buckets.
-5. Move definition finalization and structural fingerprinting to activation.
-6. Add new public declaration methods:
+2. Add module declaration buckets for data, actions, cache, hash groups, commit
+   observers, shared declarations, mutations, overlays, hooks, and draw
+   callbacks.
+3. Move definition finalization and structural fingerprinting to activation.
+4. Add new public declaration methods:
    - `module.data.define`
    - `module.actions.define`
    - `module.cache.define`
+   - `module.hashGroups.define`
+   - `module.onCommit`
    - `module.ui.tab`
    - `module.ui.quickContent`
-7. Add new callback shapes behind compatibility shims.
-8. Port first-party modules.
-9. Update `def.lua` and author docs.
-10. Retire old `createModule(...)` data/callback options in a major release.
+
+Remaining:
+
+1. Port first-party modules.
+2. Update author docs after the module ports provide final examples.
+3. Revisit hooks and overlays only after the phase object model settles.
 
 Do not start with hooks or overlays. They have special callback contracts and
 should migrate after the phase object model proves itself on storage, actions,
@@ -736,7 +706,7 @@ cache, mutation, shared events, and draw callbacks.
 - Moving state creation to activation means more code must tolerate a host
   record before data objects exist.
 - Fingerprinting must be relocated cleanly so structural reload decisions happen
-  before any candidate host is published as the live host.
+  before any candidate module is published as the live module.
 - Structural reload behavior must remain deterministic across hot reload.
 - Compatibility shims can hide design mistakes if left around too long.
 - Runtime/UI objects can become broad context blobs if new methods are added

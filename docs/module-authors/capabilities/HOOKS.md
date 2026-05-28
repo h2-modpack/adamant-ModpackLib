@@ -10,46 +10,46 @@ for those.
 
 ## Normal Shape
 
-Create the host, declare hooks on `host.hooks`, then activate:
+Create the module, declare hooks on `module.hooks`, then activate:
 
 ```lua
-local function registerHooks(host, store)
-    host.hooks.wrap("GetEligibleLootNames", function(base, ...)
+local function registerHooks(module)
+    module.hooks.wrap("GetEligibleLootNames", function(host, runtime, base, ...)
         local result = base(...)
-        if host.isEnabled() and store.get("FeatureEnabled"):read() then
+        if host.isEnabled() and runtime.data.read("FeatureEnabled") then
             -- inspect or transform result here
         end
         return result
     end)
 end
 
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-if not host then return end
+if not module then return end
 
-registerHooks(host, store)
-host.activate()
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+registerHooks(module)
+module.activate()
 ```
 
-`host.hooks` is bound to the module host, so hook declarations do not need a
+`module.hooks` is bound to the module, so hook declarations do not need a
 separate owner argument and do not rely on an ambient registration context.
 
 ## Supported Hook Forms
 
 Use:
 
-- `host.hooks.wrap(path, handler)`
-- `host.hooks.wrap(path, key, handler)`
-- `host.hooks.override(path, replacement)`
-- `host.hooks.override(path, key, replacement)`
-- `host.hooks.contextWrap(path, context)`
-- `host.hooks.contextWrap(path, key, context)`
+- `module.hooks.wrap(path, handler)`
+- `module.hooks.wrap(path, key, handler)`
+- `module.hooks.override(path, replacement)`
+- `module.hooks.override(path, key, replacement)`
+- `module.hooks.contextWrap(path, context)`
+- `module.hooks.contextWrap(path, key, context)`
 
 Use a keyed overload when one module needs more than one registration for the
 same path.
@@ -57,9 +57,9 @@ same path.
 ## Lifecycle
 
 Hook declarations are open after `lib.createModule(...)` returns and close when
-activation starts. Calling `host.hooks.*` after activation is an author error.
+activation starts. Calling `module.hooks.*` after activation is an author error.
 
-`host.activate()` installs the declared hooks. Lib owns:
+`module.activate()` installs the declared hooks. Lib owns:
 
 - installing the stable ModUtil dispatcher
 - refreshing behavior on module reload
@@ -72,10 +72,10 @@ a fresh host and declare the complete current hook set before activation.
 
 ## Runtime State
 
-Hook callbacks should read committed state from `store`:
+Hook callbacks should read committed state from `runtime.data`:
 
 ```lua
-if host.isEnabled() and store.get("FeatureEnabled"):read() then
+if host.isEnabled() and runtime.data.read("FeatureEnabled") then
     -- enabled committed behavior
 end
 ```
@@ -95,7 +95,7 @@ reason about.
 
 ## Common Mistakes
 
-- Do not call `host.hooks.*` after `host.activate()`.
+- Do not call `module.hooks.*` after `module.activate()`.
 - Do not use random keys for keyed hooks; keys are part of hook identity.
 - Do not capture staged UI state in runtime hooks.
 - Do not use hooks for declarative table edits that fit mutation plans.

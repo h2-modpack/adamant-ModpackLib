@@ -1,44 +1,30 @@
 # Mutations
 
-Mutations are for reversible live run-data edits. They let a module describe what should change while Lib owns apply, revert, enable/disable, settings commit, profile load, hot reload, and rollback behavior.
-
-Use mutations when the module changes live game tables based on committed settings. Do not use them for UI staging or optional cross-module APIs.
+Mutations are for reversible live run-data edits. A module describes what
+should change while Lib owns apply, revert, enable/disable, settings commit,
+profile load, hot reload, and rollback behavior.
 
 ## Normal Shape
 
-Declare `host.mutation.patch(function(plan, host, store) ... end)` before activation:
+Declare one patch builder before activation:
 
 ```lua
-local function buildPatchPlan(plan, host, store)
-    if store.get("FeatureEnabled"):read() then
+module.mutation.patch(function(host, runtime, plan)
+    if runtime.data.read("FeatureEnabled") then
         plan:set(SomeGameTable, "Enabled", true)
         plan:appendUnique(SomeGameTable, "Pool", "NewEntry")
     end
-end
-
-local host, store, err = lib.createModule({
-    pluginGuid = PLUGIN_GUID,
-    config = config,
-    id = MODULE_ID,
-    name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
-})
-if not host then return end
-
-host.mutation.patch(buildPatchPlan)
-host.activate()
+end)
 ```
 
-The callback receives committed runtime state through `store`.
-It should describe the mutation for an enabled module. Lib owns enabled gating,
-including enable/disable transitions and coordinated pack suspension/restore. Do not
-guard the plan with `host.isEnabled()`; during an enable transition, Lib may
-build the plan before the persisted `Enabled` alias has been written.
+The callback receives committed runtime state through `runtime.data`. It should
+describe the mutation for an enabled module. Lib owns enabled gating, including
+enable/disable transitions and coordinated pack suspension/restore. Do not
+guard plan construction with `host.isEnabled()`.
 
-Mutation patch callbacks run in runtime space, not draw space. Read committed
-settings from `store`, and use draw `actions` plus
-`onSettingsCommitted(host, store, commit)` for one-shot UI intent.
+Mutation callbacks run in runtime space, not draw space. Read committed values
+from `runtime.data`. Use draw `ui.actions` and `module.onCommit(...)` for
+one-shot UI intent.
 
 ## Plan Operations
 
@@ -58,8 +44,6 @@ Use the narrowest operation that describes the intended change.
 
 `plan:transform(tbl, key, fn)` tracks and restores only `tbl[key]`.
 
-The callback receives a copy of the current value and must return the replacement value for that key:
-
 ```lua
 plan:transform(SomeGameTable, "Weights", function(weights)
     weights.Special = 10
@@ -69,32 +53,10 @@ end)
 
 Do not mutate unrelated global state inside a transform callback.
 
-## Lifecycle
-
-Lib owns mutation execution through the live host. Module authors normally only provide the plan callback.
-
-Activation and later host operations apply or refresh the plan when needed. If activation fails, Lib rolls back side effects where possible.
-
-## When Not To Use Mutations
-
-Do not use mutation plans for:
-
-- transient UI state
-- optional cross-module shared events
-- state that belongs in declared current-run cache or `mode = "runtime"` storage
-- arbitrary side effects that cannot be restored
-
-If a real run-data edit cannot be expressed by the current plan surface, add a first-class plan operation instead of bypassing the tracked lifecycle.
-
 ## Common Mistakes
 
 - Do not hand-write apply/revert pairs in module code.
 - Do not guard patch-plan construction with `host.isEnabled()`.
-- Do not read staged draw `state` values in mutation callbacks.
+- Do not read draw `ui.data` values in mutation callbacks.
 - Do not use mutation callbacks for one-shot actions.
 - Do not mutate unrelated tables inside `plan:transform(...)`.
-
-See also:
-- [MANAGED_STATE.md](MANAGED_STATE.md)
-- [HOOKS.md](HOOKS.md)
-- [../../../API.md](../../../API.md)

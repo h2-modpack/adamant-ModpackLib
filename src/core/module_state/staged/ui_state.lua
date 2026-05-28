@@ -13,7 +13,7 @@ local uiState = {}
 ---@field write fun(alias: string, ...): boolean|nil
 ---@field resetAll fun(opts: table|nil): boolean, number
 
---- Narrows full staged state to the module author UI surface.
+--- Narrows full staged state to the module UI surface.
 --- Host internals keep the private commit/reload/snapshot methods.
 ---@param stagedState StagedState
 ---@param shared table|nil

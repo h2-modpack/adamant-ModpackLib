@@ -25,25 +25,31 @@ local data = import('core/shared/data.lua', nil, {
     sharedRegistry = sharedRegistry.data,
 })
 
-local hostInstall = import('core/shared/adapters/host_install.lua', nil, {
+local moduleInstall = import('core/shared/adapters/module_install.lua', nil, {
     logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
+    moduleRegistry = deps.moduleRegistry,
     registrations = registrations,
     data = data,
 })
 
 local service = {
-    installForHost = hostInstall.installForHost,
+    installForModule = moduleInstall.installForModule,
     data = data,
 }
 
-local author = import('core/shared/adapters/author_shared.lua', nil, {
-    logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
-    registrations = registrations,
-    events = events,
-    data = data,
-})
+function service.emitForHost(host, id, eventName, payload)
+    local record = deps.moduleRegistry.getRecord(host)
+    if not record then
+        deps.logging.violate("shared.invalid_args", "module.shared.emit: expected managed module record")
+    end
+    if record.activated ~= true then
+        deps.logging.violate("shared.invalid_args", "module.shared.emit requires module.activate() before it can run")
+    end
+    if host.isEnabled() ~= true then
+        return true, 0
+    end
+    return events.emit("module.shared.emit", id, eventName, payload)
+end
 
 local dataAdapter = import('core/shared/adapters/data_shared.lua', nil, {
     logging = deps.logging,
@@ -53,6 +59,7 @@ local dataAdapter = import('core/shared/adapters/data_shared.lua', nil, {
 
 return {
     service = service,
-    author = author,
+    registrations = registrations,
     data = dataAdapter,
+    dataDeclarations = data,
 }

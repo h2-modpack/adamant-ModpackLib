@@ -104,7 +104,7 @@ return {
     },
     ["host.retire_failed"] = {
         severity = "warn",
-        description = "Old host resource retirement had cleanup failures after a replacement host was published.",
+        description = "Old module resource retirement had cleanup failures after a replacement module was published.",
     },
 
     ["hooks.invalid_registration"] = {
@@ -181,16 +181,16 @@ return {
     },
     ["mutation.invalid_registration"] = {
         severity = "error",
-        description = "Mutation declarations require a managed module host and a patch callback before activation.",
+        description = "Mutation declarations require a managed module and a patch callback before activation.",
     },
 
-    ["lifecycle.on_settings_committed_failed"] = {
+    ["lifecycle.on_commit_failed"] = {
         severity = "warn",
-        description = "A module onSettingsCommitted callback raised an error.",
+        description = "A module onCommit callback raised an error.",
     },
-    ["lifecycle.on_settings_committed_false"] = {
+    ["lifecycle.on_commit_false"] = {
         severity = "warn",
-        description = "A module onSettingsCommitted callback returned false.",
+        description = "A module onCommit callback returned false.",
     },
     ["lifecycle.staged_state_drift_detected"] = {
         severity = "warn",

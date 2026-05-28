@@ -15,18 +15,31 @@ local function activateAndEnableHost(harness, host, pluginGuid)
     return fullHost
 end
 
+local function getLiveStore(harness, pluginGuid)
+    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local record = harness.moduleHost.getRecord(fullHost)
+    return record and record.store or nil
+end
+
 local function createCacheModule(harness, pluginGuid, opts)
     opts = opts or {}
-    local host, store = harness.public.createModule({
+    local host, err = harness.public.createModule({
         pluginGuid = pluginGuid,
         config = opts.config or {},
         modpack = "test-pack",
         id = opts.id or ("Cache" .. tostring(pluginGuid):gsub("[^%w_]", "")),
         name = opts.name or pluginGuid,
-        cache = opts.cache,
-        drawTab = opts.drawTab or function() end,
     })
-    return host, store
+    if not host then
+        return nil, err
+    end
+    if opts.cache ~= nil then
+        host.cache.define(opts.cache)
+    end
+    host.ui.tab(function(callbackHost, ui)
+        return (opts.drawTab or function() end)(ui.draw, ui.data, ui.actions, ui, callbackHost)
+    end)
+    return host, nil
 end
 
 function TestCache:testDeclaredCacheSurfacesArePhaseGated()
@@ -52,6 +65,7 @@ function TestCache:testDeclaredCacheSurfacesArePhaseGated()
     })
 
     local fullHost = activateAndEnableHost(self.harness, host, "test-cache-declared-phase-gating")
+    store = getLiveStore(self.harness, "test-cache-declared-phase-gating")
     fullHost.drawTab()
 
     lu.assertNotNil(capturedState)
@@ -60,7 +74,7 @@ end
 function TestCache:testDeclaredCurrentRunCacheCreatesNamespacedStateOnce()
     self.harness.game.CurrentRun = {}
     local calls = 0
-    local _, store = createCacheModule(self.harness, "test-cache-declared-current-run-once", {
+    local host = createCacheModule(self.harness, "test-cache-declared-current-run-once", {
         cache = {
             RunScratch = {
                 domain = "currentRun",
@@ -74,6 +88,8 @@ function TestCache:testDeclaredCurrentRunCacheCreatesNamespacedStateOnce()
             },
         },
     })
+    activateAndEnableHost(self.harness, host, "test-cache-declared-current-run-once")
+    local store = getLiveStore(self.harness, "test-cache-declared-current-run-once")
 
     local first = store.cache.currentRun.get("RunScratch")
     first.Count = 2
@@ -88,7 +104,7 @@ end
 function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
     self.harness.game.CurrentRun = {}
     local drawHasCurrentRunCache = nil
-    local host, store = createCacheModule(self.harness, "test-cache-declared-current-run", {
+    local host = createCacheModule(self.harness, "test-cache-declared-current-run", {
         id = "DeclaredCurrentRunCacheHost",
         name = "Declared Current Run Cache Host",
         cache = {
@@ -107,11 +123,12 @@ function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
         end,
     })
 
+    activateAndEnableHost(self.harness, host, "test-cache-declared-current-run")
+    local store = getLiveStore(self.harness, "test-cache-declared-current-run")
     store.cache.currentRun.get("RunScratch").Count = 2
     lu.assertTrue(store.cache.currentRun.clear("RunScratch"))
     lu.assertEquals(store.cache.currentRun.get("RunScratch").Count, 0)
 
-    activateAndEnableHost(self.harness, host, "test-cache-declared-current-run")
     self.harness.moduleHost.getLiveHost("test-cache-declared-current-run").drawTab()
     lu.assertFalse(drawHasCurrentRunCache)
 end
@@ -128,10 +145,11 @@ function TestCache:testDeclaredCurrentRunCacheRejectsInvalidInputs()
             },
         },
     })
-    lu.assertNil(host)
+    local ok = host.activate()
+    lu.assertFalse(ok)
 
     lu.assertErrorMsgContains("factory must return a table", function()
-        local _, store = createCacheModule(self.harness, "test-cache-current-run-invalid-return", {
+        local invalidHost = createCacheModule(self.harness, "test-cache-current-run-invalid-return", {
             cache = {
                 RunScratch = {
                     domain = "currentRun",
@@ -142,6 +160,8 @@ function TestCache:testDeclaredCurrentRunCacheRejectsInvalidInputs()
                 },
             },
         })
+        lu.assertTrue(invalidHost.activate())
+        local store = getLiveStore(self.harness, "test-cache-current-run-invalid-return")
         store.cache.currentRun.get("RunScratch")
     end)
 end
@@ -157,5 +177,6 @@ function TestCache:testPersistentCacheDomainIsRejected()
         },
     })
 
-    lu.assertNil(host)
+    local ok = host.activate()
+    lu.assertFalse(ok)
 end

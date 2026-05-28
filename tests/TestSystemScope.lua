@@ -30,9 +30,9 @@ function TestSystemScope:testInternalSystemScopeRejectsInvalidOwnerId()
     end)
 end
 
-function TestSystemScope:testSystemScopeIsSeparateFromHostRegistry()
+function TestSystemScope:testSystemScopeIsSeparateFromModuleRegistry()
     local system = self.h.createSystem("framework.scope")
 
-    lu.assertNil(self.h.hostRegistry.getRecord(system))
+    lu.assertNil(self.h.moduleRegistry.getRecord(system))
     lu.assertEquals(system.getOwnerId(), "framework.scope")
 end

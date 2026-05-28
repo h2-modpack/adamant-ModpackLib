@@ -2,15 +2,15 @@ local deps = ...
 
 local logging = deps.logging
 local cache = deps.cache
+local shared = deps.shared
 local sharedData = deps.sharedData
 local moduleState = deps.moduleState
 local overlays = deps.overlays
 local mutation = deps.mutation
 local definition = deps.definition
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 local uiDraw = deps.uiDraw
-local authorHostService = deps.authorHost
-local moduleHost = {
+local managedModule = {
     prepareDefinition = definition.prepareDefinition,
 }
 local phaseGate = deps.phaseGate
@@ -19,12 +19,12 @@ local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
     moduleState = moduleState,
     phaseGate = phaseGate,
 })
-local hostLifecycle = import('core/module_bootstrap/host_lifecycle.lua', nil, {
+local moduleLifecycle = import('core/module_bootstrap/managed_module_lifecycle.lua', nil, {
     logging = logging,
     mutation = mutation,
     moduleState = moduleState,
 })
-local hostActivation = import('core/module_bootstrap/host_activation.lua', nil, {
+local moduleActivation = import('core/module_bootstrap/managed_module_activation.lua', nil, {
     logging = logging,
     shared = deps.shared,
     hooks = deps.hooks,
@@ -32,26 +32,26 @@ local hostActivation = import('core/module_bootstrap/host_activation.lua', nil, 
     mutation = mutation,
     fallbackUi = deps.fallbackUi,
     coordinator = deps.coordinator,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
 })
 
-function moduleHost.getRecord(host)
-    return hostRegistry.getRecord(host)
+function managedModule.getRecord(module)
+    return moduleRegistry.getRecord(module)
 end
 
-function moduleHost.addEffectReceipt(host, name, receipt)
-    local record = hostRegistry.getRecord(host)
+function managedModule.addEffectReceipt(module, name, receipt)
+    local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: host is required")
+        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: module is required")
     end
     if record.activated ~= true then
-        logging.violate("host.not_activated", "moduleHost.addEffectReceipt requires an activated host")
+        logging.violate("host.not_activated", "managedModule.addEffectReceipt requires an activated module")
     end
     if type(name) ~= "string" or name == "" then
-        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt name is required")
+        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: receipt name is required")
     end
     if type(receipt) ~= "table" or type(receipt.dispose) ~= "function" then
-        logging.violate("host.invalid_activate_opts", "moduleHost.addEffectReceipt: receipt dispose function is required")
+        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: receipt dispose function is required")
     end
 
     record.effectReceipts = record.effectReceipts or {}
@@ -61,14 +61,14 @@ function moduleHost.addEffectReceipt(host, name, receipt)
     }
 end
 
----@class ModuleHostOpts
+---@class ManagedModuleCreateOpts
 ---@field definition ModuleDefinition
 ---@field pluginGuid string
 ---@field persistentState PersistentState
 ---@field stagedState StagedState
----@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
----@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions)
----@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions)|nil
+---@field onCommit fun(host: Host, runtime: RuntimeContext, commit: table)|nil
+---@field drawTab fun(host: Host, ui: UiContext)
+---@field drawQuickContent fun(host: Host, ui: UiContext)|nil
 
 ---@class DrawContext
 ---@field imgui table
@@ -88,7 +88,7 @@ end
 ---@field clear fun(self: DrawActionRef)
 ---@field has fun(self: DrawActionRef): boolean
 
----@class ModuleHost
+---@class ManagedModule
 ---@field getHostId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string|nil
@@ -113,68 +113,95 @@ end
 ---@field drawTab fun()
 ---@field drawQuickContent fun()|nil
 
-function moduleHost.getLiveHost(pluginGuid)
-    return hostRegistry.getLiveHost(pluginGuid)
+function managedModule.getLiveHost(pluginGuid)
+    return moduleRegistry.getLiveModule(pluginGuid)
 end
 
-local KnownHostOpts = {
+local KnownModuleCreateOpts = {
     definition = true,
     pluginGuid = true,
     persistentState = true,
     stagedState = true,
-    onSettingsCommitted = true,
+    mutationBundle = true,
+    hookDeclarations = true,
+    sharedDataDeclarations = true,
+    sharedEventRegistrations = true,
+    overlayDeclarations = true,
+    onCommit = true,
     drawTab = true,
     drawQuickContent = true,
 }
 
-local function ValidateKnownOpts(opts, context)
+local function validateKnownOpts(opts, context)
     for key in pairs(opts) do
-        if not KnownHostOpts[key] then
+        if not KnownModuleCreateOpts[key] then
             logging.violate("host.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
         end
     end
 end
 
-local function CreateMutationBundle()
+local function createMutationBundle()
     return {
         patchMutation = nil,
     }
 end
 
-local function ValidateSettingsObserver(opts)
-    if opts.onSettingsCommitted ~= nil and type(opts.onSettingsCommitted) ~= "function" then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: onSettingsCommitted must be a function")
+local function validateCommitObserver(opts)
+    if opts.onCommit ~= nil and type(opts.onCommit) ~= "function" then
+        logging.violate("host.invalid_create_opts", "managedModule.create: onCommit must be a function")
     end
-    return opts.onSettingsCommitted
+    return opts.onCommit
 end
 
---- Creates full and author-facing host objects for Framework and fallback UI.
---- Activation is explicit through the returned author host.
----@param opts ModuleHostOpts
----@return ModuleHost host Full module host.
----@return AuthorHost authorHost Module author host view.
----@return Store store Module author store view.
-function moduleHost.create(opts)
+local function createRuntimeContext(store)
+    return {
+        data = store,
+        cache = store and store.cache or nil,
+        shared = store and store.shared or nil,
+    }
+end
+
+local function createActionRuntimeBridge(persistentState)
+    local runtime = persistentState.runtime
+    return {
+        read = function(alias, ...)
+            local ref = persistentState.get(alias)
+            if ref == nil then
+                return nil
+            end
+            return ref:read(...)
+        end,
+        set = runtime and runtime.set or nil,
+        clear = runtime and runtime.clear or nil,
+    }
+end
+
+--- Creates a managed module for Framework and fallback UI.
+--- Activation is explicit through the returned module.
+---@param opts ManagedModuleCreateOpts
+---@return ManagedModule module Managed lifecycle module.
+---@return Store store Module runtime store view.
+function managedModule.create(opts)
     if type(opts) ~= "table" then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: opts must be a table")
+        logging.violate("host.invalid_create_opts", "managedModule.create: opts must be a table")
     end
-    ValidateKnownOpts(opts, "moduleHost.create")
+    validateKnownOpts(opts, "managedModule.create")
     local def = opts.definition
     local pluginGuid = opts.pluginGuid
     local persistentState = opts.persistentState
     local stagedState = opts.stagedState
     if type(def) ~= "table" or def._preparedDefinition ~= true then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: prepared definition is required")
+        logging.violate("host.invalid_create_opts", "managedModule.create: prepared definition is required")
     end
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: pluginGuid is required")
+        logging.violate("host.invalid_create_opts", "managedModule.create: pluginGuid is required")
     end
     if not (persistentState and type(persistentState.get) == "function" and type(persistentState.read) == "function") then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: persistentState is required")
+        logging.violate("host.invalid_create_opts", "managedModule.create: persistentState is required")
     end
     if not (stagedState and type(stagedState.get) == "function" and type(stagedState.isDirty) == "function"
         and type(stagedState.write) == "function" and type(stagedState.getAliasSchema) == "function") then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: stagedState is required")
+        logging.violate("host.invalid_create_opts", "managedModule.create: stagedState is required")
     end
 
     local drawTab = opts.drawTab
@@ -183,26 +210,27 @@ function moduleHost.create(opts)
         actions = def.actions,
         order = def._actionOrder,
     })
-    local mutationBundle = CreateMutationBundle()
-    local settingsObserver = ValidateSettingsObserver(opts)
+    local mutationBundle = opts.mutationBundle or createMutationBundle()
+    local commitObserver = validateCommitObserver(opts)
     local store
+    local runtimeContext
+    local actionRuntimeBridge
+    local host
 
     if type(drawTab) ~= "function" then
-        logging.violate("host.invalid_create_opts", "moduleHost.create: drawTab is required")
+        logging.violate("host.invalid_create_opts", "managedModule.create: drawTab is required")
     end
-    ---@type ModuleHost
-    local host = {}
-    ---@type AuthorHost
-    local authorHost
+    ---@type ManagedModule
+    local module = {}
 
-    local function notifySettingsCommitted(commit)
+    local function notifyCommit(commit)
         local observerOk = true
         local observerResult = nil
-        if settingsObserver ~= nil then
-            observerOk, observerResult = pcall(settingsObserver, authorHost, store, commit)
+        if commitObserver ~= nil then
+            observerOk, observerResult = pcall(commitObserver, host, runtimeContext, commit)
         end
 
-        local overlayOk, overlayErr = pcall(overlays.dispatchCommit, host, commit)
+        local overlayOk, overlayErr = pcall(overlays.dispatchCommit, module, commit)
         if not observerOk then
             if not overlayOk then
                 error(tostring(observerResult) .. " (overlay dispatch failed: " .. tostring(overlayErr) .. ")", 0)
@@ -216,25 +244,25 @@ function moduleHost.create(opts)
     end
 
     local function requireActivated(methodName)
-        local record = hostRegistry.getRecord(host)
+        local record = moduleRegistry.getRecord(module)
         if not record or record.activated ~= true then
-            logging.violate("host.not_activated", "host.%s requires host.activate() before it can run", methodName)
+            logging.violate("host.not_activated", "module.%s requires module.activate() before it can run", methodName)
         end
     end
 
-    function host.getHostId()
+    function module.getHostId()
         return pluginGuid
     end
 
-    function host.getModuleId()
+    function module.getModuleId()
         return def.id
     end
 
-    function host.getPackId()
+    function module.getPackId()
         return def.modpack
     end
 
-    function host.getMeta()
+    function module.getMeta()
         return {
             name = def.name,
             shortName = def.shortName,
@@ -242,214 +270,235 @@ function moduleHost.create(opts)
         }
     end
 
-    function host.affectsRunData()
+    function module.affectsRunData()
         return mutation.affectsRunData(mutationBundle)
     end
 
-    function host.getHashHints()
+    function module.getHashHints()
         return def.hashGroupPlan
     end
 
-    function host.getStorage()
+    function module.getStorage()
         return def.storage
     end
 
-    function host.read(alias)
+    function module.read(alias)
         return persistentState.read(alias)
     end
 
-    function host.writeAndFlush(alias, value)
+    function module.writeAndFlush(alias, value)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
-        local ok, err = hostLifecycle.commitStagedState(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
             stagedState, actionBuffer)
         return ok, err
     end
 
-    function host.stage(alias, value)
+    function module.stage(alias, value)
         stagedState.write(alias, value)
         return true
     end
 
-    function host.flush()
+    function module.flush()
         requireActivated("flush")
         if not stagedState.isDirty() and not actionBuffer.hasAny() then
             return true
         end
-        return hostLifecycle.commitStagedState(host, def, mutationBundle, notifySettingsCommitted, persistentState, stagedState,
+        return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
             actionBuffer)
     end
 
-    function host.reloadFromConfig()
+    function module.reloadFromConfig()
         requireActivated("reloadFromConfig")
         stagedState._reloadFromConfig()
         actionBuffer.clearAll()
     end
 
-    function host.resync()
+    function module.resync()
         requireActivated("resync")
-        return hostLifecycle.resyncStagedState(def, stagedState, actionBuffer)
+        return moduleLifecycle.resyncStagedState(def, stagedState, actionBuffer)
     end
 
-    function host.resetAll(resetOpts)
+    function module.resetAll(resetOpts)
         requireActivated("resetAll")
         return stagedState.resetAll(resetOpts)
     end
 
-    function host.commitIfDirty()
+    function module.commitIfDirty()
         requireActivated("commitIfDirty")
         if not stagedState.isDirty() and not actionBuffer.hasAny() then
             return true, nil, false
         end
-        local ok, err = hostLifecycle.commitStagedState(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
             stagedState, actionBuffer)
         return ok, err, ok == true
     end
 
-    function host.isEnabled()
-        return hostLifecycle.isEnabled(persistentState)
+    function module.isEnabled()
+        return moduleLifecycle.isEnabled(persistentState)
     end
 
-    function host.setEnabled(enabled)
+    function module.setEnabled(enabled)
         requireActivated("setEnabled")
-        return hostLifecycle.setEnabled(host, def, mutationBundle, notifySettingsCommitted, persistentState, stagedState,
+        return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
             actionBuffer, enabled)
     end
 
-    function host.setDebugMode(enabled)
+    function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
-        return hostLifecycle.setDebugMode(host, def, mutationBundle, notifySettingsCommitted, persistentState, stagedState,
+        return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
             actionBuffer, enabled)
     end
 
-    function host.suspendForPackDisable()
+    function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
-        return hostLifecycle.suspendForPackDisable(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+        return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
             stagedState, actionBuffer)
     end
 
-    function host.ensureSuspendedForPackDisable()
+    function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
-        return hostLifecycle.ensureSuspendedForPackDisable(host, def, mutationBundle, notifySettingsCommitted,
+        return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
             persistentState, stagedState, actionBuffer)
     end
 
-    function host.restoreForPackEnable()
+    function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
-        return hostLifecycle.restoreForPackEnable(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+        return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
             stagedState, actionBuffer)
     end
 
-    function host.rollbackPackTransition(receipt)
+    function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
-        return hostLifecycle.rollbackPackTransition(host, def, mutationBundle, notifySettingsCommitted, persistentState,
+        return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
             stagedState, actionBuffer, receipt)
     end
 
-    function host.restorePackTransitionState(receipt)
+    function module.restorePackTransitionState(receipt)
         requireActivated("restorePackTransitionState")
-        return hostLifecycle.restorePackTransitionState(stagedState, actionBuffer, receipt)
+        return moduleLifecycle.restorePackTransitionState(stagedState, actionBuffer, receipt)
     end
 
     local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
 
-    function host.log(fmt, ...)
+    function module.log(fmt, ...)
         logging.printWithPrefix(logPrefix, fmt, ...)
     end
 
-    function host.logIf(fmt, ...)
+    function module.logIf(fmt, ...)
         logging.printWithPrefixIf(persistentState.read("DebugMode") == true, logPrefix, fmt, ...)
     end
 
-    function host.applyMutation()
+    host = {
+        getHostId = module.getHostId,
+        getModuleId = module.getModuleId,
+        getPackId = module.getPackId,
+        getMeta = module.getMeta,
+        isEnabled = module.isEnabled,
+        log = module.log,
+        logIf = module.logIf,
+        shared = {
+            emit = function(id, eventName, payload)
+                return shared.emitForHost(module, id, eventName, payload)
+            end,
+        },
+    }
+
+    function module.applyMutation()
         requireActivated("applyMutation")
-        return mutation.applyForHost(host)
+        return mutation.applyForHost(module)
     end
 
-    function host.revertMutation()
+    function module.revertMutation()
         requireActivated("revertMutation")
-        return mutation.revertForHost(host)
+        return mutation.revertForHost(module)
     end
 
-    function host.activate()
-        return moduleHost.activate(host)
+    function module.activate()
+        return managedModule.activate(module)
     end
 
     local record = {
         definition = def,
         mutationBundle = mutationBundle,
+        hookDeclarations = opts.hookDeclarations,
+        sharedDataDeclarations = opts.sharedDataDeclarations,
+        sharedEventRegistrations = opts.sharedEventRegistrations,
+        overlayDeclarations = opts.overlayDeclarations,
         pluginGuid = pluginGuid,
         persistentState = persistentState,
         stagedState = stagedState,
         store = nil,
+        runtime = nil,
+        host = host,
         actionBuffer = actionBuffer,
-        authorHost = nil,
         effectReceipts = {},
         fallbackUiRequested = false,
         activated = false,
     }
-    hostRegistry.setRecord(host, record)
+    moduleRegistry.setRecord(module, record)
 
     store = moduleState.createStore(persistentState, cache.data.create({
         definition = def,
         ownerId = pluginGuid,
         source = "store.cache",
     }), sharedData.create({
-        host = host,
+        host = module,
         record = record,
         phase = "runtime",
         source = "store.shared",
     }))
+    runtimeContext = createRuntimeContext(store)
+    actionRuntimeBridge = createActionRuntimeBridge(persistentState)
     record.store = store
+    record.runtime = runtimeContext
 
-    authorHost = authorHostService.create(host)
-    record.authorHost = authorHost
     local uiPhase = uiPhaseModule.create({
         definition = def,
         stagedState = stagedState,
         shared = sharedData.create({
-            host = host,
+            host = module,
             record = record,
             phase = "draw",
             source = "state.shared",
         }),
         actionBuffer = actionBuffer,
-        authorHost = authorHost,
+        host = host,
+        actionRuntime = actionRuntimeBridge,
         logPrefix = logPrefix,
         isDebugEnabled = function()
             return persistentState.read("DebugMode") == true
         end,
     })
 
-    function host.drawTab()
+    function module.drawTab()
         requireActivated("drawTab")
         return uiPhase.run(drawTab)
     end
 
     if type(drawQuickContent) == "function" then
-        function host.drawQuickContent()
+        function module.drawQuickContent()
             requireActivated("drawQuickContent")
             return uiPhase.run(drawQuickContent)
         end
     end
 
-    return host, authorHost, store
+    return module, store
 end
 
---- Activates a constructed module host by registering external side effects.
----@param host ModuleHost
----@return AuthorHost host Module author host view.
-function moduleHost.activateOrThrow(host)
-    return hostActivation.activateOrThrow(host)
+--- Activates a constructed module by registering external side effects.
+---@param module ManagedModule
+function managedModule.activateOrThrow(module)
+    return moduleActivation.activateOrThrow(module)
 end
 
---- Safely activates a constructed module host by registering external side effects.
+--- Safely activates a constructed module by registering external side effects.
 --- Returns false plus the activation error instead of throwing.
----@param host ModuleHost
+---@param module ManagedModule
 ---@return boolean ok
 ---@return string|nil err
-function moduleHost.activate(host)
-    return hostActivation.activate(host)
+function managedModule.activate(module)
+    return moduleActivation.activate(module)
 end
 
-return moduleHost
+return managedModule

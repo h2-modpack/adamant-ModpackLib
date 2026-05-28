@@ -6,22 +6,23 @@ Use overlays when the module needs a retained display. Use widgets when the modu
 
 ## Normal Shape
 
-Create the host, declare overlays on `host.overlays`, then activate:
+Create the module, declare overlays on `module.overlays`, then activate:
 
 ```lua
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-if not host then return end
+if not module then return end
 
-host.overlays.createLine("summary.igt", {
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+
+module.overlays.createLine("summary.igt", {
     region = "middleRightStack",
-    order = host.overlays.order.module,
+    order = module.overlays.order.module,
     columnGap = 20,
     columns = {
         { key = "label", minWidth = 40 },
@@ -29,7 +30,7 @@ host.overlays.createLine("summary.igt", {
     },
 })
 
-host.overlays.onCommit(function(ctx)
+module.overlays.onCommit(function(ctx)
     ctx.setLine("summary.igt", {
         label = "IGT:",
         time = "00:00.00",
@@ -37,18 +38,18 @@ host.overlays.onCommit(function(ctx)
     ctx.refresh("summary.igt")
 end)
 
-host.activate()
+module.activate()
 ```
 
-`host.overlays` is bound to the module host, so overlay declarations do not need
+`module.overlays` is bound to the module, so overlay declarations do not need
 a separate owner argument or a construction-time callback.
 
 ## Retained Elements
 
 Use:
 
-- `host.overlays.createLine(name, spec)`
-- `host.overlays.createTable(name, spec)`
+- `module.overlays.createLine(name, spec)`
+- `module.overlays.createTable(name, spec)`
 
 Retained element names are local to the module owner id derived from
 `pluginGuid`. Different modules can reuse the same local element names without
@@ -60,17 +61,17 @@ The shared managed region currently exposed to modules is:
 
 Order bands:
 
-- `host.overlays.order.framework`
-- `host.overlays.order.module`
-- `host.overlays.order.debug`
+- `module.overlays.order.framework`
+- `module.overlays.order.module`
+- `module.overlays.order.debug`
 
 ## Projection Events
 
 Overlay projections can update retained elements from:
 
-- `host.overlays.onCommit(function(ctx, commit) ... end)`
-- `host.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
-- `host.overlays.afterHook(path, function(ctx, event) ... end)`
+- `module.overlays.onCommit(function(ctx, commit) ... end)`
+- `module.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
+- `module.overlays.afterHook(path, function(ctx, event) ... end)`
 
 The projection context exposes:
 

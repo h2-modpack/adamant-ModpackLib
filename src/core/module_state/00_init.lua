@@ -87,8 +87,13 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
 ---@field emitShared fun(id: string, eventName: string, payload: any)
----@field executePendingActions fun(host: AuthorHost, state: DrawState)
----@field flushPendingSharedEvents fun(host: AuthorHost)
+---@field executePendingActions fun(host: Host, uiData: DrawState, actionRuntime: ActionRuntimeBridge)
+---@field flushPendingSharedEvents fun(host: Host)
+
+---@class ActionRuntimeBridge
+---@field read fun(alias: string, ...): any
+---@field set fun(alias: string, value: any): boolean
+---@field clear fun(alias: string): boolean
 
 ---@class PersistentState
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
@@ -129,7 +134,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field default boolean|nil
 ---@field storage StorageSchema|nil
 ---@field cache table|nil
----@field actions table<string, fun(host: AuthorHost, state: DrawState, value: any)>|nil
+---@field actions table<string, fun(host: Host, uiData: DrawState, actionRuntime: ActionRuntimeBridge, value: any)>|nil
 ---@field _actionOrder string[]|nil
 ---@field hashGroupPlan table|nil
 
@@ -160,7 +165,7 @@ function moduleState.create(modConfig, definition)
     }
 end
 
--- Internal API: narrows persistent state to the author-facing runtime store.
+-- Internal API: narrows persistent state to the runtime store.
 function moduleState.createStore(persistentState, cache, shared)
     return storeModule.create(persistentState, cache, shared)
 end

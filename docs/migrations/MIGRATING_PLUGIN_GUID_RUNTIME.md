@@ -59,7 +59,7 @@ should not be passed to Lib as lifecycle owners.
 
 ## Hook And Overlay Notes
 
-Normal module hooks are declared on the returned author host before activation:
+Normal module hooks are declared on the returned capability host before activation:
 
 ```lua
 local function registerHooks(host, store)

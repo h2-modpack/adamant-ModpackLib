@@ -119,11 +119,7 @@ end
 
 local function ensureDataDeclarations(record)
     if not record.sharedDataDeclarations then
-        record.sharedDataDeclarations = {
-            entries = {},
-            byName = {},
-            ownerIds = {},
-        }
+        record.sharedDataDeclarations = sharedData.createDeclarations()
     end
     return record.sharedDataDeclarations
 end
@@ -151,7 +147,15 @@ local function hasOwnerDeclarations(declarations)
     return false
 end
 
-local function stageDataDeclaration(context, access, record, host, name, opts)
+function sharedData.createDeclarations()
+    return {
+        entries = {},
+        byName = {},
+        ownerIds = {},
+    }
+end
+
+local function stageDataDeclaration(context, access, declarations, hostProvider, name, opts)
     validateName(context, name)
     if opts ~= nil and type(opts) ~= "table" then
         logging.violate("shared.invalid_args", "%s opts must be a table when provided", context)
@@ -159,7 +163,6 @@ local function stageDataDeclaration(context, access, record, host, name, opts)
     opts = opts or {}
     validateId(context, opts.id)
 
-    local declarations = ensureDataDeclarations(record)
     if declarations.byName[name] then
         logging.violate("shared.invalid_args", "%s name '%s' is already declared by this host", context, name)
     end
@@ -188,7 +191,8 @@ local function stageDataDeclaration(context, access, record, host, name, opts)
         hasDefault = opts.default ~= nil,
         hasFallback = opts.fallback ~= nil,
         isEnabled = function()
-            return host.isEnabled()
+            local host = hostProvider and hostProvider() or nil
+            return host ~= nil and host.isEnabled() == true
         end,
     }
     declarations.byName[name] = declaration
@@ -199,12 +203,24 @@ local function stageDataDeclaration(context, access, record, host, name, opts)
     return true
 end
 
+function sharedData.stageOwnerDeclaration(declarations, hostProvider, name, opts)
+    return stageDataDeclaration("module.shared.data.owner", "owner", declarations, hostProvider, name, opts)
+end
+
+function sharedData.stageReaderDeclaration(declarations, hostProvider, name, opts)
+    return stageDataDeclaration("module.shared.data.reader", "reader", declarations, hostProvider, name, opts)
+end
+
 function sharedData.stageOwner(record, host, name, opts)
-    return stageDataDeclaration("host.shared.data.owner", "owner", record, host, name, opts)
+    return sharedData.stageOwnerDeclaration(ensureDataDeclarations(record), function()
+        return host
+    end, name, opts)
 end
 
 function sharedData.stageReader(record, host, name, opts)
-    return stageDataDeclaration("host.shared.data.reader", "reader", record, host, name, opts)
+    return sharedData.stageReaderDeclaration(ensureDataDeclarations(record), function()
+        return host
+    end, name, opts)
 end
 
 function sharedData.install(ownerId, declarations)

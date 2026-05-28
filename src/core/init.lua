@@ -14,8 +14,8 @@ local phaseGate = import('core/module_bootstrap/ui/phase_gate.lua', nil, {
 local registry = import('core/lib_bootstrap/registry.lua', nil, {
     runtimeRoot = runtimeRoot,
 })
-local hostRegistry = import('core/lib_bootstrap/host_registry.lua', nil, {
-    hostBucket = registry.hosts,
+local moduleRegistry = import('core/lib_bootstrap/module_registry.lua', nil, {
+    moduleBucket = registry.modules,
 })
 local systemScope = import('core/lib_bootstrap/system_scope.lua', nil, {
     logging = logging,
@@ -56,19 +56,18 @@ local coordinator = import('core/coordinator/coordinator.lua', nil, {
     coordinatorRegistry = registry.coordinators,
 })
 
-
 local definition = import('core/module_bootstrap/definition.lua', nil, {
     plugin = externals.plugin,
     logging = logging,
     storage = storage,
     values = values,
     coordinator = coordinator,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
 })
 local sharedBundle = import('core/shared/00_init.lua', nil, {
     logging = logging,
     sharedRegistry = registry.shared,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     values = values,
     phaseGate = phaseGate,
 })
@@ -77,7 +76,7 @@ local shared = sharedBundle.service
 local hooksBundle = import('core/hooks/00_init.lua', nil, {
     modutil = externals.modutil,
     logging = logging,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     hookRegistry = registry.hooks,
 })
 local hooks = hooksBundle.service
@@ -90,7 +89,7 @@ local overlaysBundle = import('core/overlays/00_init.lua', nil, {
     rom = externals.rom,
     logging = logging,
     hooks = hooks,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     rendererSystem = overlayRendererSystem,
     overlayRegistry = registry.overlays,
     values = values,
@@ -108,7 +107,7 @@ local mutationBundle = import('core/mutations/00_init.lua', nil, {
     gameDeps = gameDeps,
     logging = logging,
     values = values,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     coordinator = coordinator,
     mutationRegistry = registry.mutations,
 })
@@ -127,23 +126,16 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
     rom = externals.rom,
     modutil = externals.modutil,
     logging = logging,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     coordinator = coordinator,
     overlays = overlays,
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
 })
-local authorHost = import('core/module_bootstrap/author_host.lua', nil, {
-    fallbackUi = fallbackUiBundle.author,
-    hooks = hooksBundle.author,
-    shared = sharedBundle.author,
-    mutation = mutationBundle.author,
-    overlays = overlaysBundle.author,
-})
-local moduleHost = import('core/module_bootstrap/host.lua', nil, {
+local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     logging = logging,
     definition = definition,
-    hostRegistry = hostRegistry,
+    moduleRegistry = moduleRegistry,
     moduleState = moduleState,
     shared = shared,
     cache = cacheBundle.service,
@@ -155,7 +147,6 @@ local moduleHost = import('core/module_bootstrap/host.lua', nil, {
     coordinator = coordinator,
     storage = storage,
     uiDraw = widgetsBundle.uiDraw,
-    authorHost = authorHost,
     phaseGate = phaseGate,
 })
 
@@ -164,14 +155,21 @@ local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil,
     logging = logging,
     hashing = hashingBundle.framework,
     coordinator = coordinator,
-    moduleHost = moduleHost,
+    managedModule = managedModule,
     overlays = overlaysBundle.framework,
 })
 public.createFrameworkRuntime = frameworkRuntime.create
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
-    moduleHost = moduleHost,
+    managedModule = managedModule,
     moduleState = moduleState,
+    overlayOrder = overlaysBundle.order,
+    hookDeclarations = hooksBundle.declarations,
+    overlayDeclarations = overlaysBundle.declarations,
+    sharedDataDeclarations = sharedBundle.dataDeclarations,
+    sharedRegistrations = sharedBundle.registrations,
+    mutationLifecycle = mutationBundle.lifecycle,
+    fallbackUi = fallbackUiBundle.service,
 })
 public.createModule = moduleBundle.public.createModule
 

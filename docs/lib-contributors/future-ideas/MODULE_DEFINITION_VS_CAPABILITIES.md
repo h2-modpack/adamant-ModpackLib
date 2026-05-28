@@ -1,14 +1,24 @@
 # Module Definition Vs Capabilities
 
-Future contributor note. This captures a design discussion so the boundary can
-be revisited intentionally later.
+Historical contributor note. This captures a rejected/retired design discussion
+so the boundary can be revisited intentionally later.
 
 Related larger cleanup proposal:
 [RUNTIME_UI_BACKEND_RESTRUCTURING.md](RUNTIME_UI_BACKEND_RESTRUCTURING.md).
-That proposal intentionally revisits this document's current recommendation to
-keep storage, cache, actions, and draw callbacks inside `createModule(...)`.
+That proposal supersedes this document's old recommendation to keep storage,
+cache, actions, and draw callbacks inside `createModule(...)`.
 
-## Current Framing
+## Outcome
+
+This direction was retired. The implemented API keeps `createModule(...)` as an
+identity-only constructor and moves data, cache, actions, hash groups, commit
+observers, draw callbacks, shared declarations, hooks, overlays, and mutations
+onto the returned module declaration facade before activation.
+
+The rest of this document is preserved as historical context for why the
+project moved away from a large creation-time definition object.
+
+## Retired Framing
 
 `createModule(...)` should be understood as the module's static definition
 surface. It is the place for declarative data and command surfaces that shape

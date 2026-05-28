@@ -5,7 +5,9 @@ TestMutation_DefinitionLifecycle = {}
 
 local function patchMutation(fn)
     return {
-        patchMutation = fn,
+        patchMutation = function(callbackHost, runtime, plan)
+            return fn(plan, callbackHost, runtime and runtime.data or nil, runtime)
+        end,
     }
 end
 
@@ -39,57 +41,63 @@ function TestMutation_DefinitionLifecycle:makeStore(enabled)
     }))
 end
 
-function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
+function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     pluginGuid = pluginGuid or ("test-" .. tostring(def and def.id or "mutation"))
     local host = {
         getHostId = function()
             return pluginGuid
         end,
     }
-    self.harness.hostRegistry.setRecord(host, {
+    callbackHost = callbackHost or host
+    self.harness.moduleRegistry.setRecord(host, {
         pluginGuid = pluginGuid,
         definition = def,
         mutationBundle = mutationBundle,
-        authorHost = authorHost,
         store = store,
+        runtime = {
+            data = store,
+        },
+        callbackHost = callbackHost,
     })
     return host
 end
 
-function TestMutation_DefinitionLifecycle:applyMutation(pluginGuid, def, mutationBundle, authorHost, store)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
+function TestMutation_DefinitionLifecycle:applyMutation(pluginGuid, def, mutationBundle, callbackHost, store)
+    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     return self.mutation.applyForHost(host)
 end
 
-function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutationBundle, authorHost, store)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
+function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutationBundle, callbackHost, store)
+    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     return self.mutation.revertForHost(host)
 end
 
-function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, authorHost, store, stagedState,
+function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, callbackHost, store, stagedState,
         pluginGuid, actions)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
+    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     return self.hostLifecycle.commitStagedState(host, def, mutationBundle, commitNotifier, store, stagedState, actions)
 end
 
-function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, authorHost, store, stagedState, enabled, pluginGuid)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, authorHost, store)
+function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, stagedState, enabled, pluginGuid)
+    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     return self.hostLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, patchCallback)
     local store, stagedState = createModuleState(self.harness, config, definition)
-    local _, authorHost = self.moduleHost.create({
+    local host = self.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
+        mutationBundle = patchCallback ~= nil and {
+            patchMutation = function(callbackHost, runtime, plan)
+                return patchCallback(plan, callbackHost, runtime and runtime.data or nil, runtime)
+            end,
+        } or nil,
         drawTab = function() end,
     })
-    if patchCallback ~= nil then
-        authorHost.mutation.patch(patchCallback)
-    end
-    local ok, err = authorHost.activate()
+    local ok, err = host.activate()
     return ok, err, store
 end
 

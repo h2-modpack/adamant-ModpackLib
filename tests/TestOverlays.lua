@@ -12,10 +12,10 @@ function TestOverlays:dispatch(owner)
 end
 
 function TestOverlays:activateHostWithOverlays(pluginGuid, declareOverlays, opts)
-    local host, authorHost, store, stagedState = self.h.createHostWithOverlays(pluginGuid, declareOverlays, opts)
-    local ok, err = authorHost.activate()
+    local host, authorModule, store, stagedState = self.h.createHostWithOverlays(pluginGuid, declareOverlays, opts)
+    local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
-    return host, authorHost, store, stagedState
+    return host, authorModule, store, stagedState
 end
 
 function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()

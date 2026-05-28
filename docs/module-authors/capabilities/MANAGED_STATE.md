@@ -1,274 +1,176 @@
 # Managed State
 
-Managed state is the core Lib feature most module code builds on. It gives each module:
+Managed state gives each module validated storage, committed runtime data, draw
+state, draw actions, and hash/profile participation.
 
-- a validated storage schema
-- a committed runtime `store`
-- a staged UI `state`
-- built-in `Enabled` and `DebugMode` aliases
-- hash/profile participation for stable settings
-- table and packed-value helpers
+## Surfaces
 
-The normal entrypoint is `lib.createModule(...)`. It prepares the definition, creates the runtime store and draw state, and passes the right handle to each callback.
-
-## State Surfaces
-
-Use each state surface for one job:
-
-| Surface | Use it for | Where it appears |
+| Surface | Use it for | Phase |
 | --- | --- | --- |
-| `store` | committed setting/runtime reads | host capability declarations, hook/overlay helpers, mutation callbacks |
-| `store.runtime` | runtime writes to declared runtime-owned storage | hooks, shared event listeners, runtime helpers |
-| `state` | staged UI reads/writes | `drawTab(draw, state, actions)`, `drawQuickContent(...)` |
-| `store.cache` | declared current-run cache refs | runtime code and post-commit observers |
-| `config` | Chalk-owned backing table | local to `main.lua` |
+| `runtime.data` | committed setting/runtime reads | runtime callbacks |
+| `runtime.data.runtime` | writes to `mode = "runtime"` storage | runtime callbacks |
+| `ui.data` | staged UI reads/writes | draw callbacks |
+| `ui.actions` | one-shot draw intent | draw callbacks |
+| `runtime.data.cache` | declared current-run cache | runtime callbacks |
 
-Draw code should stage changes through `state`. Gameplay, hooks, overlays,
-shared event callbacks, and mutations should read committed values through
-`store`.
-The runtime store exposes `store.get(alias)` for read-only storage objects and
-`store.read(alias, ...)` as shorthand for `store.get(alias):read(...)`.
-Runtime-owned storage uses the narrow `store.runtime` lane:
-`store.runtime.read(alias)`, `store.runtime.set(alias, value)`, and
-`store.runtime.clear(alias)`.
-draw `state` exposes the same convenience shape for custom raw ImGui code:
-`state.read(alias, ...)` and `state.write(alias, ...)` forward through the
-staged object returned by `state.get(alias)`.
-
-These surfaces are phase-gated:
-
-- `store` is for runtime code and rejects access while any module draw callback is running.
-- `draw`, `state`, `actions`, and refs returned from them are for the active draw callback and reject access outside that callback.
-- `store.cache` is runtime-scoped and currently exposes only current-run cache.
-- Do not cache draw `state` fields, table handles, or action refs for later runtime use. Reacquire them each draw pass.
+Draw callbacks receive `(host, ui)`. Runtime callbacks receive `(host, runtime)`.
 
 ```lua
-function ui.drawTab(draw, state, actions)
-    draw.widgets.checkbox(state.get("FeatureEnabled"), {
+local function drawTab(host, ui)
+    ui.draw.widgets.checkbox(ui.data.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
 end
 
-function logic.registerHooks(host, store)
-    host.hooks.wrap("SomeGameFunction", function(base, ...)
-        if host.isEnabled() and store.get("FeatureEnabled"):read() then
-            -- Runtime behavior reads committed state.
-        end
-        return base(...)
-    end)
-end
+module.hooks.wrap("SomeGameFunction", function(host, runtime, base, ...)
+    if host.isEnabled() and runtime.data.read("FeatureEnabled") then
+        -- Runtime behavior reads committed state.
+    end
+    return base(...)
+end)
 ```
 
-Host/framework plumbing owns commit, reload, hash/profile import, and config flush behavior. Module draw callbacks receive author-facing staged state, not the private full staged-state object.
+## Storage
 
-## Storage Roots
-
-Storage lives on `definition.storage`:
+Declare storage before activation:
 
 ```lua
-function data.buildStorage()
-    return {
-        { type = "bool", alias = "FeatureEnabled", default = false },
-        { type = "string", alias = "Mode", default = "Vanilla", maxLen = 32 },
-        { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
-    }
-end
+module.data.define({
+    { type = "bool", alias = "FeatureEnabled", default = false },
+    { type = "string", alias = "Mode", default = "Vanilla", maxLen = 32 },
+    { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
+})
 ```
 
 Rules:
 
-- `alias` is the storage, state, widget, and managed storage key.
-- Normal roots persist and hash by default.
-- `persist = false, hash = false` creates staged-only transient UI state.
-- `hash = false` keeps a persisted staged value out of hash/profile serialization.
-- `hash = true` requires `persist = true`.
-- `mode = "runtime"` creates runtime-owned storage. It is written through
-  `store.runtime`, read through `store` or draw `state`, and cannot hash.
-
-Lib injects these aliases into every prepared module:
-
-| Alias | Purpose |
-| --- | --- |
-| `Enabled` | module behavior toggle |
-| `DebugMode` | diagnostic toggle, excluded from hashes/profiles |
-
-Do not declare `Enabled` or `DebugMode` yourself.
+- normal roots persist and hash by default
+- `persist = false, hash = false` creates draw-only transient UI state
+- `hash = false` keeps a persisted value out of hashes/profiles
+- `mode = "runtime"` creates runtime-owned storage and cannot hash
+- `Enabled` and `DebugMode` are Lib-owned built-ins
 
 ## Runtime-Owned Storage
 
-Runtime markers that should be updated by hooks, shared event listeners, or
-other runtime code should use runtime-owned storage:
+Use runtime-owned storage for values written by gameplay/runtime code and read
+by UI:
 
 ```lua
-{
-    type = "bool",
-    alias = "RecordingReady",
-    mode = "runtime",
-    persist = true,
-    hash = false,
-    default = false,
-}
+module.data.define({
+    {
+        type = "bool",
+        alias = "RecordingReady",
+        mode = "runtime",
+        persist = true,
+        hash = false,
+        default = false,
+    },
+})
 ```
 
-Runtime code writes through `store.runtime`:
+Runtime code writes:
 
 ```lua
-store.runtime.set("RecordingReady", true)
-local ready = store.runtime.read("RecordingReady")
+runtime.data.runtime.set("RecordingReady", true)
 ```
 
-Draw code reads the same alias through draw `state`:
+Draw code reads:
 
 ```lua
-local ready = state.read("RecordingReady")
+local ready = ui.data.read("RecordingReady")
 ```
-
-Runtime-owned storage is not user-editable staged UI state. Widgets and
-`state.write(...)` should be used for normal setting storage, not runtime-owned
-aliases.
 
 ## Tables
 
-Use `type = "table"` for compact ordered rows with one shared row schema:
+Table storage models compact ordered rows with one shared row schema:
 
 ```lua
-{
-    type = "table",
-    alias = "Tiers",
-    minRows = 0,
-    maxRows = 10,
-    defaultRows = 1,
-    row = {
-        { type = "bool", alias = "Enabled", default = true },
-        { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+module.data.define({
+    {
+        type = "table",
+        alias = "Tiers",
+        maxRows = 10,
+        defaultRows = 1,
+        row = {
+            { type = "bool", alias = "Enabled", default = true },
+            { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+        },
     },
-}
+})
 ```
 
-Table rules:
-
-- The table root owns `persist` and `hash`.
-- Row aliases are scoped to one row and do not leak into root data reads.
-- Rows are compact ordered arrays with no row ids or holes.
-- `defaultRows` creates the default row count.
-
-Use `state.get(alias)` for staged UI edits. For table roots, `get(...)`
-returns the staged table handle:
+Draw use:
 
 ```lua
-local tiers = state.get("Tiers")
+local tiers = ui.data.get("Tiers")
 tiers:append({ Enabled = true, Limit = 3 })
 tiers:write(1, "Limit", 4)
-local limit = tiers:read(1, "Limit")
-local limitField = tiers:get(1, "Limit")
+draw.widgets.stepper(tiers:get(1, "Limit"), { label = "Limit" })
 ```
 
-For raw ImGui controls that do not use Lib widgets, the convenience path is:
+Runtime read use:
 
 ```lua
-local limit = state.read("Tiers", rowIndex, "Limit")
-local nextLimit, changed = draw.imgui.SliderInt("Limit", limit, 0, 10)
-if changed then
-    state.write("Tiers", rowIndex, "Limit", nextLimit)
-end
+local limit = runtime.data.read("Tiers", 1, "Limit")
 ```
 
-Storage fields expose both schema identity and draw/control identity:
-
-- `field:alias()` returns the storage schema alias, such as `"Limit"`.
-- `field:controlId()` returns the identity widgets use for ImGui controls. Root fields use their alias; table cells use the table owner's cached path, such as `"Tiers:1:Limit"`.
-
-Use `store.get(alias)` for read-only runtime access. For table roots,
-`get(...)` returns the read-only table handle. Table handles use colon method
-syntax. `store.read("Tiers", rowIndex, "Limit")` forwards to
-`store.get("Tiers"):read(rowIndex, "Limit")`.
+Table handles use colon syntax.
 
 ## Packed Values
 
-Use `packedInt` when one numeric root should expose named child aliases:
-
-```lua
-{
-    type = "packedInt",
-    alias = "PackedFlags",
-    bits = {
-        { alias = "AttackBanned", offset = 0, width = 1, type = "bool", default = false },
-        { alias = "RarityOverride", offset = 1, width = 2, type = "int", default = 0 },
-    },
-}
-```
-
-Packed widgets can write child aliases through the same staged state. Lib handles repacking the root.
+Use `packedInt` when one numeric root should expose named child aliases.
+Packed widgets can write child aliases, and Lib repacks the root.
 
 ## Draw Actions
 
-Draw callbacks expose action staging through the `actions` argument:
-
-- `actions.get(actionKey)`
-- `actions.trigger(actionKey, value?)`
-- `actions.emit(id, eventName, payload?)`
-
-`actions.get(actionKey)` returns an action ref:
-
-- `action:stage(value)`
-- `action:read()`
-- `action:clear()`
-- `action:has()`
-
-Action refs are object handles; call their methods with colon syntax.
-`actions.trigger(actionKey, value?)` stages a declared action directly; omitted
-`value` stages `true`. `actions.emit(id, eventName, payload?)` queues an
-shared event to emit after the draw callback.
-
-Use actions for one-shot UI intent and UI-triggered runtime commands, not for
-ordinary persistent settings. Stage actions through `actions`, not through
-`state`.
-
-Declare action handlers on `createModule({ actions = ... })`. Handlers run
-after the draw callback and before staged state flush:
+Actions are declared before activation:
 
 ```lua
-actions = {
-    ClearCache = function(host, state, value)
-        local scope = value and value.scope or "run"
-        host.logIf("Clearing cache for %s", tostring(scope))
-        state.write("CacheCleared", true)
+module.actions.define({
+    StartRecording = function(host, uiData, actionRuntime, value)
+        host.logIf("Starting recording")
+        actionRuntime.set("RecordingReady", value == true)
     end,
-}
+})
 ```
 
-Handlers receive the author `host`, the current draw `state`, and the staged
-action payload. They do not receive the draw object.
-
-Observe committed actions with `onSettingsCommitted(host, store, commit)`.
-This callback runs after staged state commits, so it reads committed values
-through `store` and action payloads through `commit.actions`:
+Draw code stages actions:
 
 ```lua
-local function onSettingsCommitted(host, store, commit)
-    local clearCache = commit.actions.get("ClearCache")
-    if clearCache:has() then
-        local scope = clearCache:read()
-        host.logIf("Clearing cache for %s", tostring(scope))
+ui.actions.trigger("StartRecording", true)
+```
+
+or passes refs to widgets:
+
+```lua
+ui.draw.widgets.button("Start", {
+    action = ui.actions.get("StartRecording"),
+    value = true,
+})
+```
+
+Action handlers run after the draw callback and before staged state flush. They
+receive:
+
+- `host`: narrow logging/metadata/enabled host projection
+- `uiData`: current draw state
+- `actionRuntime`: narrow runtime bridge with `read`, `set`, and `clear`
+- `value`: staged action payload
+
+## Commit Observer
+
+Use `module.onCommit(...)` to observe committed settings/actions:
+
+```lua
+module.onCommit(function(host, runtime, commit)
+    if commit.actions.get("StartRecording"):has() then
+        host.logIf("recording command committed")
     end
 
     if commit.hadConfigChanges() then
-        -- Rebuild derived state from committed store values here.
+        -- Rebuild derived runtime state from runtime.data.
     end
-end
-
-local host, store, err = lib.createModule({
-    pluginGuid = PLUGIN_GUID,
-    config = config,
-    id = MODULE_ID,
-    name = "Example Module",
-    storage = data.buildStorage(),
-    onSettingsCommitted = onSettingsCommitted,
-    drawTab = ui.drawTab,
-})
-if not host then return end
-
-host.activate()
+end)
 ```
 
 `commit` exposes:
@@ -277,18 +179,9 @@ host.activate()
 - `commit.actions.hasAny()`
 - `commit.hadConfigChanges()`
 
-Read action payloads through `commit.actions.get(actionKey)`. Buttons can stage
-actions for this path through an `actions.get(...)` ref passed in their
-`action` option. Actions are cleared after the commit pass.
-
 ## Common Mistakes
 
-- Do not read transient aliases from `store`; they only live in draw `state`.
+- Do not read transient aliases from `runtime.data`.
 - Do not write raw Chalk config from draw code.
-- Do not call private staged-state flush/reload helpers from module UI.
-- Do not use draw actions as persistent settings.
-- Do not put gameplay behavior in `ui.lua`; UI stages state, runtime code consumes committed state.
-
-See also:
-- [WIDGETS.md](WIDGETS.md)
-- [../../../API.md](../../../API.md)
+- Do not cache draw-phase objects or refs outside draw callbacks.
+- Do not use actions as persistent settings.

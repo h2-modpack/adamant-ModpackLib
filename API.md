@@ -5,11 +5,11 @@ This is the public Lib surface.
 Preferred usage uses top-level module authoring helpers plus namespaces for specialized APIs:
 - `lib.createModule(...)`
 - `lib.createFrameworkRuntime(...)`
-- `host.fallbackUi.*`
-- `host.hooks.*`
-- `host.overlays.*`
-- `host.shared.*`
-- `host.mutation.*`
+- `module.fallbackUi.*`
+- `module.hooks.*`
+- `module.overlays.*`
+- `module.shared.*`
+- `module.mutation.*`
 
 Framework-owned live-host discovery, hash/profile, overlay, UI suppression, and
 diagnostic controls are available from
@@ -17,62 +17,57 @@ diagnostic controls are available from
 
 ## Core Model
 
-Modules declare:
-- required `definition.id`
-- required `definition.name`
-- optional `definition.modpack`
-- optional `definition.storage`
+Modules create a declaration object through `lib.createModule(...)`, declare
+data/UI/runtime capabilities on that object, then call `module.activate()`.
 
-Modules normally create and publish their behavior host through:
-- `lib.createModule(...)`
-- `host.activate()`
-
-Module/host creation requires:
-- `drawTab`
-
-Optional module callbacks passed to module/host creation:
-- `onSettingsCommitted`
-- `drawQuickContent`
-
-Host-owned capabilities can also be declared on the returned author host before
+`createModule(...)` accepts only module identity, display metadata, `config`,
+and optional `modpack`. Everything else is declared through namespaces before
 activation:
-- `host.hooks.*`
-- `host.shared.*`
-- `host.mutation.*`
-- `host.overlays.*`
-- `host.fallbackUi.*`
+- `module.data.define(...)`
+- `module.actions.define(...)`
+- `module.cache.define(...)`
+- `module.hashGroups.define(...)`
+- `module.ui.tab(...)`
+- `module.ui.quickContent(...)`
+- `module.onCommit(...)`
+- `module.hooks.*`
+- `module.shared.*`
+- `module.mutation.*`
+- `module.overlays.*`
+- `module.fallbackUi.*`
 
 That host owns:
 - `drawTab`
 - optional `drawQuickContent`
-- built-in host registry helpers for Framework and fallback UI
+- built-in module registry helpers for Framework and fallback UI
 
-Module behavior is hosted through Lib's live host registry.
+Module behavior is hosted through Lib's live module registry.
 
-## `host.shared`
+## `module.shared`
 
 Small registry for optional cross-module cooperation. Shared has two surfaces:
 event signals and owner-published read models. Both are declared after
-`lib.createModule(...)` returns and before `host.activate()`.
+`lib.createModule(...)` returns and before `module.activate()`.
 
 Typical listener declaration before activation:
 
 ```lua
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-if not host then return end
+if not module then return end
 
-host.shared.listen("run-director.route-state", "routeChanged", function(payload)
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+
+module.shared.listen("run-director.route-state", "routeChanged", function(host, runtime, payload)
     host.log("route changed: %s", tostring(payload.route))
 end)
 
-host.shared.data.owner("GodAvailability", {
+module.shared.data.owner("GodAvailability", {
     id = "run-director.god-availability",
     default = {
         active = false,
@@ -80,13 +75,13 @@ host.shared.data.owner("GodAvailability", {
     },
 })
 
-host.activate()
+module.activate()
 ```
 
 Typical emitter:
 
 ```lua
-host.shared.emit("run-director.route-state", "routeChanged", {
+module.shared.emit("run-director.route-state", "routeChanged", {
     route = "Apollo",
 })
 ```
@@ -100,10 +95,10 @@ actions.emit("run-director.route-state", "routeChanged", {
 ```
 
 Surface:
-- `host.shared.data.owner(name, { id = string, default? = value })`
-- `host.shared.data.reader(name, { id = string, fallback? = value })`
-- `host.shared.listen(id, eventName, callback)`
-- `host.shared.emit(id, eventName, payload)`
+- `module.shared.data.owner(name, { id = string, default? = value })`
+- `module.shared.data.reader(name, { id = string, fallback? = value })`
+- `module.shared.listen(id, eventName, callback)`
+- `module.shared.emit(id, eventName, payload)`
 - `actions.emit(id, eventName, payload)` from draw callbacks
 
 Rules:
@@ -126,7 +121,7 @@ notifications and coordination signals.
 Shared data owner:
 
 ```lua
-host.shared.data.owner("GodAvailability", {
+module.shared.data.owner("GodAvailability", {
     id = "run-director.god-availability",
     default = {
         active = false,
@@ -145,7 +140,7 @@ store.shared.set("GodAvailability", {
 Shared data reader:
 
 ```lua
-host.shared.data.reader("GodAvailability", {
+module.shared.data.reader("GodAvailability", {
     id = "run-director.god-availability",
     fallback = {
         active = false,
@@ -167,7 +162,7 @@ Shared data surface:
 - `state.shared.clear(name)` for owner declarations
 
 Shared data rules:
-- owner and reader access is declared through `host.shared.data.*` before activation
+- owner and reader access is declared through `module.shared.data.*` before activation
 - only the publishing module can write or clear a shared data id
 - writes update live memory immediately; there is no flush or persistence
 - reads return the fallback when no active publisher exists or the publisher is disabled
@@ -187,47 +182,50 @@ runtime-write/UI-read values.
 Declarative cache:
 
 ```lua
-local host, store = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = "Example",
     name = "Example",
-    cache = {
-        RunScratch = {
-            domain = "currentRun",
-            key = "run",
-            factory = function()
-                return {}
-            end,
-        },
-    },
-    drawTab = ui.drawTab,
 })
+if not module then return end
+
+module.cache.define({
+    RunScratch = {
+        domain = "currentRun",
+        key = "run",
+        factory = function()
+            return {}
+        end,
+    },
+})
+module.ui.tab(ui.drawTab)
+module.activate()
 ```
 
-Runtime code reads declared cache refs through `store.cache`:
+Runtime callbacks read declared cache refs through `runtime.data.cache`:
 
 ```lua
-local runScratch = store.cache.currentRun.get("RunScratch")
+local runScratch = runtime.data.cache.currentRun.get("RunScratch")
 runScratch.seen = true
 ```
 
 Rules:
 - cache declaration names must be stable identifiers
 - declared cache participates in structural definition fingerprinting
-- `store.cache` is valid outside draw callbacks
-- current-run cache is only available from `store.cache`
+- `runtime.data.cache` is valid outside draw callbacks
+- current-run cache is only available from runtime data
 
 Current run cache:
 
 ```lua
-local runScratch = store.cache.currentRun.get("RunScratch")
+local runScratch = runtime.data.cache.currentRun.get("RunScratch")
 runScratch.seen = true
 ```
 
 Surface:
-- `store.cache.currentRun.get(name)`
-- `store.cache.currentRun.clear(name)`
+- `runtime.data.cache.currentRun.get(name)`
+- `runtime.data.cache.currentRun.clear(name)`
 
 Rules:
 - the declaration name must be a stable identifier
@@ -254,30 +252,30 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua").bind(data)
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
     id = "ExampleModule",
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
-    drawQuickContent = ui.drawQuickContent,
 })
-if not host then return end
+if not module then return end
 
-host.mutation.patch(logic.buildPatchPlan)
-logic.registerHooks(host, store)
-host.activate()
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+module.ui.quickContent(ui.drawQuickContent)
+module.mutation.patch(logic.buildPatchPlan)
+logic.registerHooks(module)
+module.activate()
 ```
 
 Returns:
-- `host, store, nil` when construction succeeds
-  - `host`
-  Author-facing host with `activate()`, `isEnabled()`, metadata getters, and module-scoped logging helpers.
-  - `store`
-  Runtime read surface for gameplay/hooks.
-- `nil, nil, err` when construction fails
+- `module, nil` when construction succeeds
+- `nil, err` when construction fails
+
+The returned module object is the author-facing declaration and lifecycle
+surface. It has `activate()`, `isEnabled()`, metadata getters, logging helpers,
+and all declaration namespaces.
 
 `createModule(...)` intentionally does not return the prepared definition or
 raw staged state. Draw callbacks receive three draw-phase arguments:
@@ -285,7 +283,7 @@ raw staged state. Draw callbacks receive three draw-phase arguments:
 `draw` owns `imgui`, `widgets`, `nav`, and draw-safe logging helpers; the other
 arguments own staged UI state and deferred UI intent.
 
-Declare hooks on `host.hooks.*` before `host.activate()`. Runtime helper
+Declare hooks on `module.hooks.*` before `module.activate()`. Runtime helper
 files should receive the needed `store` or narrowed read/access closures from
 the module's hook-declaration code; draw/UI paths should use the `draw`,
 `state`, and `actions` arguments passed to draw callbacks.
@@ -295,14 +293,14 @@ host. Use this at pack orchestration boundaries when one invalid module should
 be skipped without stopping sibling modules.
 
 ```lua
-local host, store, err = lib.createModule(opts)
-if host then
-    local ok, activateErr = host.activate()
+local module, err = lib.createModule(opts)
+if module then
+    local ok, activateErr = module.activate()
 end
 ```
 
 `createModule(...)` only wraps construction. Activation remains explicit through
-`host.activate()`.
+`module.activate()`.
 
 The runtime store surface provides:
 - `store.get(alias)`
@@ -475,7 +473,7 @@ Behavior:
 - persisted aliases stage in `stagedState` and only hit config on flush/commit
 - transient aliases live only in `stagedState`
 - staged actions are transient "last intent wins" command slots that make the
-  staged state dirty and are delivered to `onSettingsCommitted(host, store, commit)`
+  staged state dirty and are delivered to `module.onCommit(...)`
 - packed child aliases re-encode their owning packed root automatically
 
 `stagedState.read(alias)` returns:
@@ -496,51 +494,51 @@ Options:
 
 Draw callbacks receive the same reset behavior through `state.resetAll(opts?)`.
 
-## `host.hooks`
+## `module.hooks`
 
 Reload-stable wrappers around ModUtil path hooks.
 
-Hosted modules declare hooks on the author host returned by
+Hosted modules declare hooks on the module object returned by
 `lib.createModule(...)`. Lib scopes those declarations to the host's
 module owner id, derived from `pluginGuid`.
 
-### `host.hooks.wrap(path, handler)`
+### `module.hooks.wrap(path, handler)`
 
 Registers or updates a stable ModUtil runtime `Path.Wrap(...)` dispatcher.
 
 Also supports:
-- `host.hooks.wrap(path, key, handler)`
+- `module.hooks.wrap(path, key, handler)`
 
 Use the keyed form when one module registers more than one wrap against the same path.
 
-### `host.hooks.override(path, replacement)`
+### `module.hooks.override(path, replacement)`
 
 Registers or updates a stable ModUtil runtime `Path.Override(...)`.
 
 Also supports:
-- `host.hooks.override(path, key, replacement)`
+- `module.hooks.override(path, key, replacement)`
 
 `replacement` must be a function. Function replacements are dispatched through
 a stable wrapper so reloading updates behavior without stacking another
 override.
 
-### `host.hooks.contextWrap(path, context)`
+### `module.hooks.contextWrap(path, context)`
 
 Registers or updates a stable ModUtil runtime `Path.Context.Wrap(...)` dispatcher.
 
 Also supports:
-- `host.hooks.contextWrap(path, key, context)`
+- `module.hooks.contextWrap(path, key, context)`
 
-These APIs are only valid before `host.activate()`. Lib-owned ModUtil
+These APIs are only valid before `module.activate()`. Lib-owned ModUtil
 dispatchers are private infrastructure, not a public owner-token surface.
 
 ### Typical module pattern
 
 ```lua
-local function registerHooks(host, store)
-    host.hooks.wrap("GetEligibleLootNames", function(base, ...)
+local function registerHooks(module)
+    module.hooks.wrap("GetEligibleLootNames", function(host, runtime, base, ...)
         local result = base(...)
-        if host.isEnabled() and store.get("FeatureEnabled"):read() then
+        if host.isEnabled() and runtime.data.read("FeatureEnabled") then
             -- inspect or transform the wrapped call here
         end
         return result
@@ -551,26 +549,26 @@ local PLUGIN_GUID = _PLUGIN.guid
 local data = import("mods/data.lua")
 local ui = import("mods/ui.lua").bind(data)
 
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     modpack = PACK_ID,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-if not host then return end
+if not module then return end
 
-registerHooks(host, store)
-host.activate()
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+registerHooks(module)
+module.activate()
 ```
 
-When `host.activate()` runs, activation installs the declarations currently
-recorded on `host.hooks` and deactivates hooks omitted by a later host for the
+When `module.activate()` runs, activation installs the declarations currently
+recorded on `module.hooks` and deactivates hooks omitted by a later host for the
 same module owner id.
 
-## `host.overlays` And `frameworkRuntime.overlays`
+## `module.overlays` And `frameworkRuntime.overlays`
 
 Host-scoped module overlays and Framework-scoped retained HUD projections for shared overlay placement.
 
@@ -589,29 +587,30 @@ Managed region:
 - `middleRightStack`: a right-anchored vertical stack used for framework markers and module status text.
 
 Order bands:
-- `host.overlays.order.framework`
-- `host.overlays.order.module`
-- `host.overlays.order.debug`
+- `module.overlays.order.framework`
+- `module.overlays.order.module`
+- `module.overlays.order.debug`
 - `frameworkRuntime.overlays.order.*` exposes the same shared bands for Framework overlays.
 
-### Module `host.overlays`
+### Module `module.overlays`
 
-Modules declare overlay structure on the returned author host before activation:
+Modules declare overlay structure on the returned module before activation:
 
 ```lua
-local host, store, err = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-if not host then return end
+if not module then return end
 
-host.overlays.createLine("summary.igt", {
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+
+module.overlays.createLine("summary.igt", {
     region = "middleRightStack",
-    order = host.overlays.order.module,
+    order = module.overlays.order.module,
     columnGap = 20,
     columns = {
         { key = "label", minWidth = 40 },
@@ -619,23 +618,23 @@ host.overlays.createLine("summary.igt", {
     },
 })
 
-host.overlays.onCommit(function(ctx)
+module.overlays.onCommit(function(ctx)
     ctx.setLine("summary.igt", { label = "IGT:", time = "00:00.00" })
     ctx.refresh("summary.igt")
 end)
 
-host.activate()
+module.activate()
 ```
 
 Retained element names are local to the module owner id derived from
 `pluginGuid` and do not collide across modules.
 
-### `host.overlays.createLine(name, spec)`
+### `module.overlays.createLine(name, spec)`
 
 Declares one retained display line. Lines can use a one-column convenience shape:
 
 ```lua
-host.overlays.createLine("message", {
+module.overlays.createLine("message", {
     region = "middleRightStack",
     minWidth = 120,
 })
@@ -644,7 +643,7 @@ host.overlays.createLine("message", {
 or explicit columns:
 
 ```lua
-host.overlays.createLine("summary.rta", {
+module.overlays.createLine("summary.rta", {
     region = "middleRightStack",
     columnGap = 20,
     columns = {
@@ -656,12 +655,12 @@ host.overlays.createLine("summary.rta", {
 
 Projection callbacks update lines through `ctx.setLine(name, values)`.
 
-### `host.overlays.createTable(name, spec)`
+### `module.overlays.createTable(name, spec)`
 
 Declares one fixed-capacity retained table projection:
 
 ```lua
-host.overlays.createTable("runs", {
+module.overlays.createTable("runs", {
     region = "middleRightStack",
     maxRows = 10,
     columnGap = 20,
@@ -680,9 +679,9 @@ tables through `ctx.setTable(name, rows)`.
 
 Supported retained overlay events:
 
-- `host.overlays.onCommit(function(ctx, commit) ... end)`
-- `host.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
-- `host.overlays.afterHook(path, function(ctx, event) ... end)`
+- `module.overlays.onCommit(function(ctx, commit) ... end)`
+- `module.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
+- `module.overlays.afterHook(path, function(ctx, event) ... end)`
 
 The projection context exposes read-only helpers plus named retained updates:
 
@@ -805,24 +804,24 @@ Raw numeric bit extraction helper.
 
 Raw numeric bit write helper.
 
-Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are host responsibilities. Use the returned module host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
+Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are module-host responsibilities. Framework uses the live host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
 Framework-owned pack suspension is also a host lifecycle responsibility; Framework uses `host.suspendForPackDisable`, `host.restoreForPackEnable`, and `host.rollbackPackTransition` so Lib can keep its internal restore marker private.
 
-## `host.fallbackUi`
+## `module.fallbackUi`
 
 Fallback UI provides the module-owned ROM GUI callsites used when a module is
 not being coordinated by Framework.
 
-### `host.fallbackUi.attachGuiOnce(register)`
+### `module.fallbackUi.attachGuiOnce(register)`
 
 Registers stable no-op-safe fallback UI callbacks once for the module's plugin
-guid. Call this before `host.activate()`.
+guid. Call this before `module.activate()`.
 
 The callback still owns the actual ROM registration, so it runs from the module
 context:
 
 ```lua
-host.fallbackUi.attachGuiOnce(function(fallbackUi)
+module.fallbackUi.attachGuiOnce(function(fallbackUi)
     rom.gui.add_imgui(fallbackUi.renderWindow)
     rom.gui.add_to_menu_bar(fallbackUi.addMenuBar)
 end)
@@ -830,7 +829,7 @@ end)
 
 Behavior:
 - `attachGuiOnce(...)` prevents callback stacking across hot reloads
-- `host.activate()` installs or swaps the active fallback UI runtime
+- `module.activate()` installs or swaps the active fallback UI runtime
 - callbacks no-op until a runtime is active
 - fallback UI suppresses its window/menu when the module's pack is coordinated
 - the fallback window includes built-in:
@@ -851,8 +850,8 @@ Returns the full runtime host registered by module activation, or `nil` when
 the plugin guid is invalid or no live host is registered.
 
 This is infrastructure API for Framework discovery. Normal module code should
-keep the author host returned by `lib.createModule(...)` and use
-`store` and draw callback arguments for state access.
+keep the module object returned by `lib.createModule(...)` and use runtime/UI
+callback arguments for data access.
 
 ## Draw Logging
 
@@ -863,7 +862,8 @@ Built-ins:
 - `draw.logIf(fmt, ...)`
 
 These helpers are the sanctioned draw-time logging path. `draw.host` is not
-available in module UI, and draw callbacks do not receive the author host.
+available in module UI, and draw callbacks do not receive the declaration
+facade.
 
 ## Draw Actions
 
@@ -900,20 +900,20 @@ The old `session.stageAction(...)` form has been removed. Use
 `actions.trigger(actionKey, value)` in draw code, or `actions.get(actionKey)`
 when a widget needs an action ref.
 
-Declare action handlers on `createModule({ actions = ... })`. Handlers run
-after the draw callback and before staged state flush:
+Declare action handlers with `module.actions.define(...)`. Handlers run after
+the draw callback and before staged state flush:
 
 ```lua
-actions = {
-    StartRecording = function(host, state, value)
+module.actions.define({
+    StartRecording = function(host, uiData, actionRuntime, value)
         host.logIf("Starting recording")
-        state.write("RecordingEnabled", value == true)
+        actionRuntime.set("RecordingEnabled", value == true)
     end,
-}
+})
 ```
 
-Handlers receive the author `host` for runtime capabilities, the current draw
-`state` for staged UI data, and the staged action `value`.
+Handlers receive the callback host, draw `uiData`, a narrow
+`actionRuntime` bridge (`read`, `set`, `clear`), and the staged action `value`.
 
 ## Draw Widgets
 

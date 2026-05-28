@@ -24,17 +24,11 @@ local hostInstall = import('core/hooks/host_install.lua', nil, {
     dispatchers = dispatchers,
 })
 
-local hostAdapter = import('core/hooks/adapters/host_install.lua', nil, {
+local moduleAdapter = import('core/hooks/adapters/module_install.lua', nil, {
     logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
+    moduleRegistry = deps.moduleRegistry,
     declarations = declarations,
     hostInstall = hostInstall,
-})
-
-local author = import('core/hooks/adapters/author_declarations.lua', nil, {
-    logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
-    declarations = declarations,
 })
 
 local system = import('core/hooks/adapters/system_declarations.lua', nil, {
@@ -44,11 +38,11 @@ local system = import('core/hooks/adapters/system_declarations.lua', nil, {
 })
 
 local service = {
-    installForHost = hostAdapter.installForHost,
+    installForModule = moduleAdapter.installForModule,
 }
 
 return {
     service = service,
-    author = author,
+    declarations = declarations,
     system = system,
 }

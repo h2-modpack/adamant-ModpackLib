@@ -19,28 +19,31 @@ accepted implementation plans unless a specific note says otherwise.
 
 Use these terms consistently in contributor docs and implementation notes:
 
-- `ModuleHost`: the full Lib object created by `moduleHost.create(...)`. It is
+- `ManagedModule`: the full Lib object created by `managedModule.create(...)`. It is
   the Framework/runtime surface for discovery, draw dispatch, staged writes,
   commit, enable/disable, mutation apply/revert, activation, rollback, and live
-  host publication.
-- `live module host`: an activated `ModuleHost` published in Lib's live-host
+  module publication.
+- `live module`: an activated `ManagedModule` published in Lib's live-module
   registry and consumed by Framework or fallback UI.
-- `AuthorHost`: the module-facing facade returned by `lib.createModule(...)`
-  and passed to authored callbacks. It exposes author-safe identity, metadata,
-  activation, logging, and future host-owned capability namespaces.
-- `lifecycle`: a responsibility of `ModuleHost`, not the canonical type name.
+- `AuthorModule`: the module-facing declaration facade returned by
+  `lib.createModule(...)`. It exposes author-safe identity, metadata,
+  declaration namespaces, activation, and logging.
+- `Host`: the narrow host projection passed to authored callbacks.
+  It exposes identity, enabled state, and logging without declaration
+  namespaces.
+- `lifecycle`: a responsibility of `ManagedModule`, not the canonical type name.
 
 Runtime identity uses `pluginGuid`. Pack id and module id are Lib/Framework
 domain metadata used for coordination, profiles, hashes, labels, and debug
 translation. The low-level `lib_bootstrap/registry` service owns Lib's
-hot-reload-stable root buckets. The host bucket currently includes live-host
+hot-reload-stable root buckets. The module bucket currently includes live-module
 lookup, plugin metadata, and the backing weak side table used by
-`lib_bootstrap/host_registry`.
+`lib_bootstrap/module_registry`.
 
 Capability backends use `ownerId`, not `pluginGuid`. `pluginGuid` belongs at
 the module bootstrap/runtime/host-adapter boundary. Once a capability call
 crosses into stateless subsystem logic, the value is only a unique owner id.
-Module-host adapters derive `ownerId` from `host.getHostId()`; system adapters
+Module adapters derive `ownerId` from `host.getHostId()`; system adapters
 receive an explicit `ownerId` from the managed system scope.
 
 System scopes are Lib-created owner objects for first-party behavior that is
@@ -49,6 +52,6 @@ module host records. System owner ids must be deliberately scoped, such as
 `adamant-lib.overlays.renderer` or `adamant-framework.<pack>.hud`, so they do
 not collide with module plugin guids or with other system capabilities.
 
-Module author docs can simply call the returned `AuthorHost` `host`. Framework
-and Lib contributor docs should say `ModuleHost` or `live module host` when they
-mean the full runtime surface.
+Module author docs call the returned `AuthorModule` `module`. Framework and
+Lib contributor docs should say `ManagedModule` or `live module` when they mean
+the full runtime surface.

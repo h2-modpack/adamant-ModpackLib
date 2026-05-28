@@ -1,7 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 local coordinator = deps.coordinator
 local overlays = deps.overlays
 local createSystem = deps.createSystem
@@ -39,20 +39,20 @@ local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     state = fallbackRegistry.fallbackHud,
 })
 
-local function requireHostRecord(host, apiName)
-    local record = hostRegistry.getRecord(host)
+local function requireModuleRecord(module, apiName)
+    local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("fallback_ui.invalid_args", "%s: expected managed module host", apiName)
+        logging.violate("fallback_ui.invalid_args", "%s: expected managed module", apiName)
     end
     return record
 end
 
-local function requireAttachmentOpen(host)
-    local record = requireHostRecord(host, "host.fallbackUi.attachGuiOnce")
+local function requireAttachmentOpen(module)
+    local record = requireModuleRecord(module, "module.fallbackUi.attachGuiOnce")
     if record.activating == true or record.activated == true then
         logging.violate(
             "fallback_ui.invalid_args",
-            "host.fallbackUi.attachGuiOnce cannot be called after activation begins"
+            "module.fallbackUi.attachGuiOnce cannot be called after activation begins"
         )
     end
     return record
@@ -124,12 +124,12 @@ local function getOrCreateBridge(ownerId)
     return bridge
 end
 
-function fallbackUi.attachGuiOnce(host, register)
+function fallbackUi.attachGuiOnce(module, register)
     if type(register) ~= "function" then
-        logging.violate("fallback_ui.invalid_args", "host.fallbackUi.attachGuiOnce: register must be a function")
+        logging.violate("fallback_ui.invalid_args", "module.fallbackUi.attachGuiOnce: register must be a function")
     end
-    local state = requireAttachmentOpen(host)
-    local ownerId = host.getHostId()
+    local state = requireAttachmentOpen(module)
+    local ownerId = module.getHostId()
     state.fallbackUiRequested = true
     local bridge = getOrCreateBridge(ownerId)
     if guiAttached[ownerId] == true then
@@ -298,9 +298,9 @@ local function createRuntime(host)
     return activeRuntime
 end
 
-function fallbackUi.installForHost(host)
-    local ownerId = host.getHostId()
-    local activeRuntime = createRuntime(host)
+function fallbackUi.installForModule(module)
+    local ownerId = module.getHostId()
+    local activeRuntime = createRuntime(module)
     local previousRuntime = nil
     local installed = false
 
@@ -333,10 +333,10 @@ function fallbackUi.installForHost(host)
     }
 end
 
-function fallbackUi.create(host)
+function fallbackUi.create(module)
     return {
         attachGuiOnce = function(register)
-            return fallbackUi.attachGuiOnce(host, register)
+            return fallbackUi.attachGuiOnce(module, register)
         end
     }
 end

@@ -67,22 +67,22 @@ local function restoreActiveMutation(ownerId, snapshot)
     return true, nil
 end
 
-local function buildMutationPlan(mutationBundle, authorHost, store)
+local function buildMutationPlan(mutationBundle, runtime, host)
     local builder = mutationBundle and mutationBundle.patchMutation
     if builder == nil then
         return nil
     end
 
     local mutationPlan = lifecycle.createPlan()
-    builder(mutationPlan, authorHost, store)
+    builder(host, runtime, mutationPlan)
     return mutationPlan
 end
 
-local function isEnabledForSync(store)
-    if not store then
+local function isEnabledForSync(runtime)
+    if not (runtime and runtime.data) then
         return false
     end
-    return store.read("Enabled") == true
+    return runtime.data.read("Enabled") == true
 end
 
 local function revertActivePlan(ownerId)
@@ -107,13 +107,13 @@ end
 
 function lifecycle.declarePatch(mutationBundle, callback)
     if type(callback) ~= "function" then
-        logging.violate("mutation.invalid_registration", "host.mutation.patch: callback must be a function")
+        logging.violate("mutation.invalid_registration", "module.mutation.patch: callback must be a function")
     end
     if type(mutationBundle) ~= "table" then
-        logging.violate("mutation.invalid_registration", "host.mutation.patch: expected managed mutation bundle")
+        logging.violate("mutation.invalid_registration", "module.mutation.patch: expected managed mutation bundle")
     end
     if mutationBundle.patchMutation ~= nil then
-        logging.violate("mutation.invalid_registration", "host.mutation.patch: patch mutation already declared")
+        logging.violate("mutation.invalid_registration", "module.mutation.patch: patch mutation already declared")
     end
     mutationBundle.patchMutation = callback
 end
@@ -128,11 +128,11 @@ end
 --- Applies a module's current mutation lifecycle to live run data.
 ---@param ownerId string Stable owner id owning the active mutation slot.
 ---@param mutationBundle table|nil Module mutation callbacks.
----@param authorHost AuthorHost|nil Module author host passed to mutation builders.
----@param store Store|nil Author-facing module store associated with the definition.
+---@param runtime RuntimeContext Module runtime context passed to mutation builders.
+---@param host Host Narrow callback-safe host passed to mutation builders.
 ---@return boolean ok True when the mutation lifecycle applied successfully.
 ---@return string|nil err Error message when the apply step fails.
-function lifecycle.apply(ownerId, mutationBundle, authorHost, store)
+function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     local hasPatch = hasPatchMutation(mutationBundle)
     local previousMutation = captureActiveMutation(ownerId)
 
@@ -155,7 +155,7 @@ function lifecycle.apply(ownerId, mutationBundle, authorHost, store)
         return true, nil
     end
 
-    local okBuild, result = pcall(buildMutationPlan, mutationBundle, authorHost, store)
+    local okBuild, result = pcall(buildMutationPlan, mutationBundle, runtime, host)
     if not okBuild then
         return failApply(result)
     end
@@ -171,14 +171,14 @@ function lifecycle.apply(ownerId, mutationBundle, authorHost, store)
     return true, nil
 end
 
-function lifecycle.sync(ownerId, def, mutationBundle, authorHost, store)
+function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
     local _ = def
-    local enabled = isEnabledForSync(store)
+    local enabled = isEnabledForSync(runtime)
     local hasPatch = hasPatchMutation(mutationBundle)
     local candidatePlan = nil
 
     if enabled and hasPatch then
-        candidatePlan = buildMutationPlan(mutationBundle, authorHost, store)
+        candidatePlan = buildMutationPlan(mutationBundle, runtime, host)
     end
 
     local previousMutation = captureActiveMutation(ownerId)

@@ -1,132 +1,61 @@
 local deps = ...
 
 local logging = deps.logging
-local moduleHost = deps.moduleHost
-local moduleState = deps.moduleState
 local modulePublic = {}
+local options = import('core/module_bootstrap/module/options.lua', nil, {
+    logging = logging,
+})
+local declarationSurface = import('core/module_bootstrap/module/declaration_surface.lua', nil, {
+    logging = logging,
+    hookDeclarations = deps.hookDeclarations,
+    overlayDeclarations = deps.overlayDeclarations,
+    sharedDataDeclarations = deps.sharedDataDeclarations,
+    sharedRegistrations = deps.sharedRegistrations,
+    mutationLifecycle = deps.mutationLifecycle,
+})
+local activationFinalizer = import('core/module_bootstrap/module/activation_finalizer.lua', nil, {
+    logging = logging,
+    managedModule = deps.managedModule,
+    moduleState = deps.moduleState,
+    fallbackUi = deps.fallbackUi,
+})
+local declarationFacade = import('core/module_bootstrap/module/declaration_facade.lua', nil, {
+    logging = logging,
+    overlayOrder = deps.overlayOrder,
+    options = options,
+    declarationSurface = declarationSurface,
+    activationFinalizer = activationFinalizer,
+    hookDeclarations = deps.hookDeclarations,
+    overlayDeclarations = deps.overlayDeclarations,
+    sharedDataDeclarations = deps.sharedDataDeclarations,
+    sharedRegistrations = deps.sharedRegistrations,
+})
 
----@class ModuleCreateOpts
----@field pluginGuid string
----@field config table
----@field modpack string|nil
----@field id string
----@field name string
----@field shortName string|nil
----@field tooltip string|nil
----@field storage StorageSchema|nil
----@field cache table|nil
----@field actions table<string, fun(host: AuthorHost, state: DrawState, value: any)>|nil
----@field hashGroupPlan HashGroupPlan|nil
----@field onSettingsCommitted fun(host: AuthorHost, store: Store, commit: table)|nil
----@field drawTab fun(draw: DrawContext, state: DrawState, actions: DrawActions)
----@field drawQuickContent fun(draw: DrawContext, state: DrawState, actions: DrawActions)|nil
-
-local KnownModuleOpts = {
-    pluginGuid = true,
-    config = true,
-    modpack = true,
-    id = true,
-    name = true,
-    shortName = true,
-    tooltip = true,
-    storage = true,
-    cache = true,
-    actions = true,
-    hashGroupPlan = true,
-    onSettingsCommitted = true,
-    drawTab = true,
-    drawQuickContent = true,
-}
-
-local function ValidateKnownOpts(opts)
-    for key in pairs(opts) do
-        if key == "definition" then
-            logging.violate(
-                "host.unknown_opt",
-                "createModule: definition table is no longer supported; put definition fields at top level"
-            )
-        end
-        if not KnownModuleOpts[key] then
-            logging.violate("host.unknown_opt", "createModule: unknown option '%s'", tostring(key))
-        end
-    end
-end
-
-local function BuildDefinitionInput(opts)
-    return {
-        modpack = opts.modpack,
-        id = opts.id,
-        name = opts.name,
-        shortName = opts.shortName,
-        tooltip = opts.tooltip,
-        storage = opts.storage,
-        cache = opts.cache,
-        actions = opts.actions,
-        hashGroupPlan = opts.hashGroupPlan,
-    }
-end
-
-local function GetStructuralBaseline(pluginGuid)
-    local previousHost = moduleHost.getLiveHost(pluginGuid)
-    local previousRecord = moduleHost.getRecord(previousHost)
-    local previousDefinition = previousRecord and previousRecord.definition or nil
-    local previousFingerprint = previousDefinition and previousDefinition._structuralFingerprint or nil
-    if previousFingerprint == nil then
-        return nil
-    end
-    return {
-        _definitionStructuralFingerprint = previousFingerprint,
-    }
-end
-
---- Creates a module through the canonical prepare -> store -> host pipeline.
+--- Creates a module declaration facade.
 --- Throws on construction failure. Public module construction uses the safe
---- wrapper below so module load can skip cleanly on invalid definitions.
+--- wrapper below so module load can skip cleanly on invalid identities.
 local function createModuleOrThrow(opts)
     if type(opts) ~= "table" then
         logging.violate("host.invalid_create_opts", "createModule: opts must be a table")
     end
-    ValidateKnownOpts(opts)
-    if type(opts.config) ~= "table" then
-        logging.violate("host.invalid_create_opts", "createModule: config is required")
-    end
-    if type(opts.pluginGuid) ~= "string" or opts.pluginGuid == "" then
-        logging.violate("host.invalid_create_opts", "createModule: pluginGuid is required")
-    end
-
-    local definition = moduleHost.prepareDefinition(GetStructuralBaseline(opts.pluginGuid), BuildDefinitionInput(opts), {
-        hasQuickContent = type(opts.drawQuickContent) == "function",
-    })
-    local state = moduleState.create(opts.config, definition)
-    local persistentState = state.persistentState
-    local stagedState = state.stagedState
-    local _, authorHost, store = moduleHost.create({
-        definition = definition,
-        pluginGuid = opts.pluginGuid,
-        persistentState = persistentState,
-        stagedState = stagedState,
-        onSettingsCommitted = opts.onSettingsCommitted,
-        drawTab = opts.drawTab,
-        drawQuickContent = opts.drawQuickContent,
-    })
-    return authorHost, store
+    options.validateKnown(opts)
+    return declarationFacade.create(opts)
 end
 
---- Safely creates a module through the canonical prepare -> store -> host pipeline.
---- Returns nils plus the construction error instead of throwing.
+--- Safely creates a module declaration facade.
+--- Returns nil plus the construction error instead of throwing.
 ---@param opts ModuleCreateOpts
----@return AuthorHost|nil host
----@return Store|nil store
+---@return AuthorModule|nil module
 ---@return string|nil err
 local function createModule(opts)
-    local ok, host, store = pcall(createModuleOrThrow, opts)
+    local ok, module = pcall(createModuleOrThrow, opts)
     if ok then
-        return host, store, nil
+        return module, nil
     end
 
-    local err = tostring(host)
+    local err = tostring(module)
     logging.violate("host.create_failed", "createModule failed; skipping module: %s", err)
-    return nil, nil, err
+    return nil, err
 end
 modulePublic.createModule = createModule
 

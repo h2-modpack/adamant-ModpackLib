@@ -11,30 +11,27 @@ local function createSharedHost(harness, pluginGuid, opts)
     if config.Enabled == nil then
         config.Enabled = true
     end
-    local definition = harness.moduleHost.prepareDefinition({}, {
+    local module = harness.public.createModule({
+        pluginGuid = pluginGuid,
+        config = config,
         id = opts.id or "SharedHost",
         name = opts.name or "Shared Host",
-        storage = opts.storage or {},
     })
-    local state = harness.moduleState.create(config, definition)
-    local host, authorHost = harness.moduleHost.create({
-        pluginGuid = pluginGuid,
-        definition = definition,
-        persistentState = state.persistentState,
-        stagedState = state.stagedState,
-        drawTab = function() end,
-    })
-    return host, authorHost, state
+    if opts.storage ~= nil then
+        module.data.define(opts.storage)
+    end
+    module.ui.tab(function() end)
+    return module, module, nil
 end
 
 local function activateHost(harness, pluginGuid, opts)
-    local host, authorHost, state = createSharedHost(harness, pluginGuid, opts)
+    local host, authorModule, state = createSharedHost(harness, pluginGuid, opts)
     if opts and opts.configureHost then
-        opts.configureHost(authorHost, host, state)
+        opts.configureHost(authorModule, host, state)
     end
-    local ok, err = authorHost.activate()
+    local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
-    return host, authorHost, state
+    return host, authorModule, state
 end
 
 local function activateAndEnableHost(harness, host, pluginGuid)
@@ -45,16 +42,22 @@ local function activateAndEnableHost(harness, host, pluginGuid)
     return fullHost
 end
 
+local function getLiveStore(harness, pluginGuid)
+    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local record = harness.moduleHost.getRecord(fullHost)
+    return record and record.store or nil
+end
+
 local function createSharedModule(harness, pluginGuid, opts)
     opts = opts or {}
-    local host, store = harness.public.createModule({
+    local host, err = harness.public.createModule({
         pluginGuid = pluginGuid,
         config = opts.config or {},
         modpack = "test-pack",
         id = opts.id or ("Shared" .. tostring(pluginGuid):gsub("[^%w_]", "")),
         name = opts.name or pluginGuid,
-        drawTab = opts.drawTab or function() end,
     })
+    lu.assertNil(err)
     for name, declaration in pairs(opts.shared or {}) do
         if declaration.access == "owner" then
             host.shared.data.owner(name, {
@@ -68,7 +71,22 @@ local function createSharedModule(harness, pluginGuid, opts)
             })
         end
     end
-    return host, store
+    host.ui.tab(function(callbackHost, ui)
+        return (opts.drawTab or function() end)(ui.draw, ui.data, ui.actions, ui, callbackHost)
+    end)
+
+    local storeProxy = {
+        shared = {},
+    }
+    setmetatable(storeProxy.shared, {
+        __index = function(_, key)
+            return function(...)
+                local store = getLiveStore(harness, pluginGuid)
+                return store.shared[key](...)
+            end
+        end,
+    })
+    return host, storeProxy
 end
 
 function TestShared:setUp()
@@ -81,7 +99,7 @@ function TestShared:testPublicSurfaceIsClosed()
 end
 
 function TestShared:testServiceSurfaceExposesInstallAndData()
-    lu.assertEquals(type(self.shared.installForHost), "function")
+    lu.assertEquals(type(self.shared.installForModule), "function")
     lu.assertEquals(type(self.shared.data), "table")
     lu.assertNil(self.shared.provideForHost)
     lu.assertNil(self.shared.pollForHost)
@@ -89,39 +107,41 @@ function TestShared:testServiceSurfaceExposesInstallAndData()
 end
 
 function TestShared:testAuthorSurfaceExposesDataAndEvents()
-    local _, authorHost = createSharedHost(self.harness, "shared-author-surface")
+    local _, authorModule = createSharedHost(self.harness, "shared-author-surface")
 
-    lu.assertEquals(type(authorHost.shared.data), "table")
-    lu.assertEquals(type(authorHost.shared.data.owner), "function")
-    lu.assertEquals(type(authorHost.shared.data.reader), "function")
-    lu.assertEquals(type(authorHost.shared.listen), "function")
-    lu.assertEquals(type(authorHost.shared.emit), "function")
-    lu.assertNil(authorHost.shared.provide)
-    lu.assertNil(authorHost.shared.poll)
+    lu.assertEquals(type(authorModule.shared.data), "table")
+    lu.assertEquals(type(authorModule.shared.data.owner), "function")
+    lu.assertEquals(type(authorModule.shared.data.reader), "function")
+    lu.assertEquals(type(authorModule.shared.listen), "function")
+    lu.assertEquals(type(authorModule.shared.emit), "function")
+    lu.assertNil(authorModule.shared.provide)
+    lu.assertNil(authorModule.shared.poll)
 end
 
 function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     local owner = {}
-    local first, firstAuthorHost = createSharedHost(self.harness, "shared-structural-a", {
+    local first, firstAuthorModule = createSharedHost(self.harness, "shared-structural-a", {
         id = "SharedStructural",
         name = "Shared Structural",
     })
-    firstAuthorHost.shared.data.owner("Snapshot", {
+    firstAuthorModule.shared.data.owner("Snapshot", {
         id = "test.shared.structural.first",
         default = "first",
     })
+    lu.assertTrue(firstAuthorModule.activate())
 
-    local second, secondAuthorHost = createSharedHost(self.harness, "shared-structural-b", {
+    local second, secondAuthorModule = createSharedHost(self.harness, "shared-structural-b", {
         id = "SharedStructural",
         name = "Shared Structural",
     })
-    secondAuthorHost.shared.data.owner("Snapshot", {
+    secondAuthorModule.shared.data.owner("Snapshot", {
         id = "test.shared.structural.second",
         default = "second",
     })
+    lu.assertTrue(secondAuthorModule.activate())
 
-    local firstRecord = self.harness.moduleHost.getRecord(first)
-    local secondRecord = self.harness.moduleHost.getRecord(second)
+    local firstRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveHost("shared-structural-a"))
+    local secondRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveHost("shared-structural-b"))
 
     lu.assertEquals(
         firstRecord.definition._structuralFingerprint,
@@ -142,10 +162,12 @@ end
 function TestShared:testListenAndEmitDeliverPayload()
     local received = {}
     activateHost(self.harness, "shared-listener", {
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.events", "changed", function(payload)
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.events", "changed", function(callbackHost, runtime, payload)
                 received[#received + 1] = {
                     payload = payload,
+                    runtime = runtime,
+                    host = callbackHost,
                 }
             end)
         end,
@@ -157,6 +179,8 @@ function TestShared:testListenAndEmitDeliverPayload()
     lu.assertTrue(ok)
     lu.assertEquals(delivered, 1)
     lu.assertEquals(received[1].payload, { value = 42 })
+    lu.assertEquals(received[1].runtime.data.read("Enabled"), true)
+    lu.assertEquals(received[1].host.getHostId(), "shared-listener")
 end
 
 function TestShared:testEmitWithoutListenersReturnsZeroDeliveries()
@@ -171,8 +195,8 @@ end
 function TestShared:testDisabledEmitterIsSkipped()
     local delivered = 0
     activateHost(self.harness, "shared-disabled-emitter-listener", {
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.disabled-emitter", "changed", function()
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.disabled-emitter", "changed", function()
                 delivered = delivered + 1
             end)
         end,
@@ -196,8 +220,8 @@ function TestShared:testDisabledListenerIsSkipped()
         config = {
             Enabled = false,
         },
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.disabled-listener", "changed", function()
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.disabled-listener", "changed", function()
                 delivered = delivered + 1
             end)
         end,
@@ -215,13 +239,13 @@ function TestShared:testNestedEventsAreQueued()
     local order = {}
     local _, emitter = activateHost(self.harness, "shared-nested-emitter")
     activateHost(self.harness, "shared-nested-listener", {
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.nested", "first", function(payload)
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.nested", "first", function(_, _, payload)
                 order[#order + 1] = payload.step
                 local ok = emitter.shared.emit("test.nested", "second", { step = "second" })
                 lu.assertTrue(ok)
             end)
-            authorHost.shared.listen("test.nested", "second", function(payload)
+            authorModule.shared.listen("test.nested", "second", function(_, _, payload)
                 order[#order + 1] = payload.step
             end)
         end,
@@ -244,15 +268,15 @@ function TestShared:testListenerFailureLogsAndContinues()
     end
     local delivered = 0
     activateHost(self.harness, "shared-failing-listener-a", {
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.listener-failure", "changed", function()
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.listener-failure", "changed", function()
                 error("listener boom")
             end)
         end,
     })
     activateHost(self.harness, "shared-failing-listener-b", {
-        configureHost = function(authorHost)
-            authorHost.shared.listen("test.listener-failure", "changed", function()
+        configureHost = function(authorModule)
+            authorModule.shared.listen("test.listener-failure", "changed", function()
                 delivered = delivered + 1
             end)
         end,
@@ -270,43 +294,43 @@ function TestShared:testListenerFailureLogsAndContinues()
 end
 
 function TestShared:testListenerRegistrationRejectsAfterActivationBegins()
-    local _, authorHost = activateHost(self.harness, "shared-listen-after-activation")
+    local _, authorModule = activateHost(self.harness, "shared-listen-after-activation")
 
-    lu.assertErrorMsgContains("cannot listen after activation begins", function()
-        authorHost.shared.listen("test.invalid", "changed", function() end)
+    lu.assertErrorMsgContains("cannot be called after module activation begins", function()
+        authorModule.shared.listen("test.invalid", "changed", function() end)
     end)
 end
 
 function TestShared:testEmitRejectsBeforeActivation()
-    local _, authorHost = createSharedHost(self.harness, "shared-emit-before-activation")
+    local _, authorModule = createSharedHost(self.harness, "shared-emit-before-activation")
 
-    lu.assertErrorMsgContains("requires host.activate() before it can run", function()
-        authorHost.shared.emit("test.invalid", "changed", {})
+    lu.assertErrorMsgContains("requires module.activate() before it can run", function()
+        authorModule.shared.emit("test.invalid", "changed", {})
     end)
 end
 
 function TestShared:testInvalidListenInputsAreRejected()
-    local _, authorHost = createSharedHost(self.harness, "shared-invalid-listen")
+    local _, authorModule = createSharedHost(self.harness, "shared-invalid-listen")
 
     lu.assertErrorMsgContains("id must be a non-empty string", function()
-        authorHost.shared.listen("", "changed", function() end)
+        authorModule.shared.listen("", "changed", function() end)
     end)
     lu.assertErrorMsgContains("event name must be a non-empty string", function()
-        authorHost.shared.listen("test.invalid", "", function() end)
+        authorModule.shared.listen("test.invalid", "", function() end)
     end)
     lu.assertErrorMsgContains("callback must be a function", function()
-        authorHost.shared.listen("test.invalid", "changed", nil)
+        authorModule.shared.listen("test.invalid", "changed", nil)
     end)
 end
 
 function TestShared:testInvalidEmitInputsAreRejected()
-    local _, authorHost = activateHost(self.harness, "shared-invalid-emit")
+    local _, authorModule = activateHost(self.harness, "shared-invalid-emit")
 
     lu.assertErrorMsgContains("id must be a non-empty string", function()
-        authorHost.shared.emit("", "changed", {})
+        authorModule.shared.emit("", "changed", {})
     end)
     lu.assertErrorMsgContains("eventName must be a non-empty string", function()
-        authorHost.shared.emit("test.invalid", "", {})
+        authorModule.shared.emit("test.invalid", "", {})
     end)
 end
 
@@ -325,7 +349,7 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
             state.shared.set("Active", true)
         end,
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-reader", {
         id = "DeclaredSharedReader",
         name = "Declared Shared Reader",
         shared = {
@@ -338,6 +362,7 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
     })
 
     activateAndEnableHost(self.harness, publisher, "test-shared-data-publisher")
+    activateAndEnableHost(self.harness, reader, "test-shared-data-reader")
     lu.assertFalse(readerStore.shared.read("Active"))
 
     self.harness.moduleHost.getLiveHost("test-shared-data-publisher").drawTab()
@@ -370,7 +395,7 @@ function TestShared:testDeclaredDataReadsTableViews()
             })
         end,
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-table-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-table-reader", {
         id = "DeclaredSharedTableReader",
         name = "Declared Shared Table Reader",
         shared = {
@@ -386,6 +411,7 @@ function TestShared:testDeclaredDataReadsTableViews()
     })
 
     activateAndEnableHost(self.harness, publisher, "test-shared-data-table-publisher")
+    activateAndEnableHost(self.harness, reader, "test-shared-data-table-reader")
     lu.assertFalse(readerStore.shared.read("Availability").active)
 
     self.harness.moduleHost.getLiveHost("test-shared-data-table-publisher").drawTab()
@@ -407,7 +433,7 @@ function TestShared:testDeclaredDataTableViewsSupportIpairs()
             },
         },
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-list-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-list-reader", {
         shared = {
             Snapshot = {
                 id = "test.declared.shared.list",
@@ -418,6 +444,7 @@ function TestShared:testDeclaredDataTableViewsSupportIpairs()
     })
 
     activateAndEnableHost(self.harness, publisher, "test-shared-data-list-publisher")
+    activateAndEnableHost(self.harness, reader, "test-shared-data-list-reader")
     lu.assertTrue(publisherStore.shared.set("Snapshot", {
         "Apollo",
         "Athena",
@@ -450,7 +477,7 @@ function TestShared:testDeclaredDataOwnerWritesCopyTables()
             },
         },
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-copy-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-copy-reader", {
         shared = {
             Snapshot = {
                 id = "test.declared.shared.copy",
@@ -466,6 +493,7 @@ function TestShared:testDeclaredDataOwnerWritesCopyTables()
         },
     }
     activateAndEnableHost(self.harness, publisher, "test-shared-data-copy-publisher")
+    activateAndEnableHost(self.harness, reader, "test-shared-data-copy-reader")
     lu.assertTrue(publisherStore.shared.set("Snapshot", snapshot))
     snapshot.nested.value = 2
 
@@ -480,7 +508,7 @@ function TestShared:testDeclaredDataOwnerWritesCopyTables()
 end
 
 function TestShared:testDeclaredDataRejectsInvalidValues()
-    local _, store = createSharedModule(self.harness, "test-shared-data-invalid", {
+    local publisher, store = createSharedModule(self.harness, "test-shared-data-invalid", {
         shared = {
             Snapshot = {
                 id = "test.declared.shared.invalid",
@@ -488,6 +516,7 @@ function TestShared:testDeclaredDataRejectsInvalidValues()
             },
         },
     })
+    activateAndEnableHost(self.harness, publisher, "test-shared-data-invalid")
 
     lu.assertErrorMsgContains("value must not be nil", function()
         store.shared.set("Snapshot", nil)
@@ -543,7 +572,7 @@ function TestShared:testDeclaredDataSameOwnerHotReloadReplacesPublication()
             },
         },
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-reload-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-reload-reader", {
         shared = {
             Snapshot = {
                 id = "test.shared.reload",
@@ -552,7 +581,9 @@ function TestShared:testDeclaredDataSameOwnerHotReloadReplacesPublication()
             },
         },
     })
+    activateAndEnableHost(self.harness, reader, "test-shared-data-reload-reader")
     activateAndEnableHost(self.harness, first, "test-shared-data-reload")
+    local staleFirstStore = getLiveStore(self.harness, "test-shared-data-reload")
     firstStore.shared.set("Snapshot", "first-value")
 
     local second, secondStore = createSharedModule(self.harness, "test-shared-data-reload", {
@@ -572,7 +603,7 @@ function TestShared:testDeclaredDataSameOwnerHotReloadReplacesPublication()
     lu.assertTrue(secondStore.shared.set("Snapshot", "second-value"))
     lu.assertEquals(readerStore.shared.read("Snapshot"), "second-value")
     lu.assertErrorMsgContains("requires the active publishing owner", function()
-        firstStore.shared.set("Snapshot", "stale")
+        staleFirstStore.shared.set("Snapshot", "stale")
     end)
 end
 
@@ -586,7 +617,7 @@ function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
             },
         },
     })
-    local _, readerStore = createSharedModule(self.harness, "test-shared-data-disabled-reader", {
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-disabled-reader", {
         shared = {
             Snapshot = {
                 id = "test.shared.disabled",
@@ -595,6 +626,7 @@ function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
             },
         },
     })
+    activateAndEnableHost(self.harness, reader, "test-shared-data-disabled-reader")
     activateAndEnableHost(self.harness, publisher, "test-shared-data-disabled")
     publisherStore.shared.set("Snapshot", "visible")
 

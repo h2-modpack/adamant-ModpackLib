@@ -1,22 +1,22 @@
 local deps = ...
 
 local logging = deps.logging
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 local registrations = deps.registrations
 local data = deps.data
-local hostAdapter = {}
+local moduleAdapter = {}
 
-local function requireHostRecord(host, context)
-    local record = hostRegistry.getRecord(host)
+local function requireModuleRecord(module, context)
+    local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("shared.invalid_args", "%s: expected managed module host record", context)
+        logging.violate("shared.invalid_args", "%s: expected managed module record", context)
     end
     return record
 end
 
-function hostAdapter.installForHost(host)
-    local record = requireHostRecord(host, "shared.installForHost")
-    local ownerId = host.getHostId()
+function moduleAdapter.installForModule(module)
+    local record = requireModuleRecord(module, "shared.installForModule")
+    local ownerId = module.getHostId()
     local dataReceipt = data.install(ownerId, record.sharedDataDeclarations)
     local eventReceipt = registrations.install(ownerId, record.sharedEventRegistrations)
     local committedData = false
@@ -57,4 +57,4 @@ function hostAdapter.installForHost(host)
     }
 end
 
-return hostAdapter
+return moduleAdapter

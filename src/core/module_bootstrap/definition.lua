@@ -4,7 +4,7 @@ local logging = deps.logging
 local storage = deps.storage
 local values = deps.values
 local coordinator = deps.coordinator
-local hostRegistry = deps.hostRegistry
+local moduleRegistry = deps.moduleRegistry
 local plugin = deps.plugin
 
 local definitionService = {}
@@ -668,7 +668,7 @@ function definitionService.prepareDefinition(structuralState, definition, struct
         if previousFingerprint ~= nil and previousFingerprint ~= fingerprint then
             structuralState.requiresFullReload = true
             if type(prepared.modpack) == "string" and coordinator.isRegistered(prepared.modpack) then
-                hostRegistry.setPendingCoordinatorRebuild(prepared, {
+                moduleRegistry.setPendingCoordinatorRebuild(prepared, {
                     kind = "structural_definition_changed",
                     moduleId = prepared.id,
                     displayName = prepared.name,

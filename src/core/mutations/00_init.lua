@@ -19,20 +19,14 @@ local lifecycle = import('core/mutations/lifecycle.lua', nil, {
     plan = plan,
 })
 
-local service = import('core/mutations/adapters/host_lifecycle.lua', nil, {
+local service = import('core/mutations/adapters/module_lifecycle.lua', nil, {
     logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
-    lifecycle = lifecycle,
-})
-
-local author = import('core/mutations/adapters/author_patch.lua', nil, {
-    logging = deps.logging,
-    hostRegistry = deps.hostRegistry,
+    moduleRegistry = deps.moduleRegistry,
     lifecycle = lifecycle,
 })
 
 return {
     service = service,
-    author = author,
+    lifecycle = lifecycle,
     plan = plan,
 }

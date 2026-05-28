@@ -28,7 +28,8 @@ end
 ---@field stagedState StagedState
 ---@field shared table|nil
 ---@field actionBuffer ActionBuffer
----@field authorHost AuthorHost
+---@field host Host
+---@field actionRuntime ActionRuntimeBridge
 ---@field logPrefix string
 ---@field isDebugEnabled fun(): boolean
 
@@ -40,18 +41,24 @@ function uiPhase.create(opts)
         state = moduleState.uiState.create(opts.stagedState, opts.shared),
         actions = moduleState.uiActions.create(opts.actionBuffer),
     }
+    objects.ui = {
+        draw = objects.draw,
+        data = objects.state,
+        actions = objects.actions,
+        shared = opts.shared,
+    }
 
     function objects.run(callback)
         local results = packResults(phaseGate.runDrawWithContext({
             logPrefix = opts.logPrefix,
             debugEnabled = opts.isDebugEnabled() == true,
-        }, function(draw, state, actions)
-            local results = packResults(callback(draw, state, actions))
-            opts.actionBuffer.executePendingActions(opts.authorHost, state)
+        }, function()
+            local results = packResults(callback(opts.host, objects.ui))
+            opts.actionBuffer.executePendingActions(opts.host, objects.state, opts.actionRuntime)
             return table.unpack(results, 1, results.n)
-        end, objects.draw, objects.state, objects.actions))
+        end))
 
-        opts.actionBuffer.flushPendingSharedEvents(opts.authorHost)
+        opts.actionBuffer.flushPendingSharedEvents(opts.host)
         return table.unpack(results, 1, results.n)
     end
 

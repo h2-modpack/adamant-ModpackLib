@@ -37,7 +37,7 @@ end
 - Runtime tables closed over by installed game/ModUtil callbacks are legitimate hot-reload anchors, but should still be owned by a scoped registry bucket rather than a broad dependency bus.
 - Runtime tables that keep active plans/receipts revertible across Lib re-imports are also real anchors; keep them under the scoped registry bucket and comment the reason.
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
-- Module host live-host, pending-rebuild, and weak host-record tables are activation anchors; keep the tables under `AdamantModpackLib_Runtime.registry.hosts`, but keep lifecycle behavior on the returned `moduleHost` service.
+- Live-module, pending-rebuild, and weak module-record tables are activation anchors; keep the tables under `AdamantModpackLib_Runtime.registry.modules`, but keep lifecycle behavior on the returned `managedModule` service.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
 ## Legacy Internal Shims

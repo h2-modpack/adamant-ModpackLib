@@ -13,14 +13,14 @@ function TestModuleHost_PrepareDefinition:tearDown()
 end
 
 local function createAndActivate(h, pluginGuid, definition, store, stagedState)
-    local _, authorHost = h.moduleHost.create({
+    local module = h.moduleHost.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
         drawTab = function() end,
     })
-    return authorHost.activate()
+    return module.activate()
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionReturnsPreparedClone()
@@ -300,7 +300,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsWhenCoordina
     lu.assertFalse(ok)
     lu.assertStrContains(err, "host.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.hostRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
 end
 
 function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
@@ -339,7 +339,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsAndKeepsPend
     lu.assertFalse(ok)
     lu.assertStrContains(err, "host.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.hostRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
 end
 
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionKeepsStableStructuralFingerprint()

@@ -39,21 +39,21 @@ These tables are initialized with `X = X or {}` so they survive a file reload in
 Safe to rebuild on every module `init`:
 - `definition`
 - `store`
-- staged state and its author-facing draw adapters
-- live module host created by `lib.createModule(...)` and activated by `host.activate()`
+- staged state and its UI draw adapters
+- live module host created by `lib.createModule(...)` and activated by `module.activate()`
 - UI draw closures
 - lookup tables derived from current imports
 
 Expected to persist across reloads:
 - Lib coordinator registrations under `AdamantModpackLib_Runtime.registry.coordinators`
-- Lib live-host registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.registry.hosts`
+- Lib live-module registry keyed by `pluginGuid` under `AdamantModpackLib_Runtime.registry.modules`
 - Lib hook dispatchers that map each capability owner slot to its current owner
   object under `AdamantModpackLib_Runtime.registry.hooks`
 - Lib shared event listeners, mutation owner slots, retained overlays, and
   fallback GUI bridges under their scoped `AdamantModpackLib_Runtime.registry`
   buckets
 - Framework pack registry and stable GUI callbacks
-- module-owned ROM GUI callbacks attached through `host.fallbackUi.attachGuiOnce(...)`
+- module-owned ROM GUI callbacks attached through `module.fallbackUi.attachGuiOnce(...)`
   and backed by Lib fallback UI bridges keyed by host id
 
 Modules pass `pluginGuid` as their stable lifecycle identity. The committed host
@@ -109,12 +109,12 @@ Lib owns the shared reload-sensitive plumbing:
 ### Modules
 
 Modules own their local rebuild:
-- recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
+- recreate module declarations and activate the Lib-created live module in `init`
 - keep `chalk`, `reload`, and raw config local to `main.lua`
-- keep committed runtime reads on `store`
-- keep staged UI edits on the author-facing draw `state`
-- declare runtime hooks on `host.hooks.*` before activation
-- declare retained overlays on `host.overlays.*` before activation
+- keep committed runtime reads on `runtime.data`
+- keep staged UI edits on draw `ui.data`
+- declare runtime hooks on `module.hooks.*` before activation
+- declare retained overlays on `module.overlays.*` before activation
 
 ## Bootstrap Pattern
 
@@ -144,11 +144,11 @@ The important part is the split:
 
 ## Coordinated Module Host Refresh
 
-`lib.createModule(...)` plus `host.activate()` is the normal behavior refresh boundary for a coordinated module.
+`lib.createModule(...)` plus `module.activate()` is the normal behavior refresh boundary for a coordinated module.
 
 During module creation and activation:
-- the module host closes over the current `definition`, `store`, and staged state
-- `host.activate()` publishes the live host
+- the module declaration facade collects data, UI, actions, hooks, overlays, shared declarations, mutations, and cache
+- `module.activate()` creates and publishes the live module
 - Lib refreshes hook registrations under the module owner id derived from `pluginGuid`; absent hook registrations for that owner are deactivated
 - Lib refreshes shared event listener registrations under the module owner id derived from `pluginGuid`; absent shared event listeners for that owner are removed
 - if the coordinator for `definition.modpack` is already registered, Lib immediately syncs live mutation state
@@ -160,7 +160,7 @@ That means one coordinated module reload refreshes its live runtime behavior imm
 Framework replaces the current pack object when the coordinator calls
 `Framework.createPack(...)` again for the same `packId`. The replacement keeps the
 pack's stable HUD/index slot while rebuilding discovery, HUD, hash, and UI state
-from the current live module hosts.
+from the current live modules.
 
 Core registers GUI callbacks once and those callback closures remain valid across
 reloads by late-reading the current Framework renderer/menu factories from
@@ -189,17 +189,17 @@ game HUD refresh.
 
 ## Hook Model
 
-Raw ModUtil path hooks do not deduplicate. The stack solves that through `host.hooks`.
+Raw ModUtil path hooks do not deduplicate. The stack solves that through `module.hooks`.
 
 Supported public hook entrypoints:
-- `host.hooks.wrap`
-- `host.hooks.override`
-- `host.hooks.contextWrap`
+- `module.hooks.wrap`
+- `module.hooks.override`
+- `module.hooks.contextWrap`
 
 The model is:
-- register hook sites on the returned author host before activation
+- register hook sites on the returned module declaration facade before activation
 - pass `pluginGuid` into `lib.createModule(...)`
-- call `host.activate()` after construction
+- call `module.activate()` after declarations
 - Lib runs the full registration pass during module activation
 
 Behavior:
@@ -236,8 +236,8 @@ implementation reloads.
 
 Important properties:
 - active tracked mutation state survives store recreation during module reload
-- active module-host records are keyed by `pluginGuid`
-- host activation synchronizes live mutation state to the module's persisted enabled state
+- active module records are keyed by `pluginGuid`
+- module activation synchronizes live mutation state to the module's persisted enabled state
 - if a module is disabled on reload, tracked active mutation state is reverted
 
 This keeps run-data patch lifecycles coherent across reloads.
@@ -272,7 +272,7 @@ Players who are not editing files do not exercise the hot-reload path. The stack
 
 Supported.
 
-Module reload replaces the module's live host surface. Framework snapshots that host on the next UI/hash operation, and Lib immediately resyncs live mutation state if the module is already coordinated.
+Module reload replaces the module's live runtime surface. Framework snapshots that module on the next UI/hash operation, and Lib immediately resyncs live mutation state if the module is already coordinated.
 
 ### Developer doing Lib or Framework work
 
@@ -290,7 +290,7 @@ layout.
 
 Best-effort.
 
-The coordinator registry, live-host registry, and coordinator rebuild callback
+The coordinator registry, live-module registry, and coordinator rebuild callback
 are designed to converge back to the latest live surfaces after the relevant
 modules rebuild their hosts. Active mutation runtime is not a Lib reload
 persistence guarantee.
@@ -316,11 +316,11 @@ coordinated path, use a full reload.
 ## Practical Rules
 
 - keep `chalk`, `reload`, and raw config local to `main.lua`
-- recreate `definition`, `store`, staged state, and the Lib-created live host in `init`
-- keep staged state behind the host; draw callbacks receive restricted `draw`, `state`, and `actions` arguments through the host
-- register runtime hooks through `host.hooks.*` before activation
+- recreate module declarations and activate the Lib-created live module in `init`
+- keep staged state behind the host; draw callbacks receive restricted `ui.draw`, `ui.data`, and `ui.actions` arguments through the host
+- register runtime hooks through `module.hooks.*` before activation
 - pass `pluginGuid` to `lib.createModule(...)`
-- call `host.activate()` after construction
+- call `module.activate()` after declarations
 - keep stable GUI callbacks outside `init`
 - late-read current framework or module state from those stable callbacks when a stale closure would matter
 - do not use raw ModUtil path wraps for repo-owned hot-reload-sensitive hook sites

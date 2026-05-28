@@ -222,7 +222,7 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertNil(h.public.imguiHelpers)
 
     lu.assertEquals(type(h.runtime.registry), "table")
-    lu.assertEquals(type(h.runtime.registry.hosts), "table")
+    lu.assertEquals(type(h.runtime.registry.modules), "table")
     lu.assertEquals(type(h.runtime.registry.hooks), "table")
     lu.assertEquals(type(h.runtime.registry.overlays), "table")
     lu.assertEquals(type(h.runtime.registry.fallback), "table")
