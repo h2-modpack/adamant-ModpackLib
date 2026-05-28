@@ -618,9 +618,12 @@ module.overlays.createLine("summary.igt", {
     },
 })
 
-module.overlays.onCommit(function(ctx)
-    ctx.setLine("summary.igt", { label = "IGT:", time = "00:00.00" })
-    ctx.refresh("summary.igt")
+module.overlays.onCommit(function(host, runtime, overlay)
+    overlay.setLine("summary.igt", {
+        label = "IGT:",
+        time = runtime.data.read("TimerText") or "00:00.00",
+    })
+    overlay.refresh("summary.igt")
 end)
 
 module.activate()
@@ -653,7 +656,7 @@ module.overlays.createLine("summary.rta", {
 })
 ```
 
-Projection callbacks update lines through `ctx.setLine(name, values)`.
+Projection callbacks update lines through `overlay.setLine(name, values)`.
 
 ### `module.overlays.createTable(name, spec)`
 
@@ -673,28 +676,25 @@ module.overlays.createTable("runs", {
 ```
 
 Rows beyond `maxRows` are ignored. Unused retained rows are hidden. Projection callbacks update
-tables through `ctx.setTable(name, rows)`.
+tables through `overlay.setTable(name, rows)`.
 
 ### Projection Events
 
 Supported retained overlay events:
 
-- `module.overlays.onCommit(function(ctx, commit) ... end)`
-- `module.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
-- `module.overlays.afterHook(path, function(ctx, event) ... end)`
+- `module.overlays.onCommit(function(host, runtime, overlay, commit) ... end)`
+- `module.overlays.onInterval(name, seconds, function(host, runtime, overlay, event) ... end, opts)`
+- `module.overlays.afterHook(path, function(host, runtime, overlay, event) ... end)`
 
-The projection context exposes read-only helpers plus named retained updates:
+`host` is the normal module utility projection. `runtime` is the runtime phase
+object. The retained overlay projection exposes named retained updates:
 
-- `ctx.read(alias)`
-- `ctx.isEnabled()`
-- `ctx.log(fmt, ...)`
-- `ctx.logIf(fmt, ...)`
-- `ctx.setLine(name, values)`
-- `ctx.setTable(name, rows)`
-- `ctx.setCell(tableName, rowKey, columnKey, value)`
-- `ctx.refresh(name)`
-- `ctx.refreshRegion(region)`
-- `ctx.refreshAll()`
+- `overlay.setLine(name, values)`
+- `overlay.setTable(name, rows)`
+- `overlay.setCell(tableName, rowKey, columnKey, value)`
+- `overlay.refresh(name)`
+- `overlay.refreshRegion(region)`
+- `overlay.refreshAll()`
 
 ### `frameworkRuntime.overlays.define(packId, name, register)`
 

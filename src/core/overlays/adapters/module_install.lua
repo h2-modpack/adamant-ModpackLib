@@ -58,7 +58,7 @@ function moduleAdapter.installForModule(module, store)
     local disposed = false
 
     local ok, err = pcall(function()
-        retained.refresh(stagingOwner, pendingOwnerId, module, store, function(registrar)
+        retained.refresh(stagingOwner, pendingOwnerId, record.host, store, function(registrar)
             declarations.replay(overlayDeclarations, registrar)
         end, { hidden = true })
         afterHookReceipt = createAfterHookReceipt(module, retained.getAfterHookPaths(stagingOwner))
@@ -90,7 +90,7 @@ function moduleAdapter.installForModule(module, store)
                 return false, clearErr
             end
             transaction.commit()
-            retained.promoteTableRegistry(stagingOwner, module, currentOwnerId, module, store)
+            retained.promoteTableRegistry(stagingOwner, module, currentOwnerId, record.host, store)
             committed = true
             return true, nil
         end,

@@ -591,11 +591,7 @@ local lib = {}
 ---@field columns AdamantModpackLib.RetainedOverlayColumn[] Ordered columns, declared left-to-right.
 ---@field visible? boolean|fun(): boolean
 
----@class AdamantModpackLib.OverlayProjectionContext
----@field read fun(alias: string): any
----@field isEnabled fun(): boolean
----@field log fun(fmt: string, ...)
----@field logIf fun(fmt: string, ...)
+---@class AdamantModpackLib.RetainedOverlayProjection
 ---@field setLine fun(name: string, values: table|string): boolean
 ---@field setTable fun(name: string, rows: table[]): boolean
 ---@field setCell fun(tableName: string, rowKey: any, columnKey: string, value: any): boolean
@@ -609,25 +605,48 @@ local lib = {}
 ---@field result any
 ---@field results table
 
+---@alias AdamantModpackLib.OverlayCommitCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    overlay: AdamantModpackLib.RetainedOverlayProjection,
+---    commit: AdamantModpackLib.CommitContext
+---)
+---@alias AdamantModpackLib.OverlayIntervalCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    overlay: AdamantModpackLib.RetainedOverlayProjection,
+---    event: table
+---)
+---@alias AdamantModpackLib.OverlayAfterHookCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    overlay: AdamantModpackLib.RetainedOverlayProjection,
+---    event: AdamantModpackLib.OverlayHookEvent
+---)
+---@alias AdamantModpackLib.SystemOverlayCommitCallback fun(
+---    overlay: AdamantModpackLib.RetainedOverlayProjection,
+---    commit: AdamantModpackLib.CommitContext
+---)
+
 ---@class AdamantModpackLib.RetainedOverlayRegistrar
 ---@field order table<string, integer> Shared overlay order bands.
 ---@field createLine fun(name: string, spec: AdamantModpackLib.RetainedLineSpec)
 ---@field createTable fun(name: string, spec: AdamantModpackLib.RetainedTableSpec)
----@field onCommit fun(callback: fun(ctx: AdamantModpackLib.OverlayProjectionContext, commit: AdamantModpackLib.CommitContext))
+---@field onCommit fun(callback: AdamantModpackLib.OverlayCommitCallback)
 ---@field onInterval fun(
 ---    name: string,
 ---    seconds: number,
----    callback: fun(ctx: AdamantModpackLib.OverlayProjectionContext, event: table),
+---    callback: AdamantModpackLib.OverlayIntervalCallback,
 ---    opts?: table
 ---)
 ---@field afterHook fun(
 ---    path: string,
----    callback: fun(ctx: AdamantModpackLib.OverlayProjectionContext, event: AdamantModpackLib.OverlayHookEvent)
+---    callback: AdamantModpackLib.OverlayAfterHookCallback
 ---)
 
 ---@class AdamantModpackLib.SystemOverlayRegistrar
 ---@field createLine fun(name: string, spec: AdamantModpackLib.RetainedLineSpec)
----@field onCommit fun(callback: fun(ctx: AdamantModpackLib.OverlayProjectionContext, commit: AdamantModpackLib.CommitContext))
+---@field onCommit fun(callback: AdamantModpackLib.SystemOverlayCommitCallback)
 
 ---@class AdamantModpackLib.UiSuppressionToken
 ---@field release fun()

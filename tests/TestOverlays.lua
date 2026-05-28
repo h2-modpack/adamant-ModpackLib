@@ -49,9 +49,9 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
                 Color = { 0.5, 0.5, 0.5, 1 },
             },
         })
-        overlays.onCommit(function(ctx)
-            ctx.setLine("message", text)
-            ctx.refresh("message")
+        overlays.onCommit(function(overlay)
+            overlay.setLine("message", text)
+            overlay.refresh("message")
         end)
     end)
 
@@ -97,11 +97,11 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
             order = system.overlays.order.debug,
             minWidth = 80,
         })
-        overlays.onCommit(function(ctx)
-            ctx.setLine("module", "Module")
-            ctx.setLine("framework", "Framework")
-            ctx.setLine("debug", "Debug")
-            ctx.refreshRegion("middleRightStack")
+        overlays.onCommit(function(overlay)
+            overlay.setLine("module", "Module")
+            overlay.setLine("framework", "Framework")
+            overlay.setLine("debug", "Debug")
+            overlay.refreshRegion("middleRightStack")
         end)
     end)
 
@@ -136,11 +136,11 @@ function TestOverlays:testRetainedTableUsesStableColumnSpacing()
                 },
             },
         })
-        overlays.onCommit(function(ctx)
-            ctx.setTable("timer", {
+        overlays.onCommit(function(_, _, overlay)
+            overlay.setTable("timer", {
                 { key = "row", label = "IGT:", time = "00:00.00" },
             })
-            ctx.refresh("timer")
+            overlay.refresh("timer")
         end)
     end)
     self:dispatch(host)
@@ -167,9 +167,9 @@ function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOver
             region = "middleRightStack",
             minWidth = 80,
         })
-        overlays.onCommit(function(ctx)
-            ctx.setLine("line", "Visible")
-            ctx.refresh("line")
+        overlays.onCommit(function(overlay)
+            overlay.setLine("line", "Visible")
+            overlay.refresh("line")
         end)
     end)
 

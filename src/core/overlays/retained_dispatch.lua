@@ -1,42 +1,12 @@
 local deps = ...
 
 local getRegistry = deps.getRegistry
-local logging = deps.logging
 local renderer = deps.renderer
 
-local function createProjectionContext(registry)
-    local host = registry.host
-    local store = registry.store
-    local ctx = {}
+local function createOverlayProjection(registry)
+    local overlay = {}
 
-    function ctx.read(alias)
-        if store and type(store.read) == "function" then
-            return store.read(alias)
-        end
-        return nil
-    end
-
-    function ctx.isEnabled()
-        if host and type(host.isEnabled) == "function" then
-            return host.isEnabled()
-        end
-        return true
-    end
-
-    function ctx.log(fmt, ...)
-        if host and type(host.log) == "function" then
-            return host.log(fmt, ...)
-        end
-        print(logging.formatLogMessage("[overlays:" .. tostring(registry.ownerId) .. "] ", fmt, ...))
-    end
-
-    function ctx.logIf(fmt, ...)
-        if host and type(host.logIf) == "function" then
-            return host.logIf(fmt, ...)
-        end
-    end
-
-    function ctx.setLine(name, valuesTable)
+    function overlay.setLine(name, valuesTable)
         local slot = registry.elements[name]
         if slot and slot.kind == "line" then
             slot.values = valuesTable
@@ -45,7 +15,7 @@ local function createProjectionContext(registry)
         return false
     end
 
-    function ctx.setTable(name, rows)
+    function overlay.setTable(name, rows)
         local slot = registry.elements[name]
         if not (slot and slot.kind == "table") then
             return false
@@ -64,7 +34,7 @@ local function createProjectionContext(registry)
         return true
     end
 
-    function ctx.setCell(tableName, rowKey, columnKey, value)
+    function overlay.setCell(tableName, rowKey, columnKey, value)
         local slot = registry.elements[tableName]
         if not (slot and slot.kind == "table") then
             return false
@@ -78,7 +48,7 @@ local function createProjectionContext(registry)
         return true
     end
 
-    function ctx.refresh(name)
+    function overlay.refresh(name)
         local slot = registry.elements[name]
         if not slot then
             return false
@@ -93,16 +63,33 @@ local function createProjectionContext(registry)
         return true
     end
 
-    function ctx.refreshRegion(region)
+    function overlay.refreshRegion(region)
         renderer.refreshStackRows(region)
     end
 
-    function ctx.refreshAll()
+    function overlay.refreshAll()
         renderer.refreshStackRows()
         renderer.refreshTextElements(true)
     end
 
-    return ctx
+    return overlay
+end
+
+local function createRuntimeContext(store)
+    return {
+        data = store,
+        cache = store and store.cache or nil,
+        shared = store and store.shared or nil,
+    }
+end
+
+local function dispatchProjection(registry, callback, event)
+    local overlay = createOverlayProjection(registry)
+    if registry.explicitOwner == true then
+        callback(overlay, event)
+        return
+    end
+    callback(registry.host, createRuntimeContext(registry.store), overlay, event)
 end
 
 local function dispatchCommit(owner, commit)
@@ -114,9 +101,8 @@ local function dispatchCommit(owner, commit)
         return
     end
 
-    local ctx = createProjectionContext(registry)
     for _, callback in ipairs(registry.events.commit or {}) do
-        callback(ctx, commit)
+        dispatchProjection(registry, callback, commit)
     end
 end
 
@@ -126,7 +112,6 @@ local function dispatchIntervals(now)
         if registry.hidden == true then
             return
         end
-        local ctx = nil
         for _, event in pairs(registry.events.intervals or {}) do
             local shouldRun = true
             if event.opts and type(event.opts.when) == "function" then
@@ -134,8 +119,7 @@ local function dispatchIntervals(now)
             end
             if shouldRun and (event.lastRun == nil or now - event.lastRun >= event.seconds) then
                 event.lastRun = now
-                ctx = ctx or createProjectionContext(registry)
-                event.callback(ctx, {
+                dispatchProjection(registry, event.callback, {
                     name = event.name,
                     now = now,
                 })
@@ -163,8 +147,7 @@ local function dispatchAfterHook(owner, path, args, results)
         return
     end
 
-    local ctx = createProjectionContext(registry)
-    event.callback(ctx, {
+    dispatchProjection(registry, event.callback, {
         path = path,
         args = args or {},
         result = results and results[1] or nil,

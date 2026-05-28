@@ -30,12 +30,12 @@ module.overlays.createLine("summary.igt", {
     },
 })
 
-module.overlays.onCommit(function(ctx)
-    ctx.setLine("summary.igt", {
+module.overlays.onCommit(function(host, runtime, overlay)
+    overlay.setLine("summary.igt", {
         label = "IGT:",
-        time = "00:00.00",
+        time = runtime.data.read("TimerText") or "00:00.00",
     })
-    ctx.refresh("summary.igt")
+    overlay.refresh("summary.igt")
 end)
 
 module.activate()
@@ -69,27 +69,26 @@ Order bands:
 
 Overlay projections can update retained elements from:
 
-- `module.overlays.onCommit(function(ctx, commit) ... end)`
-- `module.overlays.onInterval(name, seconds, function(ctx, event) ... end, opts)`
-- `module.overlays.afterHook(path, function(ctx, event) ... end)`
+- `module.overlays.onCommit(function(host, runtime, overlay, commit) ... end)`
+- `module.overlays.onInterval(name, seconds, function(host, runtime, overlay, event) ... end, opts)`
+- `module.overlays.afterHook(path, function(host, runtime, overlay, event) ... end)`
 
-The projection context exposes:
+`host` is the normal unphased module utility object. `runtime` is the runtime
+phase object, so read committed module data through `runtime.data`.
 
-- `ctx.read(alias)`
-- `ctx.isEnabled()`
-- `ctx.log(fmt, ...)`
-- `ctx.logIf(fmt, ...)`
-- `ctx.setLine(name, values)`
-- `ctx.setTable(name, rows)`
-- `ctx.setCell(tableName, rowKey, columnKey, value)`
-- `ctx.refresh(name)`
-- `ctx.refreshRegion(region)`
-- `ctx.refreshAll()`
+The retained overlay projection exposes:
 
-Use `ctx.read(alias)` for committed store values. Do not capture UI state in overlay callbacks.
+- `overlay.setLine(name, values)`
+- `overlay.setTable(name, rows)`
+- `overlay.setCell(tableName, rowKey, columnKey, value)`
+- `overlay.refresh(name)`
+- `overlay.refreshRegion(region)`
+- `overlay.refreshAll()`
+
+Do not capture UI state in overlay callbacks.
 Projection callbacks are runtime projections, not draw callbacks. They do not
 receive `draw`, `state`, or `actions`, and should not cache their
-`ctx` object outside the callback.
+`runtime` or `overlay` objects outside the callback.
 
 ## Visibility And UI Suppression
 

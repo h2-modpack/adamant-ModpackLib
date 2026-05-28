@@ -46,9 +46,9 @@ function TestOverlays_Retained:testSystemOverlayLineProjectsThroughCommitContext
                 { key = "time", minWidth = 80 },
             },
         })
-        overlays.onCommit(function(ctx)
-            ctx.setLine("summary.igt", { label = "IGT:", time = "01:23.45" })
-            ctx.refresh("summary.igt")
+        overlays.onCommit(function(overlay)
+            overlay.setLine("summary.igt", { label = "IGT:", time = "01:23.45" })
+            overlay.refresh("summary.igt")
         end)
     end)
 
@@ -101,13 +101,13 @@ function TestOverlays_Retained:testRetainedTableCapsRowsAndHidesUnusedRows()
                 { key = "time", minWidth = 80 },
             },
         })
-        overlays.onCommit(function(ctx)
-            ctx.setTable("runs", {
+        overlays.onCommit(function(_, _, overlay)
+            overlay.setTable("runs", {
                 { key = "one", label = "Run 1", time = "00:01.00" },
                 { key = "two", label = "Run 2", time = "00:02.00" },
                 { key = "three", label = "Run 3", time = "00:03.00" },
             })
-            ctx.refresh("runs")
+            overlay.refresh("runs")
         end)
     end)
     local ok, err = authorModule.activate()
@@ -125,6 +125,47 @@ function TestOverlays_Retained:testRetainedTableCapsRowsAndHidesUnusedRows()
     lu.assertNil(text["Run 3"])
     lu.assertNil(text["00:03.00"])
     lu.assertTrue(#alphas > 0)
+end
+
+function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeShape()
+    local seen = nil
+    local host, authorModule = self:createHostWithOverlays("test.retained.standard-shape", function(overlays)
+        overlays.createLine("line", {
+            region = "middleRightStack",
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+        overlays.onCommit(function(callbackHost, runtime, overlay, commit)
+            overlay.setLine("line", runtime.data.read("Flag") and "enabled" or "disabled")
+            seen = {
+                hostId = callbackHost.getHostId(),
+                hasLifecycleSetEnabled = type(callbackHost.setEnabled) == "function",
+                runtimeValue = runtime.data.read("Flag"),
+                commitValue = commit.reason,
+            }
+        end)
+    end, {
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        config = {
+            Enabled = true,
+            DebugMode = false,
+            Flag = true,
+        },
+    })
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    self.h.overlays.dispatchCommit(host, { reason = "test" })
+
+    lu.assertEquals(seen, {
+        hostId = host.getHostId(),
+        hasLifecycleSetEnabled = false,
+        runtimeValue = true,
+        commitValue = "test",
+    })
 end
 
 function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
@@ -186,7 +227,7 @@ function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnModuleRegis
     lu.assertEquals(record.overlayDeclarations.entries[1].name, "line")
 end
 
-function TestOverlays_Retained:testProjectionContextDoesNotExposeOwner()
+function TestOverlays_Retained:testSystemOverlayProjectionDoesNotExposeOwner()
     local exposedOwner = nil
     self.h.createSystem("test.retained.no-owner").overlays.define(function(overlays)
         overlays.createLine("line", {
@@ -195,8 +236,8 @@ function TestOverlays_Retained:testProjectionContextDoesNotExposeOwner()
                 { key = "text", minWidth = 40 },
             },
         })
-        overlays.onCommit(function(ctx)
-            exposedOwner = ctx.owner
+        overlays.onCommit(function(overlay)
+            exposedOwner = overlay.owner
         end)
     end)
 
@@ -431,7 +472,7 @@ function TestOverlays_Retained:testAfterHookObservesResultsWithoutChangingReturn
 
     local pluginGuid = "test-retained-overlay-after-hook"
     local _, authorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
-        overlays.afterHook("StartNewRunAfter", function(_, event)
+        overlays.afterHook("StartNewRunAfter", function(_, _, _, event)
             observed = {
                 arg = event.args[1],
                 result = event.result,
@@ -461,7 +502,7 @@ function TestOverlays_Retained:testAfterHookPreservesNilResultArity()
     end
 
     local _, authorModule = self:createHostWithOverlays("test-retained-overlay-after-hook-nil-results", function(overlays)
-        overlays.afterHook("StartNewRunNilResults", function(_, event)
+        overlays.afterHook("StartNewRunNilResults", function(_, _, _, event)
             observed = event.results
         end)
     end)

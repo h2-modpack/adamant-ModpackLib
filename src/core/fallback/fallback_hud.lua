@@ -48,9 +48,9 @@ function fallbackHud.createMarker()
             visible = shouldShowFallbackMarker,
             minWidth = 80,
         })
-        overlay.onCommit(function(ctx)
-            ctx.setLine("marker", MARKER_TEXT)
-            ctx.refresh("marker")
+        overlay.onCommit(function(retained)
+            retained.setLine("marker", MARKER_TEXT)
+            retained.refresh("marker")
         end)
     end)
 end
