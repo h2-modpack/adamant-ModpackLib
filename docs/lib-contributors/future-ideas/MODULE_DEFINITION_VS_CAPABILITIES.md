@@ -3,6 +3,11 @@
 Future contributor note. This captures a design discussion so the boundary can
 be revisited intentionally later.
 
+Related larger cleanup proposal:
+[RUNTIME_UI_BACKEND_RESTRUCTURING.md](RUNTIME_UI_BACKEND_RESTRUCTURING.md).
+That proposal intentionally revisits this document's current recommendation to
+keep storage, cache, actions, and draw callbacks inside `createModule(...)`.
+
 ## Current Framing
 
 `createModule(...)` should be understood as the module's static definition

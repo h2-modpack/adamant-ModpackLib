@@ -17,6 +17,7 @@ Use this path when building a module or modpack feature on top of Lib.
 - [lib-contributors/LIB_INTERNALS.md](lib-contributors/LIB_INTERNALS.md)
 - [lib-contributors/HOT_RELOAD_ARCHITECTURE.md](lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
 - [lib-contributors/TESTING.md](lib-contributors/TESTING.md)
+- [lib-contributors/future-ideas/RUNTIME_UI_BACKEND_RESTRUCTURING.md](lib-contributors/future-ideas/RUNTIME_UI_BACKEND_RESTRUCTURING.md)
 - [../CONTRIBUTING.md](../CONTRIBUTING.md)
 
 Use this path when changing Lib itself.

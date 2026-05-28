@@ -12,6 +12,9 @@ Recommended order:
 
 For public API behavior, use [../../API.md](../../API.md).
 
+Future design notes live under [future-ideas](future-ideas/). They are not
+accepted implementation plans unless a specific note says otherwise.
+
 ## Host Vocabulary
 
 Use these terms consistently in contributor docs and implementation notes:
