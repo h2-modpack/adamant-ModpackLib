@@ -30,19 +30,19 @@ UI-heavy modules need something in between: repeated domain controls that own a
 small bundle of storage, semantic reads/writes, and one or more standard render
 paths.
 
-Examples from first-party modules:
+Representative patterns:
 
-- biome priority controls
-- room/miniboss/trial room controls
-- boon-ban pool controls
-- NPC route controls
+- priority selector controls
+- category/subcategory controls
+- packed selection pool controls
+- route controls
 - mode/range controls
 - packed availability controls
 
 Today those modules usually build:
 
 ```text
-game/catalog data -> storage aliases -> UI option tables -> widget calls -> logic readers
+domain/catalog data -> storage aliases -> UI option tables -> widget calls -> logic readers
 ```
 
 That is correct but verbose. The same domain concept gets split across data,
@@ -79,9 +79,30 @@ control declaration -> private storage/actions -> UI renderer -> runtime reader
 That wider contract is why controls deserve their own namespace instead of
 being hidden under `ui.draw.widgets`.
 
+The useful mental model is:
+
+```text
+control template = managed module-side class
+control declaration = one object instance definition
+ui.controls.get(...) / runtime.controls.get(...) = phase-specific object ref
+private storage/actions = object fields hidden behind the control interface
+```
+
+Lib is not adding object orientation to Lua. Authors can already write normal
+module-side classes. Lib controls are valuable only when that class spans the
+UI/runtime line and needs Lib-managed storage, actions, phases, activation,
+fingerprinting, and privacy.
+
+Use a plain module class when the object is only code/data organization. Use a
+Lib control when the object owns persisted/staged fields, table rows, packed
+fields, scoped commands, or runtime/UI refs that should be managed consistently
+with the rest of the module lifecycle.
+
 ## Goals
 
 - Give UI-heavy modules a first-class way to define reusable composite controls.
+- Support managed module-side classes when their objects need Lib-owned
+  storage/action/phase/lifecycle integration.
 - Keep storage as storage, not a declarative UI language.
 - Keep widgets as leaf renderers.
 - Let controls own private storage aliases without exposing those aliases to
@@ -91,13 +112,16 @@ being hidden under `ui.draw.widgets`.
   `ui.controls`.
 - Keep controls compatible with hashes/profiles through the existing storage
   backend.
-- Keep the first version small enough to prove on BiomeControl and BoonBans.
+- Support table-backed leaf controls when they expose semantic methods instead
+  of raw table internals.
+- Keep the first version small enough to prove scalar bundles and table-backed
+  controls without broadening into layout.
 
 ## Non-Goals
 
 - Do not reintroduce storage `ui = {...}` metadata.
 - Do not reintroduce `draw.field(...)`.
-- Do not make storage declarations depend on game catalogs.
+- Do not make Lib storage/control internals know game catalogs.
 - Do not build a retained UI tree.
 - Do not make controls a second storage backend.
 - Do not make controls a screen/layout/catalog builder.
@@ -115,15 +139,15 @@ A module declares templates and instances before activation:
 
 ```lua
 module.controls.defineTemplates({
-    ModeRange = controls.modeRangeTemplate,
+    RangeSelector = controls.RangeSelectorTemplate,
 })
 
 module.controls.define({
-    BiomePriority1 = {
-        template = "ModeRange",
+    PrioritySlot1 = {
+        template = "RangeSelector",
         label = "Priority 1",
-        values = BIOME_KEYS,
-        displayValues = BIOME_LABELS,
+        values = VALUE_KEYS,
+        displayValues = VALUE_LABELS,
         defaultMode = "Any",
         defaultMin = 1,
         defaultMax = 3,
@@ -138,8 +162,8 @@ Runtime code reads the semantic object:
 
 ```lua
 module.hooks.wrap("Some.Path", function(host, runtime, base, ...)
-    local priority = runtime.controls.get("BiomePriority1")
-    if priority:matches(currentBiome) then
+    local priority = runtime.controls.get("PrioritySlot1")
+    if priority:matches(currentValue) then
         -- runtime behavior
     end
     return base(...)
@@ -150,7 +174,7 @@ UI code renders or manipulates the same semantic object:
 
 ```lua
 module.ui.tab(function(host, ui)
-    local priority = ui.controls.get("BiomePriority1")
+    local priority = ui.controls.get("PrioritySlot1")
     ui.draw.control(priority)
 end)
 ```
@@ -160,7 +184,7 @@ fit for a screen:
 
 ```lua
 module.ui.tab(function(host, ui)
-    local priority = ui.controls.get("BiomePriority1")
+    local priority = ui.controls.get("PrioritySlot1")
     ui.draw.widgets.dropdown(priority:field("Mode"), PRIORITY_MODE_OPTS)
     ui.draw.widgets.stepper(priority:field("Min"), PRIORITY_MIN_OPTS)
     ui.draw.widgets.stepper(priority:field("Max"), PRIORITY_MAX_OPTS)
@@ -169,25 +193,51 @@ end)
 
 The raw generated aliases are not part of the author contract.
 
+Modules may generate control declarations from module-owned catalog metadata
+before activation. That is different from making Lib understand those catalogs:
+
+```text
+hand-authored source definitions
+  -> domain/catalog hydration
+  -> pure metadata
+  -> control declarations
+```
+
+Controls consume prepared metadata. They should not perform external/game-data
+hydration themselves.
+
 ## Template Contract
 
-A control template is a Lib-facing module-owned object. It describes how one
-control instance maps to private storage and how phase-specific refs are
-constructed.
+A control template is a module-owned class definition. It describes how one
+control instance maps to private storage/actions and how phase-specific object
+refs are constructed.
+
+The template owns the methods exposed on the returned control object. Lib only
+requires enough common shape to compile, cache, phase-gate, and draw refs. The
+domain interface belongs to the template:
+
+```text
+RangeSelector object methods: read(), matches(...), field(...)
+SelectionGroup object methods: selectedMask(...), isSelected(...)
+RouteSlot object methods: readRoute(), writeRoute(...), reset()
+```
+
+Do not force unrelated templates into one broad shared method surface. Their
+commonality is lifecycle/plumbing, not domain behavior.
 
 Candidate shape:
 
 ```lua
-local ModeRange = {}
+local RangeSelector = {}
 
-function ModeRange.prepare(instance)
+function RangeSelector.prepare(instance)
     if instance.min > instance.max then
         return nil, "min must be <= max"
     end
     return instance
 end
 
-function ModeRange.storage(instance)
+function RangeSelector.storage(instance)
     return {
         {
             key = "Mode",
@@ -215,60 +265,167 @@ function ModeRange.storage(instance)
     }
 end
 
-function ModeRange.createRuntime(fields, instance)
-    return {
-        read = function(self)
-            return {
-                mode = fields.Mode:read(),
-                min = fields.Min:read(),
-                max = fields.Max:read(),
-            }
-        end,
-        matches = function(self, value)
-            -- template-owned semantics
-        end,
-    }
+function RangeSelector.createRuntime(fields, instance)
+    local control = {}
+
+    function control:name()
+        return instance.name
+    end
+
+    function control:read()
+        return {
+            mode = fields.Mode:read(),
+            min = fields.Min:read(),
+            max = fields.Max:read(),
+        }
+    end
+
+    function control:matches(value)
+        -- template-owned semantics
+    end
+
+    return control
 end
 
-function ModeRange.createUi(fields, instance)
-    return {
-        read = function(self)
-            return {
-                mode = fields.Mode:read(),
-                min = fields.Min:read(),
-                max = fields.Max:read(),
-            }
-        end,
-        writeMode = function(self, value)
-            return fields.Mode:write(value)
-        end,
-        field = function(self, key)
-            return fields[key]
-        end,
-    }
-end
+function RangeSelector.createUi(fields, instance)
+    local control = {}
 
-function ModeRange.draw(draw, control, instance, opts)
-    draw.widgets.dropdown(control:field("Mode"), instance.modeOpts or opts.mode)
-    draw.widgets.steppedRange(control:field("Min"), control:field("Max"), instance.rangeOpts or opts.range)
-end
+    function control:name()
+        return instance.name
+    end
 
-return ModeRange
+    function control:read()
+        return {
+            mode = fields.Mode:read(),
+            min = fields.Min:read(),
+            max = fields.Max:read(),
+        }
+    end
+
+    function control:writeMode(value)
+        return fields.Mode:write(value)
+    end
+
+    function control:field(key)
+        return fields[key]
+    end
+
+    return control
+end
 ```
+
+A table-backed control can expose a richer typed object without leaking table
+internals:
+
+```lua
+local SelectionGroup = {}
+
+function SelectionGroup.storage(instance)
+    return {
+        {
+            key = "Rows",
+            type = "table",
+            minRows = 1,
+            maxRows = instance.maxRows,
+            defaultRows = instance.defaultRows,
+            row = {
+                {
+                    key = "Selection",
+                    type = "packedInt",
+                    default = 0,
+                    bits = instance.bits,
+                },
+            },
+        },
+    }
+end
+
+function SelectionGroup.createRuntime(fields, instance)
+    local control = {}
+
+    function control:count()
+        return fields.Rows:count()
+    end
+
+    function control:selectedMask(rowIndex)
+        return fields.Rows:get(rowIndex or 1, "Selection"):read() or 0
+    end
+
+    function control:isSelected(itemKey, rowIndex)
+        local item = instance.itemByKey[itemKey]
+        return item and bit32.band(self:selectedMask(rowIndex), item.mask) ~= 0
+    end
+
+    return control
+end
+
+function SelectionGroup.createUi(fields, instance)
+    local control = {}
+
+    function control:count()
+        return fields.Rows:count()
+    end
+
+    function control:setCount(count)
+        -- append/remove rows through fields.Rows
+    end
+
+    function control:selectionField(rowIndex)
+        return fields.Rows:get(rowIndex or 1, "Selection")
+    end
+
+    function control:items()
+        return instance.items
+    end
+
+    function control:isCustomized()
+        -- inspect configured selection masks
+    end
+
+    return control
+end
+```
+
+The packed-field helper names above are illustrative. The implementation can
+settle on the actual packed child/ref API while keeping the same contract:
+runtime methods return semantic scalar values, and UI methods return draw-safe
+field refs when rendering needs a primitive widget.
 
 The exact callback names can settle during implementation, but the split should
 remain:
 
 - `prepare(instance)` validates and normalizes template-specific fields
 - `storage(instance)` returns field descriptors, not full public aliases
-- `createRuntime(fields, instance)` returns runtime control ref
-- `createUi(fields, instance)` returns UI control ref
-- `draw(draw, control, instance, opts)` draws the UI control
+- `commands(instance)` or `commands = {...}` optionally returns scoped commands
+- `createRuntime(fields, instance)` returns the runtime control object
+- `createUi(fields, instance)` returns the UI control object
+- `draw(draw, control, instance, opts)` draws the default UI control view
+- `views = { ... }` optionally defines named UI control views
 
 `prepare(instance)` is the template contact point. It owns domain validation for
 fields like mode values, display values, range bounds, packed bit options, and
 defaults. After a prepared instance enters the control compiler, downstream
 control internals should trust it.
+
+The returned control object is part of the template's author-facing contract.
+Template docs should describe which methods exist on runtime refs, which
+methods exist on UI refs, and which methods are shared.
+
+For example:
+
+```text
+SelectionGroup runtime ref:
+  count()
+  selectedMask(rowIndex)
+  isSelected(itemKey, rowIndex)
+
+SelectionGroup UI ref:
+  count()
+  setCount(count)
+  selectionField(rowIndex)
+  items()
+  isCustomized()
+```
 
 Templates may also declare scoped commands:
 
@@ -285,14 +442,60 @@ action subsystem using generated private action keys, just as control storage
 lowers into generated private storage aliases. They are scoped to one control
 instance and exposed only through that control ref.
 
+```lua
+function RangeSelector.draw(draw, control, instance, opts)
+    draw.widgets.dropdown(control:field("Mode"), instance.modeOpts or opts.mode)
+    draw.widgets.steppedRange(control:field("Min"), control:field("Max"), instance.rangeOpts or opts.range)
+end
+```
+
+Advanced templates can define named views:
+
+```lua
+SelectionGroup.views = {
+    default = function(draw, control, instance, opts)
+        return SelectionGroup.views.list(draw, control, instance, opts)
+    end,
+
+    setup = function(draw, control, instance, opts)
+        -- configured row count
+    end,
+
+    list = function(draw, control, instance, opts)
+        -- search controls, reset buttons, packed checkbox list
+    end,
+
+    compactRow = function(draw, control, instance, opts)
+        -- one compact packed dropdown row
+    end,
+}
+```
+
+Lib normalizes simple templates into a view table:
+
+```text
+template.draw -> template.views.default
+```
+
+Rules:
+
+- missing `opts.view` uses `"default"`
+- view names must be stable identifiers
+- every template must have a default view, either via `draw` or `views.default`
+- `ui.draw.control(control, { view = "name" })` dispatches through the
+  normalized template view table
+- unknown view names are rejected by Lib at the draw boundary
+- templates should not manually dispatch on `opts.view` when `views` can model
+  the variants directly
+
 ## Instance Declaration
 
 Control declaration keys are stable public control names:
 
 ```lua
 module.controls.define({
-    BiomePriority1 = {
-        template = "ModeRange",
+    PrioritySlot1 = {
+        template = "RangeSelector",
         -- template-specific fields
     },
 })
@@ -320,9 +523,9 @@ _<ControlName>_<FieldKey>
 Example:
 
 ```text
-_BiomePriority1_Mode
-_BiomePriority1_Min
-_BiomePriority1_Max
+_PrioritySlot1_Mode
+_PrioritySlot1_Min
+_PrioritySlot1_Max
 ```
 
 Generation rules:
@@ -352,7 +555,7 @@ becomes:
 
 ```lua
 {
-    alias = "_BiomePriority1_Min",
+    alias = "_PrioritySlot1_Min",
     type = "int",
     default = 1,
     min = 0,
@@ -377,15 +580,15 @@ aliases.
 Runtime:
 
 ```lua
-runtime.controls.get("BiomePriority1")
-runtime.controls.read("BiomePriority1")
+runtime.controls.get("PrioritySlot1")
+runtime.controls.read("PrioritySlot1")
 ```
 
 UI:
 
 ```lua
-ui.controls.get("BiomePriority1")
-ui.controls.read("BiomePriority1")
+ui.controls.get("PrioritySlot1")
+ui.controls.read("PrioritySlot1")
 ```
 
 `get(...)` returns a cached control object.
@@ -411,13 +614,13 @@ Rendering belongs to draw, not to data.
 Preferred:
 
 ```lua
-ui.draw.control(ui.controls.get("BiomePriority1"))
+ui.draw.control(ui.controls.get("PrioritySlot1"))
 ```
 
 Manual rendering remains:
 
 ```lua
-local priority = ui.controls.get("BiomePriority1")
+local priority = ui.controls.get("PrioritySlot1")
 ui.draw.widgets.dropdown(priority:field("Mode"), MODE_OPTS)
 ui.draw.widgets.stepper(priority:field("Min"), MIN_OPTS)
 ui.draw.widgets.stepper(priority:field("Max"), MAX_OPTS)
@@ -446,6 +649,38 @@ ui.draw.widgets.dropdown(field, opts) -- primitive draw operation by name
 ui.draw.control(control, opts)        -- typed object chooses its renderer
 ```
 
+Controls may expose named render variants through first-class template views and
+explicit draw options:
+
+```lua
+ui.draw.control(source, { view = "setup" })
+ui.draw.control(source, { view = "list", row = 1, idPrefix = "primary" })
+ui.draw.control(source, { view = "compactRow", row = 2 })
+```
+
+This is explicit view dispatch, not arg-shape dispatch. The view name selects an
+alternate projection of the same semantic control data from the template's
+normalized `views` table.
+
+Allowed:
+
+```text
+setup
+list
+compactRow
+```
+
+Not allowed:
+
+```text
+drawWholeCategoryTab
+drawWholeFeatureScreen
+drawAllModuleSettings
+```
+
+The guardrail is simple: a view may render one control's data in a different
+shape. It must not become a screen/layout builder.
+
 Query and metadata helpers belong on the control object, not the draw namespace:
 
 ```lua
@@ -473,17 +708,9 @@ Module-owned code should continue to own:
 - visibility rules
 - cross-control orchestration
 
-BiomeControl3 is the reference scenario:
-
-```text
-biome catalog -> ordered rooms/minibosses/NPCs/specials -> control names/refs
-UI files -> explicit sections/order -> ui.draw.control(...)
-logic files -> runtime.controls.get(...) or catalog-indexed control refs
-```
-
-The control replaces the repeated alias/binding/widget/reader bundle. It does
-not replace the biome catalog or the UI file that decides that Ephyra renders
-rooms, then minibosses, then rewards.
+The control replaces repeated alias/binding/widget/reader bundles. It does not
+replace the catalog or UI file that decides which controls render in which
+order.
 
 Do not add nested controls in v1 to solve layout. Parent/group composites can
 stay module-local tables that organize leaf controls.
@@ -526,10 +753,28 @@ code. A template should move into Lib only after unrelated modules prove that
 the data shape, draw behavior, and runtime semantics are all stable and
 domain-neutral.
 
-BiomeControl examples like `modeRange`, `npcModeRange`, and
-`packedRewardBans` are good module templates. They carry domain assumptions
-about room modes, forced ranges, packed reward options, labels, and conditional
-visibility. Those assumptions should not become Lib primitives prematurely.
+Examples like `RangeSelector`, `RouteSlot`, `SelectionGroup`, and
+`PackedRewardGroup` are good module templates. They carry domain assumptions
+about modes, ranges, options, labels, filtering, and conditional visibility.
+Those assumptions should not become Lib primitives prematurely.
+
+Templates can be generated from pure module metadata. A source definition can be
+hand-authored while the metadata is hydrated elsewhere:
+
+```lua
+PrimaryRewards = {
+    template = "SelectionGroup",
+    label = "Primary Rewards",
+    group = "Rewards",
+    color = catalog.PrimaryRewards.color,
+    maxRows = 10,
+    defaultRows = 5,
+    items = catalog.PrimaryRewards.items,
+}
+```
+
+The template receives `items` as already-hydrated metadata. It does not know how
+those items were discovered.
 
 ## Relationship To Storage
 
@@ -541,15 +786,15 @@ main author API.
 Authors should not be asked to declare:
 
 ```lua
-{ alias = "BiomePriority1Mode", ... }
-{ alias = "BiomePriority1Min", ... }
-{ alias = "BiomePriority1Max", ... }
+{ alias = "PrioritySlot1Mode", ... }
+{ alias = "PrioritySlot1Min", ... }
+{ alias = "PrioritySlot1Max", ... }
 ```
 
 when they mean:
 
 ```lua
-BiomePriority1 = { template = "ModeRange", ... }
+PrioritySlot1 = { template = "RangeSelector", ... }
 ```
 
 Controls are the owner of those generated fields.
@@ -627,9 +872,9 @@ If control hash compaction becomes necessary, add a control-level hash hint
 later:
 
 ```lua
-BiomePriority1 = {
-    template = "ModeRange",
-    hashGroup = "BiomePriority",
+PrioritySlot1 = {
+    template = "RangeSelector",
+    hashGroup = "Priority",
 }
 ```
 
@@ -637,15 +882,20 @@ Do not expose generated aliases to solve hash grouping.
 
 ## Tables
 
-Controls may compile to table storage, but the first version should avoid table
-control templates unless a concrete module needs one.
+Controls may compile to table storage. Table-backed controls are part of the v1
+target because they prove that controls can support repeated row data without
+exposing raw table internals.
 
-The first useful controls are likely scalar bundles:
+The first useful controls are likely scalar bundles and table-backed leaf
+controls:
 
 - dropdown + range
 - label + packed selection
 - enabled flag + numeric limit
 - priority slot
+- configurable row groups
+- table row containing a packed selection mask
+- table-backed route slots
 
 If a control needs rows, prefer a control method that exposes semantic row
 operations instead of leaking table internals:
@@ -655,6 +905,19 @@ local routes = ui.controls.get("Routes")
 routes:count()
 routes:readRoute(index)
 routes:writeRoute(index, route)
+```
+
+Table-backed example:
+
+```lua
+local source = runtime.controls.get("PrimaryRewards")
+source:count()
+source:selectedMask(2)
+source:isSelected("RewardA", 2)
+
+local source = ui.controls.get("PrimaryRewards")
+source:setCount(3)
+ui.draw.control(source, { view = "list", row = 2 })
 ```
 
 Do not add nested controls in v1.
@@ -679,6 +942,9 @@ Responsibilities:
 Own declaration contact-point validation:
 
 - template table shape
+- template `draw`/`views` shape
+- stable view names
+- default view presence
 - instance table shape
 - stable names
 - duplicate names
@@ -809,13 +1075,60 @@ The private alias check remains on author data facades only. Control adapters
 use trusted internal state directly, so rendering controls should not pay a
 private-alias rejection cost on every field access.
 
+## Validation Scenarios
+
+These scenarios motivated the design. They are not normative Lib requirements.
+They are kept here as concrete checks that the generic control contract is not
+too weak.
+
+### BiomeControl
+
+Reference pattern:
+
+```text
+domain catalog -> ordered rooms/minibosses/NPCs/specials -> control names/refs
+UI files -> explicit sections/order -> ui.draw.control(...)
+logic files -> runtime.controls.get(...) or catalog-indexed control refs
+```
+
+The control should replace repeated alias/binding/widget/reader bundles. It
+should not replace the biome catalog or the UI file that decides render order.
+
+Useful control shapes:
+
+- scalar range/mode selectors
+- route/priority slots
+- room/miniboss/trial-room controls with different UI views
+
+### BoonBans
+
+Stress-test pattern:
+
+```text
+source definitions -> hydrated reward metadata -> selection-control declarations
+root groups -> module-owned layout
+selection control -> setup/list/rarity/compact-row views
+runtime logic -> selection masks, overrides, configured row count
+```
+
+The control should replace repeated table access, packed-bit label hydration,
+packed refs, and runtime mask reads. It should not replace module-owned root
+groups, active-tab state, or cross-root panels.
+
+Useful control shapes:
+
+- table-backed selection group
+- packed reward/trait masks
+- optional secondary packed values such as rarity/priority overrides
+- multiple named views over the same control data
+
 ## First Implementation Slice
 
 Implement only enough to prove the model:
 
 1. Add `controls` declaration buckets.
 2. Add template and instance validation.
-3. Compile simple scalar field descriptors into internal `_` storage aliases.
+3. Compile scalar and table field descriptors into internal `_` storage aliases.
 4. Compile scoped commands into internal action declarations.
 5. Add prepared control catalog to the managed module record.
 6. Add `runtime.controls.get`.
@@ -828,8 +1141,16 @@ Implement only enough to prove the model:
    - control refs are cached
    - phase gates reject escaped refs
    - `ui.draw.control(...)` dispatches to the template renderer
-10. Port one narrow first-party slice, preferably one BiomeControl control with
-   a clear alias/migration decision, before broadening the API.
+   - `ui.draw.control(...)` dispatches explicit `opts.view` variants
+   - simple `draw(...)` templates are normalized into `views.default`
+   - unknown view names are rejected
+   - table-backed controls can expose semantic row methods without leaking raw
+     private aliases
+10. Port one narrow first-party scalar-bundle slice with a clear alias/migration
+   decision.
+11. Then port one first-party table-backed slice before broadening the API. This
+   is the stress test for table-backed controls, hydrated metadata, and view
+   variants.
 
 ## Risks
 
@@ -840,6 +1161,8 @@ Implement only enough to prove the model:
 - Too much template genericity can make module code less readable than direct UI.
 - Nested controls can create a mini component framework; avoid them initially.
 - Control renderers can hide too much immediate-mode layout.
+- View variants can become a disguised screen builder.
+- Table-backed controls can leak table internals if their methods are too thin.
 
 ## Guardrails
 
@@ -849,6 +1172,8 @@ Implement only enough to prove the model:
 - Keep render order in UI files, not inside large orchestration helpers.
 - Do not make controls mandatory for simple fields.
 - Do not move dynamic game catalog projection into storage.
+- Keep game-data hydration in module-owned catalog code; controls consume pure
+  metadata.
 - Do not expose generated aliases as a workaround.
 - Do not let controls register lifecycle callbacks or external capabilities.
 - Add first-party ports one module slice at a time and stop if readability gets
@@ -864,6 +1189,12 @@ Implement only enough to prove the model:
 - `ui.draw.control(control, opts)` accepts draw-time `opts`. Template draw
   functions own how to interpret or pass through those options.
 - Control-specific queries belong on the control object, not the draw namespace.
+- Template methods define the control object's author-facing interface. Lib
+  manages lifecycle/plumbing; it does not impose one broad domain method set.
+- Template views are first-class. Simple `draw(...)` templates normalize to
+  `views.default`; advanced templates define `views = { default = ..., ... }`.
+- Explicit `opts.view` dispatch is allowed through the normalized view table for
+  alternate render projections of the same control data.
 - Control-level hash grouping is out of scope for v1. Generated private storage
   hashes normally; add grouping only if a real profile/hash size issue appears.
 - Lib does not ship built-in templates in v1. Controls are domain-specific, so
@@ -872,7 +1203,10 @@ Implement only enough to prove the model:
   templates through `ui.draw.widgets`.
 - Modules own catalogs and layout. Controls own repeated leaf data/draw/runtime
   units.
+- Table-backed controls are in scope for v1 when they remain leaf controls and
+  expose semantic methods instead of raw table internals.
 
 ## Open Questions
 
-No open design questions for v1.
+No blocking design questions for v1. Implementation details such as exact helper
+names for packed child refs can settle during the first slice.
