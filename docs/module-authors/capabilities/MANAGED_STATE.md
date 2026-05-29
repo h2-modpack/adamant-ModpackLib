@@ -11,6 +11,8 @@ state, draw actions, and hash/profile participation.
 | `runtime.data.runtime` | writes to `mode = "runtime"` storage | runtime callbacks |
 | `ui.data` | staged UI reads/writes | draw callbacks |
 | `ui.actions` | one-shot draw intent | draw callbacks |
+| `ui.controls` | declared composite control refs | draw callbacks |
+| `runtime.controls` | declared composite control reads | runtime callbacks |
 | `runtime.data.cache` | declared current-run cache | runtime callbacks |
 
 Draw callbacks receive `(host, ui)`. Runtime callbacks receive `(host, runtime)`.

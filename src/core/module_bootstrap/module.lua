@@ -12,12 +12,14 @@ local declarationSurface = import('core/module_bootstrap/module/declaration_surf
     sharedDataDeclarations = deps.sharedDataDeclarations,
     sharedRegistrations = deps.sharedRegistrations,
     mutationLifecycle = deps.mutationLifecycle,
+    controlDeclarations = deps.controlDeclarations,
 })
 local activationFinalizer = import('core/module_bootstrap/module/activation_finalizer.lua', nil, {
     logging = logging,
     managedModule = deps.managedModule,
     moduleState = deps.moduleState,
     fallbackUi = deps.fallbackUi,
+    controlCompiler = deps.controlCompiler,
 })
 local declarationFacade = import('core/module_bootstrap/module/declaration_facade.lua', nil, {
     logging = logging,
@@ -29,6 +31,7 @@ local declarationFacade = import('core/module_bootstrap/module/declaration_facad
     overlayDeclarations = deps.overlayDeclarations,
     sharedDataDeclarations = deps.sharedDataDeclarations,
     sharedRegistrations = deps.sharedRegistrations,
+    controlDeclarations = deps.controlDeclarations,
 })
 
 --- Creates a module declaration facade.

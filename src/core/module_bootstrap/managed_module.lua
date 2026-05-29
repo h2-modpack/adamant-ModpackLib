@@ -11,6 +11,7 @@ local definition = deps.definition
 local moduleRegistry = deps.moduleRegistry
 local storage = deps.storage
 local uiDraw = deps.uiDraw
+local controls = deps.controls
 local managedModule = {
     prepareDefinition = definition.prepareDefinition,
     prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
@@ -133,6 +134,7 @@ local KnownModuleCreateOpts = {
     onCommit = true,
     drawTab = true,
     drawQuickContent = true,
+    controlCatalog = true,
 }
 
 local function validateKnownOpts(opts, context)
@@ -161,6 +163,7 @@ local function createRuntimeContext(store)
         data = store,
         cache = store and store.cache or nil,
         shared = store and store.shared or nil,
+        controls = store and store.controls or nil,
     }
 end
 
@@ -237,6 +240,10 @@ function managedModule.create(opts)
     local runtimeContext
     local actionRuntimeBridge
     local host
+    local controlCatalog = opts.controlCatalog or {
+        instances = {},
+        order = {},
+    }
 
     if type(drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "managedModule.create: drawTab is required")
@@ -452,6 +459,7 @@ function managedModule.create(opts)
         store = nil,
         runtime = nil,
         host = host,
+        controlCatalog = controlCatalog,
         actionBuffer = actionBuffer,
         effectReceipts = {},
         fallbackUiRequested = false,
@@ -469,6 +477,7 @@ function managedModule.create(opts)
         phase = "runtime",
         source = "store.shared",
     }))
+    store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
     runtimeContext = createRuntimeContext(store)
     actionRuntimeBridge = createActionRuntimeBridge(persistentState)
     record.store = store
@@ -486,6 +495,7 @@ function managedModule.create(opts)
         actionBuffer = actionBuffer,
         host = host,
         actionRuntime = actionRuntimeBridge,
+        controls = controls.refs.createUi(stagedState, controlCatalog, actionBuffer),
         logPrefix = logPrefix,
         isDebugEnabled = function()
             return persistentState.read("DebugMode") == true

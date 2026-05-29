@@ -30,6 +30,7 @@ end
 ---@field actionBuffer ActionBuffer
 ---@field host Host
 ---@field actionRuntime ActionRuntimeBridge
+---@field controls table|nil
 ---@field logPrefix string
 ---@field isDebugEnabled fun(): boolean
 
@@ -46,6 +47,7 @@ function uiPhase.create(opts)
         data = objects.state,
         actions = objects.actions,
         shared = opts.shared,
+        controls = opts.controls,
     }
 
     function objects.run(callback)
@@ -54,7 +56,9 @@ function uiPhase.create(opts)
             debugEnabled = opts.isDebugEnabled() == true,
         }, function()
             local results = packResults(callback(opts.host, objects.ui))
-            opts.actionBuffer.executePendingActions(opts.host, objects.state, opts.actionRuntime)
+            opts.actionBuffer.executePendingActions(opts.host, objects.state, opts.actionRuntime, {
+                controls = opts.controls,
+            })
             return table.unpack(results, 1, results.n)
         end))
 

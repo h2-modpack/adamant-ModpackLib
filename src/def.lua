@@ -162,6 +162,53 @@ local lib = {}
 ---@field actions AdamantModpackLib.CommitActions
 ---@field hadConfigChanges fun(): boolean
 
+---@alias AdamantModpackLib.ControlDrawCallback fun(
+---    draw: AdamantModpackLib.DrawContext,
+---    control: AdamantModpackLib.ControlRef,
+---    instance: table,
+---    opts: table
+---): any
+
+---@alias AdamantModpackLib.ControlCommandHandler fun(
+---    host: AdamantModpackLib.Host,
+---    uiData: AdamantModpackLib.DrawState,
+---    actionRuntime: AdamantModpackLib.ActionRuntimeBridge,
+---    control: AdamantModpackLib.ControlRef,
+---    value: any
+---)
+
+---@alias AdamantModpackLib.ControlCommandMap table<string, AdamantModpackLib.ControlCommandHandler>
+
+---@class AdamantModpackLib.ControlTemplate
+---@field prepare? fun(instance: table): table
+---@field storage? AdamantModpackLib.StorageSchema|fun(instance: table): AdamantModpackLib.StorageSchema
+---@field createRuntime? fun(fields: table<string, AdamantModpackLib.StoreDataRef>, instance: table): AdamantModpackLib.ControlRef
+---@field createUi? fun(fields: table<string, AdamantModpackLib.DrawStateRef>, instance: table): AdamantModpackLib.ControlRef
+---@field draw? AdamantModpackLib.ControlDrawCallback
+---@field views? table<string, AdamantModpackLib.ControlDrawCallback>
+---@field commands? AdamantModpackLib.ControlCommandMap|fun(instance: table): AdamantModpackLib.ControlCommandMap
+
+---@class AdamantModpackLib.ControlDeclaration
+---@field template string
+
+---@class AdamantModpackLib.ControlRef
+---@field name fun(self: AdamantModpackLib.ControlRef): string
+---@field kind fun(self: AdamantModpackLib.ControlRef): string
+---@field read? fun(self: AdamantModpackLib.ControlRef, ...): any
+---@field command? fun(self: AdamantModpackLib.ControlRef, commandName: string): AdamantModpackLib.DrawActionRef
+
+---@class AdamantModpackLib.AuthorControls
+---@field defineTemplates fun(templates: table<string, AdamantModpackLib.ControlTemplate>): nil
+---@field define fun(instances: table<string, AdamantModpackLib.ControlDeclaration>): nil
+
+---@class AdamantModpackLib.RuntimeControls
+---@field get fun(name: string): AdamantModpackLib.ControlRef
+---@field read fun(name: string, ...): any
+
+---@class AdamantModpackLib.UiControls
+---@field get fun(name: string): AdamantModpackLib.ControlRef
+---@field read fun(name: string, ...): any
+
 ---@class AdamantModpackLib.Host
 ---@field getHostId fun(): string
 ---@field getModuleId fun(): string
@@ -173,6 +220,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.RuntimeContext
 ---@field data AdamantModpackLib.Store
+---@field controls AdamantModpackLib.RuntimeControls
 ---@field cache AdamantModpackLib.StoreCache?
 ---@field shared AdamantModpackLib.SharedData?
 
@@ -186,6 +234,7 @@ local lib = {}
 ---@field draw AdamantModpackLib.DrawContext
 ---@field data AdamantModpackLib.DrawState
 ---@field actions AdamantModpackLib.DrawActions
+---@field controls AdamantModpackLib.UiControls
 ---@field shared AdamantModpackLib.SharedData?
 
 ---@alias AdamantModpackLib.UiCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): nil
@@ -209,6 +258,7 @@ local lib = {}
 ---@field data { define: fun(storage: AdamantModpackLib.StorageSchema): nil }
 ---@field actions { define: fun(actions: table<string, AdamantModpackLib.DrawActionHandler>): nil }
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
+---@field controls AdamantModpackLib.AuthorControls
 ---@field hashGroups { define: fun(hashGroupPlan: AdamantModpackLib.HashGroupPlan): nil }
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
@@ -377,6 +427,7 @@ local lib = {}
 ---@field imgui table Raw ImGui backend table for custom layout and controls.
 ---@field widgets AdamantModpackLib.DrawWidgetsApi
 ---@field nav AdamantModpackLib.DrawNavApi
+---@field control fun(control: AdamantModpackLib.ControlRef, opts?: table): any Render a declared control ref through its template renderer.
 ---@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 

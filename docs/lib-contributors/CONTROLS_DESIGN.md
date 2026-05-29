@@ -1,12 +1,13 @@
 # Controls Design
 
-Contributor design spec for a future `controls` capability.
+Contributor design spec for the `controls` capability.
 
-This document describes the backend shape only. It does not implement controls.
+This document describes the design and the first implemented Lib slice. It is
+kept as an audit guide while first-party modules prove the shape.
 
 ## Status
 
-Proposed.
+Initial backend implemented.
 
 Lib now has the backend pieces needed to support this:
 
@@ -19,6 +20,9 @@ Lib now has the backend pieces needed to support this:
 - author-facing `ui.data` and `runtime.data` reject `_` aliases
 - author-facing `ui.actions` and commit-action lookup reject `_` keys
 - widgets render `StorageField` refs and are phase-gated by `ui.draw`
+- `module.controls.defineTemplates(...)` and `module.controls.define(...)`
+  compile to private storage/actions during activation
+- `runtime.controls`, `ui.controls`, and `ui.draw.control(...)` are available
 
 ## Problem
 
@@ -533,7 +537,7 @@ Generation rules:
 - only Lib generates these aliases
 - generated aliases must start with `_`
 - generated aliases must be globally unique within the module storage schema
-- generated aliases are passed to `prepareDefinitionWithInternalStorage(...)`
+- generated aliases are passed to `prepareDefinitionWithInternalDeclarations(...)`
 - normal `module.data.define(...)` cannot declare these aliases
 - author-facing `ui.data` and `runtime.data` reject direct access to these
   aliases
@@ -924,14 +928,13 @@ Do not add nested controls in v1.
 
 ## Internal Architecture
 
-Suggested files:
+Files:
 
 ```text
 src/core/controls/00_init.lua
 src/core/controls/declarations.lua
 src/core/controls/compiler.lua
-src/core/controls/runtime_controls.lua
-src/core/controls/ui_controls.lua
+src/core/controls/refs.lua
 src/core/controls/draw_controls.lua
 ```
 
@@ -961,23 +964,16 @@ Turn validated declarations into:
 - per-instance generated alias bindings
 - renderer dispatch metadata
 
-This runs during activation finalization before `prepareDefinitionWithInternalStorage`.
+This runs during activation finalization before
+`prepareDefinitionWithInternalDeclarations(...)`.
 
-### `runtime_controls.lua`
+### `refs.lua`
 
-Build runtime control access over trusted `persistentState`.
+Build runtime and UI control access over trusted `persistentState` and
+`stagedState`.
 
 It may call internal/private aliases because it is not the author `runtime.data`
-facade.
-
-### `ui_controls.lua`
-
-Build UI control access over trusted `stagedState`.
-
-It may call internal/private aliases because it is not the author `ui.data`
-facade.
-
-Returned refs are draw-gated.
+or `ui.data` facade. Returned refs are phase-gated and cached per facade.
 
 ### `draw_controls.lua`
 
@@ -987,7 +983,7 @@ This plugs into `ui.draw.control(...)`.
 
 ## Activation Flow
 
-Target activation flow:
+Activation flow:
 
 ```text
 module.controls.defineTemplates(...)
@@ -997,12 +993,12 @@ module.activate()
     -> internalStorage
     -> internalActions
     -> controlCatalog
-  prepareDefinitionWithInternalStorage(..., internalStorage)
+  prepareDefinitionWithInternalDeclarations(..., internalStorage, internalActions)
   moduleState.create(config, definition)
-  controls.createRuntime(persistentState, controlCatalog)
-  controls.createUi(stagedState, controlCatalog)
-  ui.draw.control = controls.createDraw(controlCatalog)
   managedModule.create(...)
+    runtime.controls = controls.refs.createRuntime(...)
+    ui.controls = controls.refs.createUi(...)
+    ui.draw.control = controls.draw.render
 ```
 
 The important boundary is:
@@ -1014,7 +1010,7 @@ control refs build after state creation
 
 ## Public Surface
 
-Proposed public additions:
+Public additions:
 
 ```lua
 module.controls.defineTemplates(templates)
@@ -1037,7 +1033,7 @@ Avoid adding list/introspection helpers until first-party modules need them.
 
 ## Validation Policies
 
-Likely policies:
+Policies:
 
 - `controls.invalid_declaration`
 - `controls.duplicate_name`
@@ -1045,7 +1041,6 @@ Likely policies:
 - `controls.invalid_template`
 - `controls.invalid_field`
 - `controls.unknown_control`
-- `controls.invalid_phase`
 - `controls.invalid_render_target`
 
 Validation should happen at contact points:
@@ -1124,7 +1119,7 @@ Useful control shapes:
 
 ## First Implementation Slice
 
-Implement only enough to prove the model:
+Implemented enough to prove the model:
 
 1. Add `controls` declaration buckets.
 2. Add template and instance validation.

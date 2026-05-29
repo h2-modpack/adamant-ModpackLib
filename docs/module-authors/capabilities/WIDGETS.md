@@ -2,14 +2,14 @@
 
 This document covers `draw.widgets.*` and `draw.nav.*` from a module draw-code point of view.
 
-Draw callbacks receive `draw, state, actions`. Widget authoring
-normally uses `draw.widgets`, which calls the current draw pass `imgui`
-backend without making modules thread `imgui` through widget calls. Navigation
-helpers use `draw.nav` the same way.
+Draw callbacks receive `host, ui`. Widget authoring normally uses
+`ui.draw.widgets`, which calls the current draw pass `imgui` backend without
+making modules thread `imgui` through widget calls. Navigation helpers use
+`ui.draw.nav` the same way.
 
-`draw`, `state`, and `actions` are draw-phase objects. Their
+`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-phase objects. Their
 methods are valid only while Lib is executing a module draw callback.
-Do not cache them, storage fields returned by `state.get(...)`, or action refs
+Do not cache them, storage fields returned by `ui.data.get(...)`, or action refs
 for use after the callback returns.
 
 For storage schema, table handles, packed roots, and state/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).

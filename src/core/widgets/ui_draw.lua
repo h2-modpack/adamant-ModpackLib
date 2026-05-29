@@ -6,6 +6,11 @@ local logging = deps.logging
 local storage = deps.storage
 local imgui = deps.rom.ImGui
 local phaseGate = deps.phaseGate
+local controlsDraw = deps.controlsDraw or {
+    render = function()
+        logging.violate("controls.invalid_render_target", "ui.draw.control is unavailable")
+    end,
+}
 
 local uiDraw = {}
 local draw = {
@@ -139,6 +144,10 @@ end
 function draw.nav.verticalTabs(opts)
     phaseGate.requireAnyDraw()
     return nav.verticalTabs(draw.imgui, opts)
+end
+
+function draw.control(control, opts)
+    return controlsDraw.render(draw, control, opts)
 end
 
 ---@return DrawContext

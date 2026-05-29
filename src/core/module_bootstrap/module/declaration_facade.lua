@@ -9,6 +9,7 @@ local hookDeclarations = deps.hookDeclarations
 local overlayDeclarations = deps.overlayDeclarations
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
+local controlDeclarations = deps.controlDeclarations
 
 local declarationFacade = {}
 
@@ -23,6 +24,7 @@ local function createDeclarationState()
         hashGroupPlan = nil,
         drawTab = nil,
         drawQuickContent = nil,
+        controlDeclarations = controlDeclarations.create(),
         fallbackUi = {},
         hookDeclarations = hookDeclarations.create(),
         sharedDataDeclarations = sharedDataDeclarations.createDeclarations(),

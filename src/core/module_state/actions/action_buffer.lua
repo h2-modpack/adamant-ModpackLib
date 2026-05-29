@@ -111,6 +111,15 @@ local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
     return createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
+local function createInternalDrawActionRef(actionBuffer, actionKey, phaseGate)
+    if type(actionBuffer.validateAction) == "function" then
+        actionBuffer.validateAction("internal actions.get", actionKey)
+    else
+        validateActionKey("internal actions.get", actionKey)
+    end
+    return createDrawActionRef(actionBuffer, actionKey, phaseGate)
+end
+
 local function createCommitActionRef(snapshot, actionKey)
     local ref
     ref = markActionRef({
@@ -198,12 +207,12 @@ local function createBuffer(actionCatalog)
         }
     end
 
-    function buffer.executePendingActions(host, uiData, actionRuntime)
+    function buffer.executePendingActions(host, uiData, actionRuntime, actionContext)
         if catalog ~= nil then
             for _, actionKey in ipairs(catalog.order) do
                 if pending[actionKey] then
                     pending[actionKey] = nil
-                    catalog.handlers[actionKey](host, uiData, actionRuntime, CloneValue(slots[actionKey]))
+                    catalog.handlers[actionKey](host, uiData, actionRuntime, CloneValue(slots[actionKey]), actionContext)
                 end
             end
         end
@@ -248,6 +257,7 @@ return {
     createBuffer = createBuffer,
     createCommitActions = createCommitActions,
     createGatedDrawActionRef = createGatedDrawActionRef,
+    createInternalDrawActionRef = createInternalDrawActionRef,
     isDrawActionRef = isDrawActionRef,
     createActionCatalog = createActionCatalog,
     validateDeclaredAction = validateDeclaredAction,

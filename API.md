@@ -7,6 +7,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `lib.createFrameworkRuntime(...)`
 - `module.fallbackUi.*`
 - `module.hooks.*`
+- `module.controls.*`
 - `module.overlays.*`
 - `module.shared.*`
 - `module.mutation.*`
@@ -26,6 +27,8 @@ activation:
 - `module.data.define(...)`
 - `module.actions.define(...)`
 - `module.cache.define(...)`
+- `module.controls.defineTemplates(...)`
+- `module.controls.define(...)`
 - `module.hashGroups.define(...)`
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
@@ -42,6 +45,40 @@ That host owns:
 - built-in module registry helpers for Framework and fallback UI
 
 Module behavior is hosted through Lib's live module registry.
+
+## `module.controls`
+
+Composite controls bundle private Lib-managed storage, optional scoped commands,
+runtime readers, and draw renderers. They are for repeated UI/data concepts
+that are larger than one widget but smaller than a module.
+
+```lua
+module.controls.defineTemplates({
+    RangeSelector = RangeSelectorTemplate,
+})
+
+module.controls.define({
+    Priority = {
+        template = "RangeSelector",
+        label = "Priority",
+    },
+})
+```
+
+Runtime code uses:
+
+```lua
+local priority = runtime.controls.read("Priority")
+```
+
+Draw code uses:
+
+```lua
+ui.draw.control(ui.controls.get("Priority"), { view = "compact" })
+```
+
+Control storage is private. Normal `ui.data` and `runtime.data` cannot access
+generated control aliases.
 
 ## `module.shared`
 
@@ -940,7 +977,10 @@ These are direct immediate-mode helpers. `draw.widgets` is bound to the current
 `imgui` for the render call. Value widgets accept `StorageField` refs:
 
 ```lua
-function ui.drawTab(draw, state, actions)
+function ui.drawTab(host, ui)
+    local draw = ui.draw
+    local state = ui.data
+
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enable Feature",
     })
@@ -970,7 +1010,7 @@ multiple. It uses the same `selectionMode` option as `packedDropdown(...)` and
 `packedRadio(...)`.
 
 Interactive widgets may optionally stage a draw action with
-`action = actions.get("ActionName")`. Buttons stage `value` or `true` when
+`action = ui.actions.get("ActionName")`. Buttons stage `value` or `true` when
 `value` is omitted. Value widgets keep their normal data edit and stage the
 edited value by default unless `value` is provided.
 

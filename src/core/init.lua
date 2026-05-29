@@ -51,6 +51,14 @@ local cacheBundle = import('core/cache/00_init.lua', nil, {
     phaseGate = phaseGate,
 })
 
+local controlsBundle = import('core/controls/00_init.lua', nil, {
+    logging = logging,
+    values = values,
+    storage = storage,
+    phaseGate = phaseGate,
+    actionRefs = moduleState.actionBuffer,
+})
+
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
     logging = logging,
     coordinatorRegistry = registry.coordinators,
@@ -119,6 +127,7 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     actions = moduleState.actionBuffer,
     rom = externals.rom,
     phaseGate = phaseGate,
+    controlsDraw = controlsBundle.draw,
 })
 
 local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
@@ -147,6 +156,7 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     coordinator = coordinator,
     storage = storage,
     uiDraw = widgetsBundle.uiDraw,
+    controls = controlsBundle,
     phaseGate = phaseGate,
 })
 
@@ -170,6 +180,8 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     sharedRegistrations = sharedBundle.registrations,
     mutationLifecycle = mutationBundle.lifecycle,
     fallbackUi = fallbackUiBundle.service,
+    controlDeclarations = controlsBundle.declarations,
+    controlCompiler = controlsBundle.compiler,
 })
 public.createModule = moduleBundle.public.createModule
 

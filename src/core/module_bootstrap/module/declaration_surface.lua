@@ -6,6 +6,7 @@ local overlayDeclarations = deps.overlayDeclarations
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local mutationLifecycle = deps.mutationLifecycle
+local controlDeclarations = deps.controlDeclarations
 
 local declarationSurface = {}
 
@@ -68,6 +69,17 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
     module.cache = {
         define = function(cache)
             setOnce("cache", cache, "module.cache.define")
+        end,
+    }
+
+    module.controls = {
+        defineTemplates = function(templates)
+            lifecycle.requireOpen("module.controls.defineTemplates")
+            return controlDeclarations.defineTemplates(declarations.controlDeclarations, templates)
+        end,
+        define = function(instances)
+            lifecycle.requireOpen("module.controls.define")
+            return controlDeclarations.define(declarations.controlDeclarations, instances)
         end,
     }
 

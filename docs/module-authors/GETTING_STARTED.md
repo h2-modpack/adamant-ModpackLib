@@ -12,14 +12,14 @@ A module is built from four pieces:
 
 - `main.lua`: imports dependencies, creates the Lib module, declares
   capabilities, and activates.
-- `data.lua`: owns storage schemas, actions, cache declarations, and static
-  option data.
+- `data.lua`: owns storage schemas, actions, cache/control declarations, and
+  static option data.
 - `ui.lua`: owns immediate-mode draw functions.
 - `logic.lua`: owns hooks, mutations, and runtime behavior.
 
 The important phase rule:
 
-- draw code uses `ui.data`, `ui.draw`, and `ui.actions`
+- draw code uses `ui.data`, `ui.draw`, `ui.actions`, and optional `ui.controls`
 - runtime code uses the `runtime` callback argument
 
 ## Minimal Module
@@ -115,8 +115,8 @@ local function drawTab(host, ui)
 end
 ```
 
-`ui.draw`, `ui.data`, and `ui.actions` are draw-phase objects. Do not cache
-them or refs returned from them for runtime use.
+`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-phase objects.
+Do not cache them or refs returned from them for runtime use.
 
 ## Runtime Logic
 

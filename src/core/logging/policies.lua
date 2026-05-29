@@ -49,6 +49,44 @@ return {
         severity = "error",
         description = "Cache factories must be functions that return tables.",
     },
+
+    ["controls.invalid_declaration"] = {
+        severity = "error",
+        description = "Control declarations require stable names, known templates, and valid instance fields.",
+    },
+    ["controls.duplicate_name"] = {
+        severity = "error",
+        description = "Control template, instance, field, and command names must be unique in their scope.",
+    },
+    ["controls.unknown_template"] = {
+        severity = "error",
+        description = "Control instances can only reference templates declared by the module.",
+    },
+    ["controls.invalid_template"] = {
+        severity = "error",
+        description = "Control templates must expose valid factory, storage, command, and draw/view callbacks.",
+    },
+    ["controls.invalid_field"] = {
+        severity = "error",
+        description = "Control storage fields must compile into valid private storage declarations.",
+    },
+    ["controls.unknown_control"] = {
+        severity = "error",
+        description = "Control access requires a declared control instance.",
+    },
+    ["controls.unknown_command"] = {
+        severity = "error",
+        description = "Control command refs require a command declared by that control template.",
+    },
+    ["controls.invalid_render_target"] = {
+        severity = "error",
+        description = "Draw control rendering requires a Lib-created control ref.",
+    },
+    ["controls.unknown_view"] = {
+        severity = "error",
+        description = "Draw control rendering can only use views declared by the control template.",
+    },
+
     ["game_deps.invalid_boundary"] = {
         severity = "error",
         description = "Game dependency reads must match the expected game-global or ROM function shape.",

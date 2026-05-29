@@ -4,6 +4,7 @@ local logging = deps.logging
 local managedModule = deps.managedModule
 local moduleState = deps.moduleState
 local fallbackUi = deps.fallbackUi
+local controlCompiler = deps.controlCompiler
 
 local activationFinalizer = {}
 
@@ -40,17 +41,37 @@ local function attachFallbackUi(declarations, module)
     end
 end
 
+local function appendList(target, source)
+    for _, value in ipairs(source or {}) do
+        target[#target + 1] = value
+    end
+end
+
+local function mergeMaps(target, source)
+    for key, value in pairs(source or {}) do
+        target[key] = value
+    end
+end
+
 function activationFinalizer.activate(opts, declarations)
     if type(declarations.drawTab) ~= "function" then
         logging.violate("host.invalid_create_opts", "module.ui.tab must be declared before module.activate")
     end
 
+    local compiledControls = controlCompiler.compile(declarations.controlDeclarations)
+    local internalStorage = {}
+    local internalActions = {}
+    appendList(internalStorage, declarations.internalStorage)
+    appendList(internalStorage, compiledControls.storage)
+    mergeMaps(internalActions, declarations.internalActions)
+    mergeMaps(internalActions, compiledControls.actions)
+
     local definition = managedModule.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
         createDefinitionInput(opts, declarations), {
             hasQuickContent = type(declarations.drawQuickContent) == "function",
         }, {
-            storage = declarations.internalStorage,
-            actions = declarations.internalActions,
+            storage = internalStorage,
+            actions = internalActions,
         })
     local state = moduleState.create(opts.config, definition)
     local module = managedModule.create({
@@ -66,6 +87,7 @@ function activationFinalizer.activate(opts, declarations)
         onCommit = declarations.onCommit,
         drawTab = declarations.drawTab,
         drawQuickContent = declarations.drawQuickContent,
+        controlCatalog = compiledControls.catalog,
     })
     attachFallbackUi(declarations, module)
     local ok, err = module.activate()

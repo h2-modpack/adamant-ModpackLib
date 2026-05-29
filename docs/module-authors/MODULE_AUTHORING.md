@@ -24,6 +24,8 @@ if not module then return end
 module.data.define(data.buildStorage())
 module.actions.define(data.buildActions())
 module.cache.define(data.buildCache())
+module.controls.defineTemplates(data.buildControlTemplates())
+module.controls.define(data.buildControls())
 module.hashGroups.define(data.buildHashGroupPlan())
 module.ui.tab(ui.drawTab)
 module.ui.quickContent(ui.drawQuickContent)
@@ -42,7 +44,8 @@ module.activate()
 
 `createModule(...)` accepts module identity/display metadata and the Chalk
 config table. Storage, actions, cache, hash groups, UI, hooks, shared data,
-mutations, overlays, and fallback UI are declarations made before activation.
+controls, mutations, overlays, and fallback UI are declarations made before
+activation.
 
 ## Author Object
 
@@ -54,6 +57,8 @@ Common surfaces:
 - `module.data.define(...)`
 - `module.actions.define(...)`
 - `module.cache.define(...)`
+- `module.controls.defineTemplates(...)`
+- `module.controls.define(...)`
 - `module.hashGroups.define(...)`
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
@@ -81,11 +86,13 @@ local function drawTab(host, ui)
     draw.widgets.checkbox(state.get("FeatureEnabled"), {
         label = "Enabled",
     })
+
+    draw.control(ui.controls.get("CompositeSetting"))
 end
 ```
 
-`ui.draw`, `ui.data`, and `ui.actions` are draw-phase objects. Use them only
-inside the active draw callback.
+`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-phase objects.
+Use them only inside the active draw callback.
 
 ## Runtime Callbacks
 
@@ -121,11 +128,14 @@ Storage roots live in `module.data.define(...)`.
 - `Enabled` and `DebugMode` are Lib-owned built-ins; do not declare them.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.
+Use [capabilities/CONTROLS.md](capabilities/CONTROLS.md) when a repeated
+domain concept needs its own bundled storage, runtime reader, and draw path.
 
 ## Capability Guides
 
 - [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md)
 - [capabilities/WIDGETS.md](capabilities/WIDGETS.md)
+- [capabilities/CONTROLS.md](capabilities/CONTROLS.md)
 - [capabilities/HOOKS.md](capabilities/HOOKS.md)
 - [capabilities/MUTATIONS.md](capabilities/MUTATIONS.md)
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
