@@ -172,6 +172,39 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionPreparesActionsIn
     lu.assertEquals(type(prepared.actions.second), "function")
 end
 
+function TestModuleHost_PrepareDefinition:testPrepareDefinitionAllowsLibInternalActions()
+    local prepared = self.h.moduleHost.prepareDefinitionWithInternalDeclarations({}, {
+        id = "InternalActionsModule",
+        name = "Internal Actions Module",
+        storage = {},
+        actions = {
+            publicAction = function() end,
+        },
+    }, nil, {
+        actions = {
+            _PrivateAction = function() end,
+        },
+    })
+
+    lu.assertEquals(prepared._actionOrder, { "_PrivateAction", "publicAction" })
+    lu.assertEquals(type(prepared.actions._PrivateAction), "function")
+    lu.assertEquals(type(prepared.actions.publicAction), "function")
+end
+
+function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsInvalidInternalActions()
+    lu.assertErrorMsgContains("internal action key 'PrivateAction' must start with '_'", function()
+        self.h.moduleHost.prepareDefinitionWithInternalDeclarations({}, {
+            id = "InvalidInternalActionsModule",
+            name = "Invalid Internal Actions Module",
+            storage = {},
+        }, nil, {
+            actions = {
+                PrivateAction = function() end,
+            },
+        })
+    end)
+end
+
 function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsInvalidActions()
     lu.assertErrorMsgContains("action key 'Bad-Key'", function()
         self.h.moduleHost.prepareDefinition({}, {
@@ -180,6 +213,16 @@ function TestModuleHost_PrepareDefinition:testPrepareDefinitionRejectsInvalidAct
             storage = {},
             actions = {
                 ["Bad-Key"] = function() end,
+            },
+        })
+    end)
+    lu.assertErrorMsgContains("action key '_privateAction'", function()
+        self.h.moduleHost.prepareDefinition({}, {
+            id = "PrivateActionModule",
+            name = "Private Action Module",
+            storage = {},
+            actions = {
+                _privateAction = function() end,
             },
         })
     end)

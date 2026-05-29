@@ -24,6 +24,17 @@ local function createGate(isDrawPhase)
     end
 end
 
+local function rejectPrivateAlias(context, alias)
+    if storage.isPrivateAlias(alias) then
+        logging.violate(
+            "storage.private_alias",
+            "%s: private Lib storage alias '%s' is not author-accessible",
+            context,
+            tostring(alias)
+        )
+    end
+end
+
 local function wrapField(rawField, contextSource, gate)
     local field = {
         _kind = rawget(rawField, "_kind"),
@@ -46,6 +57,7 @@ local function wrapField(rawField, contextSource, gate)
     function field.readAlias(self, alias)
         requireMethodSelf(readAliasContext, self, field)
         gate()
+        rejectPrivateAlias(readAliasContext, alias)
         return rawField:readAlias(alias)
     end
 
@@ -58,6 +70,7 @@ local function wrapField(rawField, contextSource, gate)
     function field.writeAlias(self, alias, value)
         requireMethodSelf(writeAliasContext, self, field)
         gate()
+        rejectPrivateAlias(writeAliasContext, alias)
         return rawField:writeAlias(alias, value)
     end
 
@@ -117,12 +130,14 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
     function handle.read(self, rowIndex, rowAlias)
         requireMethodSelf(readContext, self, handle)
         gate()
+        rejectPrivateAlias(readContext, rowAlias)
         return rawTable:read(rowIndex, rowAlias)
     end
 
     function handle.get(self, rowIndex, rowAlias)
         requireMethodSelf(getContext, self, handle)
         gate()
+        rejectPrivateAlias(getContext, rowAlias)
         rowIndex = math.floor(tonumber(rowIndex) or 0)
         local rowFields = fields[rowIndex]
         if not rowFields then
@@ -161,12 +176,14 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
         function handle.write(self, rowIndex, rowAlias, value)
             requireMethodSelf(writeContext, self, handle)
             gate()
+            rejectPrivateAlias(writeContext, rowAlias)
             return rawTable:write(rowIndex, rowAlias, value)
         end
 
         function handle.reset(self, rowIndex, rowAlias)
             requireMethodSelf(resetContext, self, handle)
             gate()
+            rejectPrivateAlias(resetContext, rowAlias)
             return rawTable:reset(rowIndex, rowAlias)
         end
 
@@ -218,6 +235,7 @@ function storageRefAdapter.create(opts)
     return {
         get = function(alias)
             gate()
+            rejectPrivateAlias(source, alias)
 
             local cached = refs[alias]
             if cached ~= nil then
@@ -240,5 +258,7 @@ function storageRefAdapter.create(opts)
         end,
     }
 end
+
+storageRefAdapter.rejectPrivateAlias = rejectPrivateAlias
 
 return storageRefAdapter

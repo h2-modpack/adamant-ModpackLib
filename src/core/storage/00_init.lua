@@ -46,6 +46,7 @@ storage.getAliases = schema.getAliases
 storage.valuesEqual = schema.valuesEqual
 storage.NormalizeStorageValue = schema.NormalizeStorageValue
 storage.isHashTokenValid = schema.isHashTokenValid
+storage.isPrivateAlias = schema.isPrivateAlias
 
 local aliasAccess = import('core/storage/alias_access.lua', nil, {
     storage = storage,

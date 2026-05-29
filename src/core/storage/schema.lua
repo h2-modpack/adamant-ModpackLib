@@ -81,10 +81,20 @@ local CommonNodeFields = {
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
+local InternalIdentifierPattern = "^_[A-Za-z0-9_]*$"
 local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
+local InternalIdentifierDescription = "must start with '_' and contain only letters, digits, and underscores"
 
 local function IsStableIdentifier(value)
     return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
+end
+
+local function IsInternalIdentifier(value)
+    return type(value) == "string" and string.match(value, InternalIdentifierPattern) ~= nil
+end
+
+local function IsPrivateAlias(value)
+    return type(value) == "string" and string.byte(value, 1) == 95
 end
 
 local RootNodeFieldsByType = {
@@ -135,18 +145,31 @@ local function NormalizeMode(prefix, mode)
     return mode
 end
 
-local function ValidateAliasIdentifier(alias, prefix)
+local function IsTrustedInternalAlias(node, opts)
+    local internalNodes = opts and opts.internalNodes or nil
+    return type(node) == "table" and internalNodes ~= nil and internalNodes[node] == true
+end
+
+local function ValidateAliasIdentifier(node, alias, prefix, opts)
+    if IsTrustedInternalAlias(node, opts) then
+        if not IsInternalIdentifier(alias) then
+            logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
+                prefix, tostring(alias), InternalIdentifierDescription)
+        end
+        return
+    end
+
     if not IsStableIdentifier(alias) then
         logging.violate("storage.invalid_node", "%s: alias '%s' %s",
             prefix, tostring(alias), StableIdentifierDescription)
     end
 end
 
-local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases, seenRootKeys, prefix)
+local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases, seenRootKeys, prefix, opts)
     if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
         return
     end
-    ValidateAliasIdentifier(bitNode.alias, prefix)
+    ValidateAliasIdentifier(bitNode, bitNode.alias, prefix, opts)
 
     if seenAliases[bitNode.alias] then
         logging.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, bitNode.alias)
@@ -203,7 +226,7 @@ end
 --- Validates a storage schema and prepares its root, alias, and packed-bit metadata in place.
 ---@param storageSchema StorageSchema Ordered list of storage root descriptors to validate.
 ---@param label string Validation label used to prefix warnings.
-function schema.validate(storageSchema, label)
+function schema.validate(storageSchema, label, opts)
     if type(storageSchema) ~= "table" then
         logging.violate("storage.invalid_schema", "%s: storage is not a table", label)
     end
@@ -247,7 +270,7 @@ function schema.validate(storageSchema, label)
             else
                 ValidateKnownFields(node, RootNodeFieldsByType[node.type] or {}, prefix)
                 storageType.validate(node, prefix)
-                ValidateAliasIdentifier(node.alias, prefix)
+                ValidateAliasIdentifier(node, node.alias, prefix, opts)
                 PrepareRootNodeMetadata(node)
                 node._isRoot = true
                 node._persist = persist
@@ -280,7 +303,8 @@ function schema.validate(storageSchema, label)
                             storageSchema,
                             seenAliases,
                             seenRootKeys,
-                            prefix .. " bits[" .. bitIndex .. "]"
+                            prefix .. " bits[" .. bitIndex .. "]",
+                            opts
                         )
                     end
 
@@ -313,7 +337,7 @@ function schema.validate(storageSchema, label)
                         end
                     end
                 elseif node.type == "table" then
-                    tableStorage.PrepareTableNode(node, prefix)
+                    tableStorage.PrepareTableNode(node, prefix, opts)
                 end
 
                 if node._persist then
@@ -328,6 +352,10 @@ function schema.validate(storageSchema, label)
     end
 
     ValidatePersistedDefaults(storageSchema, label)
+end
+
+function schema.isPrivateAlias(alias)
+    return IsPrivateAlias(alias)
 end
 
 --- Returns the prepared hash/profile root nodes for a validated storage schema.

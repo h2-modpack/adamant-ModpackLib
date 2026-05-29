@@ -45,9 +45,12 @@ function activationFinalizer.activate(opts, declarations)
         logging.violate("host.invalid_create_opts", "module.ui.tab must be declared before module.activate")
     end
 
-    local definition = managedModule.prepareDefinition(getStructuralBaseline(opts.pluginGuid),
+    local definition = managedModule.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
         createDefinitionInput(opts, declarations), {
             hasQuickContent = type(declarations.drawQuickContent) == "function",
+        }, {
+            storage = declarations.internalStorage,
+            actions = declarations.internalActions,
         })
     local state = moduleState.create(opts.config, definition)
     local module = managedModule.create({

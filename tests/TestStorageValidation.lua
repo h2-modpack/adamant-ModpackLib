@@ -49,6 +49,124 @@ function TestStorageValidation:testInternalRootAliasFailsForAuthoredStorage()
     end)
 end
 
+function TestStorageValidation:testLibInternalStorageAllowsPrivateAliases()
+    local definition = self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+        id = "InternalStorage",
+        name = "Internal Storage",
+        storage = {
+            { type = "bool", alias = "PublicFlag", default = false },
+        },
+    }, nil, {
+        { type = "bool", alias = "_PrivateFlag", default = true, hash = false },
+        {
+            type = "packedInt",
+            alias = "_PrivatePacked",
+            hash = false,
+            bits = {
+                { alias = "_PrivateBit", offset = 0, width = 1, type = "bool", default = true },
+            },
+        },
+    })
+
+    local aliases = self.storage.getAliases(definition.storage)
+    lu.assertNotNil(aliases.PublicFlag)
+    lu.assertNotNil(aliases._PrivateFlag)
+    lu.assertNotNil(aliases._PrivatePacked)
+    lu.assertNotNil(aliases._PrivateBit)
+end
+
+function TestStorageValidation:testLibInternalStorageRequiresPrivateAliases()
+    lu.assertErrorMsgContains("internal alias 'PrivateFlag' must start with '_'", function()
+        self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+            id = "InternalStorage",
+            name = "Internal Storage",
+            storage = {},
+        }, nil, {
+            { type = "bool", alias = "PrivateFlag", default = true, hash = false },
+        })
+    end)
+end
+
+function TestStorageValidation:testLibInternalStorageDoesNotRelaxPublicRowAliases()
+    lu.assertErrorMsgContains("alias '_PrivateFlag' must start with a letter", function()
+        self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+            id = "InternalStoragePublicRow",
+            name = "Internal Storage Public Row",
+            storage = {
+                {
+                    type = "table",
+                    alias = "Rows",
+                    defaultRows = 1,
+                    row = {
+                        { type = "bool", alias = "_PrivateFlag", default = false },
+                    },
+                },
+            },
+        }, nil, {
+            { type = "bool", alias = "_PrivateFlag", default = true, hash = false },
+        })
+    end)
+end
+
+function TestStorageValidation:testPublicStorageCannotReachLibInternalAliases()
+    local definition = self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+        id = "InternalStorageAccess",
+        name = "Internal Storage Access",
+        storage = {
+            { type = "bool", alias = "PublicFlag", default = false },
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = false },
+                },
+            },
+        },
+    }, nil, {
+        { type = "bool", alias = "_PrivateFlag", default = true, hash = false },
+        { type = "int", alias = "_PrivateRuntime", mode = "runtime", default = 0, min = 0, max = 10 },
+    })
+    local state = self.harness.moduleState.create({}, definition)
+    local store = self.harness.moduleState.createStore(state.persistentState)
+    local uiState = self.harness.moduleState.uiState.create(state.stagedState)
+
+    lu.assertErrorMsgContains("storage.private_alias", function()
+        store.get("_PrivateFlag")
+    end)
+    lu.assertErrorMsgContains("storage.private_alias", function()
+        store.read("_PrivateFlag")
+    end)
+    lu.assertErrorMsgContains("storage.private_alias", function()
+        store.runtime.read("_PrivateRuntime")
+    end)
+    lu.assertErrorMsgContains("storage.private_alias", function()
+        store.runtime.set("_PrivateRuntime", 1)
+    end)
+    lu.assertErrorMsgContains("storage.private_alias", function()
+        store.runtime.clear("_PrivateRuntime")
+    end)
+    self.harness.phaseGate.runDraw(function()
+        lu.assertErrorMsgContains("storage.private_alias", function()
+            uiState.get("_PrivateFlag")
+        end)
+        lu.assertErrorMsgContains("storage.private_alias", function()
+            uiState.read("_PrivateFlag")
+        end)
+        lu.assertErrorMsgContains("storage.private_alias", function()
+            uiState.write("_PrivateFlag", false)
+        end)
+
+        local publicFlag = uiState.get("PublicFlag")
+        lu.assertErrorMsgContains("storage.private_alias", function()
+            publicFlag:readAlias("_PrivateFlag")
+        end)
+        lu.assertErrorMsgContains("storage.private_alias", function()
+            publicFlag:writeAlias("_PrivateFlag", false)
+        end)
+    end)
+end
+
 function TestStorageValidation:testInvalidPackedChildAliasFails()
     lu.assertErrorMsgContains("alias 'Bad.Child' must start with a letter", function()
         self.storage.validate({

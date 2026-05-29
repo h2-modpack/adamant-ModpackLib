@@ -803,6 +803,45 @@ function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
     end)
 end
 
+function TestModuleHost:testDrawActionsRejectPrivateActionKeys()
+    local definition = self.h.moduleHost.prepareDefinitionWithInternalDeclarations({}, {
+        id = "PrivateDrawAction",
+        name = "Private Draw Action",
+        storage = {},
+    }, nil, {
+        actions = {
+            _PrivateAction = function() end,
+        },
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    createActivatedHost(self.h, "test-private-draw-action", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, _, actions)
+            actions.trigger("_PrivateAction")
+        end,
+    })
+    local host = self.h.moduleHost.getLiveHost("test-private-draw-action")
+
+    lu.assertErrorMsgContains("actions.private_key", function()
+        host.drawTab()
+    end)
+end
+
+function TestModuleHost:testCommitActionsRejectPrivateActionKeys()
+    local commitActions = self.h.moduleState.createCommitActions({
+        _PrivateAction = true,
+    })
+
+    lu.assertErrorMsgContains("actions.private_key", function()
+        commitActions.get("_PrivateAction")
+    end)
+end
+
 function TestModuleHost:testFullHostOwnsManagedModuleCapabilities()
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "FullHostCapabilities",

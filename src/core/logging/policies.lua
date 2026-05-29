@@ -231,6 +231,10 @@ return {
         severity = "error",
         description = "Draw actions must be declared by the module definition before use.",
     },
+    ["actions.private_key"] = {
+        severity = "error",
+        description = "Private Lib action keys are not available through author-facing action surfaces.",
+    },
     ["api.invalid_method_call"] = {
         severity = "error",
         description = "Object handle methods must be called with Lua colon method syntax.",
@@ -279,6 +283,10 @@ return {
     ["storage.readonly_field"] = {
         severity = "error",
         description = "Writable widget fields require a writable storage owner.",
+    },
+    ["storage.private_alias"] = {
+        severity = "error",
+        description = "Private Lib storage aliases are not available through author-facing data surfaces.",
     },
 
     ["store.invalid_create_args"] = {

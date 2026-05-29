@@ -8,7 +8,8 @@ Recommended order:
 2. [LIB_INTERNALS.md](LIB_INTERNALS.md)
 3. [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md)
 4. [CACHE_OBJECT_DESIGN.md](CACHE_OBJECT_DESIGN.md)
-5. [TESTING.md](TESTING.md)
+5. [CONTROLS_DESIGN.md](CONTROLS_DESIGN.md)
+6. [TESTING.md](TESTING.md)
 
 For public API behavior, use [../../API.md](../../API.md).
 

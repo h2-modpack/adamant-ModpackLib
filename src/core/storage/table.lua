@@ -119,7 +119,7 @@ local function getAliasNodeOrError(node, aliasNodes, alias)
     return aliasNode
 end
 
-local function PrepareTableNode(node, prefix)
+local function PrepareTableNode(node, prefix, validateOpts)
     if type(node.row) ~= "table" then
         return
     end
@@ -146,7 +146,7 @@ local function PrepareTableNode(node, prefix)
         end
     end
 
-    storageInternal.validate(node.row, prefix .. " row")
+    storageInternal.validate(node.row, prefix .. " row", validateOpts)
 
     node.minRows = ClampRowCount({ minRows = 0 }, node.minRows or 0)
     node.maxRows = node.maxRows ~= nil and ClampRowCount({ minRows = 0 }, node.maxRows) or nil

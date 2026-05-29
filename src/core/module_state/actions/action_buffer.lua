@@ -22,6 +22,21 @@ local function validateActionKey(context, actionKey)
     end
 end
 
+local function isPrivateActionKey(actionKey)
+    return type(actionKey) == "string" and string.byte(actionKey, 1) == 95
+end
+
+local function rejectPrivateActionKey(context, actionKey)
+    if isPrivateActionKey(actionKey) then
+        logging.violate(
+            "actions.private_key",
+            "%s: private Lib action key '%s' is not author-accessible",
+            tostring(context),
+            tostring(actionKey)
+        )
+    end
+end
+
 local function validateDeclaredAction(catalog, context, actionKey)
     validateActionKey(context, actionKey)
     if catalog ~= nil and catalog.handlers[actionKey] == nil then
@@ -87,6 +102,7 @@ local function createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
 local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
+    rejectPrivateActionKey("actions.get", actionKey)
     if type(actionBuffer.validateAction) == "function" then
         actionBuffer.validateAction("actions.get", actionKey)
     else
@@ -212,6 +228,7 @@ local function createCommitActions(snapshot)
 
     return {
         get = function(actionKey)
+            rejectPrivateActionKey("commit.actions.get", actionKey)
             validateActionKey("commit.actions.get", actionKey)
             local ref = refs[actionKey]
             if ref ~= nil then
@@ -234,4 +251,6 @@ return {
     isDrawActionRef = isDrawActionRef,
     createActionCatalog = createActionCatalog,
     validateDeclaredAction = validateDeclaredAction,
+    rejectPrivateActionKey = rejectPrivateActionKey,
+    isPrivateActionKey = isPrivateActionKey,
 }

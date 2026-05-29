@@ -46,7 +46,9 @@ local BuiltInStorageAliases = {
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
+local InternalIdentifierPattern = "^_[A-Za-z0-9_]*$"
 local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
+local InternalIdentifierDescription = "must start with '_' and contain only letters, digits, and underscores"
 
 
 local KnownStructuralSurfaceKeys = {
@@ -55,6 +57,10 @@ local KnownStructuralSurfaceKeys = {
 
 local function IsStableIdentifier(value)
     return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
+end
+
+local function IsInternalIdentifier(value)
+    return type(value) == "string" and string.match(value, InternalIdentifierPattern) ~= nil
 end
 
 local function ValidateListShape(value, prefix, path)
@@ -118,7 +124,11 @@ local function CompareStrings(a, b)
     return a < b
 end
 
-local function PrepareActions(definition, prefix)
+local function IsTrustedInternalAction(key, internalActions)
+    return type(key) == "string" and internalActions ~= nil and internalActions[key] == true
+end
+
+local function PrepareActions(definition, prefix, internalActions)
     local actions = definition.actions
     if actions == nil then
         definition.actions = {}
@@ -132,8 +142,14 @@ local function PrepareActions(definition, prefix)
 
     local actionOrder = {}
     for key, handler in pairs(actions) do
+        local isInternalAction = IsTrustedInternalAction(key, internalActions)
         if type(key) ~= "string" or key == "" then
             logging.violate("definition.invalid_field_type", "%s: action keys must be non-empty strings", prefix)
+        elseif isInternalAction then
+            if not IsInternalIdentifier(key) then
+                logging.violate("definition.invalid_field_type", "%s: internal action key '%s' %s",
+                    prefix, key, InternalIdentifierDescription)
+            end
         elseif not IsStableIdentifier(key) then
             logging.violate("definition.invalid_field_type", "%s: action key '%s' %s",
                 prefix, key, StableIdentifierDescription)
@@ -548,7 +564,7 @@ local function IsLikelyDefinitionTable(definition)
     return false
 end
 
-local function ValidateDefinition(definition, label)
+local function ValidateDefinition(definition, label, internalActions)
     if not IsLikelyDefinitionTable(definition) then
         return
     end
@@ -593,7 +609,7 @@ local function ValidateDefinition(definition, label)
     checkType("actions", "table")
     checkType("hashGroupPlan", "table")
     PrepareCache(definition, prefix)
-    PrepareActions(definition, prefix)
+    PrepareActions(definition, prefix, internalActions)
     ValidateHashGroupPlan(definition, prefix)
 end
 
@@ -636,7 +652,103 @@ local function InjectBuiltInStorage(definition, label)
     end
 end
 
-function definitionService.prepareDefinition(structuralState, definition, structuralSurface, ...)
+local function collectInternalStorageNodes(nodes, internalNodes, prefix)
+    if nodes == nil then
+        return
+    end
+    if type(nodes) ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s: internal storage must be a table", prefix)
+    end
+
+    for index, node in ipairs(nodes) do
+        local nodePrefix = prefix .. " storage #" .. index
+        if type(node) ~= "table" then
+            logging.violate("storage.invalid_node", "%s: storage entry is not a table", nodePrefix)
+        end
+        local alias = node.alias
+        if type(alias) ~= "string" or alias == "" then
+            logging.violate("storage.invalid_node", "%s: missing alias", nodePrefix)
+        elseif not IsInternalIdentifier(alias) then
+            logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
+                nodePrefix, alias, InternalIdentifierDescription)
+        end
+        internalNodes[node] = true
+
+        if type(node.bits) == "table" then
+            for bitIndex, bitNode in ipairs(node.bits) do
+                local bitAlias = type(bitNode) == "table" and bitNode.alias or nil
+                local bitPrefix = nodePrefix .. " bits[" .. bitIndex .. "]"
+                if type(bitAlias) == "string" and bitAlias ~= "" then
+                    if not IsInternalIdentifier(bitAlias) then
+                        logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
+                            bitPrefix, bitAlias, InternalIdentifierDescription)
+                    end
+                    internalNodes[bitNode] = true
+                end
+            end
+        end
+
+        if type(node.row) == "table" then
+            collectInternalStorageNodes(node.row, internalNodes, nodePrefix .. " row")
+        end
+    end
+end
+
+local function injectInternalStorage(definition, internalStorage, label)
+    local internalNodes = {}
+    if internalStorage == nil then
+        return internalNodes
+    end
+
+    if definition.storage == nil then
+        definition.storage = {}
+    end
+    if type(definition.storage) ~= "table" then
+        logging.violate("definition.invalid_args", "%s: definition.storage must be a table", label)
+    end
+
+    local copied = values.deepCopy(internalStorage)
+    collectInternalStorageNodes(copied, internalNodes, label .. " internal")
+    for _, node in ipairs(copied) do
+        table.insert(definition.storage, node)
+    end
+    return internalNodes
+end
+
+local function injectInternalActions(definition, internalActions, label)
+    local internalActionKeys = {}
+    if internalActions == nil then
+        return internalActionKeys
+    end
+    if type(internalActions) ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s: internal actions must be a table", label)
+    end
+    if definition.actions == nil then
+        definition.actions = {}
+    end
+    if type(definition.actions) ~= "table" then
+        logging.violate("definition.invalid_field_type", "%s: definition.actions should be table, got %s",
+            label, type(definition.actions))
+    end
+
+    for key, handler in pairs(internalActions) do
+        if type(key) ~= "string" or key == "" then
+            logging.violate("definition.invalid_field_type", "%s: internal action keys must be non-empty strings", label)
+        elseif not IsInternalIdentifier(key) then
+            logging.violate("definition.invalid_field_type", "%s: internal action key '%s' %s",
+                label, key, InternalIdentifierDescription)
+        end
+        if definition.actions[key] ~= nil then
+            logging.violate("definition.invalid_field_type", "%s: duplicate internal action key '%s'", label, tostring(key))
+        end
+        definition.actions[key] = handler
+        internalActionKeys[key] = true
+    end
+
+    return internalActionKeys
+end
+
+local function prepareDefinition(structuralState, definition, structuralSurface, internalStorage, internalActions, ...)
     if select("#", ...) ~= 0 then
         logging.violate(
             "definition.invalid_args",
@@ -654,9 +766,13 @@ function definitionService.prepareDefinition(structuralState, definition, struct
     local prepared = values.deepCopy(definition)
     local label = GetLabel(prepared)
     InjectBuiltInStorage(prepared, label)
+    local internalNodes = injectInternalStorage(prepared, internalStorage, label)
+    local internalActionKeys = injectInternalActions(prepared, internalActions, label)
 
-    ValidateDefinition(prepared, label)
-    storage.validate(prepared.storage, label)
+    ValidateDefinition(prepared, label, internalActionKeys)
+    storage.validate(prepared.storage, label, {
+        internalNodes = internalNodes,
+    })
     ValidatePreparedHashGroupPlan(prepared, label)
 
     local fingerprint = GetStructuralFingerprint(prepared, structuralSurface)
@@ -683,6 +799,25 @@ function definitionService.prepareDefinition(structuralState, definition, struct
     end
 
     return prepared
+end
+
+function definitionService.prepareDefinition(structuralState, definition, structuralSurface, ...)
+    return prepareDefinition(structuralState, definition, structuralSurface, nil, nil, ...)
+end
+
+function definitionService.prepareDefinitionWithInternalStorage(
+    structuralState,
+    definition,
+    structuralSurface,
+    internalStorage,
+    internalActions
+)
+    return prepareDefinition(structuralState, definition, structuralSurface, internalStorage, internalActions)
+end
+
+function definitionService.prepareDefinitionWithInternalDeclarations(structuralState, definition, structuralSurface, internal)
+    internal = internal or {}
+    return prepareDefinition(structuralState, definition, structuralSurface, internal.storage, internal.actions)
 end
 
 return definitionService

@@ -31,6 +31,7 @@ function uiState.create(stagedState, shared)
         shared = shared,
         read = function(alias, ...)
             phaseGate.requireAnyDraw()
+            storageRefAdapter.rejectPrivateAlias("state.read", alias)
             local ref = stagedState.get(alias)
             if ref == nil then
                 return nil
@@ -39,6 +40,7 @@ function uiState.create(stagedState, shared)
         end,
         write = function(alias, ...)
             phaseGate.requireAnyDraw()
+            storageRefAdapter.rejectPrivateAlias("state.write", alias)
             local ref = stagedState.get(alias)
             if ref == nil then
                 return nil

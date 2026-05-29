@@ -9,9 +9,12 @@ local overlays = deps.overlays
 local mutation = deps.mutation
 local definition = deps.definition
 local moduleRegistry = deps.moduleRegistry
+local storage = deps.storage
 local uiDraw = deps.uiDraw
 local managedModule = {
     prepareDefinition = definition.prepareDefinition,
+    prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
+    prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
 local phaseGate = deps.phaseGate
 local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
@@ -161,18 +164,36 @@ local function createRuntimeContext(store)
     }
 end
 
+local function rejectPrivateAlias(context, alias)
+    if storage.isPrivateAlias(alias) then
+        logging.violate(
+            "storage.private_alias",
+            "%s: private Lib storage alias '%s' is not author-accessible",
+            context,
+            tostring(alias)
+        )
+    end
+end
+
 local function createActionRuntimeBridge(persistentState)
     local runtime = persistentState.runtime
     return {
         read = function(alias, ...)
+            rejectPrivateAlias("actions.runtime.read", alias)
             local ref = persistentState.get(alias)
             if ref == nil then
                 return nil
             end
             return ref:read(...)
         end,
-        set = runtime and runtime.set or nil,
-        clear = runtime and runtime.clear or nil,
+        set = runtime and function(alias, value)
+            rejectPrivateAlias("actions.runtime.set", alias)
+            return runtime.set(alias, value)
+        end or nil,
+        clear = runtime and function(alias)
+            rejectPrivateAlias("actions.runtime.clear", alias)
+            return runtime.clear(alias)
+        end or nil,
     }
 end
 
