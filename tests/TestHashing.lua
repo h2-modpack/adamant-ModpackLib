@@ -24,6 +24,7 @@ local function prepareStorage(storageService)
         {
             type = "packedInt",
             alias = "Packed",
+            width = 3,
             bits = {
                 { alias = "EnabledBit", offset = 0, width = 1, type = "bool", default = true },
                 { alias = "ModeBits", offset = 1, width = 2, type = "int", default = 2, min = 0, max = 3 },
@@ -32,17 +33,6 @@ local function prepareStorage(storageService)
     }
     storageService.validate(storage, "HashingTest")
     return storage
-end
-
-function TestHashing:testPackWidthDerivesFromRawNodeShape()
-    lu.assertEquals(self.hashing.getPackWidth({ type = "bool" }), 1)
-    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 7 }), 3)
-    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 15 }), 4)
-    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 1, max = 12 }), 4)
-    lu.assertEquals(self.hashing.getPackWidth({ type = "int", min = 0, max = 7, width = 5 }), 5)
-    lu.assertNil(self.hashing.getPackWidth({ type = "int", min = 0 }))
-    lu.assertNil(self.hashing.getPackWidth({ type = "string" }))
-    lu.assertNil(self.hashing.getPackWidth({ type = "unknown" }))
 end
 
 function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
@@ -72,27 +62,6 @@ function TestHashing:testHashCodecRoundTripsSupportedStorageTypes()
     lu.assertEquals(self.hashing.fromHash(aliases.Name, "Apollo"), "Apollo")
     lu.assertEquals(self.hashing.toHash({ type = "unknown" }, "x"), nil)
     lu.assertEquals(self.hashing.fromHash({ type = "unknown" }, "x"), nil)
-end
-
-function TestHashing:testPackWidthAndPackedBitReadWrite()
-    local storage = prepareStorage(self.storage)
-    local aliases = self.hashing.getAliases(storage)
-
-    lu.assertEquals(self.hashing.getPackWidth(aliases.EnabledFlag), 1)
-    lu.assertEquals(self.hashing.getPackWidth(aliases.Count), 3)
-    lu.assertEquals(self.hashing.getPackWidth(aliases.Name), nil)
-    lu.assertEquals(self.hashing.getPackWidth(aliases.Packed), 3)
-
-    local packed = 0
-    packed = self.hashing.writePackedBits(packed, 0, 1, 1)
-    packed = self.hashing.writePackedBits(packed, 1, 2, 3)
-
-    lu.assertEquals(packed, 7)
-    lu.assertEquals(self.hashing.readPackedBits(packed, 0, 1), 1)
-    lu.assertEquals(self.hashing.readPackedBits(packed, 1, 2), 3)
-
-    packed = self.hashing.writePackedBits(packed, 1, 2, 99)
-    lu.assertEquals(self.hashing.readPackedBits(packed, 1, 2), 3)
 end
 
 function TestHashing:testPackedAliasesResolveFromPreparedNode()

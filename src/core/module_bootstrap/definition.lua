@@ -18,12 +18,6 @@ local KnownDefinitionKeys = {
     storage = true,
     cache = true,
     actions = true,
-    hashGroupPlan = true,
-}
-
-local KnownHashGroupKeys = {
-    keyPrefix = true,
-    items = true,
 }
 
 local BuiltInStorageNodes = {
@@ -46,9 +40,9 @@ local BuiltInStorageAliases = {
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local InternalIdentifierPattern = "^_[A-Za-z0-9_]*$"
 local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
-local InternalIdentifierDescription = "must start with '_' and contain only letters, digits, and underscores"
+local InternalIdentifierDescription =
+    "must start with '_' and contain ':'-separated stable identifier segments"
 
 
 local KnownStructuralSurfaceKeys = {
@@ -60,23 +54,28 @@ local function IsStableIdentifier(value)
 end
 
 local function IsInternalIdentifier(value)
-    return type(value) == "string" and string.match(value, InternalIdentifierPattern) ~= nil
-end
-
-local function ValidateListShape(value, prefix, path)
-    local count = 0
-    local maxIndex = 0
-    for key in pairs(value) do
-        if type(key) ~= "number" or key < 1 or math.floor(key) ~= key then
-            logging.violate("definition.invalid_field_type", "%s: %s must be a list", prefix, path)
-        end
-        count = count + 1
-        if key > maxIndex then
-            maxIndex = key
-        end
+    if type(value) ~= "string" or string.byte(value, 1) ~= 95 then
+        return false
     end
-    if count ~= maxIndex then
-        logging.violate("definition.invalid_field_type", "%s: %s must be a contiguous list", prefix, path)
+
+    local rest = string.sub(value, 2)
+    if rest == "" then
+        return false
+    end
+
+    local segmentStart = 1
+    while true do
+        local separatorStart, separatorEnd = string.find(rest, ":", segmentStart, true)
+        local segment = separatorStart ~= nil
+            and string.sub(rest, segmentStart, separatorStart - 1)
+            or string.sub(rest, segmentStart)
+        if not IsStableIdentifier(segment) then
+            return false
+        end
+        if separatorStart == nil then
+            return true
+        end
+        segmentStart = separatorEnd + 1
     end
 end
 
@@ -233,255 +232,6 @@ local function PrepareCache(definition, prefix)
     definition._cacheOrder = cacheOrder
 end
 
-local function ValidateHashGroupPlan(definition, prefix)
-    local hashGroupPlan = definition.hashGroupPlan
-    if hashGroupPlan == nil then
-        return
-    end
-    if type(hashGroupPlan) ~= "table" then
-        return
-    end
-
-    ValidateListShape(hashGroupPlan, prefix, "hashGroupPlan")
-    local seenPrefixes = {}
-
-    for groupIndex, group in ipairs(hashGroupPlan) do
-        if type(group) ~= "table" then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: hashGroupPlan[%d] must be table",
-                prefix,
-                groupIndex
-            )
-        end
-
-        for key in pairs(group) do
-            if not KnownHashGroupKeys[key] then
-                logging.violate(
-                    "definition.unknown_key",
-                    "%s: unknown hashGroupPlan[%d] field '%s'",
-                    prefix,
-                    groupIndex,
-                    tostring(key)
-                )
-            end
-        end
-
-        local keyPrefix = group.keyPrefix
-        if type(keyPrefix) ~= "string" or keyPrefix == "" then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: hashGroupPlan[%d].keyPrefix is required",
-                prefix,
-                groupIndex
-            )
-        elseif not IsStableIdentifier(keyPrefix) then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: hashGroupPlan[%d].keyPrefix '%s' %s",
-                prefix,
-                groupIndex,
-                keyPrefix,
-                StableIdentifierDescription
-            )
-        end
-
-        if seenPrefixes[keyPrefix] then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: duplicate hashGroupPlan keyPrefix '%s'",
-                prefix,
-                keyPrefix
-            )
-        end
-        seenPrefixes[keyPrefix] = true
-
-        if type(group.items) ~= "table" then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: hashGroupPlan[%d].items is required",
-                prefix,
-                groupIndex
-            )
-        end
-        ValidateListShape(group.items, prefix, string.format("hashGroupPlan[%d].items", groupIndex))
-        if #group.items == 0 then
-            logging.violate(
-                "definition.invalid_field_type",
-                "%s: hashGroupPlan[%d].items must contain at least one item",
-                prefix,
-                groupIndex
-            )
-        end
-
-        for itemIndex, item in ipairs(group.items) do
-            if type(item) == "string" then
-                if item == "" then
-                    logging.violate(
-                        "definition.invalid_field_type",
-                        "%s: hashGroupPlan[%d].items[%d] must be a non-empty alias string",
-                        prefix,
-                        groupIndex,
-                        itemIndex
-                    )
-                end
-            elseif type(item) == "table" then
-                local itemPath = string.format("hashGroupPlan[%d].items[%d]", groupIndex, itemIndex)
-                ValidateListShape(item, prefix, itemPath)
-                if #item == 0 then
-                    logging.violate(
-                        "definition.invalid_field_type",
-                        "%s: %s must contain at least one alias",
-                        prefix,
-                        itemPath
-                    )
-                end
-                for aliasIndex, alias in ipairs(item) do
-                    if type(alias) ~= "string" or alias == "" then
-                        logging.violate(
-                            "definition.invalid_field_type",
-                            "%s: %s[%d] must be a non-empty alias string",
-                            prefix,
-                            itemPath,
-                            aliasIndex
-                        )
-                    end
-                end
-            else
-                logging.violate(
-                    "definition.invalid_field_type",
-                    "%s: hashGroupPlan[%d].items[%d] must be an alias string or alias list",
-                    prefix,
-                    groupIndex,
-                    itemIndex
-                )
-            end
-        end
-    end
-end
-
-local function GetHashGroupPackWidth(node)
-    local storageType = node and node.type and storage.types[node.type] or nil
-    if storageType and storageType.packWidth ~= nil then
-        return storageType.packWidth(node)
-    end
-    return nil
-end
-
-local function ValidateHashGroupAlias(aliasNodes, alias, prefix, path)
-    if alias == "Enabled" then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: %s alias '%s' is encoded as module enable state; storage groups cannot include it",
-            prefix,
-            path,
-            alias
-        )
-    end
-
-    local node = aliasNodes[alias]
-    if not node then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: %s references unknown storage alias '%s'",
-            prefix,
-            path,
-            alias
-        )
-    end
-    if node._isBitAlias then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: %s alias '%s' is a packed child alias; only root storage aliases are supported",
-            prefix,
-            path,
-            alias
-        )
-    end
-    if node._hash ~= true then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: %s alias '%s' is excluded from hashes; only hash root aliases are supported",
-            prefix,
-            path,
-            alias
-        )
-    end
-
-    local width = GetHashGroupPackWidth(node)
-    if not width then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: %s alias '%s' cannot be packed",
-            prefix,
-            path,
-            alias
-        )
-    end
-    return width
-end
-
-local function RecordHashGroupAlias(seenAliases, alias, prefix, path)
-    local existingPath = seenAliases[alias]
-    if existingPath then
-        logging.violate(
-            "definition.invalid_field_type",
-            "%s: duplicate hashGroupPlan alias '%s' at %s; first used at %s",
-            prefix,
-            alias,
-            path,
-            existingPath
-        )
-    end
-    seenAliases[alias] = path
-end
-
-local function ValidatePreparedHashGroupPlan(definition, prefix)
-    local hashGroupPlan = definition.hashGroupPlan
-    if hashGroupPlan == nil then
-        return
-    end
-
-    local aliasNodes = storage.getAliases(definition.storage)
-    local seenAliases = {}
-    for groupIndex, group in ipairs(hashGroupPlan) do
-        for itemIndex, item in ipairs(group.items) do
-            local itemWidth = 0
-            if type(item) == "string" then
-                local path = string.format("hashGroupPlan[%d].items[%d]", groupIndex, itemIndex)
-                itemWidth = ValidateHashGroupAlias(
-                    aliasNodes,
-                    item,
-                    prefix,
-                    path
-                )
-                RecordHashGroupAlias(seenAliases, item, prefix, path)
-            else
-                for aliasIndex, alias in ipairs(item) do
-                    local path = string.format("hashGroupPlan[%d].items[%d][%d]", groupIndex, itemIndex, aliasIndex)
-                    itemWidth = itemWidth + ValidateHashGroupAlias(
-                        aliasNodes,
-                        alias,
-                        prefix,
-                        path
-                    )
-                    RecordHashGroupAlias(seenAliases, alias, prefix, path)
-                end
-            end
-
-            if itemWidth > 32 then
-                logging.violate(
-                    "definition.invalid_field_type",
-                    "%s: hashGroupPlan[%d].items[%d] exceeds 32 packed bits",
-                    prefix,
-                    groupIndex,
-                    itemIndex
-                )
-            end
-        end
-    end
-end
-
 local function CompareKeys(a, b)
     local typeA = type(a)
     local typeB = type(b)
@@ -607,10 +357,8 @@ local function ValidateDefinition(definition, label, internalActions)
     checkType("storage", "table")
     checkType("cache", "table")
     checkType("actions", "table")
-    checkType("hashGroupPlan", "table")
     PrepareCache(definition, prefix)
     PrepareActions(definition, prefix, internalActions)
-    ValidateHashGroupPlan(definition, prefix)
 end
 
 local function GetStructuralFingerprint(definition, structuralSurface)
@@ -623,7 +371,6 @@ local function GetStructuralFingerprint(definition, structuralSurface)
         hasQuickContent = structuralSurface and structuralSurface.hasQuickContent == true or false,
         storage = definition and definition.storage or nil,
         cache = definition and definition.cache or nil,
-        hashGroupPlan = definition and definition.hashGroupPlan or nil,
     }
     return SerializeStructuralValue(structuralState)
 end
@@ -773,7 +520,6 @@ local function prepareDefinition(structuralState, definition, structuralSurface,
     storage.validate(prepared.storage, label, {
         internalNodes = internalNodes,
     })
-    ValidatePreparedHashGroupPlan(prepared, label)
 
     local fingerprint = GetStructuralFingerprint(prepared, structuralSurface)
     prepared._preparedDefinition = true

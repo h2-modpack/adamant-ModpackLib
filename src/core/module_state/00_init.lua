@@ -136,7 +136,6 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field cache table|nil
 ---@field actions table<string, fun(host: Host, uiData: DrawState, actionRuntime: ActionRuntimeBridge, value: any)>|nil
 ---@field _actionOrder string[]|nil
----@field hashGroupPlan table|nil
 
 --- Creates module state access surfaces around a prepared definition and config table.
 ---@param modConfig table Module config table used for persisted reads and writes.

@@ -26,7 +26,6 @@ module.actions.define(data.buildActions())
 module.cache.define(data.buildCache())
 module.controls.defineTemplates(data.buildControlTemplates())
 module.controls.define(data.buildControls())
-module.hashGroups.define(data.buildHashGroupPlan())
 module.ui.tab(ui.drawTab)
 module.ui.quickContent(ui.drawQuickContent)
 module.onCommit(logic.onCommit)
@@ -43,8 +42,8 @@ module.activate()
 ```
 
 `createModule(...)` accepts module identity/display metadata and the Chalk
-config table. Storage, actions, cache, hash groups, UI, hooks, shared data,
-controls, mutations, overlays, and fallback UI are declarations made before
+config table. Storage, actions, cache, controls, UI, hooks, shared data,
+mutations, overlays, and fallback UI are declarations made before
 activation.
 
 ## Author Object
@@ -59,7 +58,6 @@ Common surfaces:
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
 - `module.controls.define(...)`
-- `module.hashGroups.define(...)`
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
 - `module.onCommit(...)`

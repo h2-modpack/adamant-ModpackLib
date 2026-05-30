@@ -183,6 +183,7 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingConfigFromSt
             {
                 type = "packedInt",
                 alias = "PackedChoices",
+                width = 2,
                 default = 2,
                 bits = {
                     { alias = "PackedChoiceA", offset = 0, width = 1, type = "bool", default = false },

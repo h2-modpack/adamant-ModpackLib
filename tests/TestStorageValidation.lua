@@ -61,6 +61,7 @@ function TestStorageValidation:testLibInternalStorageAllowsPrivateAliases()
         {
             type = "packedInt",
             alias = "_PrivatePacked",
+            width = 1,
             hash = false,
             bits = {
                 { alias = "_PrivateBit", offset = 0, width = 1, type = "bool", default = true },
@@ -173,6 +174,7 @@ function TestStorageValidation:testInvalidPackedChildAliasFails()
             {
                 type = "packedInt",
                 alias = "Packed",
+                width = 1,
                 bits = {
                     { alias = "Bad.Child", offset = 0, width = 1, type = "bool", default = false },
                 },
@@ -293,6 +295,7 @@ function TestStorageValidation:testRuntimeModeIsInheritedByPackedChildren()
         {
             type = "packedInt",
             alias = "RuntimePacked",
+            width = 1,
             mode = "runtime",
             bits = {
                 { alias = "RuntimeBit", offset = 0, width = 1, type = "bool", default = false },
@@ -352,6 +355,7 @@ function TestStorageValidation:testUnknownPackedBitFieldFails()
             {
                 type = "packedInt",
                 alias = "Packed",
+                width = 1,
                 bits = {
                     { alias = "Bit", offset = 0, width = 1, type = "bool", default = false, defalt = true },
                 },
@@ -395,6 +399,7 @@ function TestStorageValidation:testPackedIntDerivesChildAliasesAndDefault()
         {
             type = "packedInt",
             alias = "Packed",
+            width = 3,
             bits = {
                 { alias = "EnabledBit", offset = 0, width = 1, type = "bool", default = true },
                 { alias = "ModeBits", offset = 1, width = 2, type = "int", default = 2 },
@@ -407,4 +412,41 @@ function TestStorageValidation:testPackedIntDerivesChildAliasesAndDefault()
     lu.assertEquals(storage[1].default, 5)
     lu.assertNotNil(self.storage.getAliases(storage).EnabledBit)
     lu.assertNotNil(self.storage.getAliases(storage).ModeBits)
+end
+
+function TestStorageValidation:testPackedIntRequiresExplicitWidth()
+    lu.assertErrorMsgContains("packedInt width is required", function()
+        self.storage.validate({
+            {
+                type = "packedInt",
+                alias = "Packed",
+                bits = {
+                    { alias = "EnabledBit", offset = 0, width = 1, type = "bool", default = true },
+                },
+            },
+        }, "PackedWidth")
+    end)
+end
+
+function TestStorageValidation:testPackedIntRejectsBitsOutsideDeclaredWidth()
+    lu.assertErrorMsgContains("offset + width must stay within packedInt width 1", function()
+        self.storage.validate({
+            {
+                type = "packedInt",
+                alias = "Packed",
+                width = 1,
+                bits = {
+                    { alias = "ModeBits", offset = 0, width = 2, type = "int", default = 0 },
+                },
+            },
+        }, "PackedWidth")
+    end)
+end
+
+function TestStorageValidation:testStandaloneIntWidthRequiresBoundedRange()
+    lu.assertErrorMsgContains("int width requires min and max", function()
+        self.storage.validate({
+            { type = "int", alias = "Count", default = 0, width = 4 },
+        }, "IntWidth")
+    end)
 end

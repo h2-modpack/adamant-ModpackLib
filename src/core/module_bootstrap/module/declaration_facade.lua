@@ -21,7 +21,6 @@ local function createDeclarationState()
         cache = nil,
         actions = nil,
         onCommit = nil,
-        hashGroupPlan = nil,
         drawTab = nil,
         drawQuickContent = nil,
         controlDeclarations = controlDeclarations.create(),

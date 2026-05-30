@@ -11,12 +11,6 @@ local lib = {}
 ---@alias AdamantModpackLib.PackedSelectionMode "singleEnabled"|"singleDisabled"
 ---@alias AdamantModpackLib.MutationShape "patch"
 
----@class AdamantModpackLib.HashGroup
----@field keyPrefix string Hash group family prefix.
----@field items (string|string[])[] Ordered aliases or alias bundles to pack together.
-
----@alias AdamantModpackLib.HashGroupPlan AdamantModpackLib.HashGroup[]
-
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
 ---@field alias string Public alias used by store/state/widget APIs and as the managed storage key.
@@ -28,7 +22,7 @@ local lib = {}
 ---@field hash? boolean Whether the alias participates in hash/profile surfaces; defaults true.
 ---@field min? number Integer lower bound.
 ---@field max? number Integer upper bound.
----@field width? number Packed/hash bit width for integer-like nodes.
+---@field width? number Hash bit width for bounded `int`; required root bit width for `packedInt`.
 ---@field maxLen? number String max length for input widgets/hash normalization.
 ---@field bits? AdamantModpackLib.PackedBitNode[] Packed child bit aliases for `packedInt`.
 ---@field row? AdamantModpackLib.StorageSchema Row schema for `table` roots.
@@ -259,7 +253,6 @@ local lib = {}
 ---@field actions { define: fun(actions: table<string, AdamantModpackLib.DrawActionHandler>): nil }
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
----@field hashGroups { define: fun(hashGroupPlan: AdamantModpackLib.HashGroupPlan): nil }
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
 ---@field fallbackUi AuthorFallbackUi
@@ -306,12 +299,9 @@ local lib = {}
 ---@field getRoots fun(storage: AdamantModpackLib.StorageSchema): AdamantModpackLib.StorageNode[]
 ---@field getAliases fun(storage: AdamantModpackLib.StorageSchema): AdamantModpackLib.StorageAliasMap
 ---@field valuesEqual fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode?, a: any, b: any): boolean
----@field getPackWidth fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode): number?
 ---@field toHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, value: any): string?
 ---@field fromHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, str: string): any
 ---@field isHashTokenValid fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, str: string?): boolean
----@field readPackedBits fun(packed: number?, offset: number?, width: number?): number
----@field writePackedBits fun(packed: number?, offset: number?, width: number?, value: number?): number
 
 ---@class AdamantModpackLib.FrameworkUiRuntime
 ---@field suppressOverlays fun(): AdamantModpackLib.UiSuppressionToken
@@ -395,7 +385,6 @@ local lib = {}
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
 ---@field cache? AdamantModpackLib.CacheDeclarationMap Managed runtime cache declarations.
 ---@field actions? table<string, AdamantModpackLib.DrawActionHandler> Module draw-action handlers keyed by action id.
----@field hashGroupPlan? AdamantModpackLib.HashGroupPlan Hash compaction hints.
 
 ---@alias AdamantModpackLib.DrawActionHandler fun(
 ---    host: AdamantModpackLib.Host,
@@ -437,7 +426,6 @@ local lib = {}
 ---@field getPackId fun(): string?
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
 ---@field affectsRunData fun(): boolean
----@field getHashHints fun(): AdamantModpackLib.HashGroupPlan?
 ---@field getStorage fun(): AdamantModpackLib.StorageSchema?
 ---@field read fun(alias: string): any
 ---@field writeAndFlush fun(alias: string, value: any): boolean

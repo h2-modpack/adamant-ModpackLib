@@ -98,7 +98,6 @@ end
 ---@field getPackId fun(): string|nil
 ---@field getMeta fun(): table
 ---@field affectsRunData fun(): boolean
----@field getHashHints fun(): table|nil
 ---@field getStorage fun(): StorageSchema|nil
 ---@field read fun(alias: string): any
 ---@field writeAndFlush fun(alias: string, value: any): boolean
@@ -300,10 +299,6 @@ function managedModule.create(opts)
 
     function module.affectsRunData()
         return mutation.affectsRunData(mutationBundle)
-    end
-
-    function module.getHashHints()
-        return def.hashGroupPlan
     end
 
     function module.getStorage()

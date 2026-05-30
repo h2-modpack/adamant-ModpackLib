@@ -146,8 +146,8 @@ function draw.nav.verticalTabs(opts)
     return nav.verticalTabs(draw.imgui, opts)
 end
 
-function draw.control(control, opts)
-    return controlsDraw.render(draw, control, opts)
+function draw.control(control, viewName, ...)
+    return controlsDraw.render(draw, control, viewName, ...)
 end
 
 ---@return DrawContext

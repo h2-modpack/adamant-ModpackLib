@@ -5,6 +5,10 @@ local storage = deps.storage
 local values = deps.values
 local StorageTypes = {}
 
+local function IsInteger(value)
+    return type(value) == "number" and value == math.floor(value)
+end
+
 local function NormalizeInteger(node, value)
     local num = tonumber(value)
     if num == nil then
@@ -62,18 +66,33 @@ StorageTypes.int = {
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
             logging.violate("storage.invalid_default", "%s: int default must be number, got %s", prefix, type(node.default))
+        elseif node.default ~= nil and not IsInteger(node.default) then
+            logging.violate("storage.invalid_default", "%s: int default must be an integer", prefix)
         end
         if node.min ~= nil and type(node.min) ~= "number" then
             logging.violate("storage.invalid_axis_type", "%s: int min must be number, got %s", prefix, type(node.min))
+        elseif node.min ~= nil and not IsInteger(node.min) then
+            logging.violate("storage.invalid_axis_type", "%s: int min must be an integer", prefix)
         end
         if node.max ~= nil and type(node.max) ~= "number" then
             logging.violate("storage.invalid_axis_type", "%s: int max must be number, got %s", prefix, type(node.max))
+        elseif node.max ~= nil and not IsInteger(node.max) then
+            logging.violate("storage.invalid_axis_type", "%s: int max must be an integer", prefix)
         end
         if type(node.min) == "number" and type(node.max) == "number" and node.min > node.max then
             logging.violate("storage.invalid_axis_type", "%s: int min cannot exceed max", prefix)
         end
-        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1) then
-            logging.violate("storage.invalid_axis_type", "%s: int width must be a positive number", prefix)
+        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32 or not IsInteger(node.width)) then
+            logging.violate("storage.invalid_axis_type", "%s: int width must be a positive integer no greater than 32", prefix)
+        elseif node.width ~= nil and node.offset == nil and (node.min == nil or node.max == nil) then
+            logging.violate("storage.invalid_axis_type", "%s: int width requires min and max", prefix)
+        elseif node.width ~= nil and node.offset == nil and node.min ~= nil and node.max ~= nil then
+            local range = node.max - node.min
+            local maxEncoded = range <= 0 and 0 or range
+            local mask = bit32.rshift(0xFFFFFFFF, 32 - node.width)
+            if maxEncoded > mask then
+                logging.violate("storage.invalid_axis_type", "%s: int width cannot encode min/max range", prefix)
+            end
         end
     end,
     normalize = function(node, value)
@@ -89,15 +108,7 @@ StorageTypes.int = {
         return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
     end,
     packWidth = function(node)
-        if type(node.width) == "number" and node.width >= 1 then
-            return math.floor(node.width)
-        end
-        if type(node.min) == "number" and type(node.max) == "number" then
-            local range = node.max - node.min
-            if range <= 0 then return 1 end
-            return math.ceil(math.log(range + 1) / math.log(2))
-        end
-        return nil
+        return node and node._packWidth or nil
     end,
 }
 
@@ -140,8 +151,12 @@ StorageTypes.packedInt = {
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
             logging.violate("storage.invalid_default", "%s: packedInt default must be number, got %s", prefix, type(node.default))
+        elseif node.default ~= nil and not IsInteger(node.default) then
+            logging.violate("storage.invalid_default", "%s: packedInt default must be an integer", prefix)
         end
-        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32) then
+        if node.width == nil then
+            logging.violate("storage.invalid_axis_type", "%s: packedInt width is required", prefix)
+        elseif type(node.width) ~= "number" or node.width < 1 or node.width > 32 or not IsInteger(node.width) then
             logging.violate("storage.invalid_axis_type", "%s: packedInt width must be a positive number no greater than 32", prefix)
         end
         if type(node.bits) ~= "table" or #node.bits == 0 then
@@ -161,25 +176,7 @@ StorageTypes.packedInt = {
         return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
     end,
     packWidth = function(node)
-        if type(node.width) == "number" and node.width >= 1 and node.width <= 32 then
-            return math.floor(node.width)
-        end
-        if type(node.bits) ~= "table" then
-            return nil
-        end
-        local maxUsedBit = 0
-        for _, bitNode in ipairs(node.bits) do
-            if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
-                local used = math.floor(bitNode.offset) + math.floor(bitNode.width)
-                if used > maxUsedBit then
-                    maxUsedBit = used
-                end
-            end
-        end
-        if maxUsedBit > 0 and maxUsedBit <= 32 then
-            return maxUsedBit
-        end
-        return nil
+        return node and node._packWidth or nil
     end,
 }
 
@@ -227,5 +224,6 @@ StorageTypes.table = {
 
 return {
     types = StorageTypes,
+    IsInteger = IsInteger,
     NormalizeInteger = NormalizeInteger,
 }

@@ -160,10 +160,33 @@ SelectionGroup.views = {
     default = function()
         return "default"
     end,
-    compact = function()
-        return "compact"
+    compact = function(_, _, _, suffix)
+        return "compact:" .. tostring(suffix)
     end,
 }
+
+local KeyedFlag = {}
+
+function KeyedFlag.storage(instance)
+    return {
+        {
+            key = instance.fieldKey,
+            type = "bool",
+            default = false,
+            hash = false,
+        },
+    }
+end
+
+function KeyedFlag.createUi(fields, instance)
+    return {
+        set = function(_, value)
+            fields[instance.fieldKey]:write(value)
+        end,
+    }
+end
+
+function KeyedFlag.draw() end
 
 function TestControls:setUp()
     self.h = createModuleHostHarness()
@@ -207,7 +230,7 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
             })
             capturedUiControl:field("Mode"):write("Tartarus")
             lu.assertErrorMsgContains("storage.private_alias", function()
-                ui.data.read("_PrioritySlot_Mode")
+                ui.data.read("_PrioritySlot:Mode")
             end)
         end,
     })
@@ -224,7 +247,7 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
     checkRuntimeDuringDraw = true
     liveHost.drawTab()
     liveHost.flush()
-    lu.assertEquals(config._PrioritySlot_Mode, "Tartarus")
+    lu.assertEquals(config["_PrioritySlot:Mode"], "Tartarus")
     lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
         mode = "Tartarus",
         min = 2,
@@ -232,6 +255,41 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         capturedUiControl:read()
     end)
+end
+
+function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
+    local config = {}
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-path-aliases",
+        config = config,
+        id = "ControlsPathAliases",
+        name = "Controls Path Aliases",
+        templates = {
+            KeyedFlag = KeyedFlag,
+        },
+        controls = {
+            A_B = {
+                template = "KeyedFlag",
+                fieldKey = "C",
+            },
+            A = {
+                template = "KeyedFlag",
+                fieldKey = "B_C",
+            },
+        },
+        drawTab = function(_, ui)
+            ui.controls.get("A_B"):set(true)
+            ui.controls.get("A"):set(true)
+        end,
+    })
+
+    lu.assertTrue(module.activate())
+    self.h:liveHost("test-controls-path-aliases").drawTab()
+    self.h:liveHost("test-controls-path-aliases").flush()
+
+    lu.assertEquals(config["_A_B:C"], true)
+    lu.assertEquals(config["_A:B_C"], true)
+    lu.assertNil(config._A_B_C)
 end
 
 function TestControls:testControlsAreCachedPerPhase()
@@ -281,20 +339,16 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
         drawTab = function(_, ui)
             local control = ui.controls.get("Rewards")
             results[#results + 1] = ui.draw.control(control)
-            results[#results + 1] = ui.draw.control(control, {
-                view = "compact",
-            })
+            results[#results + 1] = ui.draw.control(control, "compact", "arg")
             lu.assertErrorMsgContains("controls.unknown_view", function()
-                ui.draw.control(control, {
-                    view = "missing",
-                })
+                ui.draw.control(control, "missing")
             end)
         end,
     })
 
     lu.assertTrue(module.activate())
     self.h:liveHost("test-controls-draw-views").drawTab()
-    lu.assertEquals(results, { "default", "compact" })
+    lu.assertEquals(results, { "default", "compact:arg" })
 end
 
 function TestControls:testScopedCommandsLowerIntoPrivateActions()
@@ -318,7 +372,7 @@ function TestControls:testScopedCommandsLowerIntoPrivateActions()
             control:field("Mode"):write("Tartarus")
             control:command("ResetMode"):stage(true)
             lu.assertErrorMsgContains("actions.private_key", function()
-                ui.actions.get("_PrioritySlot_Command_ResetMode")
+                ui.actions.get("_PrioritySlot:Command:ResetMode")
             end)
         end,
     })
@@ -328,7 +382,7 @@ function TestControls:testScopedCommandsLowerIntoPrivateActions()
     liveHost.drawTab()
     liveHost.flush()
 
-    lu.assertEquals(config._PrioritySlot_Mode, "Any")
+    lu.assertEquals(config["_PrioritySlot:Mode"], "Any")
 end
 
 function TestControls:testTableBackedControlUsesSemanticRowMethods()
@@ -362,7 +416,7 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
     local rewards = record.runtime.controls.get("Rewards")
     lu.assertEquals(rewards:count(), 2)
     lu.assertEquals(rewards:selectedMask(2), 5)
-    lu.assertEquals(config._Rewards_Rows[2]._Rewards_Rows_Selection, 5)
+    lu.assertEquals(config["_Rewards:Rows"][2]["_Rewards:Rows:Selection"], 5)
 end
 
 function TestControls:testInvalidDeclarationsFailAtContactPoints()

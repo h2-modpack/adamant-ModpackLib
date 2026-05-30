@@ -112,6 +112,7 @@ local function createPackedDefinition(base, fields)
             {
                 type = "packedInt",
                 alias = "Packed",
+                width = 2,
                 bits = {
                     { alias = "First", offset = 0, width = 1, type = "bool", default = false },
                     { alias = "Second", offset = 1, width = 1, type = "bool", default = false },

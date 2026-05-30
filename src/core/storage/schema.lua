@@ -38,6 +38,8 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field _isBitAlias boolean|nil
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
+---@field _hashPackable boolean|nil
+---@field _packWidth number|nil
 
 ---@class StorageNode
 ---@field alias string
@@ -62,6 +64,8 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
 ---@field _bitAliases PackedBitNode[]|nil
+---@field _hashPackable boolean|nil
+---@field _packWidth number|nil
 
 ---@class StorageSchema: StorageNode[]
 ---@field _rootNodes StorageNode[]|nil Hash/profile root nodes.
@@ -81,16 +85,38 @@ local CommonNodeFields = {
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local InternalIdentifierPattern = "^_[A-Za-z0-9_]*$"
 local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
-local InternalIdentifierDescription = "must start with '_' and contain only letters, digits, and underscores"
+local InternalIdentifierDescription =
+    "must start with '_' and contain ':'-separated stable identifier segments"
 
 local function IsStableIdentifier(value)
     return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
 end
 
 local function IsInternalIdentifier(value)
-    return type(value) == "string" and string.match(value, InternalIdentifierPattern) ~= nil
+    if type(value) ~= "string" or string.byte(value, 1) ~= 95 then
+        return false
+    end
+
+    local rest = string.sub(value, 2)
+    if rest == "" then
+        return false
+    end
+
+    local segmentStart = 1
+    while true do
+        local separatorStart, separatorEnd = string.find(rest, ":", segmentStart, true)
+        local segment = separatorStart ~= nil
+            and string.sub(rest, segmentStart, separatorStart - 1)
+            or string.sub(rest, segmentStart)
+        if not IsStableIdentifier(segment) then
+            return false
+        end
+        if separatorStart == nil then
+            return true
+        end
+        segmentStart = separatorEnd + 1
+    end
 end
 
 local function IsPrivateAlias(value)
@@ -133,6 +159,32 @@ end
 
 local function PrepareRootNodeMetadata(node)
     node._storageKey = node.alias
+end
+
+local function GetRangePackWidth(min, max)
+    local range = max - min
+    if range <= 0 then
+        return 1
+    end
+    return math.ceil(math.log(range + 1) / math.log(2))
+end
+
+local function PrepareHashPackMetadata(node)
+    node._hashPackable = nil
+    node._packWidth = nil
+
+    if node.type == "bool" then
+        node._hashPackable = true
+        node._packWidth = 1
+    elseif node.type == "int" then
+        if storage.IsInteger(node.min) and storage.IsInteger(node.max) then
+            node._hashPackable = true
+            node._packWidth = node.width or GetRangePackWidth(node.min, node.max)
+        end
+    elseif node.type == "packedInt" then
+        node._hashPackable = true
+        node._packWidth = node.width
+    end
 end
 
 local function NormalizeMode(prefix, mode)
@@ -196,6 +248,8 @@ local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases
         _mode = root._mode,
         _storageKey = root._storageKey .. "." .. bitNode.alias,
         _valueKind = storageType and storageType.valueKind or bitNode.type,
+        _hashPackable = nil,
+        _packWidth = nil,
     }
     if child.type == "bool" and child.default == nil then
         child.default = false
@@ -307,6 +361,7 @@ function schema.validate(storageSchema, label, opts)
                             opts
                         )
                     end
+                    local maxPackedValue = packed.GetBitValueMask(node.width)
 
                     if node.default == nil then
                         node.default = 0
@@ -318,6 +373,13 @@ function schema.validate(storageSchema, label, opts)
                         end
                     else
                         node.default = NormalizeInteger(node, node.default)
+                        if node.default < 0 or node.default > maxPackedValue then
+                            logging.violate(
+                                "storage.invalid_default",
+                                "%s: packedInt default exceeds declared width",
+                                prefix
+                            )
+                        end
                         for _, child in ipairs(node._bitAliases) do
                             if child.default == nil then
                                 child.default = packed.readPackedBits(node.default, child.offset, child.width)
@@ -339,6 +401,7 @@ function schema.validate(storageSchema, label, opts)
                 elseif node.type == "table" then
                     tableStorage.PrepareTableNode(node, prefix, opts)
                 end
+                PrepareHashPackMetadata(node)
 
                 if node._persist then
                     table.insert(storageSchema._persistRootNodes, node)

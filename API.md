@@ -29,7 +29,6 @@ activation:
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
 - `module.controls.define(...)`
-- `module.hashGroups.define(...)`
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
 - `module.onCommit(...)`
@@ -793,7 +792,7 @@ Returns whether a pack id is registered.
 
 ## `frameworkRuntime.hashing`
 
-Framework-only hash/profile serialization and packed-bit helpers returned by
+Framework-only hash/profile serialization helpers returned by
 `lib.createFrameworkRuntime("adamant-ModpackFramework")`.
 
 ### `frameworkRuntime.hashing.getRoots(storage)`
@@ -816,10 +815,6 @@ Includes:
 
 Storage-aware equality helper for comparing persisted/hash values.
 
-### `frameworkRuntime.hashing.getPackWidth(node)`
-
-Returns the derived pack width for a node type that supports packing.
-
 ### `frameworkRuntime.hashing.toHash(node, value)`
 
 Encodes one storage value for hash/profile serialization.
@@ -832,14 +827,6 @@ Decodes one storage value from hash/profile serialization.
 
 Returns whether one serialized hash/profile token is syntactically valid for a prepared storage node.
 Use this at external hash/profile import boundaries before calling `fromHash(...)`.
-
-### `frameworkRuntime.hashing.readPackedBits(packed, offset, width)`
-
-Raw numeric bit extraction helper.
-
-### `frameworkRuntime.hashing.writePackedBits(packed, offset, width, value)`
-
-Raw numeric bit write helper.
 
 Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are module-host responsibilities. Framework uses the live host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
 Framework-owned pack suspension is also a host lifecycle responsibility; Framework uses `host.suspendForPackDisable`, `host.restoreForPackEnable`, and `host.rollbackPackTransition` so Lib can keep its internal restore marker private.

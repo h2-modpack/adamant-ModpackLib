@@ -24,18 +24,6 @@ function hashing.valuesEqual(node, a, b)
     return storageService.valuesEqual(node, a, b)
 end
 
---- Returns the packed bit width for a node type, or nil when the node is not packable.
----@param node StorageNode|PackedBitNode
----@return number|nil
-function hashing.getPackWidth(node)
-    if type(node) ~= "table" then return nil end
-    local storageType = StorageTypes[node.type]
-    if storageType and storageType.packWidth then
-        return storageType.packWidth(node)
-    end
-    return nil
-end
-
 ---@param node StorageNode|PackedBitNode
 ---@param value any
 ---@return string|nil
@@ -63,23 +51,6 @@ end
 ---@return boolean
 function hashing.isHashTokenValid(node, str)
     return storageService.isHashTokenValid(node, str)
-end
-
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@return number
-function hashing.readPackedBits(packed, offset, width)
-    return storageService.packed.readPackedBits(packed, offset, width)
-end
-
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@param value number|nil
----@return number
-function hashing.writePackedBits(packed, offset, width, value)
-    return storageService.packed.writePackedBits(packed, offset, width, value)
 end
 
 return {

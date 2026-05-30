@@ -17,7 +17,7 @@ The implementation now uses the clean breaking API shape:
 - Runtime author callbacks receive explicit runtime data through callback
   arguments instead of using the old returned store.
 - Draw author callbacks receive `ui, host`.
-- Storage, cache, actions, hash groups, commit observers, shared declarations,
+- Storage, cache, actions, commit observers, shared declarations,
   mutations, overlays, hooks, and draw callbacks are declared on `module`
   before activation.
 - Definition preparation and structural fingerprinting happen during
@@ -32,7 +32,7 @@ The old `createModule(...)` API did two different jobs:
 
 1. It creates the module identity and lifecycle object.
 2. It accepts the module's declarative capability surfaces:
-   storage, cache, actions, hash plan, draw callbacks, and commit callback.
+   storage, cache, actions, draw callbacks, and commit callback.
 
 That makes the module entrypoint browsable, but it also means definition
 preparation happens before the module object exists as the declaration
@@ -569,7 +569,6 @@ Structural fields should include:
 - identity fields relevant to Framework discovery
 - storage schema
 - cache declarations that alter managed runtime cache contracts
-- hash group plan
 - quick-content presence
 
 Actions should remain validated and ordered but not structural unless a reload
@@ -634,7 +633,7 @@ temporary compatibility shape:
 
 - `createModule(opts)` accepts identity fields only.
 - `createModule(opts)` returns `module, err`.
-- `storage`, `cache`, `actions`, `hashGroupPlan`, `drawTab`,
+- `storage`, `cache`, `actions`, `drawTab`,
   `drawQuickContent`, and commit observers are declared on `module`.
 - Definition preparation and structural fingerprinting happen during
   `module.activate()`, after declarations are complete.
@@ -678,7 +677,7 @@ runtime/UI callback model proves itself.
 Completed lib-side:
 
 1. Introduce internal `runtime` and `ui` phase object factories.
-2. Add module declaration buckets for data, actions, cache, hash groups, commit
+2. Add module declaration buckets for data, actions, cache, commit
    observers, shared declarations, mutations, overlays, hooks, and draw
    callbacks.
 3. Move definition finalization and structural fingerprinting to activation.
@@ -686,7 +685,6 @@ Completed lib-side:
    - `module.data.define`
    - `module.actions.define`
    - `module.cache.define`
-   - `module.hashGroups.define`
    - `module.onCommit`
    - `module.ui.tab`
    - `module.ui.quickContent`

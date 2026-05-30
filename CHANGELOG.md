@@ -18,6 +18,7 @@ All notable changes to this project will be documented in this file.
 - The global `lib.overlays.*` namespace has been removed; use `host.overlays.*`, `lib.createFrameworkRuntime(...).overlays`, or `lib.createFrameworkRuntime(...).ui` depending on the consumer.
 - The global `lib.createSystem(...)` helper has been removed; Framework owns non-module overlays through `lib.createFrameworkRuntime(...).overlays`, while Lib system scopes remain internal.
 - The global `lib.hashing.*` namespace has been removed; Framework consumes hashing through `lib.createFrameworkRuntime(...).hashing`.
+- `module.hashGroups.define(...)` and `hashGroupPlan` have been removed; hash/profile output now uses semantic module/storage keys.
 - The global `lib.config` export has been removed; Framework controls Lib diagnostics through `lib.createFrameworkRuntime(...).diagnostics`.
 - The global `lib.getLiveModuleHost(...)` helper has been removed; Framework resolves live hosts through `lib.createFrameworkRuntime(...).modules`.
 - `lib.createFrameworkRuntime(...)` now requires the Framework plugin guid, while Framework overlays take the pack id at definition time to scope retained owners.

@@ -94,10 +94,12 @@ end)
 Draw callbacks use `ui.controls` and `ui.draw.control(...)`:
 
 ```lua
+local REWARD_PRIORITY_OPTS = {
+    label = "Reward Priority",
+}
+
 local function drawTab(host, ui)
-    ui.draw.control(ui.controls.get("RewardPriority"), {
-        label = "Reward Priority",
-    })
+    ui.draw.control(ui.controls.get("RewardPriority"), "default", REWARD_PRIORITY_OPTS)
 end
 ```
 
@@ -113,10 +115,10 @@ Named views are supported:
 ```lua
 Template.views = {
     default = function(draw, control, instance, opts) end,
-    compact = function(draw, control, instance, opts) end,
+    compact = function(draw, control, instance, width) end,
 }
 
-ui.draw.control(ui.controls.get("RewardPriority"), { view = "compact" })
+ui.draw.control(ui.controls.get("RewardPriority"), "compact", 180)
 ```
 
 ## Commands

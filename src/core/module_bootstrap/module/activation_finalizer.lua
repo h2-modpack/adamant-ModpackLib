@@ -31,7 +31,6 @@ local function createDefinitionInput(opts, declarations)
         storage = declarations.storage,
         cache = declarations.cache,
         actions = declarations.actions,
-        hashGroupPlan = declarations.hashGroupPlan,
     }
 end
 

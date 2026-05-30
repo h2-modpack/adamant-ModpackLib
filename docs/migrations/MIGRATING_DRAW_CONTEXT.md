@@ -137,8 +137,6 @@ local host = lib.createModule({
     shortName = "Example",
     tooltip = "...",
     storage = storage,
-    hashGroupPlan = hashGroupPlan,
-
     drawTab = ui.drawTab,
     drawQuickContent = ui.drawQuickContent,
 })

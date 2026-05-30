@@ -59,6 +59,7 @@ function helpers.makePackedDefinition(harness)
             {
                 type = "packedInt",
                 alias = "Packed",
+                width = 3,
                 bits = {
                     { alias = "EnabledBit", offset = 0, width = 1, type = "bool", default = false },
                     { alias = "ModeBits", offset = 1, width = 2, type = "int", default = 0 },
@@ -87,6 +88,7 @@ function helpers.makeRuntimeDefinition(harness, opts)
             {
                 type = "packedInt",
                 alias = "RuntimePacked",
+                width = 1,
                 mode = "runtime",
                 persist = opts.persist,
                 bits = {
@@ -124,6 +126,7 @@ function helpers.makeTableDefinition(harness)
                     {
                         type = "packedInt",
                         alias = "PackedChoices",
+                        width = 3,
                         bits = {
                             { alias = "ChoiceA", offset = 0, width = 1, type = "bool", default = false },
                             { alias = "ChoiceMode", offset = 1, width = 2, type = "int", default = 0 },

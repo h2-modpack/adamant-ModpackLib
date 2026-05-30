@@ -83,12 +83,6 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
         end,
     }
 
-    module.hashGroups = {
-        define = function(hashGroupPlan)
-            setOnce("hashGroupPlan", hashGroupPlan, "module.hashGroups.define")
-        end,
-    }
-
     module.ui = {
         tab = function(callback)
             setFunctionOnce("drawTab", callback, "module.ui.tab")

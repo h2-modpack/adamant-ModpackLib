@@ -337,6 +337,7 @@ function SelectionGroup.storage(instance)
                     key = "Selection",
                     type = "packedInt",
                     default = 0,
+                    width = instance.width,
                     bits = instance.bits,
                 },
             },
@@ -483,14 +484,14 @@ template.draw -> template.views.default
 
 Rules:
 
-- missing `opts.view` uses `"default"`
+- missing view name uses `"default"`
 - view names must be stable identifiers
 - every template must have a default view, either via `draw` or `views.default`
-- `ui.draw.control(control, { view = "name" })` dispatches through the
-  normalized template view table
+- `ui.draw.control(control, "name", ...)` dispatches through the normalized
+  template view table and passes remaining arguments to the selected view
 - unknown view names are rejected by Lib at the draw boundary
-- templates should not manually dispatch on `opts.view` when `views` can model
-  the variants directly
+- templates should not manually dispatch on a view option when `views` can
+  model the variants directly
 
 ## Instance Declaration
 
@@ -521,21 +522,22 @@ Controls compile to Lib-owned internal storage before definition preparation.
 Generated aliases should be stable and private:
 
 ```text
-_<ControlName>_<FieldKey>
+_<ControlName>:<FieldKey>
 ```
 
 Example:
 
 ```text
-_PrioritySlot1_Mode
-_PrioritySlot1_Min
-_PrioritySlot1_Max
+_PrioritySlot1:Mode
+_PrioritySlot1:Min
+_PrioritySlot1:Max
 ```
 
 Generation rules:
 
 - only Lib generates these aliases
 - generated aliases must start with `_`
+- generated traversal segments are separated with `:`
 - generated aliases must be globally unique within the module storage schema
 - generated aliases are passed to `prepareDefinitionWithInternalDeclarations(...)`
 - normal `module.data.define(...)` cannot declare these aliases
@@ -559,7 +561,7 @@ becomes:
 
 ```lua
 {
-    alias = "_PrioritySlot1_Min",
+    alias = "_PrioritySlot1:Min",
     type = "int",
     default = 1,
     min = 0,
@@ -650,21 +652,21 @@ The intended contrast is:
 
 ```lua
 ui.draw.widgets.dropdown(field, opts) -- primitive draw operation by name
-ui.draw.control(control, opts)        -- typed object chooses its renderer
+ui.draw.control(control, view, ...)   -- typed object chooses its renderer
 ```
 
 Controls may expose named render variants through first-class template views and
 explicit draw options:
 
 ```lua
-ui.draw.control(source, { view = "setup" })
-ui.draw.control(source, { view = "list", row = 1, idPrefix = "primary" })
-ui.draw.control(source, { view = "compactRow", row = 2 })
+ui.draw.control(source, "setup")
+ui.draw.control(source, "list", 1, "primary")
+ui.draw.control(source, "compactRow", 2)
 ```
 
-This is explicit view dispatch, not arg-shape dispatch. The view name selects an
-alternate projection of the same semantic control data from the template's
-normalized `views` table.
+This is explicit single dispatch. The view name selects an alternate projection
+of the same semantic control data from the template's normalized `views` table,
+and the selected view owns the remaining positional arguments.
 
 Allowed:
 
@@ -869,20 +871,10 @@ Rules:
 
 - generated control storage with `hash = true` participates in hashes
 - generated control storage with `hash = false` is excluded
-- module `hashGroups` should not reference generated private aliases directly
-- control-specific hash grouping is out of scope for the first version
 
-If control hash compaction becomes necessary, add a control-level hash hint
-later:
-
-```lua
-PrioritySlot1 = {
-    template = "RangeSelector",
-    hashGroup = "Priority",
-}
-```
-
-Do not expose generated aliases to solve hash grouping.
+Do not expose generated aliases to solve hash size. If hashes become too long,
+shorten the final canonical string through a transport compression layer instead
+of adding control-specific bit layouts.
 
 ## Tables
 
@@ -921,7 +913,7 @@ source:isSelected("RewardA", 2)
 
 local source = ui.controls.get("PrimaryRewards")
 source:setCount(3)
-ui.draw.control(source, { view = "list", row = 2 })
+ui.draw.control(source, "list", 2)
 ```
 
 Do not add nested controls in v1.
@@ -1019,7 +1011,8 @@ runtime.controls.get(name)
 runtime.controls.read(name, ...)
 ui.controls.get(name)
 ui.controls.read(name, ...)
-ui.draw.control(control, opts)
+ui.draw.control(control)
+ui.draw.control(control, viewName, ...)
 ```
 
 Potential later additions:
@@ -1062,8 +1055,9 @@ Requirements:
 - `ui.controls.get(name)` caches refs per module UI phase object
 - `runtime.controls.get(name)` caches refs per module runtime object
 - control refs cache generated field refs
-- `ui.draw.control(...)` does not build option tables internally unless
-  the template explicitly does so
+- `ui.draw.control(...)` does not build option tables internally
+- named views use `ui.draw.control(control, viewName, ...)` so templates can
+  receive explicit positional arguments instead of draw-time option blobs
 - template authors should keep static opts and option lists outside draw loops
 
 The private alias check remains on author data facades only. Control adapters
@@ -1136,7 +1130,7 @@ Implemented enough to prove the model:
    - control refs are cached
    - phase gates reject escaped refs
    - `ui.draw.control(...)` dispatches to the template renderer
-   - `ui.draw.control(...)` dispatches explicit `opts.view` variants
+   - `ui.draw.control(...)` dispatches explicit string view variants
    - simple `draw(...)` templates are normalized into `views.default`
    - unknown view names are rejected
    - table-backed controls can expose semantic row methods without leaking raw
@@ -1179,19 +1173,20 @@ Implemented enough to prove the model:
 - Template declaration uses `defineTemplates(...)` plus `define(...)`. Do not
   add inline templates in v1; the friction is intentional because controls
   should pay for themselves through reuse.
-- Rendering one control uses `ui.draw.control(control, opts)`, not
+- Rendering one control uses `ui.draw.control(control, viewName, ...)`, not
   `ui.draw.controls.render(...)`.
-- `ui.draw.control(control, opts)` accepts draw-time `opts`. Template draw
-  functions own how to interpret or pass through those options.
+- `ui.draw.control(control, viewName, ...)` accepts a stable view name and
+  forwards remaining arguments to the selected view. Template view functions own
+  those positional arguments.
 - Control-specific queries belong on the control object, not the draw namespace.
 - Template methods define the control object's author-facing interface. Lib
   manages lifecycle/plumbing; it does not impose one broad domain method set.
 - Template views are first-class. Simple `draw(...)` templates normalize to
   `views.default`; advanced templates define `views = { default = ..., ... }`.
-- Explicit `opts.view` dispatch is allowed through the normalized view table for
+- Explicit string view dispatch is allowed through the normalized view table for
   alternate render projections of the same control data.
-- Control-level hash grouping is out of scope for v1. Generated private storage
-  hashes normally; add grouping only if a real profile/hash size issue appears.
+- Generated private storage hashes normally. If profile/hash size becomes a real
+  issue, prefer final-string compression over control-specific bit grouping.
 - Lib does not ship built-in templates in v1. Controls are domain-specific, so
   first-party modules should define local templates until patterns stabilize.
 - Controls are data-backed composites, not custom widgets. Do not route control

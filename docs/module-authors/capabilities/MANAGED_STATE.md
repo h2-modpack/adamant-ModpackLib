@@ -123,6 +123,11 @@ Table handles use colon syntax.
 Use `packedInt` when one numeric root should expose named child aliases.
 Packed widgets can write child aliases, and Lib repacks the root.
 
+`packedInt` roots must declare an explicit `width` from 1 to 32. Child
+`offset + width` must stay inside the root width. Integer storage bounds and
+packed widths are validated during storage preparation so hashes and profile
+packing can trust prepared metadata.
+
 ## Draw Actions
 
 Actions are declared before activation:

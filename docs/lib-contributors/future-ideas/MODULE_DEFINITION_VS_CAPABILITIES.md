@@ -11,7 +11,7 @@ cache, actions, and draw callbacks inside `createModule(...)`.
 ## Outcome
 
 This direction was retired. The implemented API keeps `createModule(...)` as an
-identity-only constructor and moves data, cache, actions, hash groups, commit
+identity-only constructor and moves data, cache, actions, commit
 observers, draw callbacks, shared declarations, hooks, overlays, and mutations
 onto the returned module declaration facade before activation.
 
@@ -44,7 +44,6 @@ These belong in `createModule(...)` for now:
 - `storage`
 - `cache`
 - `actions`
-- `hashGroupPlan`
 - draw callbacks
 - `onSettingsCommitted`
 
@@ -107,11 +106,9 @@ Structural data-plane declarations:
 
 - `storage`
 - `cache`
-- `hashGroupPlan`
-
 These change store/state/cache shape, persistent or managed runtime data
-contracts, cross-module shared data publication contracts, hash/profile
-surface, or activation-visible data contracts.
+contracts, cross-module shared data publication contracts, or
+activation-visible data contracts.
 
 Validated but behavior-hot-reloadable command declarations:
 

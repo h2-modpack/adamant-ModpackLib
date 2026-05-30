@@ -306,7 +306,6 @@ Changes to:
 - `definition.name`
 - `definition.shortName`
 - `definition.storage`
-- `definition.hashGroupPlan` / host hash hints
 - module presence or discovery shape
 
 should be treated as structural compatibility work. In coordinated packs, Lib can

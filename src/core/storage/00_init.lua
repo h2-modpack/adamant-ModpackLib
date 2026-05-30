@@ -10,6 +10,7 @@ local typesModule = import('core/storage/types.lua', nil, {
     values = values,
 })
 storage.types = typesModule.types
+storage.IsInteger = typesModule.IsInteger
 storage.NormalizeInteger = typesModule.NormalizeInteger
 
 local packed = import('core/storage/packed.lua', nil, {

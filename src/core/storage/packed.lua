@@ -71,6 +71,7 @@ end
 local function validatePackedBits(node, prefix)
     local seenAliases = {}
     local occupiedBits = {}
+    local rootWidth = math.floor(tonumber(node.width) or 0)
     for index, bitNode in ipairs(node.bits or {}) do
         local bitPrefix = prefix .. " bits[" .. index .. "]"
         ValidateKnownPackedBitFields(bitNode, bitPrefix)
@@ -84,15 +85,23 @@ local function validatePackedBits(node, prefix)
         if type(bitNode.offset) ~= "number" or bitNode.offset < 0 then
             logging.violate("storage.invalid_packed_bit", "%s: packed bit offset must be a non-negative number", bitPrefix)
         end
-        if type(bitNode.width) ~= "number" or bitNode.width < 1 then
-            logging.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive number", bitPrefix)
+        if type(bitNode.width) ~= "number" or bitNode.width < 1 or not storage.IsInteger(bitNode.width) then
+            logging.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive integer", bitPrefix)
         end
 
         if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
             local offset = math.floor(bitNode.offset)
             local width = math.floor(bitNode.width)
-            if offset + width > 32 then
-                logging.violate("storage.invalid_packed_bit", "%s: packed bit offset + width must stay within 32 bits", bitPrefix)
+            if not storage.IsInteger(bitNode.offset) then
+                logging.violate("storage.invalid_packed_bit", "%s: packed bit offset must be an integer", bitPrefix)
+            end
+            if offset + width > rootWidth then
+                logging.violate(
+                    "storage.invalid_packed_bit",
+                    "%s: packed bit offset + width must stay within packedInt width %d",
+                    bitPrefix,
+                    rootWidth
+                )
             end
             for bit = offset, offset + width - 1 do
                 if occupiedBits[bit] then
@@ -110,9 +119,25 @@ local function validatePackedBits(node, prefix)
             logging.violate("storage.invalid_packed_bit", "%s: packed bit type must be 'bool' or 'int'", bitPrefix)
         end
         bitNode.type = valueType
+        if valueType == "bool" and bitNode.width ~= 1 then
+            logging.violate("storage.invalid_packed_bit", "%s: bool packed bit width must be 1", bitPrefix)
+        end
         local storageType = StorageTypes[valueType]
         if storageType then
             storageType.validate(bitNode, bitPrefix)
+        end
+        if valueType == "int" then
+            local mask = GetBitValueMask(bitNode.width)
+            if bitNode.min ~= nil and bitNode.min < 0 then
+                logging.violate("storage.invalid_packed_bit", "%s: packed int bit min cannot be negative", bitPrefix)
+            end
+            if bitNode.max ~= nil and bitNode.max > mask then
+                logging.violate("storage.invalid_packed_bit", "%s: packed int bit max exceeds declared bit width", bitPrefix)
+            end
+            local default = StorageTypes.int.normalize(bitNode, bitNode.default)
+            if default < 0 or default > mask then
+                logging.violate("storage.invalid_packed_bit", "%s: packed int bit default exceeds declared bit width", bitPrefix)
+            end
         end
     end
 end

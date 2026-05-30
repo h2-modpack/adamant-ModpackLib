@@ -25,7 +25,7 @@ end
 local function generatedName(controlName, ...)
     local parts = { "_", controlName }
     for index = 1, select("#", ...) do
-        parts[#parts + 1] = "_"
+        parts[#parts + 1] = ":"
         parts[#parts + 1] = tostring(select(index, ...))
     end
     return table.concat(parts)
@@ -102,7 +102,7 @@ local function compileRowNodes(row, controlName, parentKey, binding)
             alias = child.alias,
             type = child.type,
         }
-        child.bits = compileBitNodes(child.bits, controlName, parentKey .. "_" .. rowKey, childBinding)
+        child.bits = compileBitNodes(child.bits, controlName, parentKey .. ":" .. rowKey, childBinding)
         binding.rowAliases[rowKey] = child.alias
         binding.rowBindings[rowKey] = childBinding
         compiled[#compiled + 1] = child
