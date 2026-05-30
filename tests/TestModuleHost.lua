@@ -872,7 +872,7 @@ function TestModuleHost:testFullHostOwnsManagedModuleCapabilities()
     lu.assertNil(host.tryActivate)
 end
 
-function TestModuleHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFrameworkRebuildIsPending()
+function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuild()
     local packId = "reload-pack"
     local rebuildReason = nil
 
@@ -933,9 +933,78 @@ function TestModuleHost:testCreateModuleHostSkipsImmediateCoordinatedSyncWhenFra
 
     self.h.coordinator.register(packId, nil)
     self.h.coordinator.registerRebuild(packId, nil)
-    lu.assertEquals(applyCalls, 0)
+    lu.assertEquals(applyCalls, 1)
     lu.assertNotNil(rebuildReason)
     lu.assertEquals(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"), reloadedHost)
+end
+
+function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveHostAndMutation()
+    local packId = "reload-rollback-pack"
+    local pluginGuid = "reload-rollback-pack.ReloadHost"
+    local target = { Value = "base" }
+
+    self.h.coordinator.register(packId, { ModEnabled = true })
+    self.h.coordinator.registerRebuild(packId, function()
+        return false
+    end)
+
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        modpack = packId,
+        id = "ReloadRollbackHost",
+        name = "Reload Rollback Host",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", default = false },
+        },
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+        EnabledFlag = false,
+    }, definition)
+    local firstHost = createActivatedHost(self.h, pluginGuid, {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        patchMutation = function(plan)
+            plan:set(target, "Value", "first")
+        end,
+        drawTab = function() end,
+    })
+
+    local previousRecord = self.h.moduleHost.getRecord(firstHost)
+    local prepared = self.h.moduleHost.prepareDefinition({
+        _definitionStructuralFingerprint = previousRecord.definition._structuralFingerprint,
+    }, {
+        modpack = packId,
+        id = "ReloadRollbackHost",
+        name = "Reload Rollback Host",
+        storage = {
+            { type = "bool", alias = "OtherFlag", default = false },
+        },
+    })
+    local reloadStore, reloadStagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+        OtherFlag = false,
+    }, prepared)
+    local replacementHost = self.h:createHost(pluginGuid, {
+        definition = prepared,
+        persistentState = reloadStore,
+        stagedState = reloadStagedState,
+        patchMutation = function(plan)
+            plan:set(target, "Value", "second")
+        end,
+        drawTab = function() end,
+    })
+
+    local ok, err = replacementHost.activate()
+
+    self.h.coordinator.register(packId, nil)
+    self.h.coordinator.registerRebuild(packId, nil)
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "host.structural_rebuild_unavailable")
+    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), firstHost)
+    lu.assertEquals(target.Value, "first")
 end
 
 function TestModuleHost:testActivationFailureRestoresLiveHostAndShared()

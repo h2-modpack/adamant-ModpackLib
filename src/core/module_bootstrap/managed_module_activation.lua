@@ -122,20 +122,7 @@ function moduleActivation.activateOrThrow(module)
         addReceipt("shared", shared.installForModule(module), true)
         addReceipt("hooks", hooks.installForModule(module), true)
         addReceipt("overlays", overlays.installForModule(module, store), true)
-
-        if not hasPendingCoordinatorRebuild then
-            addReceipt("mutation", mutation.syncForHost(module), false)
-        elseif hasPendingCoordinatorRebuild then
-            local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
-            if requested then
-                moduleRegistry.setPendingCoordinatorRebuild(def, nil)
-            else
-                logging.violate(
-                    "host.structural_rebuild_unavailable",
-                    "%s structural definition changed during hot reload; full reload required",
-                    tostring(meta.name or moduleId or "module"))
-            end
-        end
+        addReceipt("mutation", mutation.syncForHost(module), false)
         if record.fallbackUiRequested == true then
             addReceipt("fallbackUi", fallbackUi.installForModule(module), true)
         end
@@ -164,6 +151,18 @@ function moduleActivation.activateOrThrow(module)
         moduleRegistry.setLiveModule(pluginGuid, module)
         moduleRegistry.setPluginInfo(pluginGuid, createPluginInfo(pluginGuid, def))
         published = true
+
+        if hasPendingCoordinatorRebuild then
+            local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
+            if requested then
+                moduleRegistry.setPendingCoordinatorRebuild(def, nil)
+            else
+                logging.violate(
+                    "host.structural_rebuild_unavailable",
+                    "%s structural definition changed during hot reload; full reload required",
+                    tostring(meta.name or moduleId or "module"))
+            end
+        end
     end)
 
     if not ok then

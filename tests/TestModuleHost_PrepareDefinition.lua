@@ -259,10 +259,15 @@ end
 function TestModuleHost_PrepareDefinition:testCreateModuleHostRequestsCoordinatorRebuildOnStructuralMismatch()
     local owner = {}
     local rebuildReason = nil
+    local rebuildStorageAlias = nil
 
     self.h.coordinator.register("test-pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild("test-pack", function(reason)
         rebuildReason = reason
+        local liveHost = self.h.moduleHost.getLiveHost("test-module")
+        local storage = liveHost and liveHost.getStorage() or nil
+        local lastStorage = storage and storage[#storage] or nil
+        rebuildStorageAlias = lastStorage and lastStorage.alias or nil
         return true
     end)
 
@@ -297,6 +302,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRequestsCoordinato
     lu.assertEquals(rebuildReason.kind, "structural_definition_changed")
     lu.assertEquals(rebuildReason.moduleId, "Example")
     lu.assertEquals(rebuildReason.modpack, "test-pack")
+    lu.assertEquals(rebuildStorageAlias, "OtherFlag")
     lu.assertEquals(#self.h.warnings, 0)
 end
 
