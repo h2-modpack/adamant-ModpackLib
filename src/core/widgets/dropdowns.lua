@@ -9,6 +9,7 @@ local widgets = {}
 ---@field default ChoiceValue|nil
 ---@field displayValues ChoiceDisplayValues|nil
 ---@field valueColors ValueColorMap|nil
+---@field visibleValues ChoiceVisibilityMap|nil
 ---@field labelWidth number|nil
 ---@field controlWidth number|nil
 ---@field controlGap number|nil
@@ -97,14 +98,16 @@ local function GetDropdownPreview(opts, values, current, valueColors)
     local previewText = ""
     local previewColor = nil
     for _, value in ipairs(values) do
-        local label = helpers.ChoiceDisplay(opts, value)
-        local color = valueColors and valueColors[value] or nil
-        if previewText == "" then
-            previewText = label
-            previewColor = color
-        end
-        if value == current then
-            return label, color
+        if helpers.IsChoiceVisible(opts, value) then
+            local label = helpers.ChoiceDisplay(opts, value)
+            local color = valueColors and valueColors[value] or nil
+            if previewText == "" then
+                previewText = label
+                previewColor = color
+            end
+            if value == current then
+                return label, color
+            end
         end
     end
     return previewText, previewColor
@@ -133,19 +136,21 @@ function widgets.dropdown(imgui, field, opts)
     local changed = false
     if opened then
         for index, value in ipairs(values) do
-            local label = helpers.ChoiceDisplay(opts, value)
-            local color = valueColors and valueColors[value] or nil
-            local clicked = helpers.SelectableWithValueColor(
-                imgui,
-                helpers.MakeSelectableId(label, index),
-                value == current,
-                color
-            )
-            if clicked and value ~= current then
-                field:write(value)
-                current = value
-                helpers.StageAction("draw.widgets.dropdown", opts, value)
-                changed = true
+            if helpers.IsChoiceVisible(opts, value) then
+                local label = helpers.ChoiceDisplay(opts, value)
+                local color = valueColors and valueColors[value] or nil
+                local clicked = helpers.SelectableWithValueColor(
+                    imgui,
+                    helpers.MakeSelectableId(label, index),
+                    value == current,
+                    color
+                )
+                if clicked and value ~= current then
+                    field:write(value)
+                    current = value
+                    helpers.StageAction("draw.widgets.dropdown", opts, value)
+                    changed = true
+                end
             end
         end
         imgui.EndCombo()

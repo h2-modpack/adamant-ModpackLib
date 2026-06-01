@@ -7,6 +7,7 @@ local widgets = {}
 ---@field default ChoiceValue|nil
 ---@field displayValues ChoiceDisplayValues|nil
 ---@field valueColors ValueColorMap|nil
+---@field visibleValues ChoiceVisibilityMap|nil
 ---@field optionsPerLine number|nil
 ---@field optionGap number|nil
 ---@field action DrawActionRef|nil
@@ -64,25 +65,35 @@ function widgets.radio(imgui, field, opts)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local values = opts.values or helpers.EMPTY_LIST
     local radioId = field:controlId()
-    local optionsPerLine, optionGap = ResolveRadioLayout(imgui, #values, opts.optionsPerLine, opts.optionGap)
+    local optionCount = 0
+    for _, value in ipairs(values) do
+        if helpers.IsChoiceVisible(opts, value) then
+            optionCount = optionCount + 1
+        end
+    end
+    local optionsPerLine, optionGap = ResolveRadioLayout(imgui, optionCount, opts.optionsPerLine, opts.optionGap)
+    local visibleIndex = 0
     local changed = false
 
     DrawRadioLabel(imgui, tostring(opts.label or ""))
     for index, value in ipairs(values) do
-        AdvanceRadioOption(imgui, index, optionsPerLine, optionGap)
-        local label = helpers.ChoiceDisplay(opts, value)
-        local color = valueColors and valueColors[value] or nil
-        local clicked = helpers.RadioButtonWithValueColor(
-            imgui,
-            label .. "##" .. tostring(radioId) .. "_" .. tostring(index),
-            current == value,
-            color
-        )
-        if clicked and current ~= value then
-            field:write(value)
-            current = value
-            helpers.StageAction("draw.widgets.radio", opts, value)
-            changed = true
+        if helpers.IsChoiceVisible(opts, value) then
+            visibleIndex = visibleIndex + 1
+            AdvanceRadioOption(imgui, visibleIndex, optionsPerLine, optionGap)
+            local label = helpers.ChoiceDisplay(opts, value)
+            local color = valueColors and valueColors[value] or nil
+            local clicked = helpers.RadioButtonWithValueColor(
+                imgui,
+                label .. "##" .. tostring(radioId) .. "_" .. tostring(index),
+                current == value,
+                color
+            )
+            if clicked and current ~= value then
+                field:write(value)
+                current = value
+                helpers.StageAction("draw.widgets.radio", opts, value)
+                changed = true
+            end
         end
     end
 

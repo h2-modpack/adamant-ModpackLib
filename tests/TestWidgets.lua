@@ -423,6 +423,39 @@ function TestWidgets:testDropdownStagesDrawActionRef()
     lu.assertEquals(actionBuffer.read("mode"), 2)
 end
 
+function TestWidgets:testDropdownSkipsHiddenValues()
+    local stagedState = self.h.createValueStagedState(2)
+    local imgui, state = self.h.makeDropdownImgui()
+    local selectableLabels = {}
+    imgui.BeginCombo = function(id, preview)
+        state.beginComboId = id
+        state.beginComboPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        selectableLabels[#selectableLabels + 1] = label
+        return label == "Three##3"
+    end
+    imgui.EndCombo = function() end
+
+    local changed = DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
+        values = { 1, 2, 3 },
+        displayValues = {
+            [1] = "One",
+            [2] = "Two",
+            [3] = "Three",
+        },
+        visibleValues = {
+            [2] = false,
+        },
+    })
+
+    lu.assertTrue(changed)
+    lu.assertEquals(state.beginComboPreview, "One")
+    lu.assertEquals(selectableLabels, { "One##1", "Three##3" })
+    lu.assertEquals(stagedState.read("Mode"), 3)
+end
+
 function TestWidgets:testStepperStagesDrawActionRef()
     local actionBuffer = self.h.moduleState.createActionBuffer()
     local action = DrawAction(self.h, actionBuffer, "runs")
@@ -461,6 +494,32 @@ function TestWidgets:testRadioStagesDrawActionRef()
     lu.assertTrue(changed)
     lu.assertEquals(stagedState.read("Mode"), 2)
     lu.assertEquals(actionBuffer.read("mode"), 2)
+end
+
+function TestWidgets:testRadioSkipsHiddenValues()
+    local imgui = self.h.makeDropdownImgui()
+    local radioLabels = {}
+    imgui.RadioButton = function(label)
+        radioLabels[#radioLabels + 1] = label
+        return label == "Three##Mode_3"
+    end
+    local stagedState = self.h.createValueStagedState(2)
+
+    local changed = DrawWidgets(self.h, imgui).radio(Field(self.h, stagedState, "Mode"), {
+        values = { 1, 2, 3 },
+        displayValues = {
+            [1] = "One",
+            [2] = "Two",
+            [3] = "Three",
+        },
+        visibleValues = {
+            [2] = false,
+        },
+    })
+
+    lu.assertTrue(changed)
+    lu.assertEquals(radioLabels, { "One##Mode_1", "Three##Mode_3" })
+    lu.assertEquals(stagedState.read("Mode"), 3)
 end
 
 function TestWidgets:testPackedRadioStagesSelectedChildAction()

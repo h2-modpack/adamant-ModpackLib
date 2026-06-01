@@ -240,6 +240,7 @@ Options:
 - `default`
 - `displayValues`
 - `valueColors`
+- `visibleValues`
 - `labelWidth`
 - `controlWidth`
 - `controlGap`
@@ -249,12 +250,14 @@ Options:
 Behavior:
 - binds one storage field to one value from `values`
 - preview text comes from `displayValues[value]` when present, else `tostring(value)`
+- entries with `visibleValues[value] == false` are hidden; omitted values remain visible
 - if the staged value is invalid, it falls back to:
   - a valid `default`
-  - else the first entry in `values`
+  - else the first visible entry in `values`
 
 Use when:
 - the widget owns a fixed explicit choice list
+- the full value domain is stable, but current availability changes through a reused visibility map
 
 ### `draw.widgets.packedDropdown(target, opts?)`
 
@@ -315,6 +318,7 @@ Options:
 - `default`
 - `displayValues`
 - `valueColors`
+- `visibleValues`
 - `optionsPerLine`
 - `optionGap`
 - `action`
@@ -322,6 +326,7 @@ Options:
 
 Use when:
 - the choice list is small and visible all at once is better than a combo
+- the full value domain is stable, but current availability changes through a reused visibility map
 
 ### `draw.widgets.packedRadio(target, opts?)`
 

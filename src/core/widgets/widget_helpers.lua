@@ -14,6 +14,7 @@ widgetHelpers.EMPTY_LIST = {}
 ---@alias ChoiceValue any
 ---@alias ChoiceDisplayValues table<any, string>
 ---@alias ValueColorMap table<any, Color>
+---@alias ChoiceVisibilityMap table<any, boolean>
 ---@alias PackedSelectionMode "singleEnabled"|"singleDisabled"
 
 local PACKED_CHOICE_NONE_VALUE = false
@@ -33,12 +34,20 @@ local function ReadColorComponents(value)
     return r, g, b, a
 end
 
-function widgetHelpers.NormalizeChoiceValue(node, value)
-    local values = node.values
-    if type(values) ~= "table" or #values == 0 then
-        return value ~= nil and value or node.default
-    end
+function widgetHelpers.IsChoiceVisible(node, value)
+    return type(node.visibleValues) ~= "table" or node.visibleValues[value] ~= false
+end
 
+local function FirstVisibleChoiceValue(node, values)
+    for _, candidate in ipairs(values) do
+        if widgetHelpers.IsChoiceVisible(node, candidate) then
+            return candidate
+        end
+    end
+    return nil
+end
+
+local function NormalizeAgainstAllChoiceValues(node, value, values)
     if value ~= nil then
         for _, candidate in ipairs(values) do
             if candidate == value then
@@ -56,6 +65,36 @@ function widgetHelpers.NormalizeChoiceValue(node, value)
     end
 
     return values[1]
+end
+
+function widgetHelpers.NormalizeChoiceValue(node, value)
+    local values = node.values
+    if type(values) ~= "table" or #values == 0 then
+        return value ~= nil and value or node.default
+    end
+
+    local firstVisible = FirstVisibleChoiceValue(node, values)
+    if firstVisible == nil then
+        return NormalizeAgainstAllChoiceValues(node, value, values)
+    end
+
+    if value ~= nil then
+        for _, candidate in ipairs(values) do
+            if candidate == value and widgetHelpers.IsChoiceVisible(node, candidate) then
+                return candidate
+            end
+        end
+    end
+
+    if node.default ~= nil then
+        for _, candidate in ipairs(values) do
+            if candidate == node.default and widgetHelpers.IsChoiceVisible(node, candidate) then
+                return candidate
+            end
+        end
+    end
+
+    return firstVisible
 end
 
 function widgetHelpers.ChoiceDisplay(node, value)
