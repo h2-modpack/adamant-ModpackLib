@@ -5,7 +5,8 @@ Shared is the Lib-owned cross-module cooperation surface.
 It has two related parts:
 
 - shared data: owner-published read models available through
-  `runtime.data.shared` and draw `ui.data.shared`
+  `runtime.shared` / `runtime.data.shared` and draw `ui.shared` /
+  `ui.data.shared`
 - shared events: optional runtime signals emitted through `module.shared.emit`
   or draw `ui.actions.emit`
 
@@ -62,9 +63,11 @@ Surface:
 - `runtime.data.shared.read(name)`
 - `runtime.data.shared.set(name, value)` for owner declarations
 - `runtime.data.shared.clear(name)` for owner declarations
+- `runtime.shared.*` is the same runtime shared-data surface
 - `ui.data.shared.read(name)`
 - `ui.data.shared.set(name, value)` for owner declarations
 - `ui.data.shared.clear(name)` for owner declarations
+- `ui.shared.*` is the same draw shared-data surface
 
 Values may be scalars or tables with string/number keys. Table writes are
 copied once and reads return recursive read-only views. Cache repeated inner

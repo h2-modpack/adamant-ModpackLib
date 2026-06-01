@@ -19,7 +19,7 @@ Lib now has the backend pieces needed to support this:
 - actions support a trusted Lib-only `_` key lane
 - author-facing `ui.data` and `runtime.data` reject `_` aliases
 - author-facing `ui.actions` and commit-action lookup reject `_` keys
-- widgets render `StorageField` refs and are phase-gated by `ui.draw`
+- widgets render `StorageField` refs; write safety lives on the refs/actions
 - `module.controls.defineTemplates(...)` and `module.controls.define(...)`
   compile to private storage/actions during activation
 - `runtime.controls`, `ui.controls`, and `ui.draw.control(...)` are available
@@ -965,7 +965,7 @@ Build runtime and UI control access over trusted `persistentState` and
 `stagedState`.
 
 It may call internal/private aliases because it is not the author `runtime.data`
-or `ui.data` facade. Returned refs are phase-gated and cached per facade.
+or `ui.data` facade. Returned refs are variant-shaped and cached per facade.
 
 ### `draw_controls.lua`
 

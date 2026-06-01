@@ -13,7 +13,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
----@field alias string Public alias used by store/state/widget APIs and as the managed storage key.
+---@field alias string Public alias used by runtime/UI data and widget APIs as the managed storage key.
 ---@field mode? "setting"|"runtime" Storage ownership mode. Defaults to "setting"; "runtime" is written through `data.runtimeOwned`.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
@@ -85,7 +85,7 @@ local lib = {}
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
----Internal trusted persistent state. Module authors receive `Store`.
+---Internal trusted persistent state. Module authors access this through `runtime.data`.
 ---@class AdamantModpackLib.PersistentState
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting storage object.
 ---@field read fun(alias: string): any
@@ -107,7 +107,7 @@ local lib = {}
 ---@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
 ---@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
 
----Internal trusted staged state. Module authors receive `DrawState` during draw callbacks.
+---Internal trusted staged state. Module authors access this through `ui.data`.
 ---@class AdamantModpackLib.StagedState
 ---@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
@@ -261,6 +261,7 @@ local lib = {}
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
+---@field onActivate fun(callback: fun(host: Host, runtime: RuntimeContext): nil): nil
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
 ---@field fallbackUi AuthorFallbackUi
 ---@field hooks AdamantModpackLib.ModuleHooks

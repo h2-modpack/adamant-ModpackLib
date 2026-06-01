@@ -25,8 +25,10 @@ This document assumes:
 - raw `config` stays local to `main.lua`
 - `lib.createModule(...)` owns the definition and state construction boundary
 - draw code reads staged values through `ui.data.get(...)`
-- runtime/gameplay code reads committed setting/runtime values through
+- runtime/gameplay code reads committed setting values through
   `runtime.data.get(...)`
+- runtime-owned values are written through `runtime.data.runtimeOwned` and read
+  from UI through `ui.data.runtimeOwned`
 - draw-callback objects are shaped by variant type; read methods are
   phase-neutral, while mutation methods remain scoped
 - debug toggles write persisted values through the host/framework flow
@@ -93,10 +95,10 @@ Do the same for:
 - `GetFrameHeight()`
 - `GetStyle().ItemSpacing.x` if you are already using it repeatedly in one function
 
-### 4. Reuse `state.get(...)` refs for repeated reads
+### 4. Reuse `ui.data.get(...)` refs for repeated reads
 
 Use:
-- `local enabled = state.get("Enabled")`
+- `local enabled = ui.data.get("Enabled")`
 - `enabled:read()`
 
 When a draw helper reads the same value multiple times, cache the field handle
@@ -112,8 +114,8 @@ Ownership:
   `module.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 
 The module's job is:
-- render from `state`
-- stage edits into `state`
+- render from `ui.data`
+- stage edits into `ui.data`
 
 Not:
 - custom flush timing
@@ -153,8 +155,8 @@ Do not rebuild the same large option table multiple times in the same frame.
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
 - splitting one draw flow into extra lifecycle phases without a real need
-- calling `store.get(...):read()` from draw code instead of reading staged values through `state.get(...)`
-- doing config writes directly from draw code instead of staging through `state`
+- calling `runtime.data.get(...):read()` from draw code instead of reading staged values through `ui.data.get(...)`
+- doing config writes directly from draw code instead of staging through `ui.data`
 - bypassing the host/framework flow for normal widget edits
 
 

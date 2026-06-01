@@ -372,6 +372,39 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
     end)
 end
 
+function TestShared:testDeclaredDataPublishesOwnerOnActivate()
+    local publisher = createSharedModule(self.harness, "test-shared-data-activate-publisher", {
+        id = "DeclaredSharedActivatePublisher",
+        name = "Declared Shared Activate Publisher",
+        shared = {
+            Active = {
+                id = "test.declared.shared.activate",
+                access = "owner",
+                default = false,
+            },
+        },
+    })
+    publisher.onActivate(function(_, runtime)
+        runtime.shared.set("Active", true)
+    end)
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-activate-reader", {
+        id = "DeclaredSharedActivateReader",
+        name = "Declared Shared Activate Reader",
+        shared = {
+            Active = {
+                id = "test.declared.shared.activate",
+                access = "reader",
+                fallback = false,
+            },
+        },
+    })
+
+    activateAndEnableHost(self.harness, reader, "test-shared-data-activate-reader")
+    activateAndEnableHost(self.harness, publisher, "test-shared-data-activate-publisher")
+
+    lu.assertTrue(readerStore.shared.read("Active"))
+end
+
 function TestShared:testDeclaredDataReadsTableViews()
     local publisher = createSharedModule(self.harness, "test-shared-data-table-publisher", {
         id = "DeclaredSharedTablePublisher",

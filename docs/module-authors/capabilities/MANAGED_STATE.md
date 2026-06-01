@@ -192,5 +192,6 @@ end)
 
 - Do not read transient aliases from `runtime.data`.
 - Do not write raw Chalk config from draw code.
-- Do not cache draw-phase objects or refs outside draw callbacks.
+- Do not use draw mutation objects such as `ui.actions` or writable `ui.data`
+  refs outside draw callbacks.
 - Do not use actions as persistent settings.

@@ -96,6 +96,10 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
         setFunctionOnce("onCommit", callback, "module.onCommit")
     end
 
+    function module.onActivate(callback)
+        setFunctionOnce("onActivate", callback, "module.onActivate")
+    end
+
     module.fallbackUi = {
         attachGuiOnce = function(register)
             lifecycle.requireOpen("module.fallbackUi.attachGuiOnce")

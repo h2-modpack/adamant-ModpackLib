@@ -125,8 +125,8 @@ module.shared.emit("run-director.route-state", "routeChanged", {
 Draw callbacks emit through the post-draw action bridge:
 
 ```lua
-actions.emit("run-director.route-state", "routeChanged", {
-    route = state.read("Route"),
+ui.actions.emit("run-director.route-state", "routeChanged", {
+    route = ui.data.read("Route"),
 })
 ```
 
@@ -135,16 +135,16 @@ Surface:
 - `module.shared.data.reader(name, { id = string, fallback? = value })`
 - `module.shared.listen(id, eventName, callback)`
 - `module.shared.emit(id, eventName, payload)`
-- `actions.emit(id, eventName, payload)` from draw callbacks
+- `ui.actions.emit(id, eventName, payload)` from draw callbacks
 
 Rules:
 - Shared ids should describe domain behavior, not consumer names
 - shared data declarations do not participate in the module structural fingerprint
-- shared data writes go through `store.shared.*` or `state.shared.*`
+- shared data writes go through `runtime.shared.*` or `ui.shared.*`
 - shared data reads return fallback when no active publisher exists
 - absence means the optional notification has no listeners
 - events are runtime notifications; listener order is unspecified and nested emits are queued
-- listener callbacks receive `payload`
+- listener callbacks receive `host`, `runtime`, and `payload`
 - disabled listener hosts do not receive events
 - disabled emitter hosts do not emit events
 - one failing listener logs and does not stop remaining listeners
@@ -165,7 +165,7 @@ module.shared.data.owner("GodAvailability", {
     },
 })
 
-store.shared.set("GodAvailability", {
+runtime.shared.set("GodAvailability", {
     active = true,
     available = {
         Apollo = false,
@@ -184,18 +184,19 @@ module.shared.data.reader("GodAvailability", {
     },
 })
 
-if state.shared.read("GodAvailability").available.Apollo ~= false then
+if ui.shared.read("GodAvailability").available.Apollo ~= false then
     -- draw available UI
 end
 ```
 
 Shared data surface:
-- `store.shared.read(name)`
-- `store.shared.set(name, value)` for owner declarations
-- `store.shared.clear(name)` for owner declarations
-- `state.shared.read(name)`
-- `state.shared.set(name, value)` for owner declarations
-- `state.shared.clear(name)` for owner declarations
+- `runtime.shared.read(name)`
+- `runtime.shared.set(name, value)` for owner declarations
+- `runtime.shared.clear(name)` for owner declarations
+- `ui.shared.read(name)`
+- `ui.shared.set(name, value)` for owner declarations
+- `ui.shared.clear(name)` for owner declarations
+- `runtime.data.shared.*` and `ui.data.shared.*` are equivalent data-lane aliases
 
 Shared data rules:
 - owner and reader access is declared through `module.shared.data.*` before activation
@@ -207,7 +208,7 @@ Shared data rules:
 
 For table-shaped shared data, prefer a small domain helper that hides the
 nested table layout and exposes semantic reads. The helper can accept either
-`store` or draw `state`, because both expose `source.shared.read(...)`.
+`runtime` or `ui`, because both expose `source.shared.read(...)`.
 
 ## Cache
 
@@ -268,12 +269,13 @@ Rules:
 - the declaration factory runs only when the bucket is missing
 - the factory must return a table when provided
 - cache is namespaced under one Lib-owned root on `CurrentRun`
-- current-run cache is unavailable from draw `state`
+- current-run cache is unavailable from `ui.data`
 
 For runtime-owned values that UI needs to read, declare managed storage with
-`mode = "runtime"` and access it through `store.runtime` plus draw `state`.
+`mode = "runtime"`. Runtime code writes through
+`runtime.data.runtimeOwned`; UI code reads through `ui.data.runtimeOwned`.
 
-## Store And State
+## Runtime And UI Data
 
 ### `lib.createModule(opts)`
 
@@ -314,15 +316,19 @@ surface. It has `activate()`, `isEnabled()`, metadata getters, logging helpers,
 and all declaration namespaces.
 
 `createModule(...)` intentionally does not return the prepared definition or
-raw staged state. Draw callbacks receive three draw-phase arguments:
-`draw`, staged `state`, and draw `actions`.
-`draw` owns `imgui`, `widgets`, `nav`, and draw-safe logging helpers; the other
-arguments own staged UI state and deferred UI intent.
+raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
+`imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
+`ui.actions` stages post-draw intent; `ui.controls` exposes draw control refs.
+
+Runtime callbacks receive `(host, runtime)`. `runtime.data` reads committed
+settings, `runtime.data.runtimeOwned` reads/writes runtime-owned storage,
+`runtime.data.cache` owns current-run cache, and `runtime.shared` /
+`runtime.controls` expose shared/control surfaces.
 
 Declare hooks on `module.hooks.*` before `module.activate()`. Runtime helper
-files should receive the needed `store` or narrowed read/access closures from
-the module's hook-declaration code; draw/UI paths should use the `draw`,
-`state`, and `actions` arguments passed to draw callbacks.
+files should receive the needed `runtime` object or narrowed read/access
+closures from the module's hook-declaration code; draw/UI paths should use the
+`ui` object passed to draw callbacks.
 
 The failure path logs `host.create_failed` and does not activate or publish a
 host. Use this at pack orchestration boundaries when one invalid module should
@@ -338,12 +344,15 @@ end
 `createModule(...)` only wraps construction. Activation remains explicit through
 `module.activate()`.
 
-The runtime store surface provides:
-- `store.get(alias)`
-- `store.read(alias, ...)`
-- `store.runtime.read(alias)`
-- `store.runtime.set(alias, value)`
-- `store.runtime.clear(alias)`
+The runtime data surface provides:
+- `runtime.data.get(alias)`
+- `runtime.data.read(alias, ...)`
+- `runtime.data.runtimeOwned.get(alias)`
+- `runtime.data.runtimeOwned.read(alias, ...)`
+- `runtime.data.runtimeOwned.set(alias, value)`
+- `runtime.data.runtimeOwned.clear(alias)`
+- `runtime.data.cache.currentRun.get(name)`
+- `runtime.data.cache.currentRun.clear(name)`
 
 Persisted writes happen through host-owned semantic helpers or staged-state flushes:
 
@@ -361,19 +370,20 @@ Do not declare them in module storage or module `config.lua`.
 `Enabled` is the module behavior toggle. Framework serializes it through the
 module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 
-`store.read(alias, ...)` is syntax sugar for `store.get(alias):read(...)`.
+`runtime.data.read(alias, ...)` is syntax sugar for `runtime.data.get(alias):read(...)`.
 Scalar fields accept no extra path arguments; table handles accept the same row
 path arguments as `tableHandle:read(...)`.
 
 Rules:
-- widgets and draw code should usually read staged values through `state.get(...)`
-- runtime/gameplay code should read committed setting/runtime values through `store.get(...):read()` or `store.read(...)`
-- runtime-owned storage declares `mode = "runtime"` and writes through `store.runtime`
+- widgets and draw code should usually read staged values through `ui.data.get(...)`
+- runtime/gameplay code should read committed setting values through `runtime.data.get(...):read()` or `runtime.data.read(...)`
+- runtime-owned storage declares `mode = "runtime"` and writes through `runtime.data.runtimeOwned`
+- draw code reads runtime-owned storage through `ui.data.runtimeOwned`
 - runtime-owned storage cannot participate in hashes
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
-- transient aliases are read from `state` in draw code or internal `stagedState` plumbing
+- transient aliases are read from `ui.data` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
 
 Composite table storage is declared as one table root with a uniform row schema:
@@ -407,13 +417,13 @@ arrays with no row ids or holes.
 Read table state through `get(...)` when using the object-factory path:
 
 ```lua
-local tiers = state.get("Tiers")
+local tiers = ui.data.get("Tiers")
 local enabled = tiers:read(1, "Enabled")
 local enabledField = tiers:get(1, "Enabled")
 
-local runtimeTiers = store.get("Tiers")
+local runtimeTiers = runtime.data.get("Tiers")
 local committedEnabled = runtimeTiers:read(1, "Enabled")
-local committedEnabledSugar = store.read("Tiers", 1, "Enabled")
+local committedEnabledSugar = runtime.data.read("Tiers", 1, "Enabled")
 ```
 
 Lib internals still expose direct table helpers on the full staged-state object:
@@ -427,8 +437,10 @@ local field = tiers:get(1, "ChoiceMode")
 ```
 
 Table handles:
-- `store.get(alias)` returns a read-only field or table handle for committed setting or runtime-owned aliases
-- `state.get(alias)` returns a writable staged field or table handle
+- `runtime.data.get(alias)` returns a read-only field or table handle for committed setting aliases
+- `runtime.data.runtimeOwned.get(alias)` returns a runtime-owned field or table handle
+- `ui.data.get(alias)` returns a writable staged field or table handle
+- `ui.data.runtimeOwned.get(alias)` returns a read-only runtime-owned field or table handle
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - full internal stores expose `store.table(alias)` for framework plumbing
 - full internal staged-state objects expose `stagedState.table(alias)` for framework plumbing
@@ -460,7 +472,7 @@ Reserved aliases:
 ### `stagedState`
 
 Managed staged UI state for the module. This is a Lib/Framework plumbing
-object; module draw callbacks receive the narrower `state` adapter below.
+object; module draw callbacks receive the narrower `ui.data` adapter below.
 
 Internal surface:
 - `stagedState.view`
@@ -482,21 +494,23 @@ Host/framework plumbing methods:
 - `stagedState._restoreConfigSnapshot(snapshot)`
 
 When a module is rendered through a Lib host, draw callbacks receive a
-restricted author-facing `state` view with:
+restricted author-facing `ui.data` view with:
 - `get(alias)`
 - `read(alias, ...)`
 - `write(alias, ...)`
 - `resetAll(opts?)`
+- `runtimeOwned.get(alias)`
+- `runtimeOwned.read(alias, ...)`
 
 Draw action staging is not exposed on `stagedState`; use
-`actions.trigger(actionKey, value?)` or `actions.get(actionKey)` instead.
+`ui.actions.trigger(actionKey, value?)` or `ui.actions.get(actionKey)` instead.
 
 `stagedState.get(alias)` returns a storage object: scalar and packed aliases return
-`StorageField`; table roots return staged table handles. `state.get(alias)` is
+`StorageField`; table roots return staged table handles. `ui.data.get(alias)` is
 the author-facing entrypoint for the same staged storage objects.
-`state.read(alias, ...)` and `state.write(alias, ...)` are convenience forwards
-for custom raw ImGui draw code; they call `state.get(alias):read(...)` and
-`state.get(alias):write(...)`.
+`ui.data.read(alias, ...)` and `ui.data.write(alias, ...)` are convenience forwards
+for custom raw ImGui draw code; they call `ui.data.get(alias):read(...)` and
+`ui.data.get(alias):write(...)`.
 `tableHandle:get(rowIndex, alias)` returns `StorageField` targets for widgets
 and UI helpers. A storage field is a resolved leaf value target; storage and
 table APIs own traversal, while widgets render the final field. Storage fields
@@ -528,7 +542,7 @@ Returns:
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
 
-Draw callbacks receive the same reset behavior through `state.resetAll(opts?)`.
+Draw callbacks receive the same reset behavior through `ui.data.resetAll(opts?)`.
 
 ## `module.hooks`
 
@@ -877,27 +891,15 @@ This is infrastructure API for Framework discovery. Normal module code should
 keep the module object returned by `lib.createModule(...)` and use runtime/UI
 callback arguments for data access.
 
-## Draw Logging
-
-Draw-safe module logging is available on the draw callback `draw` argument.
-
-Built-ins:
-- `draw.log(fmt, ...)`
-- `draw.logIf(fmt, ...)`
-
-These helpers are the sanctioned draw-time logging path. `draw.host` is not
-available in module UI, and draw callbacks do not receive the declaration
-facade.
-
 ## Draw Actions
 
-Draw callbacks expose the `actions` argument for transient UI intent:
+Draw callbacks expose `ui.actions` for transient UI intent:
 
-- `actions.get(actionKey)`
-- `actions.trigger(actionKey, value?)`
-- `actions.emit(id, eventName, payload?)`
+- `ui.actions.get(actionKey)`
+- `ui.actions.trigger(actionKey, value?)`
+- `ui.actions.emit(id, eventName, payload?)`
 
-`actions.get(actionKey)` returns a ref:
+`ui.actions.get(actionKey)` returns a ref:
 
 - `action:stage(value)`
 - `action:read()`
@@ -905,8 +907,8 @@ Draw callbacks expose the `actions` argument for transient UI intent:
 - `action:has()`
 
 Action refs are object handles; call their methods with colon syntax.
-`actions.trigger(actionKey, value?)` is shorthand for staging a declared action;
-when `value` is omitted it stages `true`. `actions.emit(id, eventName, payload?)`
+`ui.actions.trigger(actionKey, value?)` is shorthand for staging a declared action;
+when `value` is omitted it stages `true`. `ui.actions.emit(id, eventName, payload?)`
 queues a shared event to emit after the draw callback.
 
 Runtime commit callbacks receive the same action snapshot through
@@ -921,7 +923,7 @@ Runtime commit callbacks receive the same action snapshot through
 - `action:has()`
 
 The old `session.stageAction(...)` form has been removed. Use
-`actions.trigger(actionKey, value)` in draw code, or `actions.get(actionKey)`
+`ui.actions.trigger(actionKey, value)` in draw code, or `ui.actions.get(actionKey)`
 when a widget needs an action ref.
 
 Declare action handlers with `module.actions.define(...)`. Handlers run after
@@ -931,13 +933,14 @@ the draw callback and before staged state flush:
 module.actions.define({
     StartRecording = function(host, uiData, actionRuntime, value)
         host.logIf("Starting recording")
-        actionRuntime.set("RecordingEnabled", value == true)
+        actionRuntime.runtimeOwned.set("RecordingEnabled", value == true)
     end,
 })
 ```
 
 Handlers receive the callback host, draw `uiData`, a narrow
-`actionRuntime` bridge (`read`, `set`, `clear`), and the staged action `value`.
+`actionRuntime` bridge (`read` for committed settings and `runtimeOwned` for
+runtime-owned storage), and the staged action `value`.
 
 ## Draw Widgets
 

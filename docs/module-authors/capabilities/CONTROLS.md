@@ -149,8 +149,9 @@ instead.
 ## Rules
 
 - Template and control names must be stable identifiers.
-- Control refs and generated fields are phase objects; do not cache them outside
-  the callback phase where they were received.
+- Control refs are shaped for the callback surface that created them. Reads are
+  phase-neutral; generated writable fields and control commands remain
+  draw-scoped.
 - Controls are not layout builders. The module still owns tab order, sections,
   catalogs, and screen composition.
 - Do not use controls for one-off leaf fields. `ui.draw.widgets.*` is simpler.

@@ -7,7 +7,7 @@ callbacks and makes patch plans the only supported run-data mutation model.
 
 - `registerManualMutation` is no longer a recognized module creation option.
 - `registerPatchMutation` moved from `lib.createModule(...)` opts to
-  `host.mutation.patch(...)` before activation.
+  `module.mutation.patch(...)` before activation.
 - Hybrid patch/manual mutation lifecycles are no longer supported.
 - `lib.mutation.createBackup()` is no longer public API.
 - `lib.mutation.createPlan()` is no longer public API.
@@ -57,17 +57,20 @@ After:
 local data = import("mods/data.lua")
 local ui = import("mods/ui.lua")
 
-local host = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-host.mutation.patch(function(plan, host, store)
+if not module then return end
+
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+module.mutation.patch(function(host, runtime, plan)
     plan:set(SomeGameTable, "SomeKey", true)
 end)
+module.activate()
 ```
 
 For list edits, prefer the existing list operations:

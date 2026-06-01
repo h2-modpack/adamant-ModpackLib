@@ -75,7 +75,14 @@ Reference and historical notes:
 
 ## Public Surface
 
+- `module.data`
+- `module.actions`
+- `module.cache`
+- `module.controls`
+- `module.ui`
+- `module.onCommit`
 - `module.hooks`
+- `module.mutation`
 - `module.overlays`
 - `module.shared`
 - `module.fallbackUi`

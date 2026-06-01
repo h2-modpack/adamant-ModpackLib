@@ -83,6 +83,7 @@ function activationFinalizer.activate(opts, declarations)
         sharedDataDeclarations = declarations.sharedDataDeclarations,
         sharedEventRegistrations = declarations.sharedEventRegistrations,
         overlayDeclarations = declarations.overlayDeclarations,
+        onActivate = declarations.onActivate,
         onCommit = declarations.onCommit,
         drawTab = declarations.drawTab,
         drawQuickContent = declarations.drawQuickContent,

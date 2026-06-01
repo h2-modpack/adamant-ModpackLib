@@ -152,6 +152,10 @@ function moduleActivation.activateOrThrow(module)
         moduleRegistry.setPluginInfo(pluginGuid, createPluginInfo(pluginGuid, def))
         published = true
 
+        if type(record.onActivate) == "function" then
+            record.onActivate(record.host, record.runtime)
+        end
+
         if hasPendingCoordinatorRebuild then
             local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
             if requested then

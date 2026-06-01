@@ -12,7 +12,7 @@ Use them from the active draw callback. Lib keeps read methods cheap and
 phase-neutral, but mutation methods such as staged writes and action staging
 remain draw-scoped. Do not cache draw objects for runtime use.
 
-For storage schema, table handles, packed roots, and state/store rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
+For storage schema, table handles, packed roots, and runtime/UI data rules, read [MANAGED_STATE.md](MANAGED_STATE.md).
 
 ## Widgets
 
@@ -38,6 +38,9 @@ These are direct immediate-mode helpers. Call them inside module draw functions 
 Typical call shape:
 
 ```lua
+local draw = ui.draw
+local state = ui.data
+
 draw.widgets.dropdown(state.get("Mode"), {
     label = "Mode",
     values = { "Vanilla", "Chaos" },

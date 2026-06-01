@@ -20,6 +20,7 @@ local function createDeclarationState()
         internalActions = nil,
         cache = nil,
         actions = nil,
+        onActivate = nil,
         onCommit = nil,
         drawTab = nil,
         drawQuickContent = nil,

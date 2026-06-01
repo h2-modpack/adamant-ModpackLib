@@ -70,6 +70,7 @@ end
 ---@field pluginGuid string
 ---@field persistentState PersistentState
 ---@field stagedState StagedState
+---@field onActivate fun(host: Host, runtime: RuntimeContext)|nil
 ---@field onCommit fun(host: Host, runtime: RuntimeContext, commit: table)|nil
 ---@field drawTab fun(host: Host, ui: UiContext)
 ---@field drawQuickContent fun(host: Host, ui: UiContext)|nil
@@ -130,6 +131,7 @@ local KnownModuleCreateOpts = {
     sharedDataDeclarations = true,
     sharedEventRegistrations = true,
     overlayDeclarations = true,
+    onActivate = true,
     onCommit = true,
     drawTab = true,
     drawQuickContent = true,
@@ -150,7 +152,10 @@ local function createMutationBundle()
     }
 end
 
-local function validateCommitObserver(opts)
+local function validateLifecycleObservers(opts)
+    if opts.onActivate ~= nil and type(opts.onActivate) ~= "function" then
+        logging.violate("host.invalid_create_opts", "managedModule.create: onActivate must be a function")
+    end
     if opts.onCommit ~= nil and type(opts.onCommit) ~= "function" then
         logging.violate("host.invalid_create_opts", "managedModule.create: onCommit must be a function")
     end
@@ -244,7 +249,7 @@ function managedModule.create(opts)
         order = def._actionOrder,
     })
     local mutationBundle = opts.mutationBundle or createMutationBundle()
-    local commitObserver = validateCommitObserver(opts)
+    local commitObserver = validateLifecycleObservers(opts)
     local store
     local runtimeContext
     local actionRuntimeBridge
@@ -465,6 +470,7 @@ function managedModule.create(opts)
         runtime = nil,
         host = host,
         controlCatalog = controlCatalog,
+        onActivate = opts.onActivate,
         actionBuffer = actionBuffer,
         effectReceipts = {},
         fallbackUiRequested = false,

@@ -41,18 +41,21 @@ local data = import("mods/data.lua")
 local logic = import("mods/logic.lua")
 local ui = import("mods/ui.lua")
 
-local host, store = lib.createModule({
+local module, err = lib.createModule({
     pluginGuid = PLUGIN_GUID,
     config = config,
     id = MODULE_ID,
     name = "Example Module",
-    storage = data.buildStorage(),
-    drawTab = ui.drawTab,
 })
-logic.registerHooks(host, store)
+if not module then return end
+
+module.data.define(data.buildStorage())
+module.ui.tab(ui.drawTab)
+logic.registerHooks(module)
+module.activate()
 ```
 
-Modules should use `host.fallbackUi.attachGuiOnce(...)` for stable fallback UI
+Modules should use `module.fallbackUi.attachGuiOnce(...)` for stable fallback UI
 callbacks instead of keeping private persistent tables for UI handles. Private
 persistent tables are still valid for truly module-owned cached data, but they
 should not be passed to Lib as lifecycle owners.
@@ -62,8 +65,8 @@ should not be passed to Lib as lifecycle owners.
 Normal module hooks are declared on the returned capability host before activation:
 
 ```lua
-local function registerHooks(host, store)
-    host.hooks.wrap("SomeGameFunction", function(base, ...)
+local function registerHooks(module)
+    module.hooks.wrap("SomeGameFunction", function(host, runtime, base, ...)
         return base(...)
     end)
 end
@@ -78,7 +81,7 @@ ownership, while Framework consumes first-party capability namespaces through
 
 ## Integration Notes
 
-shared event listeners are declared with `host.shared.listen(...)` before
+shared event listeners are declared with `module.shared.listen(...)` before
 activation and refreshed by the module's `pluginGuid`. Listener callbacks
-receive only the event payload; source metadata belongs in the payload contract
-when a domain event needs it.
+receive `(host, runtime, payload)`; source metadata belongs in the payload
+contract when a domain event needs it.
