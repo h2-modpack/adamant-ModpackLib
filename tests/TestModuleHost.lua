@@ -363,8 +363,8 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
     host.drawQuickContent()
 
     lu.assertEquals(type(quickArgs.draw.widgets), "table")
-    lu.assertEquals(type(quickArgs.draw.log), "function")
-    lu.assertEquals(type(quickArgs.draw.logIf), "function")
+    lu.assertNil(quickArgs.draw.log)
+    lu.assertNil(quickArgs.draw.logIf)
     lu.assertEquals(type(quickArgs.state.get), "function")
     lu.assertEquals(type(quickArgs.actions.get), "function")
     lu.assertEquals(type(quickArgs.actions.trigger), "function")
@@ -477,81 +477,34 @@ function TestModuleHost:testNestedDrawEntryIsRejected()
     lu.assertEquals(nestedDraws, 1)
 end
 
-function TestModuleHost:testDrawExposesDrawSafeLogging()
+function TestModuleHost:testDrawDoesNotExposeLogging()
     local drawContext = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
-        modpack = "draw-log-pack",
-        id = "DrawLogModule",
-        name = "Draw Log Module",
-        storage = {},
-    })
-    local store, stagedState = self.h:createModuleState({
-        Enabled = true,
-        DebugMode = true,
-    }, definition)
-    createActivatedHost(self.h, "test-draw-logging", {
-        definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
-        drawTab = function(draw)
-            drawContext = draw
-            draw.log("draw %s", "log")
-            draw.logIf("draw %s", "debug")
-        end,
-    })
-    local host = self.h.moduleHost.getLiveHost("test-draw-logging")
-    local warningCount = #self.h.warnings
-
-    host.drawTab()
-
-    lu.assertEquals(type(drawContext), "table")
-    lu.assertEquals(type(drawContext.log), "function")
-    lu.assertEquals(type(drawContext.logIf), "function")
-    lu.assertNil(drawContext.services)
-    lu.assertNil(drawContext.shared)
-    lu.assertNil(drawContext.hooks)
-    lu.assertNil(drawContext.overlays)
-    lu.assertNil(drawContext.mutation)
-    lu.assertNil(drawContext.activate)
-    lu.assertNil(drawContext.setEnabled)
-    lu.assertEquals(self.h.warnings[warningCount + 1], "[DrawLogModule] draw log")
-    lu.assertEquals(self.h.warnings[warningCount + 2], "[DrawLogModule] draw debug")
-    lu.assertEquals(#self.h.warnings, warningCount + 2)
-end
-
-function TestModuleHost:testDrawLoggingRejectsUseOutsideDrawPhase()
-    local drawContext = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
-        id = "DrawLogPhase",
-        name = "Draw Log Phase",
+        id = "DrawNoLog",
+        name = "Draw No Log",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-draw-logging-phase", {
+    createActivatedHost(self.h, "test-draw-no-log", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
         drawTab = function(draw)
             drawContext = draw
-            draw.log("inside")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-draw-logging-phase")
+    local host = self.h.moduleHost.getLiveHost("test-draw-no-log")
 
     host.drawTab()
 
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        drawContext.log("outside")
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        drawContext.logIf("outside")
-    end)
+    lu.assertNil(drawContext.log)
+    lu.assertNil(drawContext.logIf)
 end
 
-function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
+function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
     local actions = nil
     local actionRef = nil
     local observed = nil
@@ -591,22 +544,15 @@ function TestModuleHost:testDrawActionsRejectUseOutsideOwningDrawPhase()
         actions.trigger("recording")
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actions.get("recording")
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actions.emit("test.events", "changed", {})
     end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actionRef:read()
-    end)
+    lu.assertEquals(actionRef:read(), { kind = "start" })
+    lu.assertTrue(actionRef:has())
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actionRef:stage({ kind = "again" })
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         actionRef:clear()
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actionRef:has()
     end)
 end
 

@@ -4,7 +4,6 @@ local logging = deps.logging
 
 local phaseGate = {}
 local activeDraw = false
-local activeDrawContext = nil
 
 local function packResults(...)
     return {
@@ -20,13 +19,12 @@ local function withTraceback(err)
     return tostring(err)
 end
 
-function phaseGate.enterDraw(context)
+function phaseGate.enterDraw()
     if activeDraw then
         logging.violate("phase.nested_draw", "cannot enter draw phase while another draw callback is active")
     end
 
     activeDraw = true
-    activeDrawContext = context
 end
 
 function phaseGate.leaveDraw()
@@ -38,7 +36,6 @@ function phaseGate.leaveDraw()
     end
 
     activeDraw = false
-    activeDrawContext = nil
 end
 
 function phaseGate.requireAnyDraw()
@@ -47,19 +44,14 @@ function phaseGate.requireAnyDraw()
     end
 end
 
-function phaseGate.getActiveDrawContext()
-    phaseGate.requireAnyDraw()
-    return activeDrawContext
-end
-
 function phaseGate.requireRuntime()
     if activeDraw then
         logging.violate("phase.invalid_runtime_access", "runtime object cannot run during a draw callback")
     end
 end
 
-local function runDrawWithContext(context, callback, ...)
-    phaseGate.enterDraw(context)
+local function runDraw(callback, ...)
+    phaseGate.enterDraw()
     local args = { ... }
     local results = packResults(xpcall(function()
         return callback(table.unpack(args))
@@ -75,11 +67,7 @@ local function runDrawWithContext(context, callback, ...)
 end
 
 function phaseGate.runDraw(callback, ...)
-    return runDrawWithContext(nil, callback, ...)
-end
-
-function phaseGate.runDrawWithContext(context, callback, ...)
-    return runDrawWithContext(context, callback, ...)
+    return runDraw(callback, ...)
 end
 
 return phaseGate

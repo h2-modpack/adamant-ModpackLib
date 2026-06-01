@@ -89,8 +89,9 @@ local function drawTab(host, ui)
 end
 ```
 
-`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-phase objects.
-Use them only inside the active draw callback.
+`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback
+objects. Reads are phase-neutral, but staged writes, action staging, and other
+mutations remain draw-scoped.
 
 ## Runtime Callbacks
 
@@ -121,8 +122,9 @@ Storage roots live in `module.data.define(...)`.
 
 - Normal roots persist and hash by default.
 - `persist = false, hash = false` creates transient draw-only UI state.
-- `mode = "runtime"` creates runtime-owned storage written through
-  `runtime.data.runtime` or action runtime bridges.
+- `mode = "runtime"` creates runtime-owned storage read/written through
+  `runtime.data.runtimeOwned`, `ui.data.runtimeOwned`, or action runtime
+  bridges.
 - `Enabled` and `DebugMode` are Lib-owned built-ins; do not declare them.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.

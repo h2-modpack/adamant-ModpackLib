@@ -35,7 +35,7 @@ local function rejectPrivateAlias(context, alias)
     end
 end
 
-local function wrapField(rawField, contextSource, gate)
+local function wrapField(rawField, contextSource, gate, isWritable)
     local field = {
         _kind = rawget(rawField, "_kind"),
     }
@@ -50,52 +50,49 @@ local function wrapField(rawField, contextSource, gate)
 
     function field.read(self, ...)
         requireMethodSelf(readContext, self, field)
-        gate()
         return rawField:read(...)
     end
 
     function field.readAlias(self, alias)
         requireMethodSelf(readAliasContext, self, field)
-        gate()
         rejectPrivateAlias(readAliasContext, alias)
         return rawField:readAlias(alias)
     end
 
-    function field.write(self, value)
-        requireMethodSelf(writeContext, self, field)
-        gate()
-        return rawField:write(value)
-    end
-
-    function field.writeAlias(self, alias, value)
-        requireMethodSelf(writeAliasContext, self, field)
-        gate()
-        rejectPrivateAlias(writeAliasContext, alias)
-        return rawField:writeAlias(alias, value)
-    end
-
-    function field.reset(self)
-        requireMethodSelf(resetContext, self, field)
-        gate()
-        return rawField:reset()
-    end
-
     function field.schema(self)
         requireMethodSelf(schemaContext, self, field)
-        gate()
         return rawField:schema()
     end
 
     function field.alias(self)
         requireMethodSelf(aliasContext, self, field)
-        gate()
         return rawField:alias()
     end
 
     function field.controlId(self)
         requireMethodSelf(controlIdContext, self, field)
-        gate()
         return rawField:controlId()
+    end
+
+    if isWritable then
+        function field.write(self, value)
+            requireMethodSelf(writeContext, self, field)
+            gate()
+            return rawField:write(value)
+        end
+
+        function field.writeAlias(self, alias, value)
+            requireMethodSelf(writeAliasContext, self, field)
+            gate()
+            rejectPrivateAlias(writeAliasContext, alias)
+            return rawField:writeAlias(alias, value)
+        end
+
+        function field.reset(self)
+            requireMethodSelf(resetContext, self, field)
+            gate()
+            return rawField:reset()
+        end
     end
 
     return field
@@ -123,20 +120,17 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
 
     function handle.count(self)
         requireMethodSelf(countContext, self, handle)
-        gate()
         return rawTable:count()
     end
 
     function handle.read(self, rowIndex, rowAlias)
         requireMethodSelf(readContext, self, handle)
-        gate()
         rejectPrivateAlias(readContext, rowAlias)
         return rawTable:read(rowIndex, rowAlias)
     end
 
     function handle.get(self, rowIndex, rowAlias)
         requireMethodSelf(getContext, self, handle)
-        gate()
         rejectPrivateAlias(getContext, rowAlias)
         rowIndex = math.floor(tonumber(rowIndex) or 0)
         local rowFields = fields[rowIndex]
@@ -155,20 +149,18 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
             return nil
         end
 
-        local field = wrapField(rawField, contextSource .. ":get", gate)
+        local field = wrapField(rawField, contextSource .. ":get", gate, isWritable)
         rowFields[rowAlias] = field
         return field
     end
 
     function handle.snapshot(self, rowIndex)
         requireMethodSelf(snapshotContext, self, handle)
-        gate()
         return rawTable:snapshot(rowIndex)
     end
 
     function handle.snapshots(self)
         requireMethodSelf(snapshotsContext, self, handle)
-        gate()
         return rawTable:snapshots()
     end
 
@@ -234,7 +226,6 @@ function storageRefAdapter.create(opts)
 
     return {
         get = function(alias)
-            gate()
             rejectPrivateAlias(source, alias)
 
             local cached = refs[alias]
@@ -249,7 +240,7 @@ function storageRefAdapter.create(opts)
 
             local ref
             if storage.field.is(raw) then
-                ref = wrapField(raw, source, gate)
+                ref = wrapField(raw, source, gate, isWritable)
             else
                 ref = wrapTable(raw, source .. "(...)", gate, isWritable)
             end

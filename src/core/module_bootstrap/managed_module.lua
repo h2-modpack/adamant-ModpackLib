@@ -178,7 +178,7 @@ local function rejectPrivateAlias(context, alias)
 end
 
 local function createActionRuntimeBridge(persistentState)
-    local runtime = persistentState.runtime
+    local runtimeOwned = persistentState.runtimeOwned
     return {
         read = function(alias, ...)
             rejectPrivateAlias("actions.runtime.read", alias)
@@ -188,14 +188,24 @@ local function createActionRuntimeBridge(persistentState)
             end
             return ref:read(...)
         end,
-        set = runtime and function(alias, value)
-            rejectPrivateAlias("actions.runtime.set", alias)
-            return runtime.set(alias, value)
-        end or nil,
-        clear = runtime and function(alias)
-            rejectPrivateAlias("actions.runtime.clear", alias)
-            return runtime.clear(alias)
-        end or nil,
+        runtimeOwned = runtimeOwned and {
+            get = function(alias)
+                rejectPrivateAlias("actions.runtimeOwned.get", alias)
+                return runtimeOwned.get(alias)
+            end,
+            read = function(alias)
+                rejectPrivateAlias("actions.runtimeOwned.read", alias)
+                return runtimeOwned.read(alias)
+            end,
+            set = function(alias, value)
+                rejectPrivateAlias("actions.runtimeOwned.set", alias)
+                return runtimeOwned.set(alias, value)
+            end,
+            clear = function(alias)
+                rejectPrivateAlias("actions.runtimeOwned.clear", alias)
+                return runtimeOwned.clear(alias)
+            end,
+        } or nil,
     }
 end
 
@@ -491,10 +501,6 @@ function managedModule.create(opts)
         host = host,
         actionRuntime = actionRuntimeBridge,
         controls = controls.refs.createUi(stagedState, controlCatalog, actionBuffer),
-        logPrefix = logPrefix,
-        isDebugEnabled = function()
-            return persistentState.read("DebugMode") == true
-        end,
     })
 
     function module.drawTab()

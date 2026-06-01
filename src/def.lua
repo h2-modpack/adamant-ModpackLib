@@ -14,7 +14,7 @@ local lib = {}
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
 ---@field alias string Public alias used by store/state/widget APIs and as the managed storage key.
----@field mode? "setting"|"runtime" Storage ownership mode. Defaults to "setting"; "runtime" is written through `store.runtime`.
+---@field mode? "setting"|"runtime" Storage ownership mode. Defaults to "setting"; "runtime" is written through `data.runtimeOwned`.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
@@ -87,20 +87,22 @@ local lib = {}
 
 ---Internal trusted persistent state. Module authors receive `Store`.
 ---@class AdamantModpackLib.PersistentState
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting/runtime storage object.
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting storage object.
 ---@field read fun(alias: string): any
+---@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
----Committed runtime state facade. Store methods are valid outside draw callbacks and reject while any module draw callback is running.
+---Committed runtime state facade. Reads are phase-neutral; writes live under specific mutation lanes.
 ---@class AdamantModpackLib.Store
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting/runtime storage object.
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting storage object.
 ---@field cache AdamantModpackLib.StoreCache
 ---@field shared AdamantModpackLib.SharedData
----@field runtime AdamantModpackLib.StoreRuntimeState
+---@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
----@class AdamantModpackLib.StoreRuntimeState
+---@class AdamantModpackLib.RuntimeOwnedState
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-owned storage object.
 ---@field read fun(alias: string): any Read a declared `mode = "runtime"` storage alias.
 ---@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
 ---@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
@@ -110,6 +112,7 @@ local lib = {}
 ---@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
+---@field runtimeOwned AdamantModpackLib.UiRuntimeOwnedState
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
@@ -123,21 +126,26 @@ local lib = {}
 ---@field isDirty fun(): boolean
 ---@field auditMismatches fun(): string[]
 
----Draw-phase staged UI state facade. Methods and returned refs are valid only during draw callbacks.
+---Draw-phase staged UI state facade. Reads are phase-neutral; write methods remain draw-scoped.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field shared AdamantModpackLib.SharedData
+---@field runtimeOwned AdamantModpackLib.UiRuntimeOwnedState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
----Draw-phase transient action surface. Methods and returned refs are valid only during draw callbacks.
+---@class AdamantModpackLib.UiRuntimeOwnedState
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-owned storage object.
+---@field read fun(alias: string): any Read a declared `mode = "runtime"` storage alias.
+
+---Draw-phase transient action surface. Reads are phase-neutral; staging/emitting remains draw-scoped.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field trigger fun(actionKey: string, value?: any) Stage a declared action. Omitted value stages `true`.
 ---@field emit fun(id: string, eventName: string, payload?: any) Queue a shared event to emit after the draw callback.
 
----Draw-phase action ref. Use colon syntax; methods are valid only during draw callbacks.
+---Draw-phase action ref. Use colon syntax; mutation methods remain draw-scoped.
 ---@class AdamantModpackLib.DrawActionRef
 ---@field stage fun(self: AdamantModpackLib.DrawActionRef, value: any)
 ---@field read fun(self: AdamantModpackLib.DrawActionRef): any
@@ -220,9 +228,8 @@ local lib = {}
 
 ---Narrow runtime bridge available to draw-action handlers after a draw pass.
 ---@class AdamantModpackLib.ActionRuntimeBridge
----@field read fun(alias: string, ...): any Read committed setting/runtime storage through the underlying persistent state.
----@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
----@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
+---@field read fun(alias: string, ...): any Read committed setting storage through the underlying persistent state.
+---@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
 
 ---@class AdamantModpackLib.UiContext
 ---@field draw AdamantModpackLib.DrawContext

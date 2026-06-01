@@ -126,9 +126,3 @@ function TestWidgets_Nav:testDrawNavUsesCurrentImguiForVerticalTabs()
     lu.assertTrue(calls.ended)
     lu.assertTrue(calls.sameLine)
 end
-
-function TestWidgets_Nav:testDrawNavRejectsUseOutsideDrawPhase()
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        self.h.uiDraw.get().nav.verticalTabs({})
-    end)
-end

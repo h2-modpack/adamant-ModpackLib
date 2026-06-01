@@ -607,11 +607,11 @@ local control = ui.controls.get(name)
 return control and control:read()
 ```
 
-Returned refs are phase-gated:
+Returned refs are variant-shaped:
 
-- runtime controls reject during draw
-- UI controls reject outside draw
-- escaped control refs remain unusable outside their phase
+- runtime controls expose runtime/read-only methods
+- UI controls expose draw/staged methods
+- escaped write/action refs remain guarded by their mutation methods
 
 ## Drawing
 

@@ -7,9 +7,10 @@ state, draw actions, and hash/profile participation.
 
 | Surface | Use it for | Phase |
 | --- | --- | --- |
-| `runtime.data` | committed setting/runtime reads | runtime callbacks |
-| `runtime.data.runtime` | writes to `mode = "runtime"` storage | runtime callbacks |
+| `runtime.data` | committed setting reads | runtime callbacks |
+| `runtime.data.runtimeOwned` | read/write `mode = "runtime"` storage | runtime callbacks |
 | `ui.data` | staged UI reads/writes | draw callbacks |
+| `ui.data.runtimeOwned` | read `mode = "runtime"` storage | draw callbacks |
 | `ui.actions` | one-shot draw intent | draw callbacks |
 | `ui.controls` | declared composite control refs | draw callbacks |
 | `runtime.controls` | declared composite control reads | runtime callbacks |
@@ -73,13 +74,13 @@ module.data.define({
 Runtime code writes:
 
 ```lua
-runtime.data.runtime.set("RecordingReady", true)
+runtime.data.runtimeOwned.set("RecordingReady", true)
 ```
 
-Draw code reads:
+Draw code reads through the runtime-owned lane:
 
 ```lua
-local ready = ui.data.read("RecordingReady")
+local ready = ui.data.runtimeOwned.read("RecordingReady")
 ```
 
 ## Tables
@@ -136,7 +137,7 @@ Actions are declared before activation:
 module.actions.define({
     StartRecording = function(host, uiData, actionRuntime, value)
         host.logIf("Starting recording")
-        actionRuntime.set("RecordingReady", value == true)
+        actionRuntime.runtimeOwned.set("RecordingReady", value == true)
     end,
 })
 ```
@@ -161,7 +162,8 @@ receive:
 
 - `host`: narrow logging/metadata/enabled host projection
 - `uiData`: current draw state
-- `actionRuntime`: narrow runtime bridge with `read`, `set`, and `clear`
+- `actionRuntime`: narrow runtime bridge with `read` for settings and
+  `runtimeOwned` for runtime-owned data
 - `value`: staged action payload
 
 ## Commit Observer

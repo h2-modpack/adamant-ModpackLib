@@ -45,8 +45,8 @@ runScratch.seen = true
 ```
 
 Current-run cache is not exposed through draw `state`. If UI needs to display a
-runtime-derived value, write that value to managed runtime storage or shared
-data from runtime code.
+runtime-derived value, write that value to managed `mode = "runtime"` storage
+through `runtime.data.runtimeOwned` or publish shared data from runtime code.
 
 Rules:
 

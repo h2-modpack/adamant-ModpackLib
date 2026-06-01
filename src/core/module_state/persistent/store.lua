@@ -16,32 +16,37 @@ function store.create(persistentState, cache, shared)
         source = "store.get",
         writable = false,
     })
+    local runtimeOwnedRefs = storageRefAdapter.create({
+        root = persistentState.runtimeOwned,
+        phase = "runtime",
+        source = "store.runtimeOwned.get",
+        writable = false,
+    })
 
-    local runtime = persistentState.runtime
+    local runtimeOwned = persistentState.runtimeOwned
 
     return {
         get = refs.get,
         cache = cache,
         shared = shared,
-        runtime = runtime and {
+        runtimeOwned = runtimeOwned and {
+            get = runtimeOwnedRefs.get,
             read = function(alias)
-                phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtime.read", alias)
-                return runtime.read(alias)
+                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.read", alias)
+                return runtimeOwned.read(alias)
             end,
             set = function(alias, value)
                 phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtime.set", alias)
-                return runtime.set(alias, value)
+                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.set", alias)
+                return runtimeOwned.set(alias, value)
             end,
             clear = function(alias)
                 phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtime.clear", alias)
-                return runtime.clear(alias)
+                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.clear", alias)
+                return runtimeOwned.clear(alias)
             end,
         } or nil,
         read = function(alias, ...)
-            phaseGate.requireRuntime()
             storageRefAdapter.rejectPrivateAlias("store.read", alias)
             local ref = persistentState.get(alias)
             if ref == nil then

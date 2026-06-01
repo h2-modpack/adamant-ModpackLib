@@ -92,26 +92,33 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 
 ---@class ActionRuntimeBridge
 ---@field read fun(alias: string, ...): any
----@field set fun(alias: string, value: any): boolean
----@field clear fun(alias: string): boolean
+---@field runtimeOwned table
 
 ---@class PersistentState
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field read fun(alias: string): any
+---@field runtimeOwned RuntimeOwnedState
 ---@field table fun(alias: string): StorageTableReadOnly|nil
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
+
+---@class RuntimeOwnedState
+---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
+---@field read fun(alias: string): any
+---@field set fun(alias: string, value: any): boolean
+---@field clear fun(alias: string): boolean
 
 ---@class Store
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field cache table|nil
 ---@field shared table|nil
----@field runtime table|nil
+---@field runtimeOwned RuntimeOwnedState|nil
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
 ---@field view table<string, any>
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
 ---@field read fun(alias: string): any
+---@field runtimeOwned table
 ---@field table fun(alias: string): StorageTableStagedState|nil
 ---@field field fun(alias: string): StorageField
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil

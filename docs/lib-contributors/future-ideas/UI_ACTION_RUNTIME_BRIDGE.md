@@ -106,7 +106,7 @@ storage:
 
 ```text
 UI stages StartRecording
-action handler writes runtime-owned marker through store.runtime
+action handler writes runtime-owned marker through `actionRuntime.runtimeOwned`
 runtime hook updates marker after each game event
 UI can later read a sanctioned draw-safe projection
 ```
@@ -117,7 +117,7 @@ The broader cache-access shape is still under discussion. In particular:
 - current-run cache should remain runtime/logic scratch state
 - shared data remains the likely draw-safe read projection
 - current-run cache remains under `store.cache`
-- draw-safe runtime-owned values should come from draw `state`
+- draw-safe runtime-owned values should come from `ui.data.runtimeOwned`
 
 Do not treat this note as a full cache-v2 design.
 

@@ -1,13 +1,11 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local refs = deps.refs
 
 local drawControls = {}
 
 function drawControls.render(draw, control, viewName, ...)
-    phaseGate.requireAnyDraw()
     local entry = refs.getEntry(control)
     if entry == nil then
         logging.violate("controls.invalid_render_target", "ui.draw.control expects a control ref")

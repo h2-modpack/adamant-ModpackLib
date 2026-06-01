@@ -25,12 +25,28 @@ function uiState.create(stagedState, shared)
         source = "state.get",
         writable = true,
     })
+    local runtimeOwnedRefs = storageRefAdapter.create({
+        root = stagedState.runtimeOwned,
+        phase = "draw",
+        source = "state.runtimeOwned.get",
+        writable = false,
+    })
 
     return {
         get = refs.get,
         shared = shared,
+        runtimeOwned = {
+            get = runtimeOwnedRefs.get,
+            read = function(alias, ...)
+                storageRefAdapter.rejectPrivateAlias("state.runtimeOwned.read", alias)
+                local ref = stagedState.runtimeOwned.get(alias)
+                if ref == nil then
+                    return nil
+                end
+                return ref:read(...)
+            end,
+        },
         read = function(alias, ...)
-            phaseGate.requireAnyDraw()
             storageRefAdapter.rejectPrivateAlias("state.read", alias)
             local ref = stagedState.get(alias)
             if ref == nil then

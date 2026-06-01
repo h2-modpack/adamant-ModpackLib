@@ -27,7 +27,8 @@ This document assumes:
 - draw code reads staged values through `ui.data.get(...)`
 - runtime/gameplay code reads committed setting/runtime values through
   `runtime.data.get(...)`
-- draw-phase objects and refs are callback-local; do not cache them for runtime use
+- draw-callback objects are shaped by variant type; read methods are
+  phase-neutral, while mutation methods remain scoped
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own staged-state commit timing

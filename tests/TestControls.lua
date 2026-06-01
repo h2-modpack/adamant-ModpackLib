@@ -220,9 +220,10 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
         drawTab = function(_, ui)
             capturedUiControl = ui.controls.get("PrioritySlot")
             if checkRuntimeDuringDraw then
-                lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
-                    capturedRuntimeControl:read()
-                end)
+                lu.assertEquals(capturedRuntimeControl:read(), {
+                    mode = "Any",
+                    min = 2,
+                })
             end
             lu.assertEquals(capturedUiControl:read(), {
                 mode = "Any",
@@ -252,8 +253,12 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
         mode = "Tartarus",
         min = 2,
     })
+    lu.assertEquals(capturedUiControl:read(), {
+        mode = "Tartarus",
+        min = 2,
+    })
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        capturedUiControl:read()
+        capturedUiControl:field("Mode"):write("Any")
     end)
 end
 

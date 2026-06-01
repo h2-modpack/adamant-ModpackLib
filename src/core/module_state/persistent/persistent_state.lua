@@ -15,6 +15,7 @@ local function create(storageConfig, storage)
     local committedRoots = {}
     local tableHandles = {}
     local fieldHandles = {}
+    local runtimeOwnedFieldHandles = {}
 
     local function readRaw(alias)
         return storageConfig.readValue(alias)
@@ -102,7 +103,14 @@ local function create(storageConfig, storage)
     local storeReadBackend = {
         readRoot = readRootNode,
         canRead = function(node, alias)
-            if not node._persist and node._mode ~= "runtime" then
+            if node._mode == "runtime" then
+                logging.violate(
+                    "store.invalid_surface",
+                    "store.read: alias '%s' is runtime-owned; use store.runtimeOwned.read",
+                    tostring(alias))
+                return false
+            end
+            if not node._persist then
                 logging.violate(
                     "store.invalid_surface",
                     "store.read: alias '%s' is staged-only; use draw state for UI-only state",
@@ -136,7 +144,7 @@ local function create(storageConfig, storage)
     end
 
     local function writeRuntimeRoot(alias, value)
-        local node = getRuntimeNode(alias, "store.runtime.set")
+        local node = getRuntimeNode(alias, "store.runtimeOwned.set")
         if not node then
             return false
         end
@@ -149,7 +157,7 @@ local function create(storageConfig, storage)
     end
 
     local function clearRuntimeRoot(alias)
-        local node = getRuntimeNode(alias, "store.runtime.clear")
+        local node = getRuntimeNode(alias, "store.runtimeOwned.clear")
         if not node then
             return false
         end
@@ -169,23 +177,89 @@ local function create(storageConfig, storage)
         return aliasNodes[alias]
     end
 
-    persistentState.runtime = {
+    local runtimeOwnedReadBackend = {
+        readRoot = readRootNode,
+        canRead = function(_, alias)
+            return getRuntimeNode(alias, "store.runtimeOwned.read", true) ~= nil
+        end,
+        onUnknownRead = function(alias)
+            logging.violate("store.unknown_alias", "store.runtimeOwned.read: unknown storage alias '%s'",
+                tostring(alias))
+        end,
+    }
+
+    local getTableHandleForNode
+    local getFieldHandleForNode
+
+    local runtimeOwnedFieldOwner = {
         read = function(alias)
-            local node = getRuntimeNode(alias, "store.runtime.read", true)
+            local node = getRuntimeNode(alias, "store.runtimeOwned.read", true)
             if not node then
                 return nil
             end
-            local value = persistentState.read(alias)
+            local value = storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
             if node.type == "table" and not node._isBitAlias then
                 return ClonePersistedValue(value)
             end
             return value
         end,
+        getAliasSchema = function(alias)
+            return aliasNodes[alias]
+        end,
+    }
+
+    local function getRuntimeOwnedFieldHandleForNode(alias, node)
+        local cached = runtimeOwnedFieldHandles[alias]
+        if cached then
+            return cached
+        end
+
+        local field = storageInternal.field.createKnown(runtimeOwnedFieldOwner, alias, node, "store.runtimeOwned.get")
+        runtimeOwnedFieldHandles[alias] = field
+        return field
+    end
+
+    local function getRuntimeOwnedDataObject(alias)
+        local node = getRuntimeNode(alias, "store.runtimeOwned.get", true)
+        if not node then
+            return nil
+        end
+        if node.type == "table" and not node._isBitAlias then
+            return getTableHandleForNode(alias, node)
+        end
+        return getRuntimeOwnedFieldHandleForNode(alias, node)
+    end
+
+    persistentState.runtimeOwned = {
+        read = function(alias)
+            local node = getRuntimeNode(alias, "store.runtimeOwned.read", true)
+            if not node then
+                return nil
+            end
+            local value = storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
+            if node.type == "table" and not node._isBitAlias then
+                return ClonePersistedValue(value)
+            end
+            return value
+        end,
+        get = getRuntimeOwnedDataObject,
+        table = function(alias)
+            local node = getRuntimeNode(alias, "store.runtimeOwned.table", true)
+            if not node then
+                return nil
+            end
+            if node.type ~= "table" or node._isBitAlias then
+                logging.violate("store.invalid_table_alias",
+                    "store.runtimeOwned.table: alias '%s' is not table storage", tostring(alias))
+                return nil
+            end
+            return getTableHandleForNode(alias, node)
+        end,
         set = writeRuntimeRoot,
         clear = clearRuntimeRoot,
     }
 
-    local function getTableHandleForNode(alias, node)
+    getTableHandleForNode = function(alias, node)
         local cached = tableHandles[alias]
         if cached then
             return cached
@@ -199,7 +273,7 @@ local function create(storageConfig, storage)
         return handle
     end
 
-    local function getFieldHandleForNode(alias, node)
+    getFieldHandleForNode = function(alias, node)
         local cached = fieldHandles[alias]
         if cached then
             return cached
@@ -220,7 +294,12 @@ local function create(storageConfig, storage)
             logging.violate("store.invalid_table_alias", "store.table: alias '%s' is not table storage", tostring(alias))
             return nil
         end
-        if not node._persist and node._mode ~= "runtime" then
+        if node._mode == "runtime" then
+            logging.violate("store.invalid_surface",
+                "store.table: alias '%s' is runtime-owned; use store.runtimeOwned.table", tostring(alias))
+            return nil
+        end
+        if not node._persist then
             logging.violate("store.invalid_surface", "store.table: alias '%s' is staged-only; use stagedState.table()",
                 tostring(alias))
             return nil
@@ -234,7 +313,14 @@ local function create(storageConfig, storage)
             logging.violate("store.unknown_alias", "store.get: unknown storage alias '%s'", tostring(alias))
             return nil
         end
-        if not node._persist and node._mode ~= "runtime" then
+        if node._mode == "runtime" then
+            logging.violate(
+                "store.invalid_surface",
+                "store.get: alias '%s' is runtime-owned; use store.runtimeOwned.get",
+                tostring(alias))
+            return nil
+        end
+        if not node._persist then
             logging.violate(
                 "store.invalid_surface",
                 "store.get: alias '%s' is staged-only; use draw state for UI-only state",

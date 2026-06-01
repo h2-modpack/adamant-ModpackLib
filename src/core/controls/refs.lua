@@ -35,57 +35,54 @@ local function mapAlias(binding, alias)
     return alias
 end
 
-local function wrapField(rawField, binding, gate)
+local function wrapField(rawField, binding, gate, writable)
     local field = {
         _kind = rawget(rawField, "_kind"),
     }
 
     function field.read(self, ...)
         requireSelf("control field read", self, field)
-        gate()
         return rawField:read(...)
     end
 
     function field.readAlias(self, alias)
         requireSelf("control field readAlias", self, field)
-        gate()
         return rawField:readAlias(mapAlias(binding, alias))
-    end
-
-    function field.write(self, value)
-        requireSelf("control field write", self, field)
-        gate()
-        return rawField:write(value)
-    end
-
-    function field.writeAlias(self, alias, value)
-        requireSelf("control field writeAlias", self, field)
-        gate()
-        return rawField:writeAlias(mapAlias(binding, alias), value)
-    end
-
-    function field.reset(self)
-        requireSelf("control field reset", self, field)
-        gate()
-        return rawField:reset()
     end
 
     function field.schema(self)
         requireSelf("control field schema", self, field)
-        gate()
         return rawField:schema()
     end
 
     function field.alias(self)
         requireSelf("control field alias", self, field)
-        gate()
         return rawField:alias()
     end
 
     function field.controlId(self)
         requireSelf("control field controlId", self, field)
-        gate()
         return rawField:controlId()
+    end
+
+    if writable then
+        function field.write(self, value)
+            requireSelf("control field write", self, field)
+            gate()
+            return rawField:write(value)
+        end
+
+        function field.writeAlias(self, alias, value)
+            requireSelf("control field writeAlias", self, field)
+            gate()
+            return rawField:writeAlias(mapAlias(binding, alias), value)
+        end
+
+        function field.reset(self)
+            requireSelf("control field reset", self, field)
+            gate()
+            return rawField:reset()
+        end
     end
 
     return field
@@ -123,19 +120,16 @@ local function wrapTable(rawTable, binding, gate, writable)
 
     function handle.count(self)
         requireSelf("control table count", self, handle)
-        gate()
         return rawTable:count()
     end
 
     function handle.read(self, rowIndex, rowAlias)
         requireSelf("control table read", self, handle)
-        gate()
         return rawTable:read(rowIndex, mapAlias(binding, rowAlias))
     end
 
     function handle.get(self, rowIndex, rowAlias)
         requireSelf("control table get", self, handle)
-        gate()
         rowIndex = math.floor(tonumber(rowIndex) or 0)
         local internalAlias = mapAlias(binding, rowAlias)
         local rowFields = fieldCache[rowIndex]
@@ -151,20 +145,18 @@ local function wrapTable(rawTable, binding, gate, writable)
         if rawField == nil then
             return nil
         end
-        local field = wrapField(rawField, binding.rowBindings and binding.rowBindings[rowAlias] or nil, gate)
+        local field = wrapField(rawField, binding.rowBindings and binding.rowBindings[rowAlias] or nil, gate, writable)
         rowFields[internalAlias] = field
         return field
     end
 
     function handle.snapshot(self, rowIndex)
         requireSelf("control table snapshot", self, handle)
-        gate()
         return translateSnapshot(binding, rawTable:snapshot(rowIndex))
     end
 
     function handle.snapshots(self)
         requireSelf("control table snapshots", self, handle)
-        gate()
         local snapshots = {}
         for index, snapshot in ipairs(rawTable:snapshots()) do
             snapshots[index] = translateSnapshot(binding, snapshot)
@@ -232,26 +224,13 @@ local function createFieldSet(root, entry, phase, writable)
                 tostring(entry.name), tostring(key))
         end
         if storage.field.is(raw) then
-            fields[key] = wrapField(raw, binding, gate)
+            fields[key] = wrapField(raw, binding, gate, writable)
         else
             fields[key] = wrapTable(raw, binding, gate, writable)
         end
     end
 
     return fields
-end
-
-local function wrapControlMethods(control, gate)
-    for key, value in pairs(control) do
-        if type(value) == "function" then
-            local callback = value
-            control[key] = function(self, ...)
-                requireSelf("control:" .. tostring(key), self, control)
-                gate()
-                return callback(self, ...)
-            end
-        end
-    end
 end
 
 local function attachControlInternals(control, entry, gate, actionBuffer)
@@ -288,7 +267,6 @@ local function attachControlInternals(control, entry, gate, actionBuffer)
         end
     end
 
-    wrapControlMethods(control, gate)
     return control
 end
 
@@ -313,12 +291,10 @@ local function createFacade(opts)
     local root = opts.root
     local actionBuffer = opts.actionBuffer
     local writable = phase == "draw"
-    local gate = createGate(phase)
     local controlCache = {}
     local facade = {}
 
     function facade.get(name)
-        gate()
         local entry = catalog.instances and catalog.instances[name] or nil
         if entry == nil then
             logging.violate("controls.unknown_control", "%s.controls.get: unknown control '%s'",

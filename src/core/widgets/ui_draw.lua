@@ -5,7 +5,6 @@ local nav = deps.nav
 local logging = deps.logging
 local storage = deps.storage
 local imgui = deps.rom.ImGui
-local phaseGate = deps.phaseGate
 local controlsDraw = deps.controlsDraw or {
     render = function()
         logging.violate("controls.invalid_render_target", "ui.draw.control is unavailable")
@@ -38,24 +37,6 @@ local draw = {
 ---@class DrawNav
 ---@field verticalTabs fun(opts: VerticalTabsOpts|nil): string|number|nil
 
-local function getActiveDrawLogContext()
-    local context = phaseGate.getActiveDrawContext()
-    if type(context) ~= "table" or type(context.logPrefix) ~= "string" then
-        logging.violate("phase.invalid_ui_access", "draw logging can only run during a module draw callback")
-    end
-    return context
-end
-
-function draw.log(fmt, ...)
-    local context = getActiveDrawLogContext()
-    return logging.printWithPrefix(context.logPrefix, fmt, ...)
-end
-
-function draw.logIf(fmt, ...)
-    local context = getActiveDrawLogContext()
-    return logging.printWithPrefixIf(context.debugEnabled == true, context.logPrefix, fmt, ...)
-end
-
 local function resolveField(target, methodName)
     if storage.field.is(target) then
         return target
@@ -67,35 +48,29 @@ local function resolveField(target, methodName)
 end
 
 local function callTwoFieldWidget(methodName, firstTarget, secondTarget, opts)
-    phaseGate.requireAnyDraw()
     local firstField = resolveField(firstTarget, methodName)
     local secondField = resolveField(secondTarget, methodName)
     return widgets[methodName](draw.imgui, firstField, secondField, opts)
 end
 
 local function callFieldWidget(methodName, target, opts)
-    phaseGate.requireAnyDraw()
     local field = resolveField(target, methodName)
     return widgets[methodName](draw.imgui, field, opts)
 end
 
 function draw.widgets.separator()
-    phaseGate.requireAnyDraw()
     return widgets.separator(draw.imgui)
 end
 
 function draw.widgets.text(text, opts)
-    phaseGate.requireAnyDraw()
     return widgets.text(draw.imgui, text, opts)
 end
 
 function draw.widgets.button(label, opts)
-    phaseGate.requireAnyDraw()
     return widgets.button(draw.imgui, label, opts)
 end
 
 function draw.widgets.confirmButton(id, label, opts)
-    phaseGate.requireAnyDraw()
     return widgets.confirmButton(draw.imgui, id, label, opts)
 end
 
@@ -112,7 +87,6 @@ function draw.widgets.packedDropdown(target, opts)
 end
 
 function draw.widgets.getPackedChoiceAlias(target, opts)
-    phaseGate.requireAnyDraw()
     local field = resolveField(target, "getPackedChoiceAlias")
     return widgets.getPackedChoiceAlias(field, opts)
 end
@@ -142,7 +116,6 @@ function draw.widgets.packedCheckboxList(target, opts)
 end
 
 function draw.nav.verticalTabs(opts)
-    phaseGate.requireAnyDraw()
     return nav.verticalTabs(draw.imgui, opts)
 end
 

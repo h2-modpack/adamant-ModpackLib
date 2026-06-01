@@ -13,7 +13,6 @@ function uiActions.create(actionBuffer)
     local actions = {}
 
     function actions.get(actionKey)
-        phaseGate.requireAnyDraw()
         local ref = refs[actionKey]
         if ref ~= nil then
             return ref

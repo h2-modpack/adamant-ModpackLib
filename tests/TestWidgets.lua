@@ -68,12 +68,6 @@ local function DrawAction(h, actionBuffer, key)
     end)
 end
 
-function TestWidgets:testDrawWidgetsRejectUseOutsideDrawPhase()
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        self.h.uiDraw.get().widgets.text("outside")
-    end)
-end
-
 function TestWidgets:testPlainDropdownUsesNativePreview()
     local imgui, state = self.h.makeDropdownImgui()
     local stagedState = self.h.createValueStagedState(2)

@@ -115,8 +115,9 @@ local function drawTab(host, ui)
 end
 ```
 
-`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-phase objects.
-Do not cache them or refs returned from them for runtime use.
+`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback
+objects. Reads are phase-neutral, but staged writes, action staging, and other
+mutations remain draw-scoped.
 
 ## Runtime Logic
 

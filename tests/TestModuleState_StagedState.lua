@@ -124,10 +124,16 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
 
     lu.assertFalse(stagedState.view.RuntimeFlag)
-    lu.assertTrue(persistentState.runtime.set("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtimeOwned.set("RuntimeFlag", true))
     lu.assertTrue(stagedState.view.RuntimeFlag)
-    lu.assertTrue(stagedState.read("RuntimeFlag"))
-    lu.assertTrue(stagedState.get("RuntimeFlag"):read())
+    lu.assertTrue(stagedState.runtimeOwned.read("RuntimeFlag"))
+    lu.assertTrue(stagedState.runtimeOwned.get("RuntimeFlag"):read())
+    lu.assertErrorMsgContains("runtime-owned", function()
+        stagedState.read("RuntimeFlag")
+    end)
+    lu.assertErrorMsgContains("runtime-owned", function()
+        stagedState.get("RuntimeFlag")
+    end)
     lu.assertErrorMsgContains("runtime-owned", function()
         stagedState.write("RuntimeFlag", false)
     end)
@@ -136,7 +142,7 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     end)
     lu.assertTrue(stagedState.view.RuntimeFlag)
 
-    local runtimeRows = stagedState.get("RuntimeRows")
+    local runtimeRows = stagedState.runtimeOwned.get("RuntimeRows")
     lu.assertEquals(runtimeRows:count(), 1)
     lu.assertFalse(runtimeRows:read(1, "Enabled"))
     lu.assertNil(runtimeRows.write)
@@ -144,8 +150,20 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
 end
 
 function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsSemantically()
-    local _, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
     local state = self.harness.moduleState.uiState.create(stagedState)
+    persistentState.runtimeOwned.set("RuntimeFlag", true)
+
+    inDraw(self.harness, function()
+        lu.assertTrue(state.runtimeOwned.read("RuntimeFlag"))
+        lu.assertTrue(state.runtimeOwned.get("RuntimeFlag"):read())
+        lu.assertErrorMsgContains("runtime-owned", function()
+            state.read("RuntimeFlag")
+        end)
+        lu.assertErrorMsgContains("runtime-owned", function()
+            state.get("RuntimeFlag")
+        end)
+    end)
 
     lu.assertErrorMsgContains("staged_state.invalid_surface", function()
         inDraw(self.harness, function()
@@ -295,13 +313,13 @@ function TestModuleState_StagedState:testTableHandleReadsWritesAndCreatesCellFie
 
     stagedState._flushToConfig()
     local storeTiers = store.table("Tiers")
-    local storeChoiceMode = storeTiers:get(2, "ChoiceMode")
+    local publicStore = self.harness.moduleState.createStore(store)
+    local publicStoreTiers = publicStore.get("Tiers")
+    local publicStoreChoiceMode = publicStoreTiers:get(2, "ChoiceMode")
 
     lu.assertEquals(storeTiers:read(2, "ChoiceMode"), 2)
-    lu.assertEquals(storeChoiceMode:schema().alias, "ChoiceMode")
-    lu.assertErrorMsgContains("storage.readonly_field", function()
-        storeChoiceMode:write(1)
-    end)
+    lu.assertEquals(publicStoreChoiceMode:schema().alias, "ChoiceMode")
+    lu.assertNil(publicStoreChoiceMode.write)
 end
 
 function TestModuleState_StagedState:testStagedStateAndRowsCreateStorageFields()

@@ -24,7 +24,8 @@ Current-run cache:
 
 Runtime-owned storage replaces the old persistent-cache use case. If a module
 needs a value that runtime writes and UI reads, declare managed storage with
-`mode = "runtime"` and access it through runtime data plus draw `state`.
+`mode = "runtime"` and access it through the `runtimeOwned` lane on runtime
+and draw data.
 
 Cross-module read models are not cache domains. They are declared through
 `module.shared.data.*` and implemented by the shared subsystem.

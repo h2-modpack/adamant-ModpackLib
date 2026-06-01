@@ -78,9 +78,6 @@ local function createDrawActionRef(actionBuffer, actionKey, phaseGate)
         end,
         read = function(self)
             requireRefSelf("actions.get(...):read", self, ref)
-            if phaseGate ~= nil then
-                phaseGate.requireAnyDraw()
-            end
             return actionBuffer.read(actionKey)
         end,
         clear = function(self)
@@ -92,9 +89,6 @@ local function createDrawActionRef(actionBuffer, actionKey, phaseGate)
         end,
         has = function(self)
             requireRefSelf("actions.get(...):has", self, ref)
-            if phaseGate ~= nil then
-                phaseGate.requireAnyDraw()
-            end
             return actionBuffer.has(actionKey)
         end,
     }, DRAW_ACTION_REF)

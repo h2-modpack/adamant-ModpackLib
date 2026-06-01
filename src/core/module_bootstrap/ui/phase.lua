@@ -31,8 +31,6 @@ end
 ---@field host Host
 ---@field actionRuntime ActionRuntimeBridge
 ---@field controls table|nil
----@field logPrefix string
----@field isDebugEnabled fun(): boolean
 
 ---@param opts UiPhaseCreateOpts
 ---@return UiPhaseObjects
@@ -51,10 +49,7 @@ function uiPhase.create(opts)
     }
 
     function objects.run(callback)
-        local results = packResults(phaseGate.runDrawWithContext({
-            logPrefix = opts.logPrefix,
-            debugEnabled = opts.isDebugEnabled() == true,
-        }, function()
+        local results = packResults(phaseGate.runDraw(function()
             local results = packResults(callback(opts.host, objects.ui))
             opts.actionBuffer.executePendingActions(opts.host, objects.state, opts.actionRuntime, {
                 controls = opts.controls,
