@@ -329,6 +329,9 @@ local lib = {}
 ---    runtime: AdamantModpackLib.RuntimeContext,
 ---    ...: any
 ---): any
+---Nested `context.wrap(...)` handlers receive the raw wrapped path signature:
+---the base function followed by the wrapped path's normal arguments. They do
+---not receive host/runtime; close over those from the outer context callback.
 ---@alias AdamantModpackLib.ContextHookWrapCallback fun(base: function, ...: any): any
 ---@class AdamantModpackLib.HookContext
 ---@field wrap fun(path: string, handler: AdamantModpackLib.ContextHookWrapCallback)
@@ -625,12 +628,22 @@ local lib = {}
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when a child toggles.
 ---@field value? any Staged action payload. Defaults to `{ alias = childAlias, value = editedBoolean }`.
 
+---@alias AdamantModpackLib.RetainedOverlayVisibleCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext
+---): boolean
+---@alias AdamantModpackLib.SystemRetainedOverlayVisibleCallback fun(): boolean
+---@alias AdamantModpackLib.RetainedOverlayVisible
+---| boolean
+---| AdamantModpackLib.RetainedOverlayVisibleCallback
+---| AdamantModpackLib.SystemRetainedOverlayVisibleCallback
+
 ---@class AdamantModpackLib.RetainedOverlayColumn
 ---@field key? string Stable column key used by retained values.
 ---@field componentName? string Explicit retained HUD component name for this column.
 ---@field minWidth? number Reserved layout width used to keep following columns aligned.
 ---@field justify? "Left"|"Center"|"Right" Column text justification.
----@field visible? boolean|fun(): boolean
+---@field visible? AdamantModpackLib.RetainedOverlayVisible
 ---@field textArgs? table Text style overrides.
 
 ---@class AdamantModpackLib.RetainedLineSpec
@@ -639,7 +652,7 @@ local lib = {}
 ---@field order? integer Sort key within the region.
 ---@field columnGap? number Reserved space between columns.
 ---@field columns? AdamantModpackLib.RetainedOverlayColumn[] Ordered columns, declared left-to-right.
----@field visible? boolean|fun(): boolean
+---@field visible? AdamantModpackLib.RetainedOverlayVisible
 ---@field minWidth? number Width for one-column convenience lines.
 ---@field justify? "Left"|"Center"|"Right" Justification for one-column convenience lines.
 ---@field textArgs? table Text style overrides for one-column convenience lines.
@@ -651,7 +664,7 @@ local lib = {}
 ---@field maxRows integer Maximum retained rows to allocate.
 ---@field columnGap? number Reserved space between columns.
 ---@field columns AdamantModpackLib.RetainedOverlayColumn[] Ordered columns, declared left-to-right.
----@field visible? boolean|fun(): boolean
+---@field visible? AdamantModpackLib.RetainedOverlayVisible
 
 ---@class AdamantModpackLib.RetainedOverlayProjection
 ---@field setLine fun(name: string, values: table|string): boolean
@@ -679,6 +692,14 @@ local lib = {}
 ---    overlay: AdamantModpackLib.RetainedOverlayProjection,
 ---    event: table
 ---)
+---@alias AdamantModpackLib.OverlayIntervalWhenCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    event: table
+---): boolean
+---@alias AdamantModpackLib.SystemOverlayIntervalWhenCallback fun(event: table): boolean
+---@class AdamantModpackLib.OverlayIntervalOpts
+---@field when? AdamantModpackLib.OverlayIntervalWhenCallback|AdamantModpackLib.SystemOverlayIntervalWhenCallback
 ---@alias AdamantModpackLib.OverlayAfterHookCallback fun(
 ---    host: AdamantModpackLib.Host,
 ---    runtime: AdamantModpackLib.RuntimeContext,
@@ -699,7 +720,7 @@ local lib = {}
 ---    name: string,
 ---    seconds: number,
 ---    callback: AdamantModpackLib.OverlayIntervalCallback,
----    opts?: table
+---    opts?: AdamantModpackLib.OverlayIntervalOpts
 ---)
 ---@field afterHook fun(
 ---    path: string,

@@ -168,6 +168,53 @@ function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeSha
     })
 end
 
+function TestOverlays_Retained:testHostOverlayVisibilityReceivesStandardRuntimeShape()
+    local lineSeen = nil
+    local columnSeen = nil
+    local host, authorModule = self:createHostWithOverlays("test.retained.visibility-shape", function(overlays)
+        overlays.createLine("line", {
+            region = "middleRightStack",
+            visible = function(callbackHost, runtime)
+                lineSeen = {
+                    hostId = callbackHost.getHostId(),
+                    runtimeValue = runtime.data.read("Flag"),
+                }
+                return runtime.data.read("Flag") == true
+            end,
+            columns = {
+                {
+                    key = "text",
+                    minWidth = 40,
+                    visible = function(callbackHost, runtime)
+                        columnSeen = {
+                            hostId = callbackHost.getHostId(),
+                            runtimeValue = runtime.data.read("Flag"),
+                        }
+                        return runtime.data.read("Flag") == true
+                    end,
+                },
+            },
+        })
+    end, {
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        config = {
+            Enabled = true,
+            DebugMode = false,
+            Flag = true,
+        },
+    })
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    lu.assertEquals(lineSeen, {
+        hostId = host.getHostId(),
+        runtimeValue = true,
+    })
+    lu.assertEquals(columnSeen, lineSeen)
+end
+
 function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     lu.assertErrorMsgContains("maxRows must be a positive integer", function()
         self:createHostWithOverlays("test.retained.table.invalid", function(overlays)
@@ -409,6 +456,56 @@ function TestOverlays_Retained:testRetainedIntervalDispatchesWhenDue()
     self.h.overlays.dispatchIntervals(1.1)
 
     lu.assertEquals(calls, 2)
+end
+
+function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext()
+    local calls = 0
+    local seen = nil
+    local callbackEvent = nil
+    local host, authorModule
+    host, authorModule = self:createHostWithOverlays("test.retained.interval.when-context", function(overlays)
+        overlays.onInterval("tick", 1.0, function(callbackHost, runtime, _, event)
+            calls = calls + 1
+            callbackEvent = {
+                hostId = callbackHost.getHostId(),
+                runtimeValue = runtime.data.read("Flag"),
+                name = event.name,
+                now = event.now,
+            }
+        end, {
+            when = function(callbackHost, runtime, event)
+                seen = {
+                    hostId = callbackHost.getHostId(),
+                    runtimeValue = runtime.data.read("Flag"),
+                    name = event.name,
+                    now = event.now,
+                }
+                return callbackHost.getHostId() == host.getHostId() and runtime.data.read("Flag") == true
+            end,
+        })
+    end, {
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        config = {
+            Enabled = true,
+            DebugMode = false,
+            Flag = true,
+        },
+    })
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    self.h.overlays.dispatchIntervals(2.5)
+
+    lu.assertEquals(calls, 1)
+    lu.assertEquals(seen, {
+        hostId = host.getHostId(),
+        runtimeValue = true,
+        name = "tick",
+        now = 2.5,
+    })
+    lu.assertEquals(callbackEvent, seen)
 end
 
 function TestOverlays_Retained.testRetainedIntervalDriverUsesInjectedRom()

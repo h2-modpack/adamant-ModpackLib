@@ -92,6 +92,21 @@ local function dispatchProjection(registry, callback, event)
     callback(registry.host, createRuntimeContext(registry.store), overlay, event)
 end
 
+local function shouldDispatchInterval(registry, event)
+    local when = event.opts and event.opts.when or nil
+    if type(when) ~= "function" then
+        return true
+    end
+    local intervalEvent = {
+        name = event.name,
+        now = event.now,
+    }
+    if registry.explicitOwner == true then
+        return when(intervalEvent) == true
+    end
+    return when(registry.host, createRuntimeContext(registry.store), intervalEvent) == true
+end
+
 local function dispatchCommit(owner, commit)
     local registry = getRegistry(owner, false)
     if not registry then
@@ -113,10 +128,8 @@ local function dispatchIntervals(now)
             return
         end
         for _, event in pairs(registry.events.intervals or {}) do
-            local shouldRun = true
-            if event.opts and type(event.opts.when) == "function" then
-                shouldRun = event.opts.when() == true
-            end
+            event.now = now
+            local shouldRun = shouldDispatchInterval(registry, event)
             if shouldRun and (event.lastRun == nil or now - event.lastRun >= event.seconds) then
                 event.lastRun = now
                 dispatchProjection(registry, event.callback, {

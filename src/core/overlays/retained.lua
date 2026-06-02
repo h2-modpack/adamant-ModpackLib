@@ -6,11 +6,23 @@ local logging = deps.logging
 local overlayOrder = deps.order
 local rom = deps.rom
 
-local function resolveValue(value)
-    if type(value) == "function" then
-        return value()
+local function createRuntimeContext(store)
+    return {
+        data = store,
+        cache = store and store.cache or nil,
+        shared = store and store.shared or nil,
+        controls = store and store.controls or nil,
+    }
+end
+
+local function resolveVisibleValue(registry, visible)
+    if type(visible) ~= "function" then
+        return visible
     end
-    return value
+    if registry.explicitOwner == true then
+        return visible()
+    end
+    return visible(registry.host, createRuntimeContext(registry.store))
 end
 
 local function copyArray(source)
@@ -53,7 +65,16 @@ local function isRegistryVisible(registry, visible)
     if registry.hidden == true then
         return false
     end
-    return resolveValue(visible) ~= false
+    return resolveVisibleValue(registry, visible) ~= false
+end
+
+local function createColumnVisible(registry, visible)
+    if type(visible) ~= "function" then
+        return visible
+    end
+    return function()
+        return resolveVisibleValue(registry, visible) ~= false
+    end
 end
 
 local function ensureRegistryShape(registry, owner, explicitOwner)
@@ -153,13 +174,13 @@ local function normalizeLineColumns(spec)
     }
 end
 
-local function normalizeRetainedColumn(column, index, textResolver)
+local function normalizeRetainedColumn(registry, column, index, textResolver)
     return {
         key = column.key or tostring(index),
         componentName = column.componentName,
         minWidth = column.minWidth,
         justify = column.justify,
-        visible = column.visible,
+        visible = createColumnVisible(registry, column.visible),
         textArgs = column.textArgs,
         text = textResolver,
     }
@@ -176,7 +197,7 @@ local function createLineSlot(registry, name, spec, existingValues)
     local columns = {}
     for index, column in ipairs(normalizeLineColumns(spec)) do
         local key = column.key or tostring(index)
-        columns[#columns + 1] = normalizeRetainedColumn(column, index, function()
+        columns[#columns + 1] = normalizeRetainedColumn(registry, column, index, function()
             return readLineColumn(slot, { key = key }) or ""
         end)
     end
@@ -218,7 +239,7 @@ local function createTableSlot(registry, name, spec, existingRows, existingRowIn
         local columns = {}
         for columnIndex, column in ipairs(spec.columns or {}) do
             local key = column.key or tostring(columnIndex)
-            columns[#columns + 1] = normalizeRetainedColumn(column, columnIndex, function()
+            columns[#columns + 1] = normalizeRetainedColumn(registry, column, columnIndex, function()
                 return readTableCell(slot, rowIndex, { key = key })
             end)
         end
