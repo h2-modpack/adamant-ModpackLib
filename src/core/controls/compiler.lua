@@ -184,14 +184,14 @@ local function compileCommands(controlName, commands, internalActions)
         local actionKey = generatedName(controlName, "Command", commandName)
         local callback = commands[commandName]
         commandBindings[commandName] = actionKey
-        internalActions[actionKey] = function(host, uiData, actionRuntime, value, actionContext)
-            local controls = actionContext and actionContext.controls or nil
+        internalActions[actionKey] = function(host, runtime, value, actionContext)
+            local controls = actionContext and actionContext.controls or runtime and runtime.controls or nil
             local control = controls and controls.get(controlName) or nil
             if control == nil then
                 logging.violate("controls.unknown_control", "control command '%s.%s' could not resolve its control",
                     tostring(controlName), tostring(commandName))
             end
-            return callback(host, uiData, actionRuntime, control, value)
+            return callback(host, runtime, control, value)
         end
     end
     return commandBindings

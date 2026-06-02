@@ -173,8 +173,7 @@ local lib = {}
 
 ---@alias AdamantModpackLib.ControlCommandHandler fun(
 ---    host: AdamantModpackLib.Host,
----    uiData: AdamantModpackLib.DrawState,
----    actionRuntime: AdamantModpackLib.ActionRuntimeBridge,
+---    runtime: AdamantModpackLib.RuntimeContext,
 ---    control: AdamantModpackLib.ControlRef,
 ---    value: any
 ---)
@@ -226,11 +225,6 @@ local lib = {}
 ---@field cache AdamantModpackLib.StoreCache?
 ---@field shared AdamantModpackLib.SharedData?
 
----Narrow runtime bridge available to draw-action handlers after a draw pass.
----@class AdamantModpackLib.ActionRuntimeBridge
----@field read fun(alias: string, ...): any Read committed setting storage through the underlying persistent state.
----@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
-
 ---@class AdamantModpackLib.UiContext
 ---@field draw AdamantModpackLib.DrawContext
 ---@field data AdamantModpackLib.DrawState
@@ -257,7 +251,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.AuthorModule
 ---@field data { define: fun(storage: AdamantModpackLib.StorageSchema): nil }
----@field actions { define: fun(actions: table<string, AdamantModpackLib.DrawActionHandler>): nil }
+---@field actions { define: fun(actions: table<string, AdamantModpackLib.ModuleActionHandler>): nil }
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
@@ -410,14 +404,14 @@ local lib = {}
 ---@field tooltip? string UI tooltip.
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
 ---@field cache? AdamantModpackLib.CacheDeclarationMap Managed runtime cache declarations.
----@field actions? table<string, AdamantModpackLib.DrawActionHandler> Module draw-action handlers keyed by action id.
+---@field actions? table<string, AdamantModpackLib.ModuleActionHandler> Module action handlers keyed by action id.
 
----@alias AdamantModpackLib.DrawActionHandler fun(
+---@alias AdamantModpackLib.ModuleActionHandler fun(
 ---    host: AdamantModpackLib.Host,
----    uiData: AdamantModpackLib.DrawState,
----    actionRuntime: AdamantModpackLib.ActionRuntimeBridge,
+---    runtime: AdamantModpackLib.RuntimeContext,
 ---    value: any
 ---)
+---@alias AdamantModpackLib.DrawActionHandler AdamantModpackLib.ModuleActionHandler
 
 ---@class AdamantModpackLib.PreparedDefinition: AdamantModpackLib.ModuleDefinition
 

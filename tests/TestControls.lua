@@ -91,7 +91,7 @@ CommandRange.createUi = RangeSelector.createUi
 CommandRange.createRuntime = RangeSelector.createRuntime
 CommandRange.draw = RangeSelector.draw
 CommandRange.commands = {
-    ResetMode = function(_, _, _, control)
+    ResetMode = function(_, _, control)
         control:field("Mode"):write("Any")
     end,
 }

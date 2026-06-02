@@ -123,12 +123,12 @@ ui.draw.control(ui.controls.get("RewardPriority"), "compact", 180)
 
 ## Commands
 
-Controls can define scoped commands. Commands lower into Lib's normal draw
-action queue and run after the draw callback:
+Controls can define scoped commands. Commands lower into Lib's normal action
+queue and run after the draw callback, before staged state flush:
 
 ```lua
 RangeSelector.commands = {
-    Reset = function(host, uiData, actionRuntime, control)
+    Reset = function(host, runtime, control)
         control:field("Mode"):write("Any")
         control:field("Min"):write(0)
     end,

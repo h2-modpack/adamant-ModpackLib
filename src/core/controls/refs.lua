@@ -270,8 +270,8 @@ local function attachControlInternals(control, entry, gate, actionBuffer)
     return control
 end
 
-local function createControl(entry, fields, phase, actionBuffer)
-    local factory = phase == "draw" and entry.template.createUi or entry.template.createRuntime
+local function createControl(entry, fields, factoryPhase, gatePhase, actionBuffer)
+    local factory = factoryPhase == "draw" and entry.template.createUi or entry.template.createRuntime
     local control
     if type(factory) == "function" then
         control = factory(fields, entry.instance)
@@ -282,15 +282,16 @@ local function createControl(entry, fields, phase, actionBuffer)
         logging.violate("controls.invalid_template", "control '%s': template factory must return a table",
             tostring(entry.name))
     end
-    return attachControlInternals(control, entry, createGate(phase), actionBuffer)
+    return attachControlInternals(control, entry, createGate(gatePhase), actionBuffer)
 end
 
 local function createFacade(opts)
     local catalog = opts.catalog or {}
     local phase = opts.phase
+    local factoryPhase = opts.factoryPhase or phase
     local root = opts.root
     local actionBuffer = opts.actionBuffer
-    local writable = phase == "draw"
+    local writable = opts.writable == true or phase == "draw"
     local controlCache = {}
     local facade = {}
 
@@ -305,7 +306,7 @@ local function createFacade(opts)
             return cached
         end
         local fields = createFieldSet(root, entry, phase, writable)
-        local control = createControl(entry, fields, phase, actionBuffer)
+        local control = createControl(entry, fields, factoryPhase, phase, actionBuffer)
         controlCache[name] = control
         return control
     end
@@ -326,6 +327,16 @@ function refs.createRuntime(persistentState, catalog)
         root = persistentState,
         catalog = catalog,
         phase = "runtime",
+    })
+end
+
+function refs.createCommand(stagedState, catalog)
+    return createFacade({
+        root = stagedState,
+        catalog = catalog,
+        phase = "runtime",
+        factoryPhase = "draw",
+        writable = true,
     })
 end
 

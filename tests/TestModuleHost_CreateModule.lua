@@ -426,7 +426,6 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     local capturedUi = nil
     local capturedHost = nil
     local capturedActionHost = nil
-    local capturedActionUiData = nil
     local capturedActionRuntime = nil
     local capturedCommitRuntime = nil
     local capturedCommitHost = nil
@@ -450,12 +449,10 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
         { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
     })
     module.actions.define({
-        setBoth = function(host, uiData, actionRuntime, value)
+        setRuntime = function(host, runtime, value)
             capturedActionHost = host
-            capturedActionUiData = uiData
-            capturedActionRuntime = actionRuntime
-            uiData.write("Flag", value)
-            actionRuntime.runtimeOwned.set("RuntimeFlag", value)
+            capturedActionRuntime = runtime
+            runtime.data.runtimeOwned.set("RuntimeFlag", value)
         end,
     })
     module.onCommit(function(host, runtime, commit)
@@ -466,7 +463,8 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     module.ui.tab(function(host, ui)
         capturedUi = ui
         capturedHost = host
-        ui.actions.trigger("setBoth", true)
+        ui.data.write("Flag", true)
+        ui.actions.trigger("setRuntime", true)
     end)
 
     local ok, activateErr = module.activate()
@@ -479,11 +477,11 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     lu.assertEquals(capturedHost.getHostId(), "test-create-module-declarative-facade")
     lu.assertNotNil(capturedUi.draw)
     lu.assertEquals(type(capturedUi.actions.trigger), "function")
-    lu.assertEquals(capturedActionHost.getHostId(), "test-create-module-declarative-facade")
-    lu.assertEquals(capturedActionUiData, capturedUi.data)
-    lu.assertEquals(capturedActionRuntime.runtimeOwned.read("RuntimeFlag"), true)
+    lu.assertNil(capturedActionHost)
 
     lu.assertTrue(liveModule.commitIfDirty())
+    lu.assertEquals(capturedActionHost.getHostId(), "test-create-module-declarative-facade")
+    lu.assertEquals(capturedActionRuntime.data.runtimeOwned.read("RuntimeFlag"), true)
     lu.assertEquals(config.Flag, true)
     lu.assertEquals(capturedCommitRuntime.data.read("Flag"), true)
     lu.assertEquals(capturedCommitRuntime.data.runtimeOwned.read("RuntimeFlag"), true)

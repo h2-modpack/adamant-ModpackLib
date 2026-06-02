@@ -326,11 +326,6 @@ return {
         severity = "error",
         description = "Writable widget fields require a writable storage owner.",
     },
-    ["storage.private_alias"] = {
-        severity = "error",
-        description = "Private Lib storage aliases are not available through author-facing data surfaces.",
-    },
-
     ["store.invalid_create_args"] = {
         severity = "error",
         description = "Store creation requires a prepared module definition.",

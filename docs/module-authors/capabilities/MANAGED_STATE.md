@@ -135,9 +135,9 @@ Actions are declared before activation:
 
 ```lua
 module.actions.define({
-    StartRecording = function(host, uiData, actionRuntime, value)
+    StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        actionRuntime.runtimeOwned.set("RecordingReady", value == true)
+        runtime.data.runtimeOwned.set("RecordingReady", value == true)
     end,
 })
 ```
@@ -161,9 +161,7 @@ Action handlers run after the draw callback and before staged state flush. They
 receive:
 
 - `host`: narrow logging/metadata/enabled host projection
-- `uiData`: current draw state
-- `actionRuntime`: narrow runtime bridge with `read` for settings and
-  `runtimeOwned` for runtime-owned data
+- `runtime`: runtime context with committed data, cache, shared, and controls
 - `value`: staged action payload
 
 ## Commit Observer

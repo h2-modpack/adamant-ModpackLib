@@ -29,7 +29,6 @@ end
 ---@field shared table|nil
 ---@field actionBuffer ActionBuffer
 ---@field host Host
----@field actionRuntime ActionRuntimeBridge
 ---@field controls table|nil
 
 ---@param opts UiPhaseCreateOpts
@@ -50,11 +49,7 @@ function uiPhase.create(opts)
 
     function objects.run(callback)
         local results = packResults(phaseGate.runDraw(function()
-            local results = packResults(callback(opts.host, objects.ui))
-            opts.actionBuffer.executePendingActions(opts.host, objects.state, opts.actionRuntime, {
-                controls = opts.controls,
-            })
-            return table.unpack(results, 1, results.n)
+            return callback(opts.host, objects.ui)
         end))
 
         opts.actionBuffer.flushPendingSharedEvents(opts.host)

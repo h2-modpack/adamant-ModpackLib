@@ -436,7 +436,7 @@ Templates may also declare scoped commands:
 
 ```lua
 commands = {
-    Reset = function(host, uiData, runtimeData, control, value)
+    Reset = function(host, runtime, control, value)
         control:field("Mode"):write("Any")
     end,
 }
@@ -816,7 +816,7 @@ draw -> widget/control edit -> staged UI data
 Actions remain the explicit bridge for side effects:
 
 ```text
-draw -> action intent -> post-draw action handler
+draw -> action intent -> pre-flush action handler
 ```
 
 Controls can define scoped commands for behavior that is intrinsic to the
@@ -824,7 +824,7 @@ control, such as a reset button inside a repeated control template:
 
 ```lua
 commands = {
-    Reset = function(host, uiData, runtimeData, control, value)
+    Reset = function(host, runtime, control, value)
         control:reset()
     end,
 }
@@ -841,7 +841,7 @@ Rules:
 - command names are local to the template/control instance
 - generated action keys are private and not visible through `ui.actions.get(...)`
 - command refs are only exposed through the control ref
-- commands run in the same post-draw action phase as normal actions
+- commands run in the same pre-flush action phase as normal actions
 - commands receive the specific control ref
 - module-level `module.actions.define(...)` remains the right surface for
   module-wide commands
@@ -1126,7 +1126,7 @@ Implemented enough to prove the model:
 9. Add tests for:
    - generated `_` aliases cannot be read through `ui.data` or `runtime.data`
    - controls can read/write their own generated storage
-   - scoped commands run through the normal post-draw action phase
+   - scoped commands run through the normal pre-flush action phase
    - control refs are cached
    - phase gates reject escaped refs
    - `ui.draw.control(...)` dispatches to the template renderer

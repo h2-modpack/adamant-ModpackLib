@@ -556,12 +556,10 @@ function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
     end)
 end
 
-function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
+function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     local observedActionHost = nil
     local observedCallbackHost = nil
-    local observedUiData = nil
-    local observedActionRuntime = nil
-    local observedUiValue = nil
+    local observedRuntime = nil
     local observedRuntimeValue = nil
     local observedCommitAction = nil
     local observedConfigChange = nil
@@ -570,17 +568,16 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
         name = "Declared Draw Actions",
         storage = {
             { type = "bool", alias = "Flag", default = false },
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
         },
         actions = {
-            setFlag = function(callbackHost, uiData, actionRuntime, value)
+            setFlag = function(callbackHost, runtime, value)
                 local host = callbackHost
                 observedActionHost = host
                 observedCallbackHost = callbackHost
-                observedUiData = uiData
-                observedActionRuntime = actionRuntime
-                uiData.write("Flag", value == true)
-                observedUiValue = uiData.read("Flag")
-                observedRuntimeValue = actionRuntime.read("Flag")
+                observedRuntime = runtime
+                runtime.data.runtimeOwned.set("RuntimeFlag", value == true)
+                observedRuntimeValue = runtime.data.runtimeOwned.read("RuntimeFlag")
             end,
         },
     })
@@ -588,6 +585,7 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
         Enabled = true,
         DebugMode = false,
         Flag = false,
+        RuntimeFlag = false,
     }, definition)
     createActivatedHost(self.h, "test-declared-draw-actions", {
         definition = definition,
@@ -605,23 +603,23 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
 
     host.drawTab()
 
-    lu.assertEquals(observedActionHost.getHostId(), "test-declared-draw-actions")
-    lu.assertEquals(observedCallbackHost.getHostId(), "test-declared-draw-actions")
-    lu.assertEquals(observedCallbackHost.isEnabled(), true)
-    lu.assertEquals(type(observedUiData.read), "function")
-    lu.assertEquals(type(observedActionRuntime.read), "function")
-    lu.assertEquals(observedUiValue, true)
-    lu.assertEquals(observedRuntimeValue, false)
-    lu.assertTrue(stagedState.read("Flag"))
+    lu.assertNil(observedActionHost)
+    lu.assertFalse(stagedState.read("Flag"))
     lu.assertFalse(store.read("Flag"))
 
     local ok, err = host.commitIfDirty()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(err)
-    lu.assertTrue(store.read("Flag"))
+    lu.assertEquals(observedActionHost.getHostId(), "test-declared-draw-actions")
+    lu.assertEquals(observedCallbackHost.getHostId(), "test-declared-draw-actions")
+    lu.assertEquals(observedCallbackHost.isEnabled(), true)
+    lu.assertEquals(type(observedRuntime.data.read), "function")
+    lu.assertEquals(observedRuntimeValue, true)
+    lu.assertFalse(store.read("Flag"))
+    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
     lu.assertTrue(observedCommitAction)
-    lu.assertTrue(observedConfigChange)
+    lu.assertFalse(observedConfigChange)
 end
 
 function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()

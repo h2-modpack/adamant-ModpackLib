@@ -132,7 +132,6 @@ end
 local function createBuffer(actionCatalog)
     local catalog = actionCatalog and createActionCatalog(actionCatalog.actions, actionCatalog.order) or nil
     local slots = {}
-    local pending = {}
     local pendingEvents = {}
     local refs = {}
     local buffer = {}
@@ -141,11 +140,9 @@ local function createBuffer(actionCatalog)
         validateDeclaredAction(catalog, "actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
-            pending[actionKey] = nil
             return
         end
         slots[actionKey] = CloneValue(value)
-        pending[actionKey] = true
     end
 
     function buffer.validateAction(context, actionKey)
@@ -160,7 +157,6 @@ local function createBuffer(actionCatalog)
     function buffer.clear(actionKey)
         validateDeclaredAction(catalog, "actions.clear", actionKey)
         slots[actionKey] = nil
-        pending[actionKey] = nil
     end
 
     function buffer.has(actionKey)
@@ -178,7 +174,6 @@ local function createBuffer(actionCatalog)
 
     function buffer.clearAll()
         slots = {}
-        pending = {}
         pendingEvents = {}
     end
 
@@ -201,12 +196,11 @@ local function createBuffer(actionCatalog)
         }
     end
 
-    function buffer.executePendingActions(host, uiData, actionRuntime, actionContext)
+    function buffer.executeCommittedActions(host, runtime, actionSnapshot, actionContext)
         if catalog ~= nil then
             for _, actionKey in ipairs(catalog.order) do
-                if pending[actionKey] then
-                    pending[actionKey] = nil
-                    catalog.handlers[actionKey](host, uiData, actionRuntime, CloneValue(slots[actionKey]), actionContext)
+                if actionSnapshot and actionSnapshot[actionKey] ~= nil then
+                    catalog.handlers[actionKey](host, runtime, CloneValue(actionSnapshot[actionKey]), actionContext)
                 end
             end
         end

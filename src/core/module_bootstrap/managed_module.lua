@@ -9,7 +9,6 @@ local overlays = deps.overlays
 local mutation = deps.mutation
 local definition = deps.definition
 local moduleRegistry = deps.moduleRegistry
-local storage = deps.storage
 local uiDraw = deps.uiDraw
 local controls = deps.controls
 local managedModule = {
@@ -171,49 +170,6 @@ local function createRuntimeContext(store)
     }
 end
 
-local function rejectPrivateAlias(context, alias)
-    if storage.isPrivateAlias(alias) then
-        logging.violate(
-            "storage.private_alias",
-            "%s: private Lib storage alias '%s' is not author-accessible",
-            context,
-            tostring(alias)
-        )
-    end
-end
-
-local function createActionRuntimeBridge(persistentState)
-    local runtimeOwned = persistentState.runtimeOwned
-    return {
-        read = function(alias, ...)
-            rejectPrivateAlias("actions.runtime.read", alias)
-            local ref = persistentState.get(alias)
-            if ref == nil then
-                return nil
-            end
-            return ref:read(...)
-        end,
-        runtimeOwned = runtimeOwned and {
-            get = function(alias)
-                rejectPrivateAlias("actions.runtimeOwned.get", alias)
-                return runtimeOwned.get(alias)
-            end,
-            read = function(alias)
-                rejectPrivateAlias("actions.runtimeOwned.read", alias)
-                return runtimeOwned.read(alias)
-            end,
-            set = function(alias, value)
-                rejectPrivateAlias("actions.runtimeOwned.set", alias)
-                return runtimeOwned.set(alias, value)
-            end,
-            clear = function(alias)
-                rejectPrivateAlias("actions.runtimeOwned.clear", alias)
-                return runtimeOwned.clear(alias)
-            end,
-        } or nil,
-    }
-end
-
 --- Creates a managed module for Framework and fallback UI.
 --- Activation is explicit through the returned module.
 ---@param opts ManagedModuleCreateOpts
@@ -252,7 +208,7 @@ function managedModule.create(opts)
     local commitObserver = validateLifecycleObservers(opts)
     local store
     local runtimeContext
-    local actionRuntimeBridge
+    local commandControls
     local host
     local controlCatalog = opts.controlCatalog or {
         instances = {},
@@ -283,6 +239,12 @@ function managedModule.create(opts)
             error(overlayErr, 0)
         end
         return observerResult
+    end
+
+    local function executeActionsBeforeFlush(actionSnapshot)
+        return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot, {
+            controls = commandControls,
+        })
     end
 
     local function requireActivated(methodName)
@@ -328,7 +290,7 @@ function managedModule.create(opts)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer)
+            stagedState, actionBuffer, executeActionsBeforeFlush)
         return ok, err
     end
 
@@ -343,7 +305,7 @@ function managedModule.create(opts)
             return true
         end
         return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer)
+            actionBuffer, executeActionsBeforeFlush)
     end
 
     function module.reloadFromConfig()
@@ -368,7 +330,7 @@ function managedModule.create(opts)
             return true, nil, false
         end
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer)
+            stagedState, actionBuffer, executeActionsBeforeFlush)
         return ok, err, ok == true
     end
 
@@ -379,37 +341,37 @@ function managedModule.create(opts)
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
         return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, enabled)
+            actionBuffer, executeActionsBeforeFlush, enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
         return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, enabled)
+            actionBuffer, executeActionsBeforeFlush, enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
         return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer)
+            stagedState, actionBuffer, executeActionsBeforeFlush)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
         return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
-            persistentState, stagedState, actionBuffer)
+            persistentState, stagedState, actionBuffer, executeActionsBeforeFlush)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
         return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer)
+            stagedState, actionBuffer, executeActionsBeforeFlush)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
         return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, receipt)
+            stagedState, actionBuffer, executeActionsBeforeFlush, receipt)
     end
 
     function module.restorePackTransitionState(receipt)
@@ -490,7 +452,7 @@ function managedModule.create(opts)
     }))
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
     runtimeContext = createRuntimeContext(store)
-    actionRuntimeBridge = createActionRuntimeBridge(persistentState)
+    commandControls = controls.refs.createCommand(stagedState, controlCatalog)
     record.store = store
     record.runtime = runtimeContext
 
@@ -505,7 +467,6 @@ function managedModule.create(opts)
         }),
         actionBuffer = actionBuffer,
         host = host,
-        actionRuntime = actionRuntimeBridge,
         controls = controls.refs.createUi(stagedState, controlCatalog, actionBuffer),
     })
 
