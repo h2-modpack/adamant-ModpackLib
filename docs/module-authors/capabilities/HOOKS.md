@@ -107,6 +107,10 @@ calls happen at runtime inside the contextual callback, mirroring ModUtil's
 code. Do not store the `context` object; Lib closes it when the callback
 returns.
 
+`context.wrap(...)` handlers receive the raw wrapped path signature:
+`function(base, ...)`. They do not receive `(host, runtime, ...)` again because
+those values are already available from the outer `contextWrap` callback.
+
 ## Wrap vs Override
 
 Prefer `wrap` when the original behavior should still run. Use `override` only
