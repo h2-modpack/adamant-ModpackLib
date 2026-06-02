@@ -33,7 +33,7 @@ end
 local function requireActiveRecord(lifecycle, context)
     local record = lifecycle.getActiveRecord()
     if not record then
-        logging.violate("host.not_activated", "%s requires module.activate() before it can run", context)
+        logging.violate("managed_module.not_activated", "%s requires module.activate() before it can run", context)
     end
     return record
 end
@@ -42,14 +42,14 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
     local function setOnce(field, value, context)
         lifecycle.requireOpen(context)
         if declarations[field] ~= nil then
-            logging.violate("host.invalid_create_opts", "%s already declared", context)
+            logging.violate("module.invalid_create_opts", "%s already declared", context)
         end
         declarations[field] = value
     end
 
     local function setFunctionOnce(field, value, context)
         if type(value) ~= "function" then
-            logging.violate("host.invalid_create_opts", "%s callback must be a function", context)
+            logging.violate("module.invalid_create_opts", "%s callback must be a function", context)
         end
         setOnce(field, value, context)
     end
@@ -189,7 +189,7 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
         listen = function(id, eventName, callback)
             lifecycle.requireOpen("module.shared.listen")
             if type(callback) ~= "function" then
-                logging.violate("host.invalid_create_opts", "module.shared.listen callback must be a function")
+                logging.violate("module.invalid_create_opts", "module.shared.listen callback must be a function")
             end
             local function wrappedCallback(payload)
                 local record = requireActiveRecord(lifecycle, "module.shared.listen callback")

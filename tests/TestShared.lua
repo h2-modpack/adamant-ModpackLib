@@ -36,14 +36,14 @@ end
 
 local function activateAndEnableHost(harness, host, pluginGuid)
     lu.assertTrue(host.activate())
-    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
     lu.assertNotNil(fullHost)
     lu.assertTrue(fullHost.setEnabled(true))
     return fullHost
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
     local record = harness.moduleHost.getRecord(fullHost)
     return record and record.store or nil
 end
@@ -120,7 +120,7 @@ end
 
 function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     local owner = {}
-    local first, firstAuthorModule = createSharedHost(self.harness, "shared-structural-a", {
+    local _, firstAuthorModule = createSharedHost(self.harness, "shared-structural-a", {
         id = "SharedStructural",
         name = "Shared Structural",
     })
@@ -130,7 +130,7 @@ function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     })
     lu.assertTrue(firstAuthorModule.activate())
 
-    local second, secondAuthorModule = createSharedHost(self.harness, "shared-structural-b", {
+    local _, secondAuthorModule = createSharedHost(self.harness, "shared-structural-b", {
         id = "SharedStructural",
         name = "Shared Structural",
     })
@@ -140,8 +140,8 @@ function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     })
     lu.assertTrue(secondAuthorModule.activate())
 
-    local firstRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveHost("shared-structural-a"))
-    local secondRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveHost("shared-structural-b"))
+    local firstRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveModule("shared-structural-a"))
+    local secondRecord = self.harness.moduleHost.getRecord(self.harness.moduleHost.getLiveModule("shared-structural-b"))
 
     lu.assertEquals(
         firstRecord.definition._structuralFingerprint,
@@ -365,7 +365,7 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
     activateAndEnableHost(self.harness, reader, "test-shared-data-reader")
     lu.assertFalse(readerStore.shared.read("Active"))
 
-    self.harness.moduleHost.getLiveHost("test-shared-data-publisher").drawTab()
+    self.harness.moduleHost.getLiveModule("test-shared-data-publisher").drawTab()
     lu.assertTrue(readerStore.shared.read("Active"))
     lu.assertErrorMsgContains("does not support set", function()
         readerStore.shared.set("Active", false)
@@ -447,7 +447,7 @@ function TestShared:testDeclaredDataReadsTableViews()
     activateAndEnableHost(self.harness, reader, "test-shared-data-table-reader")
     lu.assertFalse(readerStore.shared.read("Availability").active)
 
-    self.harness.moduleHost.getLiveHost("test-shared-data-table-publisher").drawTab()
+    self.harness.moduleHost.getLiveModule("test-shared-data-table-publisher").drawTab()
     local availability = readerStore.shared.read("Availability")
     lu.assertTrue(availability.active)
     lu.assertFalse(availability.available.Apollo)
@@ -663,7 +663,7 @@ function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
     activateAndEnableHost(self.harness, publisher, "test-shared-data-disabled")
     publisherStore.shared.set("Snapshot", "visible")
 
-    local fullHost = self.harness.moduleHost.getLiveHost("test-shared-data-disabled")
+    local fullHost = self.harness.moduleHost.getLiveModule("test-shared-data-disabled")
     lu.assertEquals(readerStore.shared.read("Snapshot"), "visible")
     lu.assertTrue(fullHost.setEnabled(false))
     lu.assertEquals(readerStore.shared.read("Snapshot"), "fallback")

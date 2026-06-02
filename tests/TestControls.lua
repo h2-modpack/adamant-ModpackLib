@@ -237,8 +237,8 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
     })
 
     lu.assertTrue(module.activate())
-    local liveHost = self.h:liveHost("test-controls-scalar")
-    local record = self.h.moduleHost.getRecord(liveHost)
+    local liveModule = self.h:liveModule("test-controls-scalar")
+    local record = self.h.moduleHost.getRecord(liveModule)
     capturedRuntimeControl = record.runtime.controls.get("PrioritySlot")
 
     lu.assertEquals(capturedRuntimeControl:read(), {
@@ -246,8 +246,8 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
         min = 2,
     })
     checkRuntimeDuringDraw = true
-    liveHost.drawTab()
-    liveHost.flush()
+    liveModule.drawTab()
+    liveModule.flush()
     lu.assertEquals(config["_PrioritySlot:Mode"], "Tartarus")
     lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
         mode = "Tartarus",
@@ -289,8 +289,8 @@ function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
     })
 
     lu.assertTrue(module.activate())
-    self.h:liveHost("test-controls-path-aliases").drawTab()
-    self.h:liveHost("test-controls-path-aliases").flush()
+    self.h:liveModule("test-controls-path-aliases").drawTab()
+    self.h:liveModule("test-controls-path-aliases").flush()
 
     lu.assertEquals(config["_A_B:C"], true)
     lu.assertEquals(config["_A:B_C"], true)
@@ -320,9 +320,9 @@ function TestControls:testControlsAreCachedPerPhase()
     })
 
     lu.assertTrue(module.activate())
-    local record = self.h.moduleHost.getRecord(self.h:liveHost("test-controls-cached"))
+    local record = self.h.moduleHost.getRecord(self.h:liveModule("test-controls-cached"))
     lu.assertEquals(record.runtime.controls.get("PrioritySlot"), record.runtime.controls.get("PrioritySlot"))
-    self.h:liveHost("test-controls-cached").drawTab()
+    self.h:liveModule("test-controls-cached").drawTab()
     lu.assertEquals(uiFirst, uiSecond)
 end
 
@@ -352,7 +352,7 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     })
 
     lu.assertTrue(module.activate())
-    self.h:liveHost("test-controls-draw-views").drawTab()
+    self.h:liveModule("test-controls-draw-views").drawTab()
     lu.assertEquals(results, { "default", "compact:arg" })
 end
 
@@ -383,9 +383,9 @@ function TestControls:testScopedCommandsLowerIntoPrivateActions()
     })
 
     lu.assertTrue(module.activate())
-    local liveHost = self.h:liveHost("test-controls-commands")
-    liveHost.drawTab()
-    liveHost.flush()
+    local liveModule = self.h:liveModule("test-controls-commands")
+    liveModule.drawTab()
+    liveModule.flush()
 
     lu.assertEquals(config["_PrioritySlot:Mode"], "Any")
 end
@@ -413,10 +413,10 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
     })
 
     lu.assertTrue(module.activate())
-    local liveHost = self.h:liveHost("test-controls-table")
-    local record = self.h.moduleHost.getRecord(liveHost)
-    liveHost.drawTab()
-    liveHost.flush()
+    local liveModule = self.h:liveModule("test-controls-table")
+    local record = self.h.moduleHost.getRecord(liveModule)
+    liveModule.drawTab()
+    liveModule.flush()
 
     local rewards = record.runtime.controls.get("Rewards")
     lu.assertEquals(rewards:count(), 2)

@@ -264,8 +264,8 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRequestsCoordinato
     self.h.coordinator.register("test-pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild("test-pack", function(reason)
         rebuildReason = reason
-        local liveHost = self.h.moduleHost.getLiveHost("test-module")
-        local storage = liveHost and liveHost.getStorage() or nil
+        local liveModule = self.h.moduleHost.getLiveModule("test-module")
+        local storage = liveModule and liveModule.getStorage() or nil
         local lastStorage = storage and storage[#storage] or nil
         rebuildStorageAlias = lastStorage and lastStorage.alias or nil
         return true
@@ -297,7 +297,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostRequestsCoordinato
     createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleHost.getLiveHost("test-module"))
+    lu.assertNotNil(self.h.moduleHost.getLiveModule("test-module"))
     lu.assertNotNil(rebuildReason)
     lu.assertEquals(rebuildReason.kind, "structural_definition_changed")
     lu.assertEquals(rebuildReason.moduleId, "Example")
@@ -337,7 +337,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsWhenCoordina
     local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "host.structural_rebuild_unavailable")
+    lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
     lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
 end
@@ -376,7 +376,7 @@ function TestModuleHost_PrepareDefinition:testCreateModuleHostErrorsAndKeepsPend
     local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
 
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "host.structural_rebuild_unavailable")
+    lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
     lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
 end

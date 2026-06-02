@@ -36,10 +36,10 @@ local function callReceipt(receipt, methodName)
 end
 
 local function warnReceiptDisposal(warningId, warningPrefix, errors)
-    if warningId == "host.retire_failed" then
-        logging.violate("host.retire_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
-    elseif warningId == "host.activation_rollback_failed" then
-        logging.violate("host.activation_rollback_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
+    if warningId == "managed_module.retire_failed" then
+        logging.violate("managed_module.retire_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
+    elseif warningId == "managed_module.activation_rollback_failed" then
+        logging.violate("managed_module.activation_rollback_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
     end
 end
 
@@ -72,7 +72,7 @@ local function retireOldModule(previousModule, replacementLabel)
     if type(receipts) ~= "table" or #receipts == 0 then
         return
     end
-    disposeReceipts(receipts, "host.retire_failed", tostring(replacementLabel) .. " old module retirement failed")
+    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " old module retirement failed")
     oldRecord.effectReceipts = {}
 end
 
@@ -81,7 +81,7 @@ end
 function moduleActivation.activateOrThrow(module)
     local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("host.invalid_activate_opts", "managedModule.activateOrThrow: module is required")
+        logging.violate("managed_module.invalid_activate_opts", "managedModule.activateOrThrow: module is required")
     end
 
     local pluginGuid = module.getHostId()
@@ -89,10 +89,10 @@ function moduleActivation.activateOrThrow(module)
     local def = record.definition
 
     if record.activated == true then
-        logging.violate("host.already_activated", "managedModule.activateOrThrow: module is already activated")
+        logging.violate("managed_module.already_activated", "managedModule.activateOrThrow: module is already activated")
     end
     if record.activating == true then
-        logging.violate("host.activation_in_progress", "managedModule.activateOrThrow: module activation is already in progress")
+        logging.violate("managed_module.activation_in_progress", "managedModule.activateOrThrow: module activation is already in progress")
     end
     local meta = module.getMeta()
     local moduleId = module.getModuleId()
@@ -162,7 +162,7 @@ function moduleActivation.activateOrThrow(module)
                 moduleRegistry.setPendingCoordinatorRebuild(def, nil)
             else
                 logging.violate(
-                    "host.structural_rebuild_unavailable",
+                    "managed_module.structural_rebuild_unavailable",
                     "%s structural definition changed during hot reload; full reload required",
                     tostring(meta.name or moduleId or "module"))
             end
@@ -172,7 +172,7 @@ function moduleActivation.activateOrThrow(module)
     if not ok then
         record.activating = false
         record.activated = false
-        disposeReceipts(candidateReceipts, "host.activation_rollback_failed",
+        disposeReceipts(candidateReceipts, "managed_module.activation_rollback_failed",
             tostring(meta.name or moduleId or "module") .. " activation rollback failed")
         if published then
             moduleRegistry.setLiveModule(pluginGuid, previousModule)
@@ -197,7 +197,7 @@ function moduleActivation.activate(module)
     end
 
     err = tostring(err)
-    logging.violate("host.activate_failed", "module.activate failed; skipping module: %s", err)
+    logging.violate("managed_module.activate_failed", "module.activate failed; skipping module: %s", err)
     return false, err
 end
 

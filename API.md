@@ -12,7 +12,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `module.shared.*`
 - `module.mutation.*`
 
-Framework-owned live-host discovery, hash/profile, overlay, UI suppression, and
+Framework-owned live-module discovery, hash/profile, overlay, UI suppression, and
 diagnostic controls are available from
 `lib.createFrameworkRuntime("adamant-ModpackFramework")`.
 
@@ -283,7 +283,7 @@ Canonical safe module-construction helper.
 `pluginGuid` is the stable runtime identity. Lib owns the internal per-plugin
 runtime state used for structural hot-reload tracking, hook refresh ownership,
 overlay ownership, shared event refresh, cache, mutation runtime, and
-live-host lookup.
+live-module lookup.
 
 ```lua
 local data = import("mods/data.lua")
@@ -330,9 +330,9 @@ files should receive the needed `runtime` object or narrowed read/access
 closures from the module's hook-declaration code; draw/UI paths should use the
 `ui` object passed to draw callbacks.
 
-The failure path logs `host.create_failed` and does not activate or publish a
-host. Use this at pack orchestration boundaries when one invalid module should
-be skipped without stopping sibling modules.
+The failure path logs `module.create_failed` and does not activate or publish a
+live module. Use this at pack orchestration boundaries when one invalid module
+should be skipped without stopping sibling modules.
 
 ```lua
 local module, err = lib.createModule(opts)
@@ -842,8 +842,8 @@ Decodes one storage value from hash/profile serialization.
 Returns whether one serialized hash/profile token is syntactically valid for a prepared storage node.
 Use this at external hash/profile import boundaries before calling `fromHash(...)`.
 
-Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are module-host responsibilities. Framework uses the live host surface (`host.setEnabled`, `host.setDebugMode`, `host.flush`, `host.resync`) instead of calling internals directly.
-Framework-owned pack suspension is also a host lifecycle responsibility; Framework uses `host.suspendForPackDisable`, `host.restoreForPackEnable`, and `host.rollbackPackTransition` so Lib can keep its internal restore marker private.
+Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are live-module responsibilities. Framework uses the live module surface (`module.setEnabled`, `module.setDebugMode`, `module.flush`, `module.resync`) instead of calling internals directly.
+Framework-owned pack suspension is also a live-module lifecycle responsibility; Framework uses `module.suspendForPackDisable`, `module.restoreForPackEnable`, and `module.rollbackPackTransition` so Lib can keep its internal restore marker private.
 
 ## `module.fallbackUi`
 
@@ -874,18 +874,18 @@ Behavior:
   - `Enabled`
   - `Debug Mode`
   - `Resync State`
-- then calls `moduleHost.drawTab(...)` when the module is enabled
-- commits dirty staged state through `moduleHost.commitIfDirty()`
+- then calls the live module's `drawTab(...)` when the module is enabled
+- commits dirty staged state through the live module's `commitIfDirty()`
 
 ## `frameworkRuntime.modules`
 
-Framework-only live module host discovery returned by
+Framework-only live module discovery returned by
 `lib.createFrameworkRuntime("adamant-ModpackFramework")`.
 
-### `frameworkRuntime.modules.getLiveHost(pluginGuid)`
+### `frameworkRuntime.modules.getLiveModule(pluginGuid)`
 
-Returns the full runtime host registered by module activation, or `nil` when
-the plugin guid is invalid or no live host is registered.
+Returns the managed module registered by module activation, or `nil` when
+the plugin guid is invalid or no live module is registered.
 
 This is infrastructure API for Framework discovery. Normal module code should
 keep the module object returned by `lib.createModule(...)` and use runtime/UI

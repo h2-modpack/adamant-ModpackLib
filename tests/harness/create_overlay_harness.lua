@@ -152,14 +152,14 @@ local function createOverlayHarness(opts)
                         "module.overlays.onCommit",
                         callback)
                 end,
-                onInterval = function(name, seconds, callback, opts)
+                onInterval = function(name, seconds, callback, intervalOpts)
                     return base.overlaysBundle.declarations.declareInterval(
                         overlayDeclarations,
                         "module.overlays.onInterval",
                         name,
                         seconds,
                         callback,
-                        opts)
+                        intervalOpts)
                 end,
                 afterHook = function(path, callback)
                     return base.overlaysBundle.declarations.declareAfterHook(

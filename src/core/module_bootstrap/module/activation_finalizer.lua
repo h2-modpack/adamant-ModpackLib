@@ -9,7 +9,7 @@ local controlCompiler = deps.controlCompiler
 local activationFinalizer = {}
 
 local function getStructuralBaseline(pluginGuid)
-    local previousModule = managedModule.getLiveHost(pluginGuid)
+    local previousModule = managedModule.getLiveModule(pluginGuid)
     local previousRecord = managedModule.getRecord(previousModule)
     local previousDefinition = previousRecord and previousRecord.definition or nil
     local previousFingerprint = previousDefinition and previousDefinition._structuralFingerprint or nil
@@ -54,7 +54,7 @@ end
 
 function activationFinalizer.activate(opts, declarations)
     if type(declarations.drawTab) ~= "function" then
-        logging.violate("host.invalid_create_opts", "module.ui.tab must be declared before module.activate")
+        logging.violate("module.invalid_create_opts", "module.ui.tab must be declared before module.activate")
     end
 
     local compiledControls = controlCompiler.compile(declarations.controlDeclarations)

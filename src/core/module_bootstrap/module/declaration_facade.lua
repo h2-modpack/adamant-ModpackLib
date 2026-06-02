@@ -98,13 +98,13 @@ function declarationFacade.create(opts)
 
     function lifecycle.requireOpen(context)
         if activated or activating then
-            logging.violate("host.invalid_create_opts", "%s cannot be called after module activation begins", context)
+            logging.violate("module.invalid_create_opts", "%s cannot be called after module activation begins", context)
         end
     end
 
     function lifecycle.requireActive(context)
         if not activeModule then
-            logging.violate("host.not_activated", "%s requires module.activate() before it can run", context)
+            logging.violate("managed_module.not_activated", "%s requires module.activate() before it can run", context)
         end
         return activeModule
     end
@@ -119,10 +119,10 @@ function declarationFacade.create(opts)
 
     local function activateOrThrow()
         if activated then
-            logging.violate("host.already_activated", "module.activate: module is already activated")
+            logging.violate("managed_module.already_activated", "module.activate: module is already activated")
         end
         if activating then
-            logging.violate("host.activation_in_progress", "module.activate: module activation is already in progress")
+            logging.violate("managed_module.activation_in_progress", "module.activate: module activation is already in progress")
         end
         activating = true
         activeModule, activeRecord = activationFinalizer.activate(opts, declarations)
@@ -138,7 +138,7 @@ function declarationFacade.create(opts)
         end
         activating = false
         err = tostring(err)
-        logging.violate("host.activate_failed", "module.activate failed; skipping module: %s", err)
+        logging.violate("managed_module.activate_failed", "module.activate failed; skipping module: %s", err)
         return false, err
     end
 

@@ -42,8 +42,8 @@ local function createTestModule(h, opts)
 end
 
 local function getLiveStore(h, pluginGuid)
-    local liveHost = h:liveHost(pluginGuid)
-    local record = h.moduleHost.getRecord(liveHost)
+    local liveModule = h:liveModule(pluginGuid)
+    local record = h.moduleHost.getRecord(liveModule)
     return record and record.store or nil
 end
 
@@ -137,11 +137,11 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
         end,
     })
 
-    lu.assertNil(self.h:liveHost("test-create-module"))
+    lu.assertNil(self.h:liveModule("test-create-module"))
     host.activate()
-    local liveHost = self.h:liveHost("test-create-module")
+    local liveModule = self.h:liveModule("test-create-module")
     store = getLiveStore(self.h, "test-create-module")
-    liveHost.drawTab()
+    liveModule.drawTab()
 
     lu.assertNotNil(drawImgui)
     lu.assertNotNil(capturedState)
@@ -192,13 +192,13 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(runtimeRows:read(1, "Limit"), 2)
     lu.assertEquals(runtimeRowField:read(), 2)
     checkRuntimeRefs = true
-    liveHost.drawTab()
+    liveModule.drawTab()
     lu.assertEquals(store.read("Flag"), false)
     lu.assertEquals(store.read("Rows", 1, "Limit"), 2)
     lu.assertErrorMsgContains("storage.invalid_field_args", function()
         store.read("Flag", 1, "Limit")
     end)
-    liveHost.flush()
+    liveModule.flush()
     lu.assertEquals(store.read("Flag"), true)
     lu.assertEquals(runtimeField:read(), true)
     lu.assertEquals(self.h.moduleRegistry.getPluginInfo("test-create-module"), {
@@ -226,7 +226,7 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
         authorRows:write(1, "Limit", 4)
     end)
     lu.assertEquals(authorRowField:read(), 3)
-    local liveRecord = self.h.moduleHost.getRecord(liveHost)
+    local liveRecord = self.h.moduleHost.getRecord(liveModule)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
 
@@ -252,10 +252,10 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
     })
 
     host.activate()
-    local liveHost = self.h:liveHost("test-create-module-stable-draw-objects")
-    liveHost.drawTab()
-    liveHost.drawTab()
-    liveHost.drawTab()
+    local liveModule = self.h:liveModule("test-create-module-stable-draw-objects")
+    liveModule.drawTab()
+    liveModule.drawTab()
+    liveModule.drawTab()
 
     lu.assertEquals(#calls, 3)
     lu.assertEquals(calls[1].draw, calls[2].draw)
@@ -312,7 +312,7 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
 
     host.activate()
     local store = getLiveStore(self.h, "test-create-module-packed-widget-owner")
-    self.h:liveHost("test-create-module-packed-widget-owner").drawTab()
+    self.h:liveModule("test-create-module-packed-widget-owner").drawTab()
 
     lu.assertTrue(changed)
     lu.assertEquals(checkboxLabels, {
@@ -321,7 +321,7 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
     })
     lu.assertEquals(store.read("Packed"), 0)
 
-    self.h:liveHost("test-create-module-packed-widget-owner").flush()
+    self.h:liveModule("test-create-module-packed-widget-owner").flush()
     lu.assertEquals(store.read("Packed"), 1)
     lu.assertEquals(config.Packed, 1)
 end
@@ -362,8 +362,8 @@ function TestModuleHost_CreateModule:testDrawFacadeIsSharedAcrossHosts()
 
     firstHost.activate()
     secondHost.activate()
-    self.h:liveHost("test-create-module-shared-draw-a").drawTab()
-    self.h:liveHost("test-create-module-shared-draw-b").drawTab()
+    self.h:liveModule("test-create-module-shared-draw-a").drawTab()
+    self.h:liveModule("test-create-module-shared-draw-b").drawTab()
 
     lu.assertNotNil(firstDraw)
     lu.assertEquals(firstDraw, secondDraw)
@@ -472,9 +472,9 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     local ok, activateErr = module.activate()
     lu.assertTrue(ok, tostring(activateErr))
 
-    local liveHost = self.h:liveHost("test-create-module-declarative-facade")
-    lu.assertNotNil(liveHost)
-    liveHost.drawTab()
+    local liveModule = self.h:liveModule("test-create-module-declarative-facade")
+    lu.assertNotNil(liveModule)
+    liveModule.drawTab()
 
     lu.assertEquals(capturedHost.getHostId(), "test-create-module-declarative-facade")
     lu.assertNotNil(capturedUi.draw)
@@ -483,7 +483,7 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     lu.assertEquals(capturedActionUiData, capturedUi.data)
     lu.assertEquals(capturedActionRuntime.runtimeOwned.read("RuntimeFlag"), true)
 
-    lu.assertTrue(liveHost.commitIfDirty())
+    lu.assertTrue(liveModule.commitIfDirty())
     lu.assertEquals(config.Flag, true)
     lu.assertEquals(capturedCommitRuntime.data.read("Flag"), true)
     lu.assertEquals(capturedCommitRuntime.data.runtimeOwned.read("RuntimeFlag"), true)
@@ -565,8 +565,8 @@ function TestModuleHost_CreateModule:testDeclarativeModuleHooksReceiveHostRuntim
     end)
 
     lu.assertTrue(module.activate())
-    local liveHost = self.h:liveHost("test-create-module-declarative-hooks")
-    local record = self.h.moduleHost.getRecord(liveHost)
+    local liveModule = self.h:liveModule("test-create-module-declarative-hooks")
+    local record = self.h.moduleHost.getRecord(liveModule)
     local slot = record.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
     local result = slot.value(function(value)
         return value + 1
@@ -649,9 +649,9 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsErrorAndLogsWarning(
     lu.assertNil(host)
     lu.assertStrContains(err, "config is required")
     lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "host.create_failed")
+    lu.assertStrContains(self.h.warnings[1], "module.create_failed")
     lu.assertStrContains(self.h.warnings[1], "config is required")
-    lu.assertNil(self.h:liveHost("test-try-create-module-invalid"))
+    lu.assertNil(self.h:liveModule("test-try-create-module-invalid"))
 end
 
 function TestModuleHost_CreateModule:testCreateModuleActivationIsSingleUse()

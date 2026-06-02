@@ -20,7 +20,7 @@ All notable changes to this project will be documented in this file.
 - The global `lib.hashing.*` namespace has been removed; Framework consumes hashing through `lib.createFrameworkRuntime(...).hashing`.
 - `module.hashGroups.define(...)` and `hashGroupPlan` have been removed; hash/profile output now uses semantic module/storage keys.
 - The global `lib.config` export has been removed; Framework controls Lib diagnostics through `lib.createFrameworkRuntime(...).diagnostics`.
-- The global `lib.getLiveModuleHost(...)` helper has been removed; Framework resolves live hosts through `lib.createFrameworkRuntime(...).modules`.
+- The global `lib.getLiveModuleHost(...)` helper has been removed; Framework resolves live modules through `lib.createFrameworkRuntime(...).modules`.
 - `lib.createFrameworkRuntime(...)` now requires the Framework plugin guid, while Framework overlays take the pack id at definition time to scope retained owners.
 - Framework now consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`, so coordinator mods can route pack registration through Framework.
 - The global `lib.coordinator.*` namespace has been removed; Framework consumes coordinator registration through `lib.createFrameworkRuntime(...).coordinator`.
@@ -56,7 +56,7 @@ All notable changes to this project will be documented in this file.
 
 - Added `lib.prepareDefinition(...)` as the canonical definition-preparation step before store and host creation.
 - Added a LuaLS public definition file at `src/def.lua` for the Lib module export, storage/session types, module host contract, lifecycle helpers, mutation plans, widgets, nav, hooks, shared events, hashing, logging, and ImGui helpers.
-- Added Lib-owned live-host publication and lookup through `lib.getLiveModuleHost(...)`.
+- Added Lib-owned live-module publication and lookup through `lib.getLiveModuleHost(...)`.
 - Added reload-stable ModUtil hook registration through `lib.hooks.Wrap(...)`, `lib.hooks.Override(...)`, and `lib.hooks.Context.Wrap(...)`.
 - Added coordinated pack rebuild callbacks through `lib.coordinator.registerRebuild(...)` and `lib.coordinator.requestRebuild(...)`.
 - Added optional cross-module integration registration through `lib.integrations.*`.
@@ -75,7 +75,7 @@ All notable changes to this project will be documented in this file.
 - Effective storage defaults are hydrated during definition preparation, before structural fingerprinting.
 - Structural definition changes are fingerprinted separately from behavior-only changes.
 - Coordinated modules can request a Framework rebuild when structural definition shape changes during hot reload.
-- `createModuleHost(...)` now owns live-host publication and requires `drawTab`.
+- `createModuleHost(...)` now owns live-module publication and requires `drawTab`.
 - Public module host surface was narrowed around stable host accessors and behavior calls; direct raw definition access was removed.
 - `createModuleHost(...)` and fallback UI now require an explicit plugin guid captured at module load time.
 - Manual lifecycle hooks now receive the active author host and runtime store as `apply(host, store)` and `revert(host, store)`.

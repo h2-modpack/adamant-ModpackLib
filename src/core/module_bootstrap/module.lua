@@ -39,7 +39,7 @@ local declarationFacade = import('core/module_bootstrap/module/declaration_facad
 --- wrapper below so module load can skip cleanly on invalid identities.
 local function createModuleOrThrow(opts)
     if type(opts) ~= "table" then
-        logging.violate("host.invalid_create_opts", "createModule: opts must be a table")
+        logging.violate("module.invalid_create_opts", "createModule: opts must be a table")
     end
     options.validateKnown(opts)
     return declarationFacade.create(opts)
@@ -57,7 +57,7 @@ local function createModule(opts)
     end
 
     local err = tostring(module)
-    logging.violate("host.create_failed", "createModule failed; skipping module: %s", err)
+    logging.violate("module.create_failed", "createModule failed; skipping module: %s", err)
     return nil, err
 end
 modulePublic.createModule = createModule

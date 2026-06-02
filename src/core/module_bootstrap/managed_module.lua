@@ -46,16 +46,16 @@ end
 function managedModule.addEffectReceipt(module, name, receipt)
     local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: module is required")
+        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: module is required")
     end
     if record.activated ~= true then
-        logging.violate("host.not_activated", "managedModule.addEffectReceipt requires an activated module")
+        logging.violate("managed_module.not_activated", "managedModule.addEffectReceipt requires an activated module")
     end
     if type(name) ~= "string" or name == "" then
-        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: receipt name is required")
+        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: receipt name is required")
     end
     if type(receipt) ~= "table" or type(receipt.dispose) ~= "function" then
-        logging.violate("host.invalid_activate_opts", "managedModule.addEffectReceipt: receipt dispose function is required")
+        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: receipt dispose function is required")
     end
 
     record.effectReceipts = record.effectReceipts or {}
@@ -117,7 +117,7 @@ end
 ---@field drawTab fun()
 ---@field drawQuickContent fun()|nil
 
-function managedModule.getLiveHost(pluginGuid)
+function managedModule.getLiveModule(pluginGuid)
     return moduleRegistry.getLiveModule(pluginGuid)
 end
 
@@ -141,7 +141,7 @@ local KnownModuleCreateOpts = {
 local function validateKnownOpts(opts, context)
     for key in pairs(opts) do
         if not KnownModuleCreateOpts[key] then
-            logging.violate("host.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
+            logging.violate("module.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
         end
     end
 end
@@ -154,10 +154,10 @@ end
 
 local function validateLifecycleObservers(opts)
     if opts.onActivate ~= nil and type(opts.onActivate) ~= "function" then
-        logging.violate("host.invalid_create_opts", "managedModule.create: onActivate must be a function")
+        logging.violate("module.invalid_create_opts", "managedModule.create: onActivate must be a function")
     end
     if opts.onCommit ~= nil and type(opts.onCommit) ~= "function" then
-        logging.violate("host.invalid_create_opts", "managedModule.create: onCommit must be a function")
+        logging.violate("module.invalid_create_opts", "managedModule.create: onCommit must be a function")
     end
     return opts.onCommit
 end
@@ -221,7 +221,7 @@ end
 ---@return Store store Module runtime store view.
 function managedModule.create(opts)
     if type(opts) ~= "table" then
-        logging.violate("host.invalid_create_opts", "managedModule.create: opts must be a table")
+        logging.violate("module.invalid_create_opts", "managedModule.create: opts must be a table")
     end
     validateKnownOpts(opts, "managedModule.create")
     local def = opts.definition
@@ -229,17 +229,17 @@ function managedModule.create(opts)
     local persistentState = opts.persistentState
     local stagedState = opts.stagedState
     if type(def) ~= "table" or def._preparedDefinition ~= true then
-        logging.violate("host.invalid_create_opts", "managedModule.create: prepared definition is required")
+        logging.violate("module.invalid_create_opts", "managedModule.create: prepared definition is required")
     end
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        logging.violate("host.invalid_create_opts", "managedModule.create: pluginGuid is required")
+        logging.violate("module.invalid_create_opts", "managedModule.create: pluginGuid is required")
     end
     if not (persistentState and type(persistentState.get) == "function" and type(persistentState.read) == "function") then
-        logging.violate("host.invalid_create_opts", "managedModule.create: persistentState is required")
+        logging.violate("module.invalid_create_opts", "managedModule.create: persistentState is required")
     end
     if not (stagedState and type(stagedState.get) == "function" and type(stagedState.isDirty) == "function"
         and type(stagedState.write) == "function" and type(stagedState.getAliasSchema) == "function") then
-        logging.violate("host.invalid_create_opts", "managedModule.create: stagedState is required")
+        logging.violate("module.invalid_create_opts", "managedModule.create: stagedState is required")
     end
 
     local drawTab = opts.drawTab
@@ -260,7 +260,7 @@ function managedModule.create(opts)
     }
 
     if type(drawTab) ~= "function" then
-        logging.violate("host.invalid_create_opts", "managedModule.create: drawTab is required")
+        logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required")
     end
     ---@type ManagedModule
     local module = {}
@@ -288,7 +288,7 @@ function managedModule.create(opts)
     local function requireActivated(methodName)
         local record = moduleRegistry.getRecord(module)
         if not record or record.activated ~= true then
-            logging.violate("host.not_activated", "module.%s requires module.activate() before it can run", methodName)
+            logging.violate("managed_module.not_activated", "module.%s requires module.activate() before it can run", methodName)
         end
     end
 

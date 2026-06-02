@@ -101,8 +101,8 @@ local function createModuleHostHarness(harnessOpts)
         return host, host, ok, err, store
     end
 
-    function h:liveHost(pluginGuid)
-        return self.moduleHost.getLiveHost(pluginGuid)
+    function h:liveModule(pluginGuid)
+        return self.moduleHost.getLiveModule(pluginGuid)
     end
 
     return h

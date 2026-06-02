@@ -20,7 +20,7 @@ local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
 
 -- Hot-reload-stable fallback UI runtime. Bridges and GUI callbacks late-read
--- this table so replacement module hosts can swap behavior without new handles.
+-- this table so replacement managed modules can swap behavior without new handles.
 fallbackRegistry.bridges = fallbackRegistry.bridges or {}
 fallbackRegistry.guiAttached = fallbackRegistry.guiAttached or {}
 fallbackRegistry.runtimes = fallbackRegistry.runtimes or {}
@@ -89,7 +89,7 @@ end
 
 local function warnFallbackUiRuntimeDispose(ownerId, err)
     logging.violate(
-        "host.retire_failed",
+        "managed_module.retire_failed",
         "fallback UI runtime '%s' retirement failed: %s",
         tostring(ownerId),
         tostring(err)
@@ -238,7 +238,7 @@ local function createRuntime(host)
                     enabled = enabledValue == true
                     markRunDataDirty()
                 else
-                    logging.violate("host.enable_transition_failed", "%s %s failed: %s",
+                    logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
                         tostring(meta.name or moduleId or "module"),
                         enabledValue and "enable" or "disable",
                         tostring(err))
@@ -263,7 +263,7 @@ local function createRuntime(host)
                     markRunDataDirty()
                 elseif ok == false then
                     logging.violate(
-                        "host.staged_state_commit_failed",
+                        "managed_module.staged_state_commit_failed",
                         "%s staged state commit failed; restored previous config where possible: %s",
                         tostring(meta.name or moduleId or "module"),
                         tostring(err)

@@ -48,8 +48,8 @@ Module adapters derive `ownerId` from `host.getHostId()`; system adapters
 receive an explicit `ownerId` from the managed system scope.
 
 System scopes are Lib-created owner objects for first-party behavior that is
-not owned by a module host. They close over explicit owner ids and do not own
-module host records. System owner ids must be deliberately scoped, such as
+not owned by a managed module. They close over explicit owner ids and do not own
+managed module records. System owner ids must be deliberately scoped, such as
 `adamant-lib.overlays.renderer` or `adamant-framework.<pack>.hud`, so they do
 not collide with module plugin guids or with other system capabilities.
 

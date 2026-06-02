@@ -53,11 +53,11 @@ function frameworkRuntime.create(frameworkPluginGuid, unexpectedPackId)
             end,
         },
         modules = {
-            getLiveHost = function(pluginGuid)
+            getLiveModule = function(pluginGuid)
                 if type(pluginGuid) ~= "string" or pluginGuid == "" then
                     return nil
                 end
-                return deps.managedModule.getLiveHost(pluginGuid)
+                return deps.managedModule.getLiveModule(pluginGuid)
             end,
         },
         overlays = deps.overlays.create(),

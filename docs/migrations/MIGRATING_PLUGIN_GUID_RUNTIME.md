@@ -7,15 +7,15 @@ module-authored `owner` tokens.
 
 - `lib.createModule(...)` no longer accepts
   `owner`.
-- `pluginGuid` is the stable lookup identity for a module host.
-- The committed host is the managed lifecycle owner for hooks, overlays,
+- `pluginGuid` is the stable lookup identity for a managed module.
+- The committed managed module is the lifecycle owner for hooks, overlays,
   shared events, activation metadata, and structural hot-reload comparison.
 - Mutation runtime is still module-owner scoped because raw game-table edits
-  are process-global. For module hosts, that owner id is derived from
+  are process-global. For managed modules, that owner id is derived from
   `pluginGuid`.
 - `definition.id` remains the module's domain/UI/profile/hash identity.
 - `modpack` remains coordinator grouping.
-- Stateless capability backends use `ownerId`, not `pluginGuid`. Module-host
+- Stateless capability backends use `ownerId`, not `pluginGuid`. Managed-module
   adapters derive that owner id from `pluginGuid`; system scopes provide their
   own deliberately scoped owner ids.
 

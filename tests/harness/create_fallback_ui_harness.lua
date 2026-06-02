@@ -163,7 +163,7 @@ local function createFallbackUiHarness(opts)
         end
         local ok, err = host.activate()
         assert(ok, tostring(err))
-        return self.moduleHost.getLiveHost(pluginGuid), host
+        return self.moduleHost.getLiveModule(pluginGuid), host
     end
 
     function h:getFallbackUiRuntime(pluginGuid)

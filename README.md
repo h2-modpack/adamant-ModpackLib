@@ -10,7 +10,7 @@ ModpackLib provides the common plumbing that those projects usually need:
 - runtime `runtime.data` for committed hook, mutation, overlay, and shared-event logic
 - profile and hash helpers for saving, loading, and identifying settings
 - mutation helpers for modules that patch run data
-- module host helpers for coordinated and fallback UI usage
+- managed module helpers for coordinated and fallback UI usage
 - reusable ImGui widgets and navigation helpers
 
 The library is designed around immediate-mode UI. Module authors write normal
@@ -39,7 +39,7 @@ module.activate()
 `pluginGuid` is the stable runtime identity; Lib owns the internal hot-reload
 state for hooks, overlays, shared events, cache, mutation runtime, and
 structural reload tracking. Declare runtime hooks on `module.hooks.*` before activation.
-`module.activate()` registers the live host for coordinated discovery and installs requested fallback UI.
+`module.activate()` registers the live module for coordinated discovery and installs requested fallback UI.
 Every module definition must declare a stable `id` and display `name`; `modpack`
 is optional and marks modules that participate in Framework coordination.
 

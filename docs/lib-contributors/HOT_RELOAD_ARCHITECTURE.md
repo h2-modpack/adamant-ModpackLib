@@ -40,7 +40,7 @@ Safe to rebuild on every module `init`:
 - `definition`
 - `store`
 - staged state and its UI draw adapters
-- live module host created by `lib.createModule(...)` and activated by `module.activate()`
+- live module created by `lib.createModule(...)` and activated by `module.activate()`
 - UI draw closures
 - lookup tables derived from current imports
 
@@ -258,7 +258,7 @@ Important consequences:
 
 Activation syncs live mutation state for both coordinated and fallback UI modules.
 Framework init and fallback UI activation do not run a separate startup mutation pass.
-This keeps non-structural module reloads on the same host activation path as cold startup.
+This keeps non-structural module reloads on the same managed module activation path as cold startup.
 
 ## Safety By Scenario
 
@@ -279,7 +279,7 @@ Module reload replaces the module's live runtime surface. Framework snapshots th
 Best-effort infrastructure development path.
 
 Persistent Lib registries survive Lib reload, and Core late-reads Framework
-callbacks. Existing module hosts may still close over prior Lib implementation
+callbacks. Existing managed modules may still close over prior Lib implementation
 closures until the owning module reloads. Coordinator/Core must re-call
 `Framework.createPack(...)` to rebuild Framework pack state after Framework changes.
 Use a full process restart as the correctness boundary for infrastructure

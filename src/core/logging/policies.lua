@@ -92,55 +92,55 @@ return {
         description = "Game dependency reads must match the expected game-global or ROM function shape.",
     },
 
-    ["host.invalid_create_opts"] = {
+    ["module.invalid_create_opts"] = {
         severity = "error",
-        description = "Module host creation requires prepared definition, pluginGuid, state handles, drawTab, and callbacks.",
+        description = "Module creation requires a prepared definition, pluginGuid, state handles, drawTab, and callbacks.",
     },
-    ["host.invalid_activate_opts"] = {
+    ["managed_module.invalid_activate_opts"] = {
         severity = "error",
-        description = "Module host activation requires a constructed host.",
+        description = "Managed module activation requires a constructed module.",
     },
-    ["host.already_activated"] = {
+    ["managed_module.already_activated"] = {
         severity = "error",
-        description = "Module hosts can only be activated once.",
+        description = "Managed modules can only be activated once.",
     },
-    ["host.activation_in_progress"] = {
+    ["managed_module.activation_in_progress"] = {
         severity = "error",
-        description = "Module host activation cannot be called recursively from activation callbacks.",
+        description = "Managed module activation cannot be called recursively from activation callbacks.",
     },
-    ["host.not_activated"] = {
+    ["managed_module.not_activated"] = {
         severity = "error",
-        description = "Side-effecting module host methods require explicit activation first.",
+        description = "Side-effecting managed module methods require explicit activation first.",
     },
-    ["host.unknown_opt"] = {
+    ["module.unknown_opt"] = {
         severity = "error",
-        description = "Module host creation only accepts known construction options.",
+        description = "Module creation only accepts known construction options.",
     },
-    ["host.enable_transition_failed"] = {
+    ["managed_module.enable_transition_failed"] = {
         severity = "warn",
         description = "A module enable/disable transition failed and the UI state may need resync.",
     },
-    ["host.staged_state_commit_failed"] = {
+    ["managed_module.staged_state_commit_failed"] = {
         severity = "warn",
         description = "A staged UI state commit failed and Lib attempted to restore the previous config state.",
     },
-    ["host.structural_rebuild_unavailable"] = {
+    ["managed_module.structural_rebuild_unavailable"] = {
         severity = "error",
         description = "A coordinated structural reload was detected but no rebuild callback accepted it.",
     },
-    ["host.create_failed"] = {
+    ["module.create_failed"] = {
         severity = "warn",
         description = "Safe module construction failed; the caller may skip this module and continue loading siblings.",
     },
-    ["host.activate_failed"] = {
+    ["managed_module.activate_failed"] = {
         severity = "warn",
         description = "Safe module activation failed; the caller may skip this module and continue loading siblings.",
     },
-    ["host.activation_rollback_failed"] = {
+    ["managed_module.activation_rollback_failed"] = {
         severity = "warn",
         description = "Candidate activation rollback had secondary cleanup failures.",
     },
-    ["host.retire_failed"] = {
+    ["managed_module.retire_failed"] = {
         severity = "warn",
         description = "Old module resource retirement had cleanup failures after a replacement module was published.",
     },
@@ -210,7 +210,7 @@ return {
 
     ["fallback_ui.invalid_args"] = {
         severity = "error",
-        description = "Fallback UI attachment requires a managed host and one-time registration callback.",
+        description = "Fallback UI attachment requires a managed module and one-time registration callback.",
     },
 
     ["mutation.invalid_runtime_key"] = {

@@ -295,7 +295,7 @@ local lib = {}
 ---@field isRegistered fun(packId: string?): boolean
 
 ---@class AdamantModpackLib.FrameworkModulesRuntime
----@field getLiveHost fun(pluginGuid: string?): AdamantModpackLib.ManagedModule?
+---@field getLiveModule fun(pluginGuid: string?): AdamantModpackLib.ManagedModule?
 
 ---@class AdamantModpackLib.FrameworkOverlaysRuntime
 ---@field order table<string, integer> Shared overlay order bands.

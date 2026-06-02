@@ -315,7 +315,7 @@ end
 function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit()
     local pluginGuid = "test-retained-overlay-staging"
     local ownerId = pluginGuid
-    local host, authorModule, store = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, _, store = self:createHostWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("candidate", {
             region = "middleRightStack",
             columns = {
@@ -387,7 +387,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
     local secondRegistry = self.h.retainedState.tableRegistries[secondHost]
 
-    lu.assertEquals(self.h.harness.moduleHost.getLiveHost(pluginGuid), secondHost)
+    lu.assertEquals(self.h.harness.moduleHost.getLiveModule(pluginGuid), secondHost)
     lu.assertNotNil(secondRow)
     lu.assertNotEquals(firstRow, secondRow)
     lu.assertTrue(firstRegistry == nil or firstRegistry.elements.shared == nil)
@@ -636,5 +636,5 @@ function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations
     local retained = self.h.retainedState.tableRegistries[firstHost]
     lu.assertNotNil(retained.elements.stable)
     lu.assertNil(retained.elements.replacement)
-    lu.assertEquals(self.h.harness.moduleHost.getLiveHost(pluginGuid), firstHost)
+    lu.assertEquals(self.h.harness.moduleHost.getLiveModule(pluginGuid), firstHost)
 end

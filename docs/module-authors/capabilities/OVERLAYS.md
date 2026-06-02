@@ -1,6 +1,6 @@
 # Overlays
 
-Overlays are retained HUD projections owned by a module host. They are useful for gameplay-facing status text, counters, timers, or compact tables that should appear in Lib-managed HUD regions.
+Overlays are retained HUD projections owned by a managed module. They are useful for gameplay-facing status text, counters, timers, or compact tables that should appear in Lib-managed HUD regions.
 
 Use overlays when the module needs a retained display. Use widgets when the module needs configuration UI.
 

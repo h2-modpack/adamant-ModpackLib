@@ -9,14 +9,14 @@ end
 
 local function activateAndEnableHost(harness, host, pluginGuid)
     lu.assertTrue(host.activate())
-    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
     lu.assertNotNil(fullHost)
     lu.assertTrue(fullHost.setEnabled(true))
     return fullHost
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local fullHost = harness.moduleHost.getLiveHost(pluginGuid)
+    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
     local record = harness.moduleHost.getRecord(fullHost)
     return record and record.store or nil
 end
@@ -129,7 +129,7 @@ function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
     lu.assertTrue(store.cache.currentRun.clear("RunScratch"))
     lu.assertEquals(store.cache.currentRun.get("RunScratch").Count, 0)
 
-    self.harness.moduleHost.getLiveHost("test-cache-declared-current-run").drawTab()
+    self.harness.moduleHost.getLiveModule("test-cache-declared-current-run").drawTab()
     lu.assertFalse(drawHasCurrentRunCache)
 end
 

@@ -146,7 +146,7 @@ function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
             drawCalls = drawCalls + 1
         end,
     })
-    local moduleHost = self.h.moduleHost.getLiveHost(pluginGuid)
+    local moduleHost = self.h.moduleHost.getLiveModule(pluginGuid)
     moduleHost.commitIfDirty = function()
         return false, "commit boom", false
     end
@@ -159,7 +159,7 @@ function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
     lu.assertEquals(#self.h.warnings, 1)
     lu.assertStrContains(self.h.warnings[1], "Fallback UI Test staged state commit failed")
     lu.assertStrContains(self.h.warnings[1], "commit boom")
-    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), moduleHost)
+    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), moduleHost)
 end
 
 function TestModuleHost:testFallbackUiInstallsDuringActivation()
@@ -183,14 +183,14 @@ function TestModuleHost:testFallbackUiInstallsDuringActivation()
         end,
         drawTab = function() end,
     })
-    local host = self.h.moduleHost.getLiveHost(pluginGuid)
+    local host = self.h.moduleHost.getLiveModule(pluginGuid)
 
     local runtime = self.h.registry.fallback.runtimes[pluginGuid]
 
     lu.assertTrue(attached)
     lu.assertEquals(type(runtime.renderWindow), "function")
     lu.assertEquals(type(runtime.addMenuBar), "function")
-    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), host)
+    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), host)
 end
 
 function TestModuleHost:testFlushNotifiesSettingsObserver()
@@ -216,7 +216,7 @@ function TestModuleHost:testFlushNotifiesSettingsObserver()
         end,
         drawTab = function() end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-settings-observer-host")
+    local host = self.h.moduleHost.getLiveModule("test-settings-observer-host")
 
     host.stage("Value", true)
     local ok, err = host.flush()
@@ -275,7 +275,7 @@ function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
         drawTab = function() end,
     })
 
-    lu.assertErrorMsgContains("host.not_activated", function()
+    lu.assertErrorMsgContains("managed_module.not_activated", function()
         host.flush()
     end)
 end
@@ -310,7 +310,7 @@ function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
             end
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-reset-host")
+    local host = self.h.moduleHost.getLiveModule("test-reset-host")
 
     host.drawTab()
 
@@ -358,7 +358,7 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
         end,
     })
 
-    local host = self.h.moduleHost.getLiveHost("test-author-module")
+    local host = self.h.moduleHost.getLiveModule("test-author-module")
     host.drawTab()
     host.drawQuickContent()
 
@@ -496,7 +496,7 @@ function TestModuleHost:testDrawDoesNotExposeLogging()
             drawContext = draw
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-draw-no-log")
+    local host = self.h.moduleHost.getLiveModule("test-draw-no-log")
 
     host.drawTab()
 
@@ -534,7 +534,7 @@ function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
             }
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-draw-actions-phase")
+    local host = self.h.moduleHost.getLiveModule("test-draw-actions-phase")
 
     host.drawTab()
 
@@ -601,7 +601,7 @@ function TestModuleHost:testDeclaredDrawActionsExecuteAfterDrawBeforeFlush()
             actions.trigger("setFlag")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-declared-draw-actions")
+    local host = self.h.moduleHost.getLiveModule("test-declared-draw-actions")
 
     host.drawTab()
 
@@ -714,7 +714,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
             lu.assertNil(delivered)
         end,
     })
-    local emitter = self.h.moduleHost.getLiveHost("test-draw-action-emit-emitter")
+    local emitter = self.h.moduleHost.getLiveModule("test-draw-action-emit-emitter")
 
     emitter.drawTab()
 
@@ -742,7 +742,7 @@ function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
             actions.trigger("missing")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-undeclared-draw-action")
+    local host = self.h.moduleHost.getLiveModule("test-undeclared-draw-action")
 
     lu.assertErrorMsgContains("actions.unknown_key", function()
         host.drawTab()
@@ -771,7 +771,7 @@ function TestModuleHost:testDrawActionsRejectPrivateActionKeys()
             actions.trigger("_PrivateAction")
         end,
     })
-    local host = self.h.moduleHost.getLiveHost("test-private-draw-action")
+    local host = self.h.moduleHost.getLiveModule("test-private-draw-action")
 
     lu.assertErrorMsgContains("actions.private_key", function()
         host.drawTab()
@@ -849,7 +849,7 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
 
     local applyCalls = 0
 
-    local previousRecord = self.h.moduleHost.getRecord(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"))
+    local previousRecord = self.h.moduleHost.getRecord(self.h.moduleHost.getLiveModule("reload-pack.ReloadHost"))
     local prepared = self.h.moduleHost.prepareDefinition({
         _definitionStructuralFingerprint = previousRecord.definition._structuralFingerprint,
     }, {
@@ -875,16 +875,16 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
         end,
         drawTab = function() end,
     })
-    local reloadedHost = self.h.moduleHost.getLiveHost("reload-pack.ReloadHost")
+    local reloadedHost = self.h.moduleHost.getLiveModule("reload-pack.ReloadHost")
 
     self.h.coordinator.register(packId, nil)
     self.h.coordinator.registerRebuild(packId, nil)
     lu.assertEquals(applyCalls, 1)
     lu.assertNotNil(rebuildReason)
-    lu.assertEquals(self.h.moduleHost.getLiveHost("reload-pack.ReloadHost"), reloadedHost)
+    lu.assertEquals(self.h.moduleHost.getLiveModule("reload-pack.ReloadHost"), reloadedHost)
 end
 
-function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveHostAndMutation()
+function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAndMutation()
     local packId = "reload-rollback-pack"
     local pluginGuid = "reload-rollback-pack.ReloadHost"
     local target = { Value = "base" }
@@ -948,12 +948,12 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveHostAndM
     self.h.coordinator.register(packId, nil)
     self.h.coordinator.registerRebuild(packId, nil)
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "host.structural_rebuild_unavailable")
-    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), firstHost)
+    lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
+    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), firstHost)
     lu.assertEquals(target.Value, "first")
 end
 
-function TestModuleHost:testActivationFailureRestoresLiveHostAndShared()
+function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
     local pluginGuid = "test-activation-rollback"
     local sharedId = "test.activation.rollback"
     local previousValue = nil
@@ -1025,7 +1025,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndShared()
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "shared boom")
-    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), firstHost)
+    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), firstHost)
     lu.assertEquals(self.h.moduleRegistry.getPluginInfo(pluginGuid), {
         pluginGuid = pluginGuid,
         packId = nil,
@@ -1033,7 +1033,7 @@ function TestModuleHost:testActivationFailureRestoresLiveHostAndShared()
         name = "Activation Rollback",
     })
     lu.assertEquals(previousValue, "previous")
-    lu.assertErrorMsgContains("host.not_activated", function()
+    lu.assertErrorMsgContains("managed_module.not_activated", function()
         secondHost.flush()
     end)
 end
@@ -1088,12 +1088,12 @@ function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "new shared boom")
-    lu.assertNil(self.h.moduleHost.getLiveHost(pluginGuid))
+    lu.assertNil(self.h.moduleHost.getLiveModule(pluginGuid))
     lu.assertNil(self.h.moduleRegistry.getPluginInfo(pluginGuid))
     lu.assertTrue(emitOk)
     lu.assertEquals(count, 0)
     lu.assertEquals(delivered, 0)
-    lu.assertErrorMsgContains("host.not_activated", function()
+    lu.assertErrorMsgContains("managed_module.not_activated", function()
         host.flush()
     end)
 end
@@ -1149,16 +1149,16 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
     })
 
     local ok, err = secondHost.activate()
-    local liveHost = self.h.moduleHost.getLiveHost(pluginGuid)
+    local liveModule = self.h.moduleHost.getLiveModule(pluginGuid)
     local targetValue = target.Value
 
     lu.assertFalse(ok)
     lu.assertStrContains(tostring(err), "replacement boom")
-    lu.assertEquals(liveHost, firstHost)
-    lu.assertNotEquals(liveHost, secondHost)
+    lu.assertEquals(liveModule, firstHost)
+    lu.assertNotEquals(liveModule, secondHost)
     lu.assertEquals(targetValue, "first")
     lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "host.activate_failed")
+    lu.assertStrContains(self.h.warnings[1], "managed_module.activate_failed")
     lu.assertStrContains(self.h.warnings[1], "replacement boom")
 end
 
@@ -1191,10 +1191,10 @@ function TestModuleHost:testactivateModuleReturnsErrorAndDoesNotPublishBrokenHos
     lu.assertFalse(ok)
     lu.assertStrContains(err, "try activate boom")
     lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "host.activate_failed")
+    lu.assertStrContains(self.h.warnings[1], "managed_module.activate_failed")
     lu.assertStrContains(self.h.warnings[1], "try activate boom")
-    lu.assertNil(self.h.moduleHost.getLiveHost(pluginGuid))
-    lu.assertErrorMsgContains("host.not_activated", function()
+    lu.assertNil(self.h.moduleHost.getLiveModule(pluginGuid))
+    lu.assertErrorMsgContains("managed_module.not_activated", function()
         host.flush()
     end)
 end
@@ -1222,7 +1222,7 @@ function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
 
     lu.assertTrue(ok)
     lu.assertNil(err)
-    lu.assertEquals(self.h.moduleHost.getLiveHost(pluginGuid), host)
+    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), host)
 end
 
 function TestModuleHost:testActivationRefreshRemovesOmittedShared()
@@ -1310,7 +1310,7 @@ function TestModuleHost:testActivationRejectsReentrantActivateCalls()
 
     lu.assertTrue(ok)
     lu.assertNil(err)
-    lu.assertEquals(self.h.moduleHost.getLiveHost("test-reentrant-activate"), host)
+    lu.assertEquals(self.h.moduleHost.getLiveModule("test-reentrant-activate"), host)
     lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "host.activation_in_progress")
+    lu.assertStrContains(self.h.warnings[1], "managed_module.activation_in_progress")
 end
