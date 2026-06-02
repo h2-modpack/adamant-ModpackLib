@@ -579,6 +579,29 @@ Registers or updates a stable ModUtil runtime `Path.Context.Wrap(...)` dispatche
 Also supports:
 - `module.hooks.contextWrap(path, key, context)`
 
+Context callbacks receive `(host, runtime, context, ...)`. The `context`
+object exposes scoped hook declarations that are valid only for that ModUtil
+context invocation:
+
+- `context.wrap(path, handler)`
+
+Do not store the `context` object. Its helpers are closed as soon as the
+context callback returns.
+
+Use this for ModUtil patterns that need an inner `Path.Wrap(...)` during one
+outer contextual call:
+
+```lua
+module.hooks.contextWrap("DeathPresentation", function(host, runtime, context)
+    context.wrap("wait", function(base, duration, tag, persist)
+        if host.isEnabled() and runtime.data.read("SkipDeathCutscene") then
+            return
+        end
+        return base(duration, tag, persist)
+    end)
+end)
+```
+
 These APIs are only valid before `module.activate()`. Lib-owned ModUtil
 dispatchers are private infrastructure, not a public owner-token surface.
 

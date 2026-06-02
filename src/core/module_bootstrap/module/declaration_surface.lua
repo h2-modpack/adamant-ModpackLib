@@ -2,11 +2,13 @@ local deps = ...
 
 local logging = deps.logging
 local hookDeclarations = deps.hookDeclarations
+local hookContext = deps.hookContext
 local overlayDeclarations = deps.overlayDeclarations
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local mutationLifecycle = deps.mutationLifecycle
 local controlDeclarations = deps.controlDeclarations
+local unpackValues = table.unpack or _G.unpack
 
 local declarationSurface = {}
 
@@ -150,7 +152,13 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 function(context)
                     return function(...)
                         local record = requireActiveRecord(lifecycle, "module.hooks.contextWrap callback")
-                        return context(record.host, record.runtime, ...)
+                        local contextSurface, closeContextSurface = hookContext.createSurface()
+                        local results = copyArgs(pcall(context, record.host, record.runtime, contextSurface, ...))
+                        closeContextSurface()
+                        if not results[1] then
+                            error(results[2], 0)
+                        end
+                        return unpackValues(results, 2, results.n)
                     end
                 end)
             return hookDeclarations.declareContextWrap(

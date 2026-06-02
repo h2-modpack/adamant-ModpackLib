@@ -1,5 +1,6 @@
 local lu = require("luaunit")
 local createLibHarness = require('tests/harness/create_lib_harness')
+local unpackValues = table.unpack or _G.unpack
 
 TestHooks = {}
 
@@ -11,15 +12,42 @@ local function createPathMock(target)
         contextWrap = 0,
     }
     local originals = {}
+    local activeContext = nil
 
     local function getEnv()
         return assert(target.env, "hook test env missing")
+    end
+
+    local function wrapScopedChain(base, wraps)
+        local chain = base
+        for i = 1, #wraps do
+            local handler = wraps[i].handler
+            local previous = chain
+            chain = function(...)
+                return handler(previous, ...)
+            end
+        end
+        return chain
+    end
+
+    local function pack(...)
+        return {
+            n = select("#", ...),
+            ...
+        }
     end
 
     local testModUtil = {
         Path = {
             Wrap = function(path, handler)
                 counts.wrap = counts.wrap + 1
+                if activeContext then
+                    table.insert(activeContext.wraps, {
+                        path = path,
+                        handler = handler,
+                    })
+                    return
+                end
                 local env = getEnv()
                 local base = env[path]
                 env[path] = function(...)
@@ -51,8 +79,27 @@ local function createPathMock(target)
                     local env = getEnv()
                     local base = env[path]
                     env[path] = function(...)
-                        context(...)
-                        return base(...)
+                        local scopedContext = { wraps = {} }
+                        local previousContext = activeContext
+                        activeContext = scopedContext
+                        local contextResults = pack(pcall(context, ...))
+                        activeContext = previousContext
+                        if not contextResults[1] then
+                            error(contextResults[2], 0)
+                        end
+
+                        local restored = {}
+                        for _, wrap in ipairs(scopedContext.wraps) do
+                            local current = env[wrap.path]
+                            restored[wrap.path] = restored[wrap.path] or current
+                            env[wrap.path] = wrapScopedChain(current, { wrap })
+                        end
+
+                        local results = pack(base(...))
+                        for wrapPath, original in pairs(restored) do
+                            env[wrapPath] = original
+                        end
+                        return unpackValues(results, 1, results.n)
                     end
                 end,
             },
@@ -483,6 +530,55 @@ function TestHooks:testContextWrapRegistersOnceAndUpdatesContext()
 
     lu.assertEquals(self.counts.contextWrap, 1)
     lu.assertEquals(observed, { "second", "base" })
+end
+
+function TestHooks:testContextWrapProvidesScopedWrapSurface()
+    local observed = {}
+    local capturedContext
+
+    self.env.AdamantHookTestInnerContext = function(value)
+        table.insert(observed, "inner:" .. tostring(value))
+        return "inner:" .. tostring(value)
+    end
+    self.env.AdamantHookTestOuterContext = function(value)
+        table.insert(observed, "outer:" .. tostring(value))
+        return self.env.AdamantHookTestInnerContext(value)
+    end
+
+    local authorModule = self.public.createModule({
+        pluginGuid = "hook-test-context-surface",
+        config = {
+            Enabled = false,
+            DebugMode = false,
+        },
+        id = "HookTest",
+        name = "Hook Test",
+    })
+    authorModule.ui.tab(function() end)
+    authorModule.hooks.contextWrap("AdamantHookTestOuterContext", function(_, _, context)
+        capturedContext = context
+        context.wrap("AdamantHookTestInnerContext", function(base, value)
+            table.insert(observed, "wrapped:" .. tostring(value))
+            return "wrapped:" .. base(value)
+        end)
+    end)
+    lu.assertTrue(authorModule.activate())
+
+    lu.assertEquals(self.env.AdamantHookTestOuterContext("run"), "wrapped:inner:run")
+    lu.assertEquals(self.env.AdamantHookTestInnerContext("direct"), "inner:direct")
+    lu.assertEquals(self.counts.contextWrap, 1)
+    lu.assertEquals(self.counts.wrap, 1)
+    lu.assertErrorMsgContains("cannot be called after the context callback returns", function()
+        capturedContext.wrap("AdamantHookTestInnerContext", function(base, value)
+            return base(value)
+        end)
+    end)
+    lu.assertEquals(observed, {
+        "outer:run",
+        "wrapped:run",
+        "inner:run",
+        "inner:direct",
+    })
 end
 
 function TestHooks:testContextWrapRefreshOmissionBecomesInert()

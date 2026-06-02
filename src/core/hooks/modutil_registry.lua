@@ -176,6 +176,11 @@ local function installContextWrap(owner, path, key, context)
     return state
 end
 
+local function installScopedWrap(path, handler)
+    local modutilPath = getModUtilPath()
+    return modutilPath.Wrap(path, handler)
+end
+
 local function deactivateSlot(state)
     if state.kind == "wrap" then
         state.handler = nil
@@ -201,6 +206,7 @@ return {
     installWrap = installWrap,
     installOverride = installOverride,
     installContextWrap = installContextWrap,
+    installScopedWrap = installScopedWrap,
     deactivateSlot = deactivateSlot,
     getPathTarget = getPathTarget,
 }

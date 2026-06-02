@@ -84,6 +84,29 @@ Do not read draw-state values inside hook callbacks. Draw state is staged UI sta
 Store access is runtime-phase access. It is valid in hook callbacks and normal
 runtime helper code, but not while any module draw callback is running.
 
+## Context-Scoped Wraps
+
+`module.hooks.contextWrap(...)` callbacks receive `(host, runtime, context, ...)`.
+Use `context.wrap(path, handler)` for ModUtil-style nested wraps that should
+exist only while the outer context call is active:
+
+```lua
+module.hooks.contextWrap("KillHero", function(host, runtime, context)
+    context.wrap("LoadMap", function(base, argTable)
+        if host.isEnabled() and runtime.data.read("SpawnLocation") and argTable.Name == "Hub_Main" then
+            argTable.Name = "Hub_PreRun"
+        end
+        return base(argTable)
+    end)
+end)
+```
+
+Declare the outer `contextWrap` before activation. Inner `context.wrap(...)`
+calls happen at runtime inside the contextual callback, mirroring ModUtil's
+`Path.Context.Wrap(...)` semantics without exposing raw ModUtil calls to module
+code. Do not store the `context` object; Lib closes it when the callback
+returns.
+
 ## Wrap vs Override
 
 Prefer `wrap` when the original behavior should still run. Use `override` only

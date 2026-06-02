@@ -175,6 +175,7 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     moduleState = moduleState,
     overlayOrder = overlaysBundle.order,
     hookDeclarations = hooksBundle.declarations,
+    hookContext = hooksBundle.context,
     overlayDeclarations = overlaysBundle.declarations,
     sharedDataDeclarations = sharedBundle.dataDeclarations,
     sharedRegistrations = sharedBundle.registrations,

@@ -329,16 +329,31 @@ local lib = {}
 ---    runtime: AdamantModpackLib.RuntimeContext,
 ---    ...: any
 ---): any
+---@alias AdamantModpackLib.ContextHookWrapCallback fun(base: function, ...: any): any
+---@class AdamantModpackLib.HookContext
+---@field wrap fun(path: string, handler: AdamantModpackLib.ContextHookWrapCallback)
+---@alias AdamantModpackLib.HookContextCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    context: AdamantModpackLib.HookContext,
+---    ...: any
+---): any
 
 ---@class AdamantModpackLib.AuthorHooks
----@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback, maybeHandler?: AdamantModpackLib.HookWrapCallback)
----@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback, maybeCallback?: AdamantModpackLib.HookCallback)
----@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookCallback, maybeContext?: AdamantModpackLib.HookCallback)
+---@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback,
+---    maybeHandler?: AdamantModpackLib.HookWrapCallback)
+---@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback,
+---    maybeCallback?: AdamantModpackLib.HookCallback)
+---@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookContextCallback,
+---    maybeContext?: AdamantModpackLib.HookContextCallback)
 
 ---@class AdamantModpackLib.ModuleHooks
----@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback, maybeHandler?: AdamantModpackLib.HookWrapCallback)
----@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback, maybeCallback?: AdamantModpackLib.HookCallback)
----@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookCallback, maybeContext?: AdamantModpackLib.HookCallback)
+---@field wrap fun(path: string, keyOrHandler: string|AdamantModpackLib.HookWrapCallback,
+---    maybeHandler?: AdamantModpackLib.HookWrapCallback)
+---@field override fun(path: string, keyOrCb: string|AdamantModpackLib.HookCallback,
+---    maybeCallback?: AdamantModpackLib.HookCallback)
+---@field contextWrap fun(path: string, keyOrContext: string|AdamantModpackLib.HookContextCallback,
+---    maybeContext?: AdamantModpackLib.HookContextCallback)
 
 ---@class AdamantModpackLib.AuthorShared
 ---@field data AdamantModpackLib.AuthorSharedData

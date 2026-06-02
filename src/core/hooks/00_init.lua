@@ -44,5 +44,8 @@ local service = {
 return {
     service = service,
     declarations = declarations,
+    context = {
+        createSurface = dispatchers.createContextSurface,
+    },
     system = system,
 }

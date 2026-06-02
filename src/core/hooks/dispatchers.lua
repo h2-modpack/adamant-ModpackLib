@@ -1,5 +1,6 @@
 local deps = ...
 local hookRegistry = deps.hookRegistry
+local logging = deps.logging
 local modutilHooks = import('core/hooks/modutil_registry.lua', nil, {
     modutil = deps.modutil,
     logging = deps.logging,
@@ -226,6 +227,33 @@ local function installModUtilContextWrap(modutilOwner, path, key, context)
     return modutilHooks.installContextWrap(modutilOwner, path, key, context)
 end
 
+local function validateScopedWrap(path, handler)
+    if type(path) ~= "string" or path == "" then
+        logging.violate("hooks.invalid_registration", "module.hooks.contextWrap context.wrap: path must be a non-empty string")
+    end
+    if type(handler) ~= "function" then
+        logging.violate("hooks.invalid_registration", "module.hooks.contextWrap context.wrap: handler must be a function")
+    end
+end
+
+local function createContextSurface()
+    local closed = false
+    return {
+        wrap = function(path, handler)
+            if closed then
+                logging.violate(
+                    "hooks.invalid_context",
+                    "module.hooks.contextWrap context.wrap cannot be called after the context callback returns"
+                )
+            end
+            validateScopedWrap(path, handler)
+            return modutilHooks.installScopedWrap(path, handler)
+        end,
+    }, function()
+        closed = true
+    end
+end
+
 local function ensureWrapDispatcher(dispatcher)
     if modutilDispatcherIsCurrent(dispatcher) then
         return
@@ -374,6 +402,7 @@ return {
     getCurrentOwner = getCurrentOwner,
     installModUtilWrap = installModUtilWrap,
     installModUtilContextWrap = installModUtilContextWrap,
+    createContextSurface = createContextSurface,
     attachOwner = attachOwner,
     detachOwner = detachOwner,
 }

@@ -149,6 +149,10 @@ return {
         severity = "error",
         description = "Hook registration requires valid owners, paths, and callback functions.",
     },
+    ["hooks.invalid_context"] = {
+        severity = "error",
+        description = "Hook context helper calls must stay inside the active context callback.",
+    },
     ["hooks.inactive_override"] = {
         severity = "error",
         description = "Inactive hook replacements should not be invoked after refresh invalidation.",
