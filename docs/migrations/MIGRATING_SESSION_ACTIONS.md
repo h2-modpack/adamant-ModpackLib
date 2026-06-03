@@ -4,16 +4,16 @@ Session action helpers have been removed from the old module-author `session`
 surface. The current draw callback receives staged storage through `state` and
 transient action refs through `actions`.
 
-Action handlers declared on `createModule({ actions = ... })` now receive
-`host, state, value`. They run after the draw callback and before staged state
-flush:
+Action handlers declared through `module.actions.define(...)` receive
+`host, runtime, value`. They run during commit after the draw callback and
+before staged state flush:
 
 ```lua
-actions = {
-    ClearCache = function(host, state, value)
+module.actions.define({
+    ClearCache = function(host, runtime, value)
         host.logIf("Clear cache: %s", tostring(value and value.scope))
     end,
-}
+})
 ```
 
 Use `actions.trigger(...)` for direct transient UI intent:
@@ -60,12 +60,12 @@ end
 For commit observers, use `commit.actions`:
 
 ```lua
-local function onSettingsCommitted(host, store, commit)
+module.onCommit(function(host, runtime, commit)
     local clearCache = commit.actions.get("ClearCache")
     if clearCache:has() then
         local payload = clearCache:read()
     end
-end
+end)
 ```
 
 The old `commit.readAction(...)`, `commit.hasAction(...)`, and

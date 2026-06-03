@@ -124,7 +124,8 @@ ui.draw.control(ui.controls.get("RewardPriority"), "compact", 180)
 ## Commands
 
 Controls can define scoped commands. Commands lower into Lib's normal action
-queue and run after the draw callback, before staged state flush:
+queue and run during commit after the draw callback and before staged state
+flush:
 
 ```lua
 RangeSelector.commands = {

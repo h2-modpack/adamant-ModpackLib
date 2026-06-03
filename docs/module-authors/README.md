@@ -6,9 +6,10 @@ Recommended order:
 
 1. [GETTING_STARTED.md](GETTING_STARTED.md)
 2. [MODULE_AUTHORING.md](MODULE_AUTHORING.md)
-3. [capabilities/README.md](capabilities/README.md)
-4. [UI_PERFORMANCE.md](UI_PERFORMANCE.md)
-5. [../../API.md](../../API.md)
+3. [DRAW_LIFECYCLE.md](DRAW_LIFECYCLE.md)
+4. [capabilities/README.md](capabilities/README.md)
+5. [UI_PERFORMANCE.md](UI_PERFORMANCE.md)
+6. [../../API.md](../../API.md)
 
 Capability guides:
 

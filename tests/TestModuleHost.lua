@@ -661,8 +661,10 @@ function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()
     lu.assertTrue(observedCommit.hadConfigChanges())
 end
 
-function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
+function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
     local delivered = nil
+    local actionRan = false
+    local actionRanAtDelivery = nil
     local sharedId = "test.draw-action-emit"
     local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
         id = "DrawActionEmitListener",
@@ -686,8 +688,9 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
                 id = sharedId,
                 eventName = "changed",
                 callback = function(_, _, payload)
-                listenerStoreRead = listenerStore.read("ListenerFlag")
-                delivered = payload
+                    listenerStoreRead = listenerStore.read("ListenerFlag")
+                    actionRanAtDelivery = actionRan
+                    delivered = payload
                 end,
             },
         },
@@ -698,6 +701,11 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
         id = "DrawActionEmitEmitter",
         name = "Draw Action Emit Emitter",
         storage = {},
+        actions = {
+            mark = function()
+                actionRan = true
+            end,
+        },
     })
     local emitterStore, emitterState = self.h:createModuleState({
         Enabled = true,
@@ -708,6 +716,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
         persistentState = emitterStore,
         stagedState = emitterState,
         drawTab = function(_, _, actions)
+            actions.trigger("mark", true)
             actions.emit(sharedId, "changed", { value = 42 })
             lu.assertNil(delivered)
         end,
@@ -716,8 +725,67 @@ function TestModuleHost:testDrawActionsEmitSharedEventsAfterDraw()
 
     emitter.drawTab()
 
+    lu.assertNil(delivered)
+    lu.assertTrue(emitter.commitIfDirty())
     lu.assertEquals(delivered, { value = 42 })
+    lu.assertTrue(actionRanAtDelivery)
     lu.assertTrue(listenerStoreRead)
+    lu.assertEquals(#self.h.warnings, 0)
+end
+
+function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction()
+    local delivered = nil
+    local sharedId = "test.draw-action-emit-only"
+    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawActionEmitOnlyListener",
+        name = "Draw Action Emit Only Listener",
+        storage = {},
+    })
+    local listenerStore, listenerState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, listenerDefinition)
+    createActivatedHost(self.h, "test-draw-action-emit-only-listener", {
+        definition = listenerDefinition,
+        persistentState = listenerStore,
+        stagedState = listenerState,
+        sharedListeners = {
+            {
+                id = sharedId,
+                eventName = "changed",
+                callback = function(_, _, payload)
+                    delivered = payload
+                end,
+            },
+        },
+        drawTab = function() end,
+    })
+
+    local emitterDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "DrawActionEmitOnlyEmitter",
+        name = "Draw Action Emit Only Emitter",
+        storage = {},
+    })
+    local emitterStore, emitterState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, emitterDefinition)
+    createActivatedHost(self.h, "test-draw-action-emit-only-emitter", {
+        definition = emitterDefinition,
+        persistentState = emitterStore,
+        stagedState = emitterState,
+        drawTab = function(_, _, actions)
+            actions.emit(sharedId, "changed", { value = 7 })
+            lu.assertNil(delivered)
+        end,
+    })
+    local emitter = self.h.moduleHost.getLiveModule("test-draw-action-emit-only-emitter")
+
+    emitter.drawTab()
+
+    lu.assertNil(delivered)
+    lu.assertTrue(emitter.commitIfDirty())
+    lu.assertEquals(delivered, { value = 7 })
     lu.assertEquals(#self.h.warnings, 0)
 end
 

@@ -93,6 +93,9 @@ end
 objects. Reads are phase-neutral, but staged writes, action staging, and other
 mutations remain draw-scoped.
 
+Use [DRAW_LIFECYCLE.md](DRAW_LIFECYCLE.md) for the full draw/commit order and
+the runtime-vs-UI data boundary.
+
 ## Runtime Callbacks
 
 Runtime callbacks receive `host` plus a runtime context when they need module

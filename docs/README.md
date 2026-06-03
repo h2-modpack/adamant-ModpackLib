@@ -6,6 +6,7 @@ Choose the path that matches the work.
 
 - [module-authors/GETTING_STARTED.md](module-authors/GETTING_STARTED.md)
 - [module-authors/MODULE_AUTHORING.md](module-authors/MODULE_AUTHORING.md)
+- [module-authors/DRAW_LIFECYCLE.md](module-authors/DRAW_LIFECYCLE.md)
 - [module-authors/capabilities/README.md](module-authors/capabilities/README.md)
 - [module-authors/UI_PERFORMANCE.md](module-authors/UI_PERFORMANCE.md)
 - [../API.md](../API.md)

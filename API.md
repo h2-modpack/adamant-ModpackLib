@@ -122,7 +122,7 @@ module.shared.emit("run-director.route-state", "routeChanged", {
 })
 ```
 
-Draw callbacks emit through the post-draw action bridge:
+Draw callbacks queue shared emits through the draw action bridge:
 
 ```lua
 ui.actions.emit("run-director.route-state", "routeChanged", {
@@ -135,7 +135,7 @@ Surface:
 - `module.shared.data.reader(name, { id = string, fallback? = value })`
 - `module.shared.listen(id, eventName, callback)`
 - `module.shared.emit(id, eventName, payload)`
-- `ui.actions.emit(id, eventName, payload)` from draw callbacks
+- `ui.actions.emit(id, eventName, payload)` from draw callbacks; delivery happens during commit
 
 Rules:
 - Shared ids should describe domain behavior, not consumer names
@@ -318,7 +318,7 @@ and all declaration namespaces.
 `createModule(...)` intentionally does not return the prepared definition or
 raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
 `imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
-`ui.actions` stages post-draw intent; `ui.controls` exposes draw control refs.
+`ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs.
 
 Runtime callbacks receive `(host, runtime)`. `runtime.data` reads committed
 settings, `runtime.data.runtimeOwned` reads/writes runtime-owned storage,
@@ -932,7 +932,7 @@ Draw callbacks expose `ui.actions` for transient UI intent:
 Action refs are object handles; call their methods with colon syntax.
 `ui.actions.trigger(actionKey, value?)` is shorthand for staging a declared action;
 when `value` is omitted it stages `true`. `ui.actions.emit(id, eventName, payload?)`
-queues a shared event to emit after the draw callback.
+queues a shared event to emit during commit.
 
 Runtime commit callbacks receive the same action snapshot through
 `commit.actions`:
@@ -954,16 +954,15 @@ the draw callback and before staged state flush:
 
 ```lua
 module.actions.define({
-    StartRecording = function(host, uiData, actionRuntime, value)
+    StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        actionRuntime.runtimeOwned.set("RecordingEnabled", value == true)
+        runtime.data.runtimeOwned.set("RecordingEnabled", value == true)
     end,
 })
 ```
 
-Handlers receive the callback host, draw `uiData`, a narrow
-`actionRuntime` bridge (`read` for committed settings and `runtimeOwned` for
-runtime-owned storage), and the staged action `value`.
+Handlers receive the callback host, runtime context, staged action `value`,
+and an optional action context.
 
 ## Draw Widgets
 

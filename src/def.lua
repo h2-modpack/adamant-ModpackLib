@@ -143,7 +143,7 @@ local lib = {}
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field trigger fun(actionKey: string, value?: any) Stage a declared action. Omitted value stages `true`.
----@field emit fun(id: string, eventName: string, payload?: any) Queue a shared event to emit after the draw callback.
+---@field emit fun(id: string, eventName: string, payload?: any) Queue a shared event to emit during commit.
 
 ---Draw-phase action ref. Use colon syntax; mutation methods remain draw-scoped.
 ---@class AdamantModpackLib.DrawActionRef

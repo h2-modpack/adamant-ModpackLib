@@ -52,7 +52,6 @@ function uiPhase.create(opts)
             return callback(opts.host, objects.ui)
         end))
 
-        opts.actionBuffer.flushPendingSharedEvents(opts.host)
         return table.unpack(results, 1, results.n)
     end
 

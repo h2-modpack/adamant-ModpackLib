@@ -17,6 +17,8 @@ state, draw actions, and hash/profile participation.
 | `runtime.data.cache` | declared current-run cache | runtime callbacks |
 
 Draw callbacks receive `(host, ui)`. Runtime callbacks receive `(host, runtime)`.
+Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
+order.
 
 ```lua
 local function drawTab(host, ui)
@@ -157,8 +159,8 @@ ui.draw.widgets.button("Start", {
 })
 ```
 
-Action handlers run after the draw callback and before staged state flush. They
-receive:
+Action handlers run during commit after the draw callback and before staged
+state flush. They receive:
 
 - `host`: narrow logging/metadata/enabled host projection
 - `runtime`: runtime context with committed data, cache, shared, and controls

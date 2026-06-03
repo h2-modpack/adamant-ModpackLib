@@ -247,6 +247,10 @@ function managedModule.create(opts)
         })
     end
 
+    local function flushSharedEventsBeforeFlush()
+        return actionBuffer.flushPendingSharedEvents(host)
+    end
+
     local function requireActivated(methodName)
         local record = moduleRegistry.getRecord(module)
         if not record or record.activated ~= true then
@@ -290,7 +294,7 @@ function managedModule.create(opts)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush)
+            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
         return ok, err
     end
 
@@ -305,7 +309,7 @@ function managedModule.create(opts)
             return true
         end
         return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush)
+            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
     end
 
     function module.reloadFromConfig()
@@ -330,7 +334,7 @@ function managedModule.create(opts)
             return true, nil, false
         end
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush)
+            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
         return ok, err, ok == true
     end
 
@@ -341,37 +345,37 @@ function managedModule.create(opts)
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
         return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush, enabled)
+            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
         return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush, enabled)
+            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
         return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush)
+            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
         return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
-            persistentState, stagedState, actionBuffer, executeActionsBeforeFlush)
+            persistentState, stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
         return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush)
+            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
         return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, receipt)
+            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, receipt)
     end
 
     function module.restorePackTransitionState(receipt)

@@ -103,6 +103,10 @@ local function drawTab(host, ui)
 end
 ```
 
+Draw emits are staged during the draw callback and delivered during commit.
+Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
+order.
+
 Delivery rules:
 
 - disabled listener modules do not receive events

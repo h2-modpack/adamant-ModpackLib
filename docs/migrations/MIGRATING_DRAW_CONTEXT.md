@@ -37,7 +37,7 @@ end
 
 - `ui.draw`: raw ImGui plus widgets, navigation, and control rendering
 - `ui.data`: staged UI storage and read-only runtime-owned data
-- `ui.actions`: post-draw action and shared-event staging
+- `ui.actions`: draw-time action and shared-event intent staging
 - `ui.controls`: UI control refs
 - `ui.shared`: shared-data reads and owner writes
 
@@ -145,7 +145,7 @@ draw.widgets.button("Reset", {
 })
 ```
 
-`ui.actions.emit(...)` queues shared events after the draw callback.
+`ui.actions.emit(...)` queues shared events for commit-time delivery.
 
 ## Rules
 
