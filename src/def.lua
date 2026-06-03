@@ -81,6 +81,7 @@ local lib = {}
 ---@field reset fun(self: AdamantModpackLib.StorageField): boolean?
 
 ---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageFieldReadOnly|AdamantModpackLib.StorageTableReadOnly
+---@alias AdamantModpackLib.RuntimeOwnedDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.DrawStateRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
@@ -102,10 +103,10 @@ local lib = {}
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
 ---@class AdamantModpackLib.RuntimeOwnedState
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-owned storage object.
----@field read fun(alias: string): any Read a declared `mode = "runtime"` storage alias.
----@field set fun(alias: string, value: any): boolean Set a declared `mode = "runtime"` storage alias.
----@field clear fun(alias: string): boolean Reset a declared `mode = "runtime"` storage alias to its default.
+---@field get fun(alias: string): AdamantModpackLib.RuntimeOwnedDataRef? Return writable runtime-owned storage object.
+---@field read fun(alias: string, ...): any Read a declared `mode = "runtime"` storage alias or table cell.
+---@field write fun(alias: string, ...): boolean Write a declared `mode = "runtime"` storage alias or table cell.
+---@field reset fun(alias: string, ...): boolean Reset a declared `mode = "runtime"` storage alias or table cell.
 
 ---Internal trusted staged state. Module authors access this through `ui.data`.
 ---@class AdamantModpackLib.StagedState
@@ -133,11 +134,10 @@ local lib = {}
 ---@field runtimeOwned AdamantModpackLib.UiRuntimeOwnedState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
----@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
 ---@class AdamantModpackLib.UiRuntimeOwnedState
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-owned storage object.
----@field read fun(alias: string): any Read a declared `mode = "runtime"` storage alias.
+---@field read fun(alias: string, ...): any Read a declared `mode = "runtime"` storage alias or table cell.
 
 ---Draw-phase transient action surface. Reads are phase-neutral; staging/emitting remains draw-scoped.
 ---@class AdamantModpackLib.DrawActions
@@ -199,7 +199,6 @@ local lib = {}
 ---@field get fun(name: string): AdamantModpackLib.ControlRef
 ---@field read fun(name: string, ...): any
 ---@field reset fun(name: string): boolean, integer
----@field resetAll fun(): boolean, integer
 
 ---@class AdamantModpackLib.Host
 ---@field getHostId fun(): string
@@ -222,6 +221,7 @@ local lib = {}
 ---@field actions AdamantModpackLib.DrawActions
 ---@field controls AdamantModpackLib.UiControls
 ---@field shared AdamantModpackLib.SharedData?
+---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean Queue a full module reset for the current draw commit.
 
 ---@alias AdamantModpackLib.UiCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): nil
 ---@alias AdamantModpackLib.CommitCallback fun(

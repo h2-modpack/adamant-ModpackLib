@@ -280,17 +280,15 @@ function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
     end)
 end
 
-function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
-    local capturedState = nil
-    local doAuthorReset = false
-    local authorChanged = nil
-    local authorCount = nil
+function TestModuleHost:testHostResetAllResetsStagedAndRuntimeOwnedState()
+    local capturedUi = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
         id = "ResetHost",
         name = "Reset Host",
         storage = {
             { type = "bool", alias = "EnabledFlag", default = false },
             { type = "int", alias = "Count", default = 2, min = 0, max = 9 },
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
         },
     })
     local store, stagedState = self.h:createModuleState({
@@ -301,35 +299,120 @@ function TestModuleHost:testHostAndUiStateResetAllDelegateToStagedState()
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
-        drawTab = function(_, state)
-            capturedState = state
-            if doAuthorReset then
-                authorChanged, authorCount = state.resetAll({
-                    exclude = { Count = true },
-                })
-            end
+        drawTab = function(_, _, _, ui)
+            capturedUi = ui
         end,
     })
     local host = self.h.moduleHost.getLiveModule("test-reset-host")
+    store.runtimeOwned.write("RuntimeFlag", true)
 
     host.drawTab()
 
     local changed, count = host.resetAll()
     lu.assertTrue(changed)
-    lu.assertEquals(count, 2)
+    lu.assertEquals(count, 3)
     lu.assertEquals(stagedState.read("EnabledFlag"), false)
     lu.assertEquals(stagedState.read("Count"), 2)
+    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
 
-    stagedState.write("EnabledFlag", true)
-    stagedState.write("Count", 6)
-    doAuthorReset = true
-    host.drawTab()
-    lu.assertTrue(authorChanged)
-    lu.assertEquals(authorCount, 1)
-    lu.assertEquals(stagedState.read("EnabledFlag"), false)
-    lu.assertEquals(stagedState.read("Count"), 6)
+    local ok, err = host.commitIfDirty()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertFalse(store.runtimeOwned.read("RuntimeFlag"))
+
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        capturedState.resetAll()
+        capturedUi.resetAll()
+    end)
+end
+
+function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
+    local capturedUi = nil
+    local doReset = false
+    local commitHadActions = nil
+    local publicActionRan = false
+    local delivered = nil
+    local sharedId = "test.ui-reset-clears-intent"
+    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "UiResetAllListener",
+        name = "UI Reset All Listener",
+        storage = {},
+    })
+    local listenerStore, listenerState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, listenerDefinition)
+    createActivatedHost(self.h, "test-ui-reset-all-listener", {
+        definition = listenerDefinition,
+        persistentState = listenerStore,
+        stagedState = listenerState,
+        sharedListeners = {
+            {
+                id = sharedId,
+                eventName = "changed",
+                callback = function(_, _, payload)
+                    delivered = payload
+                end,
+            },
+        },
+        drawTab = function() end,
+    })
+
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "UiResetAll",
+        name = "UI Reset All",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", default = false },
+            { type = "int", alias = "Count", default = 2, min = 0, max = 9 },
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
+        },
+        actions = {
+            mark = function()
+                publicActionRan = true
+            end,
+        },
+    })
+    local store, stagedState = self.h:createModuleState({
+        EnabledFlag = true,
+        Count = 7,
+    }, definition)
+    createActivatedHost(self.h, "test-ui-reset-all", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        onCommit = function(_, _, commit)
+            commitHadActions = commit.actions.hasAny()
+        end,
+        drawTab = function(_, _, actions, ui)
+            capturedUi = ui
+            if doReset then
+                actions.trigger("mark", true)
+                actions.emit(sharedId, "changed", { value = 7 })
+                lu.assertTrue(ui.resetAll({
+                    exclude = { Count = true },
+                }))
+            end
+        end,
+    })
+    local host = self.h.moduleHost.getLiveModule("test-ui-reset-all")
+    store.runtimeOwned.write("RuntimeFlag", true)
+
+    doReset = true
+    host.drawTab()
+    lu.assertFalse(stagedState.read("EnabledFlag"))
+    lu.assertEquals(stagedState.read("Count"), 7)
+    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
+
+    local ok, err, committed = host.commitIfDirty()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertTrue(committed)
+    lu.assertFalse(stagedState.read("EnabledFlag"))
+    lu.assertEquals(stagedState.read("Count"), 7)
+    lu.assertFalse(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertFalse(commitHadActions)
+    lu.assertFalse(publicActionRan)
+    lu.assertNil(delivered)
+
+    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
+        capturedUi.resetAll()
     end)
 end
 
@@ -578,7 +661,7 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
                 observedCallbackHost = callbackHost
                 observedRuntime = runtime
                 observedCommittedFlagInAction = runtime.data.read("Flag")
-                runtime.data.runtimeOwned.set("RuntimeFlag", value == true)
+                runtime.data.runtimeOwned.write("RuntimeFlag", value == true)
                 observedRuntimeValue = runtime.data.runtimeOwned.read("RuntimeFlag")
             end,
         },
@@ -624,6 +707,86 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
     lu.assertTrue(observedCommitAction)
     lu.assertTrue(observedConfigChange)
+end
+
+function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
+    local target = { Value = false }
+    local actionSawMutation = nil
+    local failedActionRan = false
+    local definition = self.h.moduleHost.prepareDefinition({}, {
+        id = "ActionAfterMutation",
+        name = "Action After Mutation",
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        actions = {
+            mark = function()
+                actionSawMutation = target.Value
+            end,
+        },
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+        Flag = false,
+    }, definition)
+    createActivatedHost(self.h, "test-action-after-mutation", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        patchMutation = function(plan)
+            plan:set(target, "Value", true)
+        end,
+        drawTab = function(_, state, actions)
+            state.write("Flag", true)
+            actions.trigger("mark", true)
+        end,
+    })
+    local host = self.h.moduleHost.getLiveModule("test-action-after-mutation")
+    target.Value = false
+
+    host.drawTab()
+    local ok, err = host.commitIfDirty()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertTrue(actionSawMutation)
+
+    local failingDefinition = self.h.moduleHost.prepareDefinition({}, {
+        id = "ActionAfterFailedMutation",
+        name = "Action After Failed Mutation",
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        actions = {
+            mark = function()
+                failedActionRan = true
+            end,
+        },
+    })
+    local failingStore, failingState = self.h:createModuleState({
+        Enabled = false,
+        DebugMode = false,
+        Flag = false,
+    }, failingDefinition)
+    createActivatedHost(self.h, "test-action-after-failed-mutation", {
+        definition = failingDefinition,
+        persistentState = failingStore,
+        stagedState = failingState,
+        patchMutation = function()
+            error("mutation failed")
+        end,
+        drawTab = function(_, state, actions)
+            state.write("Enabled", true)
+            state.write("Flag", true)
+            actions.trigger("mark", true)
+        end,
+    })
+    local failingHost = self.h.moduleHost.getLiveModule("test-action-after-failed-mutation")
+
+    failingHost.drawTab()
+    ok, err = failingHost.commitIfDirty()
+    lu.assertFalse(ok)
+    lu.assertStrContains(tostring(err), "mutation failed")
+    lu.assertFalse(failedActionRan)
 end
 
 function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()

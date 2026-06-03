@@ -16,6 +16,7 @@ local managedModule = {
     prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
     prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
+local INTERNAL_RESET_RUNTIME_OWNED_ACTION = "_ResetRuntimeOwned"
 local phaseGate = deps.phaseGate
 local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
     uiDraw = uiDraw,
@@ -244,6 +245,29 @@ function managedModule.create(opts)
         return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
     end
 
+    local function queueRuntimeOwnedReset(resetOpts)
+        actionBuffer.clearPublicIntent()
+        local runtimeChanged, runtimeCount = persistentState.runtimeOwned.countResettable(resetOpts)
+        actionBuffer.stageInternal(INTERNAL_RESET_RUNTIME_OWNED_ACTION, runtimeChanged and (resetOpts or true) or nil)
+        return runtimeChanged, runtimeCount
+    end
+
+    local function stageResetAll(resetOpts)
+        local stagedChanged, stagedCount = stagedState.resetAll(resetOpts)
+        local runtimeChanged, runtimeCount = queueRuntimeOwnedReset(resetOpts)
+        return stagedChanged or runtimeChanged, (stagedCount or 0) + (runtimeCount or 0)
+    end
+
+    local function executeInternalActionsDuringCommit(internalSnapshot)
+        if internalSnapshot and internalSnapshot[INTERNAL_RESET_RUNTIME_OWNED_ACTION] ~= nil then
+            local resetOpts = internalSnapshot[INTERNAL_RESET_RUNTIME_OWNED_ACTION]
+            if type(resetOpts) ~= "table" then
+                resetOpts = nil
+            end
+            persistentState.runtimeOwned.resetAll(resetOpts)
+        end
+    end
+
     local function flushSharedEventsDuringCommit()
         return actionBuffer.flushPendingSharedEvents(host)
     end
@@ -291,7 +315,8 @@ function managedModule.create(opts)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit)
         return ok, err
     end
 
@@ -306,7 +331,7 @@ function managedModule.create(opts)
             return true
         end
         return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit)
     end
 
     function module.reloadFromConfig()
@@ -322,7 +347,7 @@ function managedModule.create(opts)
 
     function module.resetAll(resetOpts)
         requireActivated("resetAll")
-        return stagedState.resetAll(resetOpts)
+        return stageResetAll(resetOpts)
     end
 
     function module.commitIfDirty()
@@ -331,7 +356,8 @@ function managedModule.create(opts)
             return true, nil, false
         end
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit)
         return ok, err, ok == true
     end
 
@@ -342,37 +368,43 @@ function managedModule.create(opts)
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
         return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit,
+            enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
         return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit,
+            enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
         return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
         return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
-            persistentState, stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            persistentState, stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
         return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
         return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, receipt)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
+            executeInternalActionsDuringCommit, receipt)
     end
 
     function module.restorePackTransitionState(receipt)
@@ -468,6 +500,9 @@ function managedModule.create(opts)
         actionBuffer = actionBuffer,
         host = host,
         controls = controls.refs.createUi(stagedState, controlCatalog),
+        resetAll = function(resetOpts)
+            return stageResetAll(resetOpts)
+        end,
     })
 
     function module.drawTab()

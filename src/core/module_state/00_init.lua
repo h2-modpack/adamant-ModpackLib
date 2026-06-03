@@ -84,8 +84,11 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field has fun(actionKey: string): boolean
 ---@field hasAny fun(): boolean
 ---@field captureSnapshot fun(): table
+---@field captureInternalSnapshot fun(): table
 ---@field clearAll fun()
+---@field clearPublicIntent fun()
 ---@field getRef fun(actionKey: string): table
+---@field stageInternal fun(actionKey: string, value: any)
 ---@field emitShared fun(id: string, eventName: string, payload: any)
 ---@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table)
 ---@field flushPendingSharedEvents fun(host: Host)
@@ -98,10 +101,12 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 
 ---@class RuntimeOwnedState
----@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
----@field read fun(alias: string): any
----@field set fun(alias: string, value: any): boolean
----@field clear fun(alias: string): boolean
+---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
+---@field read fun(alias: string, ...): any
+---@field write fun(alias: string, ...): boolean
+---@field reset fun(alias: string, ...): boolean
+---@field countResettable fun(opts: table|nil): boolean, number
+---@field resetAll fun(opts: table|nil): boolean, number
 
 ---@class Store
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil

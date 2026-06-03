@@ -452,7 +452,7 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
         setRuntime = function(host, runtime, value)
             capturedActionHost = host
             capturedActionRuntime = runtime
-            runtime.data.runtimeOwned.set("RuntimeFlag", value)
+            runtime.data.runtimeOwned.write("RuntimeFlag", value)
         end,
     })
     module.onCommit(function(host, runtime, commit)

@@ -191,7 +191,7 @@ Options:
 
 Notes:
 - returns whether the button was clicked
-- when `action` is an `actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
+- when `action` is a `ui.actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
 - command side effects should be declared in `createModule({ actions = ... })` and staged through `action`
 - for fully custom imperative behavior, use raw `draw.imgui.Button(...)` and own the side effect at the call site
 
@@ -208,7 +208,7 @@ Options:
 
 Notes:
 - returns `true` only when the confirm action is taken
-- when `action` is an `actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
+- when `action` is a `ui.actions.get(...)` ref, stages `value` on that action, or `true` when `value` is omitted
 - this is good for destructive or global reset actions
 
 ## Input widget

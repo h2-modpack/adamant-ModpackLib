@@ -132,6 +132,7 @@ end
 local function createBuffer(actionCatalog)
     local catalog = actionCatalog and createActionCatalog(actionCatalog.actions, actionCatalog.order) or nil
     local slots = {}
+    local internalSlots = {}
     local pendingEvents = {}
     local refs = {}
     local buffer = {}
@@ -143,6 +144,15 @@ local function createBuffer(actionCatalog)
             return
         end
         slots[actionKey] = CloneValue(value)
+    end
+
+    function buffer.stageInternal(actionKey, value)
+        validateActionKey("internal actions.stage", actionKey)
+        if value == nil then
+            internalSlots[actionKey] = nil
+            return
+        end
+        internalSlots[actionKey] = CloneValue(value)
     end
 
     function buffer.validateAction(context, actionKey)
@@ -165,14 +175,24 @@ local function createBuffer(actionCatalog)
     end
 
     function buffer.hasAny()
-        return next(slots) ~= nil or #pendingEvents > 0
+        return next(slots) ~= nil or next(internalSlots) ~= nil or #pendingEvents > 0
     end
 
     function buffer.captureSnapshot()
         return CloneValue(slots)
     end
 
+    function buffer.captureInternalSnapshot()
+        return CloneValue(internalSlots)
+    end
+
     function buffer.clearAll()
+        slots = {}
+        internalSlots = {}
+        pendingEvents = {}
+    end
+
+    function buffer.clearPublicIntent()
         slots = {}
         pendingEvents = {}
     end

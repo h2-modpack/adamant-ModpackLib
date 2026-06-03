@@ -29,6 +29,7 @@ module operations such as logging and enabled-state checks.
 | `ui.actions` | stage one-shot runtime actions and shared emits |
 | `ui.shared` | read shared data |
 | `ui.controls` | get draw refs for declared controls |
+| `ui.resetAll` | queue a full module reset for commit |
 
 Runtime callbacks receive `(host, runtime)` instead. They read committed data
 through `runtime.data`, write runtime-owned storage through
@@ -44,14 +45,16 @@ normal cycle is:
 3. Draw code stages storage edits through `ui.data`.
 4. Draw code stages runtime actions through `ui.actions.trigger(...)`.
 5. Draw code may queue shared events through `ui.actions.emit(...)`.
-6. The draw callback returns. Shared events are not delivered here.
-7. Framework asks the live module to commit if it has staged work.
-8. Lib flushes dirty staged storage to config.
-9. Lib runs staged action handlers against committed runtime data.
-10. Lib applies/reverts mutation state if committed settings changed.
-11. Lib delivers queued shared events.
-12. Lib clears the live staged action/shared-event buffer.
-13. Lib runs `module.onCommit(...)` observers with the captured action snapshot.
+6. Draw code may reset staged module state and queue runtime-owned reset through `ui.resetAll(...)`.
+7. The draw callback returns. Shared events are not delivered here.
+8. Framework asks the live module to commit if it has staged work.
+9. Lib flushes dirty staged storage to config.
+10. Lib applies/reverts mutation state if committed UI-owned settings changed.
+11. Lib runs staged action handlers against committed runtime data.
+12. Lib applies queued runtime-owned reset requests.
+13. Lib delivers queued shared events.
+14. Lib clears the live staged action/shared-event buffer.
+15. Lib runs `module.onCommit(...)` observers with the captured action snapshot.
 
 The important boundary: runtime/gameplay code only sees committed settings.
 Values written through `ui.data` become runtime-visible after commit.
@@ -94,7 +97,7 @@ module.data.define({
 Runtime writes:
 
 ```lua
-runtime.data.runtimeOwned.set("RecordingReady", true)
+runtime.data.runtimeOwned.write("RecordingReady", true)
 ```
 
 Draw reads:
@@ -104,7 +107,25 @@ local ready = ui.data.runtimeOwned.read("RecordingReady")
 ```
 
 This is the explicit runtime-owned lane. Do not model this as a normal staged
-UI setting when gameplay code owns the value.
+UI setting when gameplay code owns the value. Runtime-owned values are not
+mutation inputs; if a value should affect `module.mutation.patch(...)`, model it
+as normal UI-owned storage instead.
+
+## Reset
+
+Use `ui.resetAll(opts?)` when a draw interaction should restore the module to
+defaults:
+
+```lua
+if ui.draw.widgets.confirmButton("ResetModule", "Reset To Defaults") then
+    ui.resetAll()
+end
+```
+
+This resets UI-owned, transient, and control-backed storage during draw, cancels
+pending draw-staged actions/shared emits from the same frame, then queues
+runtime-owned storage to reset during the same commit. The runtime-owned reset
+is not exposed as a public `commit.actions` entry.
 
 ## Actions
 
@@ -113,7 +134,7 @@ Use actions when a draw interaction should run runtime side-effect logic at comm
 ```lua
 module.actions.define({
     StartRecording = function(host, runtime, value)
-        runtime.data.runtimeOwned.set("RecordingReady", value == true)
+        runtime.data.runtimeOwned.write("RecordingReady", value == true)
     end,
 })
 
@@ -125,9 +146,13 @@ local function drawTab(host, ui)
 end
 ```
 
-Action handlers run during commit after staged storage flushes. They receive
-`(host, runtime, value)`, and `runtime.data` reads the values just committed by
-the draw that staged the action.
+Action handlers run during commit after staged storage flushes and mutation sync
+succeeds. They receive `(host, runtime, value)`, and `runtime.data` reads the
+values just committed by the draw that staged the action.
+
+Actions may update runtime-owned state, but they are not a second settings lane.
+Mutation sync is driven by committed UI-owned storage changes, not by
+runtime-owned action writes.
 
 Actions are one-shot intent, not storage. If a value needs to survive across
 frames, declare storage for that value.
@@ -142,9 +167,10 @@ ui.actions.emit("run-director.route-state", "routeChanged", {
 })
 ```
 
-The event is staged during draw and delivered during commit after action
-handlers and mutation sync. Listeners run outside the draw callback and should
-use their runtime context or module-local dependencies, not captured draw refs.
+The event is staged during draw and delivered during commit after mutation sync,
+action handlers, and queued runtime-owned resets. Listeners run outside the draw
+callback and should use their runtime context or module-local dependencies, not
+captured draw refs.
 
 This keeps shared events from observing partially rendered UI state while still
 letting draw interactions emit module-to-module signals.
@@ -200,6 +226,7 @@ Use `runtime.data.runtimeOwned` plus `ui.data.runtimeOwned` for:
   callbacks.
 - Do not expect runtime hooks to see staged UI edits before commit.
 - Do not use actions as settings.
+- Do not use runtime-owned action writes as mutation inputs.
 - Do not emit shared events directly from draw with `host.shared.emit(...)`; use
   `ui.actions.emit(...)` so delivery happens during commit.
 - Do not use normal staged storage for runtime-owned values.

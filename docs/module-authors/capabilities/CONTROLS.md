@@ -125,11 +125,12 @@ Draw code can reset control-backed storage without exposing generated aliases:
 
 ```lua
 ui.controls.reset("RewardPriority")
-ui.controls.resetAll()
 ```
 
-These helpers reset the Lib-compiled storage roots for the control instance.
-They do not call template-defined reset methods.
+This helper resets the Lib-compiled storage roots for one control instance. It
+does not call template-defined reset methods. Use `ui.resetAll()` when the
+interaction should reset the entire module, including non-control and
+runtime-owned storage.
 
 ## Rules
 

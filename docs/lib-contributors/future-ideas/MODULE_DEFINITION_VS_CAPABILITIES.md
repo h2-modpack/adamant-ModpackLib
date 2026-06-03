@@ -65,8 +65,8 @@ local host, store = lib.createModule({
     },
 
     actions = {
-        ResetAll = function(host, state)
-            state.resetAll()
+        ResetAll = function(host, ui)
+            ui.resetAll()
         end,
     },
 
@@ -79,7 +79,7 @@ complete static module definition.
 
 ## Capability Plane
 
-These remain host declarations between creation and activation:
+These remain module declarations between creation and activation:
 
 - hooks
 - shared events
@@ -91,11 +91,11 @@ Those capabilities install runtime behavior or external side effects and should
 continue to be managed by activation/rollback receipts:
 
 ```lua
-host.hooks.wrap(...)
-host.shared.listen(...)
-host.overlays.add(...)
-host.mutation.patch(...)
-host.activate()
+module.hooks.wrap(...)
+module.shared.listen(...)
+module.overlays.createLine(...)
+module.mutation.patch(...)
+module.activate()
 ```
 
 ## Structural Fingerprint

@@ -80,7 +80,7 @@ end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, stagedState, enabled, pluginGuid)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.hostLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, nil, nil, enabled)
+    return self.hostLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, nil, nil, nil, enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, patchCallback)

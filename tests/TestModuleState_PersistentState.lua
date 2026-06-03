@@ -52,7 +52,7 @@ function TestModuleState_PersistentState:testPersistentStateReadsCommittedSnapsh
     lu.assertEquals(persistentState.read("MaxGods"), 8)
 end
 
-function TestModuleState_PersistentState:testRuntimeStorageSetAndClearUpdatesCommittedSnapshot()
+function TestModuleState_PersistentState:testRuntimeStorageWriteAndResetUpdatesCommittedSnapshot()
     local config = { RuntimeFlag = false, RuntimeCount = 1, RuntimePacked = 0 }
     local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
 
@@ -60,9 +60,9 @@ function TestModuleState_PersistentState:testRuntimeStorageSetAndClearUpdatesCom
     lu.assertEquals(persistentState.runtimeOwned.read("RuntimeCount"), 1)
     lu.assertFalse(persistentState.runtimeOwned.read("RuntimeBit"))
 
-    lu.assertTrue(persistentState.runtimeOwned.set("RuntimeFlag", true))
-    lu.assertTrue(persistentState.runtimeOwned.set("RuntimeCount", 10))
-    lu.assertTrue(persistentState.runtimeOwned.set("RuntimePacked", 1))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeCount", 10))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimePacked", 1))
     lu.assertTrue(persistentState.runtimeOwned.read("RuntimeFlag"))
     lu.assertEquals(persistentState.runtimeOwned.read("RuntimeCount"), 5)
     lu.assertTrue(persistentState.runtimeOwned.read("RuntimeBit"))
@@ -73,20 +73,25 @@ function TestModuleState_PersistentState:testRuntimeStorageSetAndClearUpdatesCom
     lu.assertEquals(config.RuntimeCount, 5)
     lu.assertEquals(config.RuntimePacked, 1)
 
-    lu.assertTrue(persistentState.runtimeOwned.clear("RuntimeFlag"))
+    lu.assertTrue(persistentState.runtimeOwned.reset("RuntimeFlag"))
     lu.assertFalse(persistentState.runtimeOwned.read("RuntimeFlag"))
     lu.assertFalse(config.RuntimeFlag)
 
-    lu.assertErrorMsgContains("packed child", function()
-        persistentState.runtimeOwned.set("RuntimeBit", true)
-    end)
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeBit", false))
+    lu.assertEquals(config.RuntimePacked, 0)
+    lu.assertFalse(persistentState.runtimeOwned.read("RuntimeBit"))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeBit", true))
+    lu.assertEquals(config.RuntimePacked, 1)
+    lu.assertTrue(persistentState.runtimeOwned.reset("RuntimeBit"))
+    lu.assertEquals(config.RuntimePacked, 0)
+    lu.assertFalse(persistentState.runtimeOwned.read("RuntimeBit"))
 
     lu.assertErrorMsgContains("not runtime-owned", function()
-        persistentState.runtimeOwned.set("SettingFlag", true)
+        persistentState.runtimeOwned.write("SettingFlag", true)
     end)
 end
 
-function TestModuleState_PersistentState:testRuntimeTableReadReturnsCopy()
+function TestModuleState_PersistentState:testRuntimeTableHandleReadsWritesAndSnapshots()
     local config = {
         RuntimeRows = {
             { Enabled = false },
@@ -94,14 +99,49 @@ function TestModuleState_PersistentState:testRuntimeTableReadReturnsCopy()
     }
     local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
 
-    local rows = persistentState.runtimeOwned.read("RuntimeRows")
-    rows[1].Enabled = true
-    rows[2] = { Enabled = true }
+    lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
+        persistentState.runtimeOwned.read("RuntimeRows")
+    end)
 
-    local nextRows = persistentState.runtimeOwned.read("RuntimeRows")
-    lu.assertFalse(nextRows[1].Enabled)
-    lu.assertNil(nextRows[2])
+    local rows = persistentState.runtimeOwned.get("RuntimeRows")
+    local snapshot = rows:snapshots()
+    snapshot[1].Enabled = true
+    snapshot[2] = { Enabled = true }
+
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertNil(rows:snapshot(2))
     lu.assertFalse(config.RuntimeRows[1].Enabled)
+    lu.assertNil(config.RuntimeRows[2])
+
+    lu.assertTrue(rows:write(1, "Enabled", true))
+    lu.assertTrue(persistentState.runtimeOwned.read("RuntimeRows", 1, "Enabled"))
+    lu.assertTrue(config.RuntimeRows[1].Enabled)
+
+    lu.assertErrorMsgContains("table storage", function()
+        persistentState.runtimeOwned.write("RuntimeRows", {
+            { Enabled = false },
+        })
+    end)
+    lu.assertTrue(config.RuntimeRows[1].Enabled)
+
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeRows", 1, "Enabled", false))
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertFalse(config.RuntimeRows[1].Enabled)
+
+    lu.assertTrue(rows:write(1, "Enabled", true))
+    lu.assertTrue(config.RuntimeRows[1].Enabled)
+
+    lu.assertTrue(rows:reset(1, "Enabled"))
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertFalse(config.RuntimeRows[1].Enabled)
+
+    lu.assertTrue(rows:append({ Enabled = true }))
+    lu.assertEquals(rows:count(), 2)
+    lu.assertTrue(config.RuntimeRows[2].Enabled)
+
+    lu.assertTrue(persistentState.runtimeOwned.reset("RuntimeRows"))
+    lu.assertEquals(rows:count(), 1)
+    lu.assertFalse(rows:read(1, "Enabled"))
     lu.assertNil(config.RuntimeRows[2])
 end
 
@@ -112,13 +152,13 @@ function TestModuleState_PersistentState:testNonPersistentRuntimeStorageKeepsCom
     }))
 
     lu.assertFalse(persistentState.runtimeOwned.read("RuntimeFlag"))
-    lu.assertTrue(persistentState.runtimeOwned.set("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeFlag", true))
     lu.assertTrue(persistentState.runtimeOwned.read("RuntimeFlag"))
     lu.assertNil(config.RuntimeFlag)
     persistentState._reloadFromConfig()
     lu.assertTrue(persistentState.runtimeOwned.read("RuntimeFlag"))
 
-    lu.assertTrue(persistentState.runtimeOwned.clear("RuntimeFlag"))
+    lu.assertTrue(persistentState.runtimeOwned.reset("RuntimeFlag"))
     lu.assertFalse(persistentState.runtimeOwned.read("RuntimeFlag"))
     lu.assertNil(config.RuntimeFlag)
 end

@@ -30,6 +30,7 @@ end
 ---@field actionBuffer ActionBuffer
 ---@field host Host
 ---@field controls table|nil
+---@field resetAll fun(opts: table|nil)|nil
 
 ---@param opts UiPhaseCreateOpts
 ---@return UiPhaseObjects
@@ -45,6 +46,10 @@ function uiPhase.create(opts)
         actions = objects.actions,
         shared = opts.shared,
         controls = opts.controls,
+        resetAll = function(resetOpts)
+            phaseGate.requireAnyDraw()
+            return opts.resetAll(resetOpts)
+        end,
     }
 
     function objects.run(callback)

@@ -124,7 +124,7 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
 
     lu.assertFalse(stagedState.view.RuntimeFlag)
-    lu.assertTrue(persistentState.runtimeOwned.set("RuntimeFlag", true))
+    lu.assertTrue(persistentState.runtimeOwned.write("RuntimeFlag", true))
     lu.assertTrue(stagedState.view.RuntimeFlag)
     lu.assertTrue(stagedState.runtimeOwned.read("RuntimeFlag"))
     lu.assertTrue(stagedState.runtimeOwned.get("RuntimeFlag"):read())
@@ -152,7 +152,7 @@ end
 function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsSemantically()
     local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
     local state = self.harness.moduleState.uiState.create(stagedState)
-    persistentState.runtimeOwned.set("RuntimeFlag", true)
+    persistentState.runtimeOwned.write("RuntimeFlag", true)
 
     inDraw(self.harness, function()
         lu.assertTrue(state.runtimeOwned.read("RuntimeFlag"))
@@ -224,7 +224,7 @@ function TestModuleState_StagedState:testResetRestoresPackedChildDefault()
     lu.assertEquals(stagedState.view.Packed, 1)
 end
 
-function TestModuleState_StagedState:testResetAllRestoresPersistedRootsOnly()
+function TestModuleState_StagedState:testResetAllRestoresAllNonRuntimeRoots()
     local definition = prepareDefinition(self.harness, {
         storage = {
             { type = "int", alias = "MaxGods", default = 3, min = 1, max = 9 },
@@ -238,9 +238,9 @@ function TestModuleState_StagedState:testResetAllRestoresPersistedRootsOnly()
     local changed, count = stagedState.resetAll()
 
     lu.assertTrue(changed)
-    lu.assertEquals(count, 1)
+    lu.assertEquals(count, 2)
     lu.assertEquals(stagedState.view.MaxGods, 3)
-    lu.assertEquals(stagedState.view.FilterText, "Hermes")
+    lu.assertEquals(stagedState.view.FilterText, "")
     lu.assertTrue(stagedState.isDirty())
 end
 

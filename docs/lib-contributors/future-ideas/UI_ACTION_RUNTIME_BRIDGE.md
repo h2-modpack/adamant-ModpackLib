@@ -13,7 +13,8 @@ drawTab(host, ui)
 ```
 
 `ui.actions` stages transient UI intent during draw. Pending action handlers run
-during commit after staged state flush, so they read committed runtime data.
+during commit after staged state flush and mutation sync, so they read committed
+runtime data.
 
 Action handlers intentionally receive the module `host` and runtime context
 because some UI actions intentionally cross from UI into runtime behavior.
@@ -78,7 +79,7 @@ end
 local actions = {
     StartRecording = function(_, runtime, value)
         local count = value and value.count or runtime.data.read("RecordingCount")
-        runtime.data.runtimeOwned.set("RecordingRemaining", count)
+        runtime.data.runtimeOwned.write("RecordingRemaining", count)
     end,
 }
 ```

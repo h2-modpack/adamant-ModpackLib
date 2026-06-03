@@ -128,6 +128,8 @@ Storage roots live in `module.data.define(...)`.
 - `mode = "runtime"` creates runtime-owned storage read/written through
   `runtime.data.runtimeOwned`, `ui.data.runtimeOwned`, or action runtime
   bridges.
+- Runtime-owned storage is runtime state, not mutation configuration. Use
+  normal UI-owned storage for values that should affect `module.mutation.patch`.
 - `Enabled` and `DebugMode` are Lib-owned built-ins; do not declare them.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.

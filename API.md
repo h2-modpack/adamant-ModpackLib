@@ -318,7 +318,8 @@ and all declaration namespaces.
 `createModule(...)` intentionally does not return the prepared definition or
 raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
 `imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
-`ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs.
+`ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs;
+`ui.resetAll(...)` resets staged module state and queues runtime-owned reset for commit.
 
 Runtime callbacks receive `(host, runtime)`. `runtime.data` reads committed
 settings, `runtime.data.runtimeOwned` reads/writes runtime-owned storage,
@@ -349,8 +350,8 @@ The runtime data surface provides:
 - `runtime.data.read(alias, ...)`
 - `runtime.data.runtimeOwned.get(alias)`
 - `runtime.data.runtimeOwned.read(alias, ...)`
-- `runtime.data.runtimeOwned.set(alias, value)`
-- `runtime.data.runtimeOwned.clear(alias)`
+- `runtime.data.runtimeOwned.write(alias, ...)`
+- `runtime.data.runtimeOwned.reset(alias, ...)`
 - `runtime.data.cache.currentRun.get(name)`
 - `runtime.data.cache.currentRun.clear(name)`
 
@@ -373,6 +374,10 @@ module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 `runtime.data.read(alias, ...)` is syntax sugar for `runtime.data.get(alias):read(...)`.
 Scalar fields accept no extra path arguments; table handles accept the same row
 path arguments as `tableHandle:read(...)`.
+`runtime.data.runtimeOwned.read(alias, ...)` follows the same rule. For
+runtime-owned table roots, read cells through `read(alias, rowIndex, rowAlias)`
+or use `runtime.data.runtimeOwned.get(alias):snapshot(...)` /
+`:snapshots()` for explicit copied rows.
 
 Rules:
 - widgets and draw code should usually read staged values through `ui.data.get(...)`
@@ -441,6 +446,8 @@ Table handles:
 - `runtime.data.runtimeOwned.get(alias)` returns a runtime-owned field or table handle
 - `ui.data.get(alias)` returns a writable staged field or table handle
 - `ui.data.runtimeOwned.get(alias)` returns a read-only runtime-owned field or table handle
+- `runtime.data.runtimeOwned.write(alias, ...)` writes scalar roots, packed child aliases, or table cells
+- `runtime.data.runtimeOwned.reset(alias, ...)` resets scalar roots, packed child aliases, table roots, or table cells
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - full internal stores expose `store.table(alias)` for framework plumbing
 - full internal staged-state objects expose `stagedState.table(alias)` for framework plumbing
@@ -498,9 +505,10 @@ restricted author-facing `ui.data` view with:
 - `get(alias)`
 - `read(alias, ...)`
 - `write(alias, ...)`
-- `resetAll(opts?)`
 - `runtimeOwned.get(alias)`
 - `runtimeOwned.read(alias, ...)`
+
+Use `ui.resetAll(opts?)` for module-wide resets from draw code.
 
 Draw action staging is not exposed on `stagedState`; use
 `ui.actions.trigger(actionKey, value?)` or `ui.actions.get(actionKey)` instead.
@@ -531,9 +539,26 @@ Behavior:
 
 ## Whole-State Reset
 
-### `host.resetAll(opts?)`
+### `ui.resetAll(opts?)`
 
-Resets changed persistent storage roots back to their defaults in the host's staged state.
+Draw callbacks use `ui.resetAll(opts?)` when one interaction should restore the
+whole module to defaults.
+
+`ui.resetAll(...)` resets staged UI-owned, transient, and control-backed roots
+during draw, then queues runtime-owned roots to reset during commit. The
+runtime-owned reset is hidden from `commit.actions`.
+
+Options:
+- `exclude = { Alias = true }` skips specific root aliases.
+
+### Live module `resetAll(opts?)`
+
+Framework/runtime orchestration can reset a live managed module directly through
+the live-module object returned by Lib's Framework runtime lookup. This is not
+part of the module-author facade returned by `lib.createModule(...)`.
+
+It resets changed UI-owned and runtime-owned storage roots back to their defaults
+for the live module.
 
 Returns:
 - `changed`
@@ -541,8 +566,6 @@ Returns:
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
-
-Draw callbacks receive the same reset behavior through `ui.data.resetAll(opts?)`.
 
 ## `module.hooks`
 
@@ -950,19 +973,23 @@ The old `session.stageAction(...)` form has been removed. Use
 when a widget needs an action ref.
 
 Declare action handlers with `module.actions.define(...)`. Handlers run during
-commit after staged state flush, so `runtime.data` reads the values just
-committed by the draw that staged the action:
+commit after staged state flush and mutation sync, so `runtime.data` reads the
+values just committed by the draw that staged the action:
 
 ```lua
 module.actions.define({
     StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        runtime.data.runtimeOwned.set("RecordingEnabled", value == true)
+        runtime.data.runtimeOwned.write("RecordingEnabled", value == true)
     end,
 })
 ```
 
 Handlers receive the callback host, runtime context, and staged action `value`.
+Actions may update runtime-owned state, but runtime-owned state is not a
+mutation input. Mutation sync is driven by committed UI-owned settings changes;
+use normal UI-owned storage for values that should affect
+`module.mutation.patch(...)`.
 
 ## Draw Widgets
 

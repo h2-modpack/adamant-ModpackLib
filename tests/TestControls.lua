@@ -382,7 +382,7 @@ end
 function TestControls:testUiControlsResetNamedAndAllBoundStorage()
     local config = {}
     local resetNamedResult = nil
-    local resetAllResult = nil
+    local resetModuleResult = nil
     local module = createModule(self.h, {
         pluginGuid = "test-controls-reset",
         config = config,
@@ -417,7 +417,9 @@ function TestControls:testUiControlsResetNamedAndAllBoundStorage()
             })
             lu.assertEquals(rewards:count(), 2)
 
-            resetAllResult = { ui.controls.resetAll() }
+            resetModuleResult = { ui.resetAll() }
+            lu.assertEquals(rewards:count(), 1)
+            lu.assertEquals(rewards:selectionField(1):read(), 0)
         end,
     })
 
@@ -428,7 +430,7 @@ function TestControls:testUiControlsResetNamedAndAllBoundStorage()
     liveModule.flush()
 
     lu.assertEquals(resetNamedResult, { true, 2 })
-    lu.assertEquals(resetAllResult, { true, 1 })
+    lu.assertEquals(resetModuleResult, { true, 1 })
     lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
         mode = "Any",
         min = 2,

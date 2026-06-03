@@ -13,6 +13,7 @@ state, draw actions, and hash/profile participation.
 | `ui.data.runtimeOwned` | read `mode = "runtime"` storage | draw callbacks |
 | `ui.actions` | one-shot draw intent | draw callbacks |
 | `ui.controls` | declared composite control refs | draw callbacks |
+| `ui.resetAll` | queue a full module reset | draw callbacks |
 | `runtime.controls` | declared composite control reads | runtime callbacks |
 | `runtime.data.cache` | declared current-run cache | runtime callbacks |
 
@@ -76,7 +77,7 @@ module.data.define({
 Runtime code writes:
 
 ```lua
-runtime.data.runtimeOwned.set("RecordingReady", true)
+runtime.data.runtimeOwned.write("RecordingReady", true)
 ```
 
 Draw code reads through the runtime-owned lane:
@@ -119,7 +120,30 @@ Runtime read use:
 local limit = runtime.data.read("Tiers", 1, "Limit")
 ```
 
-Table handles use colon syntax.
+Table handles use colon syntax. Runtime-owned table roots use the same handle
+model:
+
+```lua
+runtime.data.runtimeOwned.write("Rows", 1, "Enabled", true)
+local enabled = ui.data.runtimeOwned.read("Rows", 1, "Enabled")
+local rows = ui.data.runtimeOwned.get("Rows"):snapshots()
+```
+
+Use `snapshot(rowIndex)` or `snapshots()` when you need copied table data.
+
+## Reset
+
+Use `ui.resetAll(opts?)` from draw code to reset the whole module:
+
+```lua
+if ui.draw.widgets.confirmButton("ResetModule", "Reset To Defaults") then
+    ui.resetAll()
+end
+```
+
+`ui.resetAll(...)` resets UI-owned, transient, and control-backed storage during
+draw, then queues `mode = "runtime"` storage to reset during the current commit.
+Pass `exclude = { Alias = true }` to skip specific root aliases.
 
 ## Packed Values
 
@@ -139,7 +163,7 @@ Actions are declared before activation:
 module.actions.define({
     StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        runtime.data.runtimeOwned.set("RecordingReady", value == true)
+        runtime.data.runtimeOwned.write("RecordingReady", value == true)
     end,
 })
 ```
@@ -159,7 +183,8 @@ ui.draw.widgets.button("Start", {
 })
 ```
 
-Action handlers run during commit after staged state flush. They receive:
+Action handlers run during commit after staged state flush and mutation sync.
+They receive:
 
 - `host`: narrow logging/metadata/enabled host projection
 - `runtime`: runtime context with committed data, cache, shared, and controls
@@ -167,6 +192,11 @@ Action handlers run during commit after staged state flush. They receive:
 
 `runtime.data` reads the values just committed by the draw that staged the
 action.
+
+Action handlers may update `runtime.data.runtimeOwned`, but runtime-owned state
+is not a mutation input. Mutation sync is triggered by committed UI-owned
+settings changes; if mutation behavior should change, declare normal UI-owned
+storage for that setting.
 
 ## Commit Observer
 

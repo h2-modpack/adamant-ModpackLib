@@ -62,6 +62,24 @@ local function executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
     end
 end
 
+local function executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
+    if internalActionExecutor == nil or internalActionSnapshot == nil or next(internalActionSnapshot) == nil then
+        return
+    end
+
+    local ok, result = pcall(internalActionExecutor, internalActionSnapshot)
+    if not ok then
+        logging.violate("lifecycle.on_commit_failed", "%s: internal action handler failed: %s",
+            tostring(def.name or def.id or "module"),
+            tostring(result))
+        return
+    end
+    if result == false then
+        logging.violate("lifecycle.on_commit_false", "%s: internal action handler returned false",
+            tostring(def.name or def.id or "module"))
+    end
+end
+
 local function flushSharedEventsDuringCommit(def, sharedEventFlusher)
     if sharedEventFlusher == nil then
         return
@@ -133,17 +151,16 @@ local function resyncStagedState(def, stagedState, actionBuffer)
 end
 
 local function commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                                 actionExecutor, sharedEventFlusher)
+                                 actionExecutor, sharedEventFlusher, internalActionExecutor)
     local hasPendingActions = actionBuffer and actionBuffer.hasAny()
     if not stagedState.isDirty() and not hasPendingActions then
         return true, nil
     end
 
     local actionSnapshot = actionBuffer and actionBuffer.captureSnapshot() or {}
+    local internalActionSnapshot = actionBuffer and actionBuffer.captureInternalSnapshot() or {}
     local previousEffective = isEnabled(persistentState)
     local hadConfigChanges, snapshot = flushDirtyConfig(stagedState)
-
-    executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
 
     local nextEffective = isEnabled(persistentState)
     local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
@@ -151,6 +168,8 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         and hadConfigChanges
 
     if not shouldSyncMutation then
+        executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
+        executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
         flushSharedEventsDuringCommit(def, sharedEventFlusher)
         if actionBuffer then
             actionBuffer.clearAll()
@@ -168,6 +187,8 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         ok, err = true, nil
     end
     if ok then
+        executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
+        executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
         flushSharedEventsDuringCommit(def, sharedEventFlusher)
         if actionBuffer then
             actionBuffer.clearAll()
@@ -182,7 +203,7 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
 end
 
 local function setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                          actionExecutor, sharedEventFlusher, enabled)
+                          actionExecutor, sharedEventFlusher, internalActionExecutor, enabled)
     local previousEffective = isEnabled(persistentState)
     stagedState.write("Enabled", enabled == true)
     if not stagedState.isDirty() and not (actionBuffer and actionBuffer.hasAny()) then
@@ -192,14 +213,14 @@ local function setEnabled(host, def, mutationBundle, commitNotifier, persistentS
         return true, nil
     end
     return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher)
+        actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
 local function setDebugMode(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                            actionExecutor, sharedEventFlusher, enabled)
+                            actionExecutor, sharedEventFlusher, internalActionExecutor, enabled)
     stagedState.write("DebugMode", enabled == true)
     return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher)
+        actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
 local function makePackTransitionReceipt(persistentState)
@@ -215,21 +236,21 @@ local function stagePackTransitionReceipt(stagedState, receipt)
 end
 
 local function suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                                     actionExecutor, sharedEventFlusher)
+                                     actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
     local marker = receipt.previousEnabled and PACK_RESTORE_ENABLED or PACK_RESTORE_DISABLED
     stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, marker)
     local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher, false)
+        actionExecutor, sharedEventFlusher, internalActionExecutor, false)
     return ok, err, receipt
 end
 
 local function ensureSuspendedForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState,
-                                             actionBuffer, actionExecutor, sharedEventFlusher)
+                                             actionBuffer, actionExecutor, sharedEventFlusher, internalActionExecutor)
     local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
     if marker == PACK_RESTORE_NONE or marker == nil then
         return suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-            actionExecutor, sharedEventFlusher)
+            actionExecutor, sharedEventFlusher, internalActionExecutor)
     end
     if persistentState.read("Enabled") ~= true then
         return true, nil, nil
@@ -237,11 +258,11 @@ local function ensureSuspendedForPackDisable(host, def, mutationBundle, commitNo
 
     stagedState.write("Enabled", false)
     return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher)
+        actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
 local function restoreForPackEnable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                                    actionExecutor, sharedEventFlusher)
+                                    actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
     local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
     local target = receipt.previousEnabled
@@ -253,15 +274,15 @@ local function restoreForPackEnable(host, def, mutationBundle, commitNotifier, p
 
     stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, PACK_RESTORE_NONE)
     local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher, target)
+        actionExecutor, sharedEventFlusher, internalActionExecutor, target)
     return ok, err, receipt
 end
 
 local function rollbackPackTransition(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-                                      actionExecutor, sharedEventFlusher, receipt)
+                                      actionExecutor, sharedEventFlusher, internalActionExecutor, receipt)
     stagePackTransitionReceipt(stagedState, receipt)
     return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
-        actionExecutor, sharedEventFlusher)
+        actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
 local function restorePackTransitionState(stagedState, actionBuffer, receipt)

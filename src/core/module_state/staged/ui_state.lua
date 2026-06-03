@@ -11,7 +11,6 @@ local uiState = {}
 ---@field shared table|nil
 ---@field read fun(alias: string, ...): any
 ---@field write fun(alias: string, ...): boolean|nil
----@field resetAll fun(opts: table|nil): boolean, number
 
 --- Narrows full staged state to the module UI surface.
 --- Host internals keep the private commit/reload/snapshot methods.
@@ -69,10 +68,6 @@ function uiState.create(stagedState, shared)
                 return nil
             end
             return ref:write(...)
-        end,
-        resetAll = function(opts)
-            phaseGate.requireAnyDraw()
-            return stagedState.resetAll(opts)
         end,
     }
 end

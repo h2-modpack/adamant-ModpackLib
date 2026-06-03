@@ -327,15 +327,6 @@ local function createFacade(opts)
             return resetBoundRoots(root, entry)
         end
 
-        function facade.resetAll()
-            phaseGate.requireAnyDraw()
-            local count = 0
-            for _, name in ipairs(catalog.order or {}) do
-                local _, controlCount = facade.reset(name)
-                count = count + controlCount
-            end
-            return count > 0, count
-        end
     end
 
     return facade

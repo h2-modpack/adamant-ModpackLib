@@ -120,9 +120,9 @@ unrelated globals inside `transform`; the plan tracks only the target key.
 Do not move arbitrary side effects into `transform` to replace manual mutation.
 Use the lifecycle surface that owns the side effect:
 
-- hooks: `host.hooks.*` declarations before activation
-- overlays: `host.overlays.*` declarations before activation
-- shared events: `host.shared.listen(...)` before activation; emit runtime events after activation
+- hooks: `module.hooks.*` declarations before activation
+- overlays: `module.overlays.*` declarations before activation
+- shared events: `module.shared.listen(...)` before activation; emit runtime events after activation
 - persistent runtime values: `mode = "runtime"` storage plus
   `runtime.data.runtimeOwned`
 - unrepresented run-data edits: add a patch-plan operation

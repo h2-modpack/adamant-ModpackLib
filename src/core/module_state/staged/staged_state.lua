@@ -333,7 +333,7 @@ local function createStagedState(storageConfig, storage, persistentState)
 
         for _, root in ipairs(stagedRootNodes) do
             local alias = root.alias
-            if root._persist and root._mode ~= "runtime" and alias ~= nil and not exclude[alias] then
+            if root._mode ~= "runtime" and alias ~= nil and not exclude[alias] then
                 local current = readStagingValue(alias)
                 if not storageInternal.valuesEqual(root, current, root.default) then
                     resetAliasValue(alias)

@@ -20,7 +20,7 @@ function store.create(persistentState, cache, shared)
         root = persistentState.runtimeOwned,
         phase = "runtime",
         source = "store.runtimeOwned.get",
-        writable = false,
+        writable = true,
     })
 
     local runtimeOwned = persistentState.runtimeOwned
@@ -31,19 +31,23 @@ function store.create(persistentState, cache, shared)
         shared = shared,
         runtimeOwned = runtimeOwned and {
             get = runtimeOwnedRefs.get,
-            read = function(alias)
+            read = function(alias, ...)
                 storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.read", alias)
-                return runtimeOwned.read(alias)
+                local ref = runtimeOwnedRefs.get(alias)
+                if ref == nil then
+                    return nil
+                end
+                return ref:read(...)
             end,
-            set = function(alias, value)
+            write = function(alias, ...)
                 phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.set", alias)
-                return runtimeOwned.set(alias, value)
+                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.write", alias)
+                return runtimeOwned.write(alias, ...)
             end,
-            clear = function(alias)
+            reset = function(alias, ...)
                 phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.clear", alias)
-                return runtimeOwned.clear(alias)
+                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.reset", alias)
+                return runtimeOwned.reset(alias, ...)
             end,
         } or nil,
         read = function(alias, ...)

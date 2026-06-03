@@ -14,8 +14,10 @@ local function create(storageConfig, storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local committedRoots = {}
     local tableHandles = {}
+    local runtimeOwnedTableHandles = {}
     local fieldHandles = {}
     local runtimeOwnedFieldHandles = {}
+    local readRootNode
 
     local function readRaw(alias)
         return storageConfig.readValue(alias)
@@ -45,7 +47,23 @@ local function create(storageConfig, storage)
         committedRoots[root.alias] = ClonePersistedValue(NormalizeStorageValue(root, value))
     end
 
-    local function readRootNode(root)
+    local function writeCommittedRoot(root, value)
+        if not usesCommittedRoot(root) then
+            return false
+        end
+        local normalized = NormalizeStorageValue(root, value)
+        local current = readRootNode(root)
+        if storageInternal.valuesEqual(root, current, normalized) then
+            return false
+        end
+        committedRoots[root.alias] = ClonePersistedValue(normalized)
+        if root._persist then
+            writeRaw(root._storageKey, normalized)
+        end
+        return true
+    end
+
+    readRootNode = function(root)
         if usesCommittedRoot(root) then
             local value = committedRoots[root.alias]
             if value ~= nil then
@@ -143,30 +161,83 @@ local function create(storageConfig, storage)
         return node
     end
 
-    local function writeRuntimeRoot(alias, value)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.set")
+    local runtimeOwnedWriteBackend = {
+        readRoot = readRootNode,
+        canWrite = function(_, alias)
+            return getRuntimeNode(alias, "store.runtimeOwned.write", true) ~= nil
+        end,
+        writeRoot = writeCommittedRoot,
+        onUnknownWrite = function(alias)
+            logging.violate("store.unknown_alias", "store.runtimeOwned.write: unknown storage alias '%s'",
+                tostring(alias))
+        end,
+    }
+
+    local function writeRuntimeValue(alias, value)
+        local node = getRuntimeNode(alias, "store.runtimeOwned.write", true)
         if not node then
             return false
         end
-        local normalized = NormalizeStorageValue(node, value)
-        replaceCommittedRoot(node, normalized)
-        if node._persist then
-            writeRaw(node._storageKey, normalized)
+        if node.type == "table" and not node._isBitAlias then
+            logging.violate("store.invalid_surface",
+                "store.runtimeOwned.write: alias '%s' is table storage; use a table handle or table cell write",
+                tostring(alias))
+            return false
         end
-        return true
+        return storageInternal.writeAlias(aliasNodes, runtimeOwnedWriteBackend, alias, value)
     end
 
-    local function clearRuntimeRoot(alias)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.clear")
+    local function resetRuntimeRoot(alias)
+        local node = getRuntimeNode(alias, "store.runtimeOwned.reset")
         if not node then
             return false
         end
-        local normalized = ClonePersistedValue(node.default)
-        replaceCommittedRoot(node, normalized)
-        if node._persist then
-            writeRaw(node._storageKey, normalized)
+        return writeCommittedRoot(node, node.default)
+    end
+
+    local function resetRuntimeValue(alias)
+        local node = getRuntimeNode(alias, "store.runtimeOwned.reset", true)
+        if not node then
+            return false
         end
-        return true
+        if node._isBitAlias then
+            return writeRuntimeValue(alias, node.default)
+        end
+        return resetRuntimeRoot(alias)
+    end
+
+    local function countResettableRuntimeRoots(opts)
+        local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
+        local count = 0
+
+        for _, root in ipairs(allRoots) do
+            local alias = root.alias
+            if root._mode == "runtime" and alias ~= nil and not exclude[alias] then
+                local current = readRootNode(root)
+                if not storageInternal.valuesEqual(root, current, root.default) then
+                    count = count + 1
+                end
+            end
+        end
+
+        return count > 0, count
+    end
+
+    local function resetAllRuntimeRoots(opts)
+        local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
+        local count = 0
+
+        for _, root in ipairs(allRoots) do
+            local alias = root.alias
+            if root._mode == "runtime" and alias ~= nil and not exclude[alias] then
+                local current = readRootNode(root)
+                if not storageInternal.valuesEqual(root, current, root.default) and resetRuntimeRoot(alias) then
+                    count = count + 1
+                end
+            end
+        end
+
+        return count > 0, count
     end
 
     function persistentState.read(alias)
@@ -189,6 +260,7 @@ local function create(storageConfig, storage)
     }
 
     local getTableHandleForNode
+    local getRuntimeOwnedTableHandleForNode
     local getFieldHandleForNode
 
     local runtimeOwnedFieldOwner = {
@@ -197,12 +269,10 @@ local function create(storageConfig, storage)
             if not node then
                 return nil
             end
-            local value = storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
-            if node.type == "table" and not node._isBitAlias then
-                return ClonePersistedValue(value)
-            end
-            return value
+            return storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
         end,
+        write = writeRuntimeValue,
+        reset = resetRuntimeValue,
         getAliasSchema = function(alias)
             return aliasNodes[alias]
         end,
@@ -225,22 +295,18 @@ local function create(storageConfig, storage)
             return nil
         end
         if node.type == "table" and not node._isBitAlias then
-            return getTableHandleForNode(alias, node)
+            return getRuntimeOwnedTableHandleForNode(alias, node)
         end
         return getRuntimeOwnedFieldHandleForNode(alias, node)
     end
 
     persistentState.runtimeOwned = {
-        read = function(alias)
-            local node = getRuntimeNode(alias, "store.runtimeOwned.read", true)
-            if not node then
+        read = function(alias, ...)
+            local ref = getRuntimeOwnedDataObject(alias)
+            if ref == nil then
                 return nil
             end
-            local value = storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
-            if node.type == "table" and not node._isBitAlias then
-                return ClonePersistedValue(value)
-            end
-            return value
+            return ref:read(...)
         end,
         get = getRuntimeOwnedDataObject,
         table = function(alias)
@@ -253,10 +319,42 @@ local function create(storageConfig, storage)
                     "store.runtimeOwned.table: alias '%s' is not table storage", tostring(alias))
                 return nil
             end
-            return getTableHandleForNode(alias, node)
+            return getRuntimeOwnedTableHandleForNode(alias, node)
         end,
-        set = writeRuntimeRoot,
-        clear = clearRuntimeRoot,
+        write = function(alias, ...)
+            local argc = select("#", ...)
+            if argc == 1 then
+                return writeRuntimeValue(alias, ...)
+            end
+            local ref = getRuntimeOwnedDataObject(alias)
+            if ref == nil then
+                return nil
+            end
+            if type(ref.write) ~= "function" then
+                logging.violate("store.invalid_surface", "store.runtimeOwned.write: alias '%s' is not writable",
+                    tostring(alias))
+                return nil
+            end
+            return ref:write(...)
+        end,
+        reset = function(alias, ...)
+            local argc = select("#", ...)
+            if argc == 0 then
+                return resetRuntimeValue(alias)
+            end
+            local ref = getRuntimeOwnedDataObject(alias)
+            if ref == nil then
+                return nil
+            end
+            if type(ref.reset) ~= "function" then
+                logging.violate("store.invalid_surface", "store.runtimeOwned.reset: alias '%s' is not resettable",
+                    tostring(alias))
+                return nil
+            end
+            return ref:reset(...)
+        end,
+        countResettable = countResettableRuntimeRoots,
+        resetAll = resetAllRuntimeRoots,
     }
 
     getTableHandleForNode = function(alias, node)
@@ -270,6 +368,21 @@ local function create(storageConfig, storage)
             normalizedRoot = true,
         })
         tableHandles[alias] = handle
+        return handle
+    end
+
+    getRuntimeOwnedTableHandleForNode = function(alias, node)
+        local cached = runtimeOwnedTableHandles[alias]
+        if cached then
+            return cached
+        end
+
+        local handle = storageInternal.table.CreateTableHandle(node, {
+            readRoot = readRootNode,
+            writeRoot = writeCommittedRoot,
+            normalizedRoot = true,
+        })
+        runtimeOwnedTableHandles[alias] = handle
         return handle
     end
 

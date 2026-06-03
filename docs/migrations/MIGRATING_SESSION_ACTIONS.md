@@ -5,7 +5,8 @@ surface. The current draw callback receives staged storage through `state` and
 transient action refs through `actions`.
 
 Action handlers declared through `module.actions.define(...)` receive
-`host, runtime, value`. They run during commit after staged state flush:
+`host, runtime, value`. They run during commit after staged state flush and
+mutation sync:
 
 ```lua
 module.actions.define({
@@ -14,6 +15,11 @@ module.actions.define({
     end,
 })
 ```
+
+Actions are runtime intent, not configuration. They may write
+`runtime.data.runtimeOwned`, but mutation sync is still driven by committed
+UI-owned settings changes. If an interaction should alter mutation behavior,
+store that value in normal UI-owned storage.
 
 Use `actions.trigger(...)` for direct transient UI intent:
 
