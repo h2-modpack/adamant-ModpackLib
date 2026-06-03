@@ -85,17 +85,6 @@ function RangeSelector.draw(draw, control)
     })
 end
 
-local CommandRange = {}
-CommandRange.storage = RangeSelector.storage
-CommandRange.createUi = RangeSelector.createUi
-CommandRange.createRuntime = RangeSelector.createRuntime
-CommandRange.draw = RangeSelector.draw
-CommandRange.commands = {
-    ResetMode = function(_, _, control)
-        control:field("Mode"):write("Any")
-    end,
-}
-
 local SelectionGroup = {}
 
 function SelectionGroup.storage()
@@ -356,40 +345,6 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     lu.assertEquals(results, { "default", "compact:arg" })
 end
 
-function TestControls:testScopedCommandsLowerIntoPrivateActions()
-    local config = {}
-    local module = createModule(self.h, {
-        pluginGuid = "test-controls-commands",
-        config = config,
-        id = "ControlsCommands",
-        name = "Controls Commands",
-        templates = {
-            CommandRange = CommandRange,
-        },
-        controls = {
-            PrioritySlot = {
-                template = "CommandRange",
-                defaultMode = "Tartarus",
-            },
-        },
-        drawTab = function(_, ui)
-            local control = ui.controls.get("PrioritySlot")
-            control:field("Mode"):write("Tartarus")
-            control:command("ResetMode"):stage(true)
-            lu.assertErrorMsgContains("actions.private_key", function()
-                ui.actions.get("_PrioritySlot:Command:ResetMode")
-            end)
-        end,
-    })
-
-    lu.assertTrue(module.activate())
-    local liveModule = self.h:liveModule("test-controls-commands")
-    liveModule.drawTab()
-    liveModule.flush()
-
-    lu.assertEquals(config["_PrioritySlot:Mode"], "Any")
-end
-
 function TestControls:testTableBackedControlUsesSemanticRowMethods()
     local config = {}
     local module = createModule(self.h, {
@@ -422,6 +377,65 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
     lu.assertEquals(rewards:count(), 2)
     lu.assertEquals(rewards:selectedMask(2), 5)
     lu.assertEquals(config["_Rewards:Rows"][2]["_Rewards:Rows:Selection"], 5)
+end
+
+function TestControls:testUiControlsResetNamedAndAllBoundStorage()
+    local config = {}
+    local resetNamedResult = nil
+    local resetAllResult = nil
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-reset",
+        config = config,
+        id = "ControlsReset",
+        name = "Controls Reset",
+        templates = {
+            RangeSelector = RangeSelector,
+            SelectionGroup = SelectionGroup,
+        },
+        controls = {
+            PrioritySlot = {
+                template = "RangeSelector",
+                defaultMin = 2,
+            },
+            Rewards = {
+                template = "SelectionGroup",
+            },
+        },
+        drawTab = function(_, ui)
+            local priority = ui.controls.get("PrioritySlot")
+            priority:field("Mode"):write("Tartarus")
+            priority:field("Min"):write(5)
+
+            local rewards = ui.controls.get("Rewards")
+            rewards:setCount(2)
+            rewards:selectionField(2):write(5)
+
+            resetNamedResult = { ui.controls.reset("PrioritySlot") }
+            lu.assertEquals(priority:read(), {
+                mode = "Any",
+                min = 2,
+            })
+            lu.assertEquals(rewards:count(), 2)
+
+            resetAllResult = { ui.controls.resetAll() }
+        end,
+    })
+
+    lu.assertTrue(module.activate())
+    local liveModule = self.h:liveModule("test-controls-reset")
+    local record = self.h.moduleHost.getRecord(liveModule)
+    liveModule.drawTab()
+    liveModule.flush()
+
+    lu.assertEquals(resetNamedResult, { true, 2 })
+    lu.assertEquals(resetAllResult, { true, 1 })
+    lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
+        mode = "Any",
+        min = 2,
+    })
+    local rewards = record.runtime.controls.get("Rewards")
+    lu.assertEquals(rewards:count(), 1)
+    lu.assertEquals(rewards:selectedMask(1), 0)
 end
 
 function TestControls:testInvalidDeclarationsFailAtContactPoints()

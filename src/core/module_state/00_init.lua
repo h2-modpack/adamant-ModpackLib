@@ -87,7 +87,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field clearAll fun()
 ---@field getRef fun(actionKey: string): table
 ---@field emitShared fun(id: string, eventName: string, payload: any)
----@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table, actionContext: table|nil)
+---@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table)
 ---@field flushPendingSharedEvents fun(host: Host)
 
 ---@class PersistentState
@@ -137,7 +137,7 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field default boolean|nil
 ---@field storage StorageSchema|nil
 ---@field cache table|nil
----@field actions table<string, fun(host: Host, runtime: RuntimeContext, value: any, actionContext: table|nil)>|nil
+---@field actions table<string, fun(host: Host, runtime: RuntimeContext, value: any)>|nil
 ---@field _actionOrder string[]|nil
 
 --- Creates module state access surfaces around a prepared definition and config table.

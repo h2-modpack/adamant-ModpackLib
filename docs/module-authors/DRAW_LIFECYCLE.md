@@ -26,7 +26,7 @@ module operations such as logging and enabled-state checks.
 | `ui.draw` | ImGui, widgets, nav, and control drawing |
 | `ui.data` | staged UI storage reads/writes |
 | `ui.data.runtimeOwned` | read runtime-owned storage |
-| `ui.actions` | stage one-shot commands and shared emits |
+| `ui.actions` | stage one-shot runtime actions and shared emits |
 | `ui.shared` | read shared data |
 | `ui.controls` | get draw refs for declared controls |
 
@@ -42,15 +42,15 @@ normal cycle is:
 1. Framework calls the module draw callback.
 2. Draw code renders immediate UI.
 3. Draw code stages storage edits through `ui.data`.
-4. Draw code stages commands through `ui.actions.trigger(...)`.
+4. Draw code stages runtime actions through `ui.actions.trigger(...)`.
 5. Draw code may queue shared events through `ui.actions.emit(...)`.
 6. The draw callback returns. Shared events are not delivered here.
 7. Framework asks the live module to commit if it has staged work.
-8. Lib runs staged action handlers.
-9. Lib delivers queued shared events.
-10. Lib flushes dirty staged storage to config.
-11. Lib clears the live staged action/shared-event buffer.
-12. Lib applies/reverts mutation state if committed settings changed.
+8. Lib flushes dirty staged storage to config.
+9. Lib runs staged action handlers against committed runtime data.
+10. Lib applies/reverts mutation state if committed settings changed.
+11. Lib delivers queued shared events.
+12. Lib clears the live staged action/shared-event buffer.
 13. Lib runs `module.onCommit(...)` observers with the captured action snapshot.
 
 The important boundary: runtime/gameplay code only sees committed settings.
@@ -108,7 +108,7 @@ UI setting when gameplay code owns the value.
 
 ## Actions
 
-Use actions when a draw interaction should run command logic at commit:
+Use actions when a draw interaction should run runtime side-effect logic at commit:
 
 ```lua
 module.actions.define({
@@ -125,8 +125,9 @@ local function drawTab(host, ui)
 end
 ```
 
-Action handlers run during commit after draw returns and before staged storage
-flush. They receive `(host, runtime, value)`.
+Action handlers run during commit after staged storage flushes. They receive
+`(host, runtime, value)`, and `runtime.data` reads the values just committed by
+the draw that staged the action.
 
 Actions are one-shot intent, not storage. If a value needs to survive across
 frames, declare storage for that value.
@@ -142,8 +143,8 @@ ui.actions.emit("run-director.route-state", "routeChanged", {
 ```
 
 The event is staged during draw and delivered during commit after action
-handlers. Listeners run outside the draw callback and should use their runtime
-context or module-local dependencies, not captured draw refs.
+handlers and mutation sync. Listeners run outside the draw callback and should
+use their runtime context or module-local dependencies, not captured draw refs.
 
 This keeps shared events from observing partially rendered UI state while still
 letting draw interactions emit module-to-module signals.
@@ -177,7 +178,6 @@ Use `ui.data` for:
 
 Use `ui.actions` for:
 
-- reset buttons
 - import/export/apply commands
 - draw interactions that should write runtime-owned storage
 - shared events emitted from draw interactions

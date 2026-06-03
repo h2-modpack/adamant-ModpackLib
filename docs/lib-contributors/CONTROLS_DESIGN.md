@@ -99,8 +99,8 @@ fingerprinting, and privacy.
 
 Use a plain module class when the object is only code/data organization. Use a
 Lib control when the object owns persisted/staged fields, table rows, packed
-fields, scoped commands, or runtime/UI refs that should be managed consistently
-with the rest of the module lifecycle.
+fields, or runtime/UI refs that should be managed consistently with the rest of
+the module lifecycle.
 
 ## Goals
 
@@ -401,7 +401,6 @@ remain:
 
 - `prepare(instance)` validates and normalizes template-specific fields
 - `storage(instance)` returns field descriptors, not full public aliases
-- `commands(instance)` or `commands = {...}` optionally returns scoped commands
 - `createRuntime(fields, instance)` returns the runtime control object
 - `createUi(fields, instance)` returns the UI control object
 - `draw(draw, control, instance, opts)` draws the default UI control view
@@ -431,21 +430,6 @@ SelectionGroup UI ref:
   items()
   isCustomized()
 ```
-
-Templates may also declare scoped commands:
-
-```lua
-commands = {
-    Reset = function(host, runtime, control, value)
-        control:field("Mode"):write("Any")
-    end,
-}
-```
-
-Control commands are a mini version of actions. They lower into the existing
-action subsystem using generated private action keys, just as control storage
-lowers into generated private storage aliases. They are scoped to one control
-instance and exposed only through that control ref.
 
 ```lua
 function RangeSelector.draw(draw, control, instance, opts)
@@ -816,39 +800,11 @@ draw -> widget/control edit -> staged UI data
 Actions remain the explicit bridge for side effects:
 
 ```text
-draw -> action intent -> pre-flush action handler
+draw -> action intent -> staged state flush -> action handler
 ```
 
-Controls can define scoped commands for behavior that is intrinsic to the
-control, such as a reset button inside a repeated control template:
-
-```lua
-commands = {
-    Reset = function(host, runtime, control, value)
-        control:reset()
-    end,
-}
-
-function RouteSlot.draw(draw, control)
-    draw.widgets.button("Reset", {
-        action = control:command("Reset"),
-    })
-end
-```
-
-Rules:
-
-- command names are local to the template/control instance
-- generated action keys are private and not visible through `ui.actions.get(...)`
-- command refs are only exposed through the control ref
-- commands run in the same pre-flush action phase as normal actions
-- commands receive the specific control ref
-- module-level `module.actions.define(...)` remains the right surface for
-  module-wide commands
-
-Do not use control commands for lifecycle behavior. A control command may edit
-the control's data or bridge simple UI intent into runtime-owned data. If the
-behavior needs commit observation, hooks, overlays, shared events, cache, or
+Control-local UI edits should happen directly in the control draw function. If
+the behavior needs commit observation, hooks, overlays, shared events, cache, or
 mutation, it belongs at module level.
 
 Example module-level coordination:
@@ -860,8 +816,7 @@ module.onCommit(function(host, runtime, commit)
 end)
 ```
 
-Controls compose data, draw, and basic scoped commands. Everything beyond that
-is the module itself.
+Controls compose data and draw. Everything beyond that is the module itself.
 
 ## Hashes And Profiles
 
@@ -951,7 +906,6 @@ Own declaration contact-point validation:
 Turn validated declarations into:
 
 - internal storage nodes
-- internal action declarations for scoped control commands
 - prepared control catalog
 - per-instance generated alias bindings
 - renderer dispatch metadata
@@ -983,7 +937,6 @@ module.controls.define(...)
 module.activate()
   controls.compile(declarations.controls)
     -> internalStorage
-    -> internalActions
     -> controlCatalog
   prepareDefinitionWithInternalDeclarations(..., internalStorage, internalActions)
   moduleState.create(config, definition)
@@ -1118,15 +1071,13 @@ Implemented enough to prove the model:
 1. Add `controls` declaration buckets.
 2. Add template and instance validation.
 3. Compile scalar and table field descriptors into internal `_` storage aliases.
-4. Compile scoped commands into internal action declarations.
-5. Add prepared control catalog to the managed module record.
-6. Add `runtime.controls.get`.
-7. Add `ui.controls.get`.
-8. Add `ui.draw.control`.
-9. Add tests for:
+4. Add prepared control catalog to the managed module record.
+5. Add `runtime.controls.get`.
+6. Add `ui.controls.get`.
+7. Add `ui.draw.control`.
+8. Add tests for:
    - generated `_` aliases cannot be read through `ui.data` or `runtime.data`
    - controls can read/write their own generated storage
-   - scoped commands run through the normal pre-flush action phase
    - control refs are cached
    - phase gates reject escaped refs
    - `ui.draw.control(...)` dispatches to the template renderer
@@ -1135,9 +1086,9 @@ Implemented enough to prove the model:
    - unknown view names are rejected
    - table-backed controls can expose semantic row methods without leaking raw
      private aliases
-10. Port one narrow first-party scalar-bundle slice with a clear alias/migration
+9. Port one narrow first-party scalar-bundle slice with a clear alias/migration
    decision.
-11. Then port one first-party table-backed slice before broadening the API. This
+10. Then port one first-party table-backed slice before broadening the API. This
    is the stress test for table-backed controls, hydrated metadata, and view
    variants.
 
@@ -1145,7 +1096,6 @@ Implemented enough to prove the model:
 
 - Controls can become a declarative UI language by accident.
 - Template callbacks can become broad context blobs.
-- Scoped commands can become a hidden lifecycle system.
 - Generated aliases can make hashes/profiles harder to explain.
 - Too much template genericity can make module code less readable than direct UI.
 - Nested controls can create a mini component framework; avoid them initially.

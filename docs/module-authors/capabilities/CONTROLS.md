@@ -121,38 +121,21 @@ Template.views = {
 ui.draw.control(ui.controls.get("RewardPriority"), "compact", 180)
 ```
 
-## Commands
-
-Controls can define scoped commands. Commands lower into Lib's normal action
-queue and run during commit after the draw callback and before staged state
-flush:
+Draw code can reset control-backed storage without exposing generated aliases:
 
 ```lua
-RangeSelector.commands = {
-    Reset = function(host, runtime, control)
-        control:field("Mode"):write("Any")
-        control:field("Min"):write(0)
-    end,
-}
-
-function RangeSelector.draw(draw, control)
-    draw.widgets.button({
-        label = "Reset",
-        action = control:command("Reset"),
-    })
-end
+ui.controls.reset("RewardPriority")
+ui.controls.resetAll()
 ```
 
-Use commands for simple control-local UI intent. If a behavior needs broader
-module orchestration, declare a normal `module.actions.define(...)` action
-instead.
+These helpers reset the Lib-compiled storage roots for the control instance.
+They do not call template-defined reset methods.
 
 ## Rules
 
 - Template and control names must be stable identifiers.
 - Control refs are shaped for the callback surface that created them. Reads are
-  phase-neutral; generated writable fields and control commands remain
-  draw-scoped.
+  phase-neutral; generated writable fields remain draw-scoped.
 - Controls are not layout builders. The module still owns tab order, sections,
   catalogs, and screen composition.
 - Do not use controls for one-off leaf fields. `ui.draw.widgets.*` is simpler.

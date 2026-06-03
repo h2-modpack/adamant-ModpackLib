@@ -149,54 +149,6 @@ local function compileStorageNodes(controlName, descriptors)
     return storageNodes, bindings
 end
 
-local function getCommandMap(template, instance, controlName)
-    local commands = template.commands
-    if type(commands) == "function" then
-        local ok, result = pcall(commands, instance)
-        if not ok then
-            error(result, 0)
-        end
-        commands = result
-    end
-    if commands == nil then
-        return {}
-    end
-    if type(commands) ~= "table" then
-        logging.violate("controls.invalid_template", "control '%s': commands must be a table", tostring(controlName))
-    end
-    return commands
-end
-
-local function compileCommands(controlName, commands, internalActions)
-    local commandBindings = {}
-    local commandNames = {}
-    for commandName, callback in pairs(commands) do
-        requireStableIdentifier("control command name", commandName)
-        if type(callback) ~= "function" then
-            logging.violate("controls.invalid_template", "control '%s' command '%s' must be a function",
-                tostring(controlName), tostring(commandName))
-        end
-        commandNames[#commandNames + 1] = commandName
-    end
-    table.sort(commandNames, compareStrings)
-
-    for _, commandName in ipairs(commandNames) do
-        local actionKey = generatedName(controlName, "Command", commandName)
-        local callback = commands[commandName]
-        commandBindings[commandName] = actionKey
-        internalActions[actionKey] = function(host, runtime, value, actionContext)
-            local controls = actionContext and actionContext.controls or runtime and runtime.controls or nil
-            local control = controls and controls.get(controlName) or nil
-            if control == nil then
-                logging.violate("controls.unknown_control", "control command '%s.%s' could not resolve its control",
-                    tostring(controlName), tostring(commandName))
-            end
-            return callback(host, runtime, control, value)
-        end
-    end
-    return commandBindings
-end
-
 function compiler.compile(bucket)
     bucket = bucket or {}
     local templates = bucket.templates or {}
@@ -208,7 +160,6 @@ function compiler.compile(bucket)
     table.sort(order, compareStrings)
 
     local internalStorage = {}
-    local internalActions = {}
     local catalog = {
         instances = {},
         order = order,
@@ -256,13 +207,11 @@ function compiler.compile(bucket)
             instance = instance,
             bindings = bindings,
             views = normalizeViews(template),
-            commands = compileCommands(name, getCommandMap(template, instance, name), internalActions),
         }
     end
 
     return {
         storage = internalStorage,
-        actions = internalActions,
         catalog = catalog,
     }
 end

@@ -14,7 +14,6 @@ local refs = import('core/controls/refs.lua', nil, {
     values = deps.values,
     storage = deps.storage,
     phaseGate = deps.phaseGate,
-    actionRefs = deps.actionRefs,
 })
 
 local draw = import('core/controls/draw_controls.lua', nil, {

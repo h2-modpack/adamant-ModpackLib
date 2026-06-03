@@ -208,7 +208,6 @@ function managedModule.create(opts)
     local commitObserver = validateLifecycleObservers(opts)
     local store
     local runtimeContext
-    local commandControls
     local host
     local controlCatalog = opts.controlCatalog or {
         instances = {},
@@ -241,13 +240,11 @@ function managedModule.create(opts)
         return observerResult
     end
 
-    local function executeActionsBeforeFlush(actionSnapshot)
-        return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot, {
-            controls = commandControls,
-        })
+    local function executeActionsDuringCommit(actionSnapshot)
+        return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
     end
 
-    local function flushSharedEventsBeforeFlush()
+    local function flushSharedEventsDuringCommit()
         return actionBuffer.flushPendingSharedEvents(host)
     end
 
@@ -294,7 +291,7 @@ function managedModule.create(opts)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err
     end
 
@@ -309,7 +306,7 @@ function managedModule.create(opts)
             return true
         end
         return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.reloadFromConfig()
@@ -334,7 +331,7 @@ function managedModule.create(opts)
             return true, nil, false
         end
         local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err, ok == true
     end
 
@@ -345,37 +342,37 @@ function managedModule.create(opts)
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
         return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, enabled)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
         return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, enabled)
+            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
         return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
         return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
-            persistentState, stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            persistentState, stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
         return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
         return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsBeforeFlush, flushSharedEventsBeforeFlush, receipt)
+            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, receipt)
     end
 
     function module.restorePackTransitionState(receipt)
@@ -456,7 +453,6 @@ function managedModule.create(opts)
     }))
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
     runtimeContext = createRuntimeContext(store)
-    commandControls = controls.refs.createCommand(stagedState, controlCatalog)
     record.store = store
     record.runtime = runtimeContext
 
@@ -471,7 +467,7 @@ function managedModule.create(opts)
         }),
         actionBuffer = actionBuffer,
         host = host,
-        controls = controls.refs.createUi(stagedState, controlCatalog, actionBuffer),
+        controls = controls.refs.createUi(stagedState, controlCatalog),
     })
 
     function module.drawTab()

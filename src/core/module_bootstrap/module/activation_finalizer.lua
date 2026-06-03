@@ -63,7 +63,6 @@ function activationFinalizer.activate(opts, declarations)
     appendList(internalStorage, declarations.internalStorage)
     appendList(internalStorage, compiledControls.storage)
     mergeMaps(internalActions, declarations.internalActions)
-    mergeMaps(internalActions, compiledControls.actions)
 
     local definition = managedModule.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
         createDefinitionInput(opts, declarations), {

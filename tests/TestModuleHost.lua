@@ -561,6 +561,7 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     local observedCallbackHost = nil
     local observedRuntime = nil
     local observedRuntimeValue = nil
+    local observedCommittedFlagInAction = nil
     local observedCommitAction = nil
     local observedConfigChange = nil
     local definition = self.h.moduleHost.prepareDefinition({}, {
@@ -576,6 +577,7 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
                 observedActionHost = host
                 observedCallbackHost = callbackHost
                 observedRuntime = runtime
+                observedCommittedFlagInAction = runtime.data.read("Flag")
                 runtime.data.runtimeOwned.set("RuntimeFlag", value == true)
                 observedRuntimeValue = runtime.data.runtimeOwned.read("RuntimeFlag")
             end,
@@ -595,7 +597,8 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
             observedCommitAction = commit.actions.get("setFlag"):read()
             observedConfigChange = commit.hadConfigChanges()
         end,
-        drawTab = function(_, _, actions)
+        drawTab = function(_, state, actions)
+            state.write("Flag", true)
             actions.trigger("setFlag")
         end,
     })
@@ -604,7 +607,7 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     host.drawTab()
 
     lu.assertNil(observedActionHost)
-    lu.assertFalse(stagedState.read("Flag"))
+    lu.assertTrue(stagedState.read("Flag"))
     lu.assertFalse(store.read("Flag"))
 
     local ok, err = host.commitIfDirty()
@@ -615,11 +618,12 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     lu.assertEquals(observedCallbackHost.getHostId(), "test-declared-draw-actions")
     lu.assertEquals(observedCallbackHost.isEnabled(), true)
     lu.assertEquals(type(observedRuntime.data.read), "function")
+    lu.assertTrue(observedCommittedFlagInAction)
     lu.assertEquals(observedRuntimeValue, true)
-    lu.assertFalse(store.read("Flag"))
+    lu.assertTrue(store.read("Flag"))
     lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
     lu.assertTrue(observedCommitAction)
-    lu.assertFalse(observedConfigChange)
+    lu.assertTrue(observedConfigChange)
 end
 
 function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()

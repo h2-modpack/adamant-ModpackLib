@@ -159,12 +159,14 @@ ui.draw.widgets.button("Start", {
 })
 ```
 
-Action handlers run during commit after the draw callback and before staged
-state flush. They receive:
+Action handlers run during commit after staged state flush. They receive:
 
 - `host`: narrow logging/metadata/enabled host projection
 - `runtime`: runtime context with committed data, cache, shared, and controls
 - `value`: staged action payload
+
+`runtime.data` reads the values just committed by the draw that staged the
+action.
 
 ## Commit Observer
 

@@ -4,7 +4,6 @@ local logging = deps.logging
 local values = deps.values
 local storage = deps.storage
 local phaseGate = deps.phaseGate
-local actionRefs = deps.actionRefs
 
 local refs = {}
 local CONTROL_REF_MARKER = {}
@@ -233,7 +232,7 @@ local function createFieldSet(root, entry, phase, writable)
     return fields
 end
 
-local function attachControlInternals(control, entry, gate, actionBuffer)
+local function attachControlInternals(control, entry)
     control[CONTROL_REF_MARKER] = entry
 
     if control.name == nil then
@@ -247,30 +246,10 @@ local function attachControlInternals(control, entry, gate, actionBuffer)
         end
     end
 
-    if actionBuffer ~= nil then
-        local commandRefs = {}
-        function control:command(commandName)
-            requireSelf("control:command", self, control)
-            gate()
-            local actionKey = entry.commands and entry.commands[commandName] or nil
-            if actionKey == nil then
-                logging.violate("controls.unknown_command", "control '%s': unknown command '%s'",
-                    tostring(entry.name), tostring(commandName))
-            end
-            local ref = commandRefs[commandName]
-            if ref ~= nil then
-                return ref
-            end
-            ref = actionRefs.createInternalDrawActionRef(actionBuffer, actionKey, phaseGate)
-            commandRefs[commandName] = ref
-            return ref
-        end
-    end
-
     return control
 end
 
-local function createControl(entry, fields, factoryPhase, gatePhase, actionBuffer)
+local function createControl(entry, fields, factoryPhase)
     local factory = factoryPhase == "draw" and entry.template.createUi or entry.template.createRuntime
     local control
     if type(factory) == "function" then
@@ -282,7 +261,27 @@ local function createControl(entry, fields, factoryPhase, gatePhase, actionBuffe
         logging.violate("controls.invalid_template", "control '%s': template factory must return a table",
             tostring(entry.name))
     end
-    return attachControlInternals(control, entry, createGate(gatePhase), actionBuffer)
+    return attachControlInternals(control, entry)
+end
+
+local function resetBoundRoots(root, entry)
+    local changedCount = 0
+    local seen = {}
+
+    for _, binding in pairs(entry.bindings or {}) do
+        local alias = binding.alias
+        if alias ~= nil and not seen[alias] then
+            seen[alias] = true
+            local schema = root.getAliasSchema(alias)
+            local current = root.read(alias)
+            if not storage.valuesEqual(schema, current, schema.default) then
+                root.reset(alias)
+                changedCount = changedCount + 1
+            end
+        end
+    end
+
+    return changedCount > 0, changedCount
 end
 
 local function createFacade(opts)
@@ -290,7 +289,6 @@ local function createFacade(opts)
     local phase = opts.phase
     local factoryPhase = opts.factoryPhase or phase
     local root = opts.root
-    local actionBuffer = opts.actionBuffer
     local writable = opts.writable == true or phase == "draw"
     local controlCache = {}
     local facade = {}
@@ -306,7 +304,7 @@ local function createFacade(opts)
             return cached
         end
         local fields = createFieldSet(root, entry, phase, writable)
-        local control = createControl(entry, fields, factoryPhase, phase, actionBuffer)
+        local control = createControl(entry, fields, factoryPhase)
         controlCache[name] = control
         return control
     end
@@ -317,6 +315,27 @@ local function createFacade(opts)
             logging.violate("controls.invalid_template", "control '%s' does not expose read()", tostring(name))
         end
         return control:read(...)
+    end
+
+    if phase == "draw" then
+        function facade.reset(name)
+            phaseGate.requireAnyDraw()
+            local entry = catalog.instances and catalog.instances[name] or nil
+            if entry == nil then
+                logging.violate("controls.unknown_control", "ui.controls.reset: unknown control '%s'", tostring(name))
+            end
+            return resetBoundRoots(root, entry)
+        end
+
+        function facade.resetAll()
+            phaseGate.requireAnyDraw()
+            local count = 0
+            for _, name in ipairs(catalog.order or {}) do
+                local _, controlCount = facade.reset(name)
+                count = count + controlCount
+            end
+            return count > 0, count
+        end
     end
 
     return facade
@@ -330,22 +349,11 @@ function refs.createRuntime(persistentState, catalog)
     })
 end
 
-function refs.createCommand(stagedState, catalog)
-    return createFacade({
-        root = stagedState,
-        catalog = catalog,
-        phase = "runtime",
-        factoryPhase = "draw",
-        writable = true,
-    })
-end
-
-function refs.createUi(stagedState, catalog, actionBuffer)
+function refs.createUi(stagedState, catalog)
     return createFacade({
         root = stagedState,
         catalog = catalog,
         phase = "draw",
-        actionBuffer = actionBuffer,
     })
 end
 

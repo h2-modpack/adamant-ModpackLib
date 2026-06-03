@@ -103,7 +103,8 @@ local function drawTab(host, ui)
 end
 ```
 
-Draw emits are staged during the draw callback and delivered during commit.
+Draw emits are staged during the draw callback and delivered during commit
+after staged state flush, action handlers, and mutation sync.
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
 order.
 

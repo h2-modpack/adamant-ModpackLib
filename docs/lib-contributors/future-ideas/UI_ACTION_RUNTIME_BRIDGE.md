@@ -1,21 +1,22 @@
 # UI Action Runtime Bridge
 
-Contributor note. The action-handler part of this design is implemented; the
-runtime-owned storage shape replaced the cache bridge discussed here.
+Contributor note. The action-handler part of this design has converged into the
+current draw lifecycle. Runtime-owned storage replaced the cache bridge
+discussed here, and action handlers now run after staged UI storage flushes.
 
 ## Problem
 
-Draw callbacks currently receive:
+Draw callbacks receive:
 
 ```lua
-drawTab(draw, state, actions)
+drawTab(host, ui)
 ```
 
-`actions` stages transient UI intent during draw. Pending action handlers run
-after draw and before staged state flush.
+`ui.actions` stages transient UI intent during draw. Pending action handlers run
+during commit after staged state flush, so they read committed runtime data.
 
-Action handlers intentionally receive the module `host` because some UI actions
-are commands that intentionally cross from UI into runtime behavior.
+Action handlers intentionally receive the module `host` and runtime context
+because some UI actions intentionally cross from UI into runtime behavior.
 
 Example:
 
@@ -27,15 +28,15 @@ That flow needs a bridge from draw intent to runtime capability access.
 
 ## Action Model
 
-Treat draw actions as a UI-to-runtime command bridge.
+Treat draw actions as a UI-to-runtime side-effect bridge.
 
 Handler shape:
 
 ```lua
 actions = {
-    StartRecording = function(host, state, value)
+    StartRecording = function(host, runtime, value)
         -- host: runtime capability authority
-        -- state: staged draw data, useful for command parameters
+        -- runtime: committed runtime data and runtime-owned writers
         -- value: staged action payload
     end,
 }
@@ -45,39 +46,39 @@ Execution order remains:
 
 ```text
 draw callback runs
-pending action handlers run
 staged state flushes to config
-onSettingsCommitted(host, store, commit) runs
+pending action handlers run
+mutation sync runs
+shared events deliver
+onCommit(host, runtime, commit) runs
 ```
 
 ## Semantics
 
 - Draw code stages intent; it should not perform runtime side effects directly.
 - Action handlers may use `host` for runtime side effects.
-- Action handlers may read or write `state` before the normal flush.
+- Action handlers read committed runtime data after the normal flush.
 - Action handlers receive staged `value` payloads from widgets or custom draw
   code.
-- If command logic needs committed storage after flush, use
-  `onSettingsCommitted(host, store, commit)` instead.
 - the draw object should not be passed to action handlers; draw is a render
-  surface, while actions are command execution.
+  surface, while actions are side-effect execution.
 
 ## Example
 
 ```lua
-local function drawTab(draw, state, actions)
-    draw.widgets.button("Start Recording", {
-        action = actions.get("StartRecording"),
+local function drawTab(host, ui)
+    ui.draw.widgets.button("Start Recording", {
+        action = ui.actions.get("StartRecording"),
         value = {
-            count = state.read("RecordingCount"),
+            count = ui.data.read("RecordingCount"),
         },
     })
 end
 
 local actions = {
-    StartRecording = function(_, state, value)
-        local count = value and value.count or state.read("RecordingCount")
-        -- Future bridge would need an explicit runtime-owned storage writer here.
+    StartRecording = function(_, runtime, value)
+        local count = value and value.count or runtime.data.read("RecordingCount")
+        runtime.data.runtimeOwned.set("RecordingRemaining", count)
     end,
 }
 ```
@@ -91,13 +92,13 @@ Runtime hooks can then consume and update the runtime-owned marker.
 
 ```text
 draw: render and stage intent
-actions: execute UI-triggered runtime command
+actions: execute UI-triggered runtime side effect
 runtime hooks: continue runtime state machine
 ```
 
-This is cleaner than routing all such commands through `onSettingsCommitted`
-only, because actions can read staged UI state before flush and execute commands
-that are not necessarily settings commits.
+This is cleaner than routing these through `onCommit` only, because actions
+express UI intent explicitly and receive their payload without making commit
+observers infer button clicks from storage state.
 
 ## Cache Relationship
 
@@ -106,7 +107,8 @@ storage:
 
 ```text
 UI stages StartRecording
-action handler writes runtime-owned marker through `actionRuntime.runtimeOwned`
+commit flushes staged UI storage
+action handler writes runtime-owned marker through `runtime.data.runtimeOwned`
 runtime hook updates marker after each game event
 UI can later read a sanctioned draw-safe projection
 ```
@@ -123,6 +125,6 @@ Do not treat this note as a full cache-v2 design.
 
 ## Completed Shape
 
-- Draw action handler invocation is `(host, state, value)`.
+- Draw action handler invocation is `(host, runtime, value)`.
 - `draw` is not passed to action handlers.
 - `commit.actions` is unchanged; it remains the post-flush observation path.

@@ -196,11 +196,11 @@ local function createBuffer(actionCatalog)
         }
     end
 
-    function buffer.executeCommittedActions(host, runtime, actionSnapshot, actionContext)
+    function buffer.executeCommittedActions(host, runtime, actionSnapshot)
         if catalog ~= nil then
             for _, actionKey in ipairs(catalog.order) do
                 if actionSnapshot and actionSnapshot[actionKey] ~= nil then
-                    catalog.handlers[actionKey](host, runtime, CloneValue(actionSnapshot[actionKey]), actionContext)
+                    catalog.handlers[actionKey](host, runtime, CloneValue(actionSnapshot[actionKey]))
                 end
             end
         end

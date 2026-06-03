@@ -35,10 +35,6 @@ local function validateTemplate(templateName, template)
     if template.createUi ~= nil and type(template.createUi) ~= "function" then
         logging.violate("controls.invalid_template", "controls template '%s': createUi must be a function", templateName)
     end
-    if template.commands ~= nil and type(template.commands) ~= "function" and type(template.commands) ~= "table" then
-        logging.violate("controls.invalid_template", "controls template '%s': commands must be a function or table",
-            templateName)
-    end
     if hasDraw and type(template.draw) ~= "function" then
         logging.violate("controls.invalid_template", "controls template '%s': draw must be a function", templateName)
     end

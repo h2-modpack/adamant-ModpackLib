@@ -64,7 +64,7 @@ return {
     },
     ["controls.invalid_template"] = {
         severity = "error",
-        description = "Control templates must expose valid factory, storage, command, and draw/view callbacks.",
+        description = "Control templates must expose valid factory, storage, and draw/view callbacks.",
     },
     ["controls.invalid_field"] = {
         severity = "error",
@@ -73,10 +73,6 @@ return {
     ["controls.unknown_control"] = {
         severity = "error",
         description = "Control access requires a declared control instance.",
-    },
-    ["controls.unknown_command"] = {
-        severity = "error",
-        description = "Control command refs require a command declared by that control template.",
     },
     ["controls.invalid_render_target"] = {
         severity = "error",

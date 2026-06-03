@@ -47,9 +47,9 @@ Module behavior is hosted through Lib's live module registry.
 
 ## `module.controls`
 
-Composite controls bundle private Lib-managed storage, optional scoped commands,
-runtime readers, and draw renderers. They are for repeated UI/data concepts
-that are larger than one widget but smaller than a module.
+Composite controls bundle private Lib-managed storage, runtime readers, and draw
+renderers. They are for repeated UI/data concepts that are larger than one
+widget but smaller than a module.
 
 ```lua
 module.controls.defineTemplates({
@@ -949,8 +949,9 @@ The old `session.stageAction(...)` form has been removed. Use
 `ui.actions.trigger(actionKey, value)` in draw code, or `ui.actions.get(actionKey)`
 when a widget needs an action ref.
 
-Declare action handlers with `module.actions.define(...)`. Handlers run after
-the draw callback and before staged state flush:
+Declare action handlers with `module.actions.define(...)`. Handlers run during
+commit after staged state flush, so `runtime.data` reads the values just
+committed by the draw that staged the action:
 
 ```lua
 module.actions.define({
@@ -961,8 +962,7 @@ module.actions.define({
 })
 ```
 
-Handlers receive the callback host, runtime context, staged action `value`,
-and an optional action context.
+Handlers receive the callback host, runtime context, and staged action `value`.
 
 ## Draw Widgets
 

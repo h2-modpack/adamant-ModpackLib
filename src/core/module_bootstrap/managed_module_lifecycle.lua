@@ -44,9 +44,9 @@ local function notifyCommitAfterFlush(def, commitNotifier, commitContext)
     return ok, err
 end
 
-local function executeActionsBeforeFlush(def, actionExecutor, actionSnapshot)
+local function executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
     if actionExecutor == nil or actionSnapshot == nil or next(actionSnapshot) == nil then
-        return true, nil
+        return
     end
 
     local ok, result = pcall(actionExecutor, actionSnapshot)
@@ -54,18 +54,17 @@ local function executeActionsBeforeFlush(def, actionExecutor, actionSnapshot)
         logging.violate("lifecycle.on_commit_failed", "%s: action handler failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(result))
-        return false, tostring(result)
+        return
     end
     if result == false then
         logging.violate("lifecycle.on_commit_false", "%s: action handler returned false",
             tostring(def.name or def.id or "module"))
     end
-    return true, nil
 end
 
-local function flushSharedEventsBeforeFlush(def, sharedEventFlusher)
+local function flushSharedEventsDuringCommit(def, sharedEventFlusher)
     if sharedEventFlusher == nil then
-        return true, nil
+        return
     end
 
     local ok, result = pcall(sharedEventFlusher)
@@ -73,13 +72,12 @@ local function flushSharedEventsBeforeFlush(def, sharedEventFlusher)
         logging.violate("lifecycle.on_commit_failed", "%s: shared event flush failed: %s",
             tostring(def.name or def.id or "module"),
             tostring(result))
-        return false, tostring(result)
+        return
     end
     if result == false then
         logging.violate("lifecycle.on_commit_false", "%s: shared event flush returned false",
             tostring(def.name or def.id or "module"))
     end
-    return true, nil
 end
 
 local function isEnabled(persistentState)
@@ -110,6 +108,15 @@ local function restoreConfigAndRuntime(host, def, stagedState, snapshot, previou
     return false, primaryErr
 end
 
+local function flushDirtyConfig(stagedState)
+    if not stagedState._hasConfigChanges() then
+        return false, nil
+    end
+    local snapshot = stagedState._captureDirtyConfigSnapshot()
+    stagedState._flushToConfig()
+    return true, snapshot
+end
+
 local function resyncStagedState(def, stagedState, actionBuffer)
     local mismatches = stagedState.auditMismatches()
     if #mismatches > 0 then
@@ -133,32 +140,21 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
     end
 
     local actionSnapshot = actionBuffer and actionBuffer.captureSnapshot() or {}
-    local actionsOk, actionsErr = executeActionsBeforeFlush(def, actionExecutor, actionSnapshot)
-    if not actionsOk then
-        return false, actionsErr
-    end
-
-    local eventsOk, eventsErr = flushSharedEventsBeforeFlush(def, sharedEventFlusher)
-    if not eventsOk then
-        return false, eventsErr
-    end
-
-    local hadConfigChanges = stagedState._hasConfigChanges()
     local previousEffective = isEnabled(persistentState)
-    local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
-    local snapshot = hadConfigChanges and stagedState._captureDirtyConfigSnapshot() or nil
-    if hadConfigChanges then
-        stagedState._flushToConfig()
-    end
-    if actionBuffer then
-        actionBuffer.clearAll()
-    end
+    local hadConfigChanges, snapshot = flushDirtyConfig(stagedState)
+
+    executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
 
     local nextEffective = isEnabled(persistentState)
+    local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
     local shouldSyncMutation = mutation.affectsRunData(mutationBundle)
         and hadConfigChanges
 
     if not shouldSyncMutation then
+        flushSharedEventsDuringCommit(def, sharedEventFlusher)
+        if actionBuffer then
+            actionBuffer.clearAll()
+        end
         return notifyCommitAfterFlush(def, commitNotifier, commitContext)
     end
 
@@ -172,9 +168,16 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
         ok, err = true, nil
     end
     if ok then
+        flushSharedEventsDuringCommit(def, sharedEventFlusher)
+        if actionBuffer then
+            actionBuffer.clearAll()
+        end
         return notifyCommitAfterFlush(def, commitNotifier, commitContext)
     end
 
+    if actionBuffer then
+        actionBuffer.clearAll()
+    end
     return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)
 end
 

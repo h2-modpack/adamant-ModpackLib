@@ -5,8 +5,7 @@ surface. The current draw callback receives staged storage through `state` and
 transient action refs through `actions`.
 
 Action handlers declared through `module.actions.define(...)` receive
-`host, runtime, value`. They run during commit after the draw callback and
-before staged state flush:
+`host, runtime, value`. They run during commit after staged state flush:
 
 ```lua
 module.actions.define({

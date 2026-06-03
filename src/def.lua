@@ -171,15 +171,6 @@ local lib = {}
 ---    opts: table
 ---): any
 
----@alias AdamantModpackLib.ControlCommandHandler fun(
----    host: AdamantModpackLib.Host,
----    runtime: AdamantModpackLib.RuntimeContext,
----    control: AdamantModpackLib.ControlRef,
----    value: any
----)
-
----@alias AdamantModpackLib.ControlCommandMap table<string, AdamantModpackLib.ControlCommandHandler>
-
 ---@class AdamantModpackLib.ControlTemplate
 ---@field prepare? fun(instance: table): table
 ---@field storage? AdamantModpackLib.StorageSchema|fun(instance: table): AdamantModpackLib.StorageSchema
@@ -187,7 +178,6 @@ local lib = {}
 ---@field createUi? fun(fields: table<string, AdamantModpackLib.DrawStateRef>, instance: table): AdamantModpackLib.ControlRef
 ---@field draw? AdamantModpackLib.ControlDrawCallback
 ---@field views? table<string, AdamantModpackLib.ControlDrawCallback>
----@field commands? AdamantModpackLib.ControlCommandMap|fun(instance: table): AdamantModpackLib.ControlCommandMap
 
 ---@class AdamantModpackLib.ControlDeclaration
 ---@field template string
@@ -196,7 +186,6 @@ local lib = {}
 ---@field name fun(self: AdamantModpackLib.ControlRef): string
 ---@field kind fun(self: AdamantModpackLib.ControlRef): string
 ---@field read? fun(self: AdamantModpackLib.ControlRef, ...): any
----@field command? fun(self: AdamantModpackLib.ControlRef, commandName: string): AdamantModpackLib.DrawActionRef
 
 ---@class AdamantModpackLib.AuthorControls
 ---@field defineTemplates fun(templates: table<string, AdamantModpackLib.ControlTemplate>): nil
@@ -209,6 +198,8 @@ local lib = {}
 ---@class AdamantModpackLib.UiControls
 ---@field get fun(name: string): AdamantModpackLib.ControlRef
 ---@field read fun(name: string, ...): any
+---@field reset fun(name: string): boolean, integer
+---@field resetAll fun(): boolean, integer
 
 ---@class AdamantModpackLib.Host
 ---@field getHostId fun(): string
