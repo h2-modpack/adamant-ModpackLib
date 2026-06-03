@@ -37,9 +37,8 @@ The stack deliberately stores reload-sensitive state on `_G` tables:
 These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
 
 Safe to rebuild on every module `init`:
-- `definition`
-- `store`
-- staged state and its UI draw adapters
+- module declarations
+- committed runtime data and staged UI data adapters
 - live module created by `lib.createModule(...)` and activated by `module.activate()`
 - UI draw closures
 - lookup tables derived from current imports
@@ -56,7 +55,7 @@ Expected to persist across reloads:
 - module-owned ROM GUI callbacks attached through `module.fallbackUi.attachGuiOnce(...)`
   and backed by Lib fallback UI bridges keyed by host id
 
-Modules pass `pluginGuid` as their stable lifecycle identity. The committed host
+Modules pass `pluginGuid` as their stable lifecycle identity. The live module
 for that plugin is the structural hot-reload baseline and the owner for managed
 hooks, overlays, shared events, and activation metadata. Capability backends
 receive this identity as an `ownerId`; system scopes provide their own scoped
@@ -142,7 +141,7 @@ The important part is the split:
 - stable GUI registration happens once
 - the active state rebuild happens from `init`
 
-## Coordinated Module Host Refresh
+## Coordinated Module Refresh
 
 `lib.createModule(...)` plus `module.activate()` is the normal behavior refresh boundary for a coordinated module.
 
@@ -235,7 +234,7 @@ Mutation runtime is durable across module reloads, not across arbitrary Lib
 implementation reloads.
 
 Important properties:
-- active tracked mutation state survives store recreation during module reload
+- active tracked mutation state survives live-module recreation during module reload
 - active module records are keyed by `pluginGuid`
 - module activation synchronizes live mutation state to the module's persisted enabled state
 - if a module is disabled on reload, tracked active mutation state is reverted
@@ -308,15 +307,16 @@ Changes to:
 - `definition.storage`
 - module presence or discovery shape
 
-should be treated as structural compatibility work. In coordinated packs, Lib can
-request a Framework rebuild after the replacement host is created. Outside that
-coordinated path, use a full reload.
+should be treated as structural compatibility work. In coordinated packs, Lib
+can request a Framework rebuild after the replacement live module is created.
+Outside that coordinated path, use a full reload.
 
 ## Practical Rules
 
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate module declarations and activate the Lib-created live module in `init`
-- keep staged state behind the host; draw callbacks receive restricted `ui.draw`, `ui.data`, and `ui.actions` arguments through the host
+- keep staged state behind the live module; draw callbacks receive restricted
+  `ui.draw`, `ui.data`, and `ui.actions` through the UI phase object
 - register runtime hooks through `module.hooks.*` before activation
 - pass `pluginGuid` to `lib.createModule(...)`
 - call `module.activate()` after declarations

@@ -19,7 +19,7 @@ Current-run cache:
 - mutable table buckets
 - follows the active `CurrentRun`
 - runtime-only through `runtime.data.cache.currentRun`
-- inaccessible from draw state
+- inaccessible from draw `ui.data`
 - backed by one Lib-owned root on `CurrentRun`
 
 Runtime-owned storage replaces the old persistent-cache use case. If a module
@@ -69,7 +69,7 @@ phase and ownership rules are obvious.
 
 ## Shared Data Boundary
 
-Shared data uses the same `store`/draw `state` access model, but its
-declaration and activation lifecycle belong to `core/shared`. Keep that
-boundary intact so cache remains module-local runtime scratch state and shared
-remains cross-module cooperation.
+Shared data uses runtime/draw phase adapters, but its declaration and
+activation lifecycle belong to `core/shared`. Keep that boundary intact so
+cache remains module-local runtime scratch state and shared remains
+cross-module cooperation.

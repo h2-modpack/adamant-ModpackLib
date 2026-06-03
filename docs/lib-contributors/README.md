@@ -8,13 +8,14 @@ Recommended order:
 2. [LIB_INTERNALS.md](LIB_INTERNALS.md)
 3. [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md)
 4. [CACHE_OBJECT_DESIGN.md](CACHE_OBJECT_DESIGN.md)
-5. [CONTROLS_DESIGN.md](CONTROLS_DESIGN.md)
+5. [CONTROL_ERGONOMICS.md](CONTROL_ERGONOMICS.md)
 6. [TESTING.md](TESTING.md)
 
 For public API behavior, use [../../API.md](../../API.md).
 
-Future design notes live under [future-ideas](future-ideas/). They are not
-accepted implementation plans unless a specific note says otherwise.
+Future design notes are indexed in [future-ideas/README.md](future-ideas/README.md).
+They are not accepted implementation plans unless a specific note says
+otherwise.
 
 ## Host Vocabulary
 
