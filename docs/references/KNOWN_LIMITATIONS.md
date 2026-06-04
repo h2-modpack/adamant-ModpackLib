@@ -42,7 +42,7 @@ What this means in practice:
 
 - existing managed modules may close over prior Lib implementation closures until the owning module reloads
 - active mutation runtime is durable across module reload, not arbitrary Lib implementation reload
-- a Framework file reload does not update an existing pack object until Core or a coordinator rebuild calls `Framework.createPack(...)` again
+- a Framework file reload does not update an existing pack object until a coordinator rebuild calls `Framework.createPack(...)` again
 - retained HUD layout changes may require HUD recreation or a game HUD refresh
 
 Why this exists:

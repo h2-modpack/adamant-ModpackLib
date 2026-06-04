@@ -21,11 +21,11 @@ finishing a Lib change.
 From the shell repo root, run:
 
 ```bash
-python Setup/test_all.py
+python ModpackTools/test_all.py
 ```
 
 This is the high-signal end-to-end validation path for the repo family. It runs
-Lib, Framework, module, and Setup tests through the shared test harness.
+Lib, Framework, module, and ModpackTools tests through the shared test harness.
 
 ## Diff Hygiene
 

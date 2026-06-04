@@ -6,6 +6,28 @@ ModpackFramework.
 For exact API types, use [API.md](../../API.md). For the fuller contract, use
 [MODULE_AUTHORING.md](MODULE_AUTHORING.md).
 
+## Start From The Tools
+
+For the full new-pack walkthrough, start with the
+[`ModpackBootstrap` Getting Started guide](https://github.com/h2-modpack/ModpackBootstrap/blob/main/docs/GETTING_STARTED.md).
+This guide focuses on the Lib module-authoring contract after a pack workspace
+exists.
+
+For a new pack, use
+[`ModpackBootstrap`](https://github.com/h2-modpack/ModpackBootstrap). It creates
+the shell repo, coordinator package, shared Lib/Framework submodules, and
+`ModpackTools/`.
+
+For a new module in an existing pack, run this from the shell repo root:
+
+```bash
+python ModpackTools/new_module/create.py --package-id My_Module --title "My Module"
+```
+
+That command scaffolds from
+[`ModpackModuleTemplate`](https://github.com/h2-modpack/ModpackModuleTemplate),
+registers the module under `Submodules/`, and syncs coordinator dependencies.
+
 ## Core Model
 
 A module is built from four pieces:

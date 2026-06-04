@@ -68,6 +68,6 @@ For each leaf migration:
 
 1. Run targeted tests for the touched subsystem.
 2. Run the full Lib suite.
-3. Run the repo-level `python Setup/test_all.py`.
+3. Run the repo-level `python ModpackTools/test_all.py`.
 4. Run `git diff --check`.
 5. Search for stale internal-bus references before moving on.

@@ -64,22 +64,22 @@ are process-global.
 
 ## Layer Responsibilities
 
-### Core
+### Coordinator
 
-Core owns coordinator bootstrap and stable GUI callback registration.
+The coordinator owns pack bootstrap and stable GUI callback registration.
 
-Core responsibilities:
+Coordinator responsibilities:
 - register stable `rom.gui` callbacks once behind `modutil.once_loaded.game(...)`
 - register coordinator metadata from `mods.on_all_mods_loaded(...)`
 - call `Framework.createPack(...)` from the reload body
-- late-read Framework factories so a Framework reload does not leave Core holding stale closures
+- late-read Framework factories so a Framework reload does not leave the coordinator holding stale closures
 
 `mods.on_all_mods_loaded(...)` is intentional coordinator timing, not a generic
 readiness gate. ROM calls these callbacks after the full mod graph loads, and it
 also replays a module's callbacks when that module hot reloads after the
-all-mods-loaded milestone. That gives Core both properties the coordinator
-beacon needs: initial registration happens after coordinated modules have loaded,
-and later Core reloads refresh Lib's stored rebuild callback closure.
+all-mods-loaded milestone. That gives the coordinator both properties the beacon
+needs: initial registration happens after coordinated modules have loaded, and
+later coordinator reloads refresh Lib's stored rebuild callback closure.
 
 ### Framework
 
@@ -90,7 +90,7 @@ Framework owns pack-level coordinator state:
 - coordinator UI
 
 Framework owns the current pack object for each `packId`.
-Coordinator/Core code owns the pack creation parameters and re-calls `Framework.createPack(...)`
+Coordinator code owns the pack creation parameters and re-calls `Framework.createPack(...)`
 when the coordinator/framework layer reloads or when Lib requests a coordinated
 structural rebuild.
 
@@ -161,13 +161,13 @@ Framework replaces the current pack object when the coordinator calls
 pack's stable HUD/index slot while rebuilding discovery, HUD, hash, and UI state
 from the current live modules.
 
-Core registers GUI callbacks once and those callback closures remain valid across
+The coordinator registers GUI callbacks once and those callback closures remain valid across
 reloads by late-reading the current Framework renderer/menu factories from
 `rom.mods`.
 
 The invariant is:
 - stable callbacks survive reloads
-- coordinator/Core owns `Framework.createPack(...)` re-entry
+- the coordinator owns `Framework.createPack(...)` re-entry
 - ordinary coordinated module behavior reloads do not require a pack rebuild
 
 Framework reload is an infrastructure path, not the fast module-authoring path.
@@ -277,9 +277,9 @@ Module reload replaces the module's live runtime surface. Framework snapshots th
 
 Best-effort infrastructure development path.
 
-Persistent Lib registries survive Lib reload, and Core late-reads Framework
+Persistent Lib registries survive Lib reload, and the coordinator late-reads Framework
 callbacks. Existing managed modules may still close over prior Lib implementation
-closures until the owning module reloads. Coordinator/Core must re-call
+closures until the owning module reloads. The coordinator must re-call
 `Framework.createPack(...)` to rebuild Framework pack state after Framework changes.
 Use a full process restart as the correctness boundary for infrastructure
 changes that affect mutation internals, top-level registration, or retained HUD

@@ -17,7 +17,7 @@ This document focuses on:
 - `ModUtil.LoadOnce`
 - `chalk.auto`
 
-It does not define the stack-specific hot-reload architecture for Lib, Framework, Core, or managed modules.
+It does not define the stack-specific hot-reload architecture for Lib, Framework, coordinators, or managed modules.
 
 It also calls out a few important things these libraries do **not** do:
 - ModUtil wrap registration does **not** deduplicate by callback or mod
