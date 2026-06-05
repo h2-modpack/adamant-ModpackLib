@@ -74,6 +74,10 @@ return {
         severity = "error",
         description = "Control field and table methods can only access aliases declared by the control template binding.",
     },
+    ["controls.unavailable_field"] = {
+        severity = "error",
+        description = "Control template refs can only use fields available on the current runtime or UI surface.",
+    },
     ["controls.unknown_control"] = {
         severity = "error",
         description = "Control access requires a declared control instance.",

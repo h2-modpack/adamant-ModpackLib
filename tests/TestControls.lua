@@ -146,6 +146,10 @@ function SelectionGroup.createUi(fields)
         return fields.Rows:read(1, "Enabled")
     end
 
+    function control:readInternalRowAlias()
+        return fields.Rows:read(1, "_Rewards:Rows:Selection")
+    end
+
     return control
 end
 
@@ -180,6 +184,33 @@ function KeyedFlag.createUi(fields, instance)
 end
 
 function KeyedFlag.draw() end
+
+local PackedFlags = {}
+
+function PackedFlags.storage()
+    return {
+        {
+            key = "Value",
+            type = "packedInt",
+            default = 0,
+            width = 2,
+            bits = {
+                { key = "Alpha", type = "bool", offset = 0, width = 1, default = false },
+                { key = "Beta", type = "bool", offset = 1, width = 1, default = false },
+            },
+        },
+    }
+end
+
+function PackedFlags.createUi(fields)
+    return {
+        field = function()
+            return fields.Value
+        end,
+    }
+end
+
+function PackedFlags.draw() end
 
 local FilteredValue = {}
 
@@ -403,7 +434,9 @@ function TestControls:testRuntimeControlsSkipUiOnlyFields()
     local record = self.h.moduleHost.getRecord(liveModule)
     local runtimeControl = record.runtime.controls.get("Searchable")
     lu.assertEquals(runtimeControl:read(), 1)
-    lu.assertFalse(runtimeControl:hasFilter())
+    lu.assertErrorMsgContains("controls.unavailable_field", function()
+        runtimeControl:hasFilter()
+    end)
 
     liveModule.drawTab()
     liveModule.flush()
@@ -446,6 +479,38 @@ function TestControls:testControlsRejectRuntimeOwnedStorage()
     local ok, err = module.activate()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "controls cannot declare runtime-owned storage")
+end
+
+function TestControls:testControlSchemasExposeSemanticAliasesOnly()
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-semantic-schema",
+        config = {},
+        id = "ControlsSemanticSchema",
+        name = "Controls Semantic Schema",
+        templates = {
+            PackedFlags = PackedFlags,
+        },
+        controls = {
+            Flags = {
+                template = "PackedFlags",
+            },
+        },
+        drawTab = function(_, ui)
+            local field = ui.controls.get("Flags"):field()
+            local schema = field:schema()
+            lu.assertEquals(schema.alias, "Value")
+            lu.assertEquals(schema.bits[1].alias, "Alpha")
+            lu.assertEquals(schema.bits[2].alias, "Beta")
+            field:writeAlias("Alpha", true)
+            lu.assertTrue(field:readAlias("Alpha"))
+            lu.assertErrorMsgContains("controls.unknown_field_alias", function()
+                field:readAlias("_Flags:Value:Alpha")
+            end)
+        end,
+    })
+
+    lu.assertTrue(module.activate())
+    self.h:liveModule("test-controls-semantic-schema").drawTab()
 end
 
 function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
@@ -499,6 +564,9 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
             rewards:selectionField(2):write(5)
             lu.assertErrorMsgContains("controls.unknown_field_alias", function()
                 rewards:readUnknownRowAlias()
+            end)
+            lu.assertErrorMsgContains("controls.unknown_field_alias", function()
+                rewards:readInternalRowAlias()
             end)
         end,
     })

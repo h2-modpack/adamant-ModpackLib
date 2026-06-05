@@ -25,16 +25,33 @@ local function findMappedAlias(mapping, alias)
     if type(mapping) ~= "table" then
         return nil
     end
-    local mapped = mapping[alias]
-    if mapped ~= nil then
-        return mapped
+    return mapping[alias]
+end
+
+local function toSemanticAlias(mapping, internalAlias)
+    if type(mapping) ~= "table" then
+        return internalAlias
     end
-    for _, internalAlias in pairs(mapping) do
-        if alias == internalAlias then
-            return internalAlias
+    for semanticAlias, mappedAlias in pairs(mapping) do
+        if mappedAlias == internalAlias then
+            return semanticAlias
         end
     end
-    return nil
+    return internalAlias
+end
+
+local function semanticFieldSchema(rawSchema, binding)
+    local schema = values.deepCopy(rawSchema)
+    if binding == nil then
+        return schema
+    end
+    schema.alias = binding.key or schema.alias
+    if type(schema.bits) == "table" then
+        for _, bit in ipairs(schema.bits) do
+            bit.alias = toSemanticAlias(binding.bitAliases, bit.alias)
+        end
+    end
+    return schema
 end
 
 local function mapFieldAlias(binding, alias, context)
@@ -72,7 +89,7 @@ local function wrapField(rawField, binding, gate, writable)
 
     function field.schema(self)
         requireSelf("control field schema", self, field)
-        return rawField:schema()
+        return semanticFieldSchema(rawField:schema(), binding)
     end
 
     function field.alias(self)
@@ -235,7 +252,19 @@ end
 
 local function createFieldSet(root, entry, phase, writable)
     local gate = createGate(phase)
-    local fields = {}
+    local unavailable = {}
+    local fields = setmetatable({}, {
+        __index = function(_, key)
+            local reason = unavailable[key]
+            if reason ~= nil then
+                logging.violate("controls.unavailable_field", "control '%s': field '%s' is unavailable in %s",
+                    tostring(entry.name),
+                    tostring(key),
+                    reason)
+            end
+            return nil
+        end,
+    })
 
     for key, binding in pairs(entry.bindings or {}) do
         local schema = root.getAliasSchema(binding.alias)
@@ -246,6 +275,7 @@ local function createFieldSet(root, entry, phase, writable)
             local bindField = true
             if phase == "runtime" and not schema._persist then
                 bindField = false
+                unavailable[key] = "runtime because it is UI-only transient storage"
             end
 
             if bindField then
