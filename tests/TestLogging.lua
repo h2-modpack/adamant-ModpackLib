@@ -264,9 +264,13 @@ function TestLogging.testViolationErrorRaises()
             description = "Test error policy.",
         },
     }, function(activeLogging)
-        lu.assertErrorMsgContains("[lib] test.error: broken", function()
+        local ok, err = pcall(function()
             activeLogging.violate("test.error", "broken")
         end)
+
+        lu.assertFalse(ok)
+        lu.assertStrContains(err, "[lib] test.error: broken")
+        lu.assertStrContains(err, "stack traceback")
     end)
 end
 

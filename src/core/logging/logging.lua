@@ -49,6 +49,9 @@ function logging.violate(id, fmt, ...)
 
     local message = logging.formatLogMessage("[lib] " .. id .. ": ", fmt, ...)
     if severity == "error" then
+        if debug and type(debug.traceback) == "function" then
+            error(debug.traceback(message, 2), 0)
+        end
         error(message, 2)
     elseif severity == "warn" then
         print(message)
