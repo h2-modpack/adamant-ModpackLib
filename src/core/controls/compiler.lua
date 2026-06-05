@@ -50,6 +50,16 @@ local function copyDescriptor(descriptor)
     return copy
 end
 
+local function rejectRuntimeOwnedField(controlName, fieldKey)
+    local message = "controls cannot declare runtime-owned storage; declare runtime-owned storage at module level " ..
+        "and pass the value into the control view"
+    logging.violate("controls.invalid_field",
+        "control '%s' field '%s': %s",
+        tostring(controlName),
+        tostring(fieldKey),
+        message)
+end
+
 local function compileBitNodes(bits, controlName, parentKey, binding)
     if bits == nil then
         return nil
@@ -68,6 +78,9 @@ local function compileBitNodes(bits, controlName, parentKey, binding)
         end
         local key = bit.key or bit.alias
         requireStableIdentifier("control packed bit key", key)
+        if bit.mode == "runtime" then
+            rejectRuntimeOwnedField(controlName, parentKey .. ":" .. key)
+        end
         local bitCopy = copyDescriptor(bit)
         bitCopy.alias = generatedName(controlName, parentKey, key)
         binding.bitAliases[key] = bitCopy.alias
@@ -95,6 +108,9 @@ local function compileRowNodes(row, controlName, parentKey, binding)
         end
         local rowKey = rowNode.key or rowNode.alias
         requireStableIdentifier("control row field key", rowKey)
+        if rowNode.mode == "runtime" then
+            rejectRuntimeOwnedField(controlName, parentKey .. ":" .. rowKey)
+        end
         local child = copyDescriptor(rowNode)
         child.alias = generatedName(controlName, parentKey, rowKey)
         local childBinding = {
@@ -127,6 +143,9 @@ local function compileStorageNodes(controlName, descriptors)
         end
         local key = descriptor.key or descriptor.alias
         requireStableIdentifier("control storage field key", key)
+        if descriptor.mode == "runtime" then
+            rejectRuntimeOwnedField(controlName, key)
+        end
         if bindings[key] ~= nil then
             logging.violate("controls.duplicate_name", "control '%s' has duplicate field '%s'",
                 tostring(controlName), tostring(key))

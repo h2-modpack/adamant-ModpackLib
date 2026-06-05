@@ -141,3 +141,6 @@ runtime-owned storage.
   catalogs, and screen composition.
 - Do not use controls for one-off leaf fields. `ui.draw.widgets.*` is simpler.
 - Do not use generated `_` aliases directly; they are private Lib storage.
+- Do not declare `mode = "runtime"` inside control storage. Runtime-owned
+  coordination state belongs at module level and can be passed into control
+  views when needed.

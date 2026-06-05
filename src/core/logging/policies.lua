@@ -70,6 +70,10 @@ return {
         severity = "error",
         description = "Control storage fields must compile into valid private storage declarations.",
     },
+    ["controls.unknown_field_alias"] = {
+        severity = "error",
+        description = "Control field and table methods can only access aliases declared by the control template binding.",
+    },
     ["controls.unknown_control"] = {
         severity = "error",
         description = "Control access requires a declared control instance.",

@@ -85,7 +85,7 @@ Controls are leaf elements rendered as one unit.
 
 Controls may own:
 
-- private storage/action fields
+- private configuration storage fields
 - labels, tooltips, options, defaults, and display values
 - semantic runtime reads
 - field-level writes during draw
@@ -102,6 +102,7 @@ Controls should not own:
 - cross-screen orchestration
 - module lifecycle behavior
 - hooks, overlays, mutation plans, shared events, or cache declarations
+- runtime-owned coordination state or command actions
 
 If visibility depends only on fields owned by the control, keep it inside the
 control. If visibility depends on sibling controls or screen state, keep that in
@@ -182,7 +183,7 @@ widget renders already-existing refs. A control crosses declaration, UI, and
 runtime planes:
 
 ```text
-control declaration -> private storage/actions -> UI renderer -> runtime reader
+control declaration -> private storage -> UI renderer -> runtime reader
 ```
 
 The useful mental model:
@@ -191,7 +192,7 @@ The useful mental model:
 control template = managed module-side class
 control declaration = one object instance definition
 ui.controls.get(...) / runtime.controls.get(...) = phase-specific object ref
-private storage/actions = object fields hidden behind the control interface
+private storage = object fields hidden behind the control interface
 ```
 
 Use a plain module class when the object is only code/data organization. Use a
@@ -202,17 +203,15 @@ the module lifecycle.
 ## Template Contract
 
 A control template is a module-owned class definition. It describes how one
-control instance maps to private storage/actions and how phase-specific object
+control instance maps to private storage and how phase-specific object
 refs are constructed.
 
 Common template entry points:
 
 - `storage(instance)` returns private storage descriptors using `key` rather
   than public `alias`.
-- `actions(instance)` may return private action handlers when the control needs
-  internal button/command behavior.
 - `createRuntime(fields, instance)` returns the runtime control ref.
-- `createUi(fields, instance, actions)` returns the UI control ref.
+- `createUi(fields, instance)` returns the UI control ref.
 - `draw(draw, control, instance, ...)` defines the default view.
 - `views = { name = function(draw, control, instance, ...) end }` defines
   named views.
@@ -234,9 +233,8 @@ module.controls.define(...)
 module.activate()
   controls.compile(declarations.controls)
     -> internalStorage
-    -> internalActions
     -> controlCatalog
-  prepareDefinitionWithInternalDeclarations(..., internalStorage, internalActions)
+  prepareDefinitionWithInternalDeclarations(..., internalStorage)
   moduleState.create(config, definition)
   managedModule.create(...)
     runtime.controls = controls.refs.createRuntime(...)

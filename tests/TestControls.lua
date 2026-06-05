@@ -142,6 +142,10 @@ function SelectionGroup.createUi(fields)
         return fields.Rows:get(rowIndex, "Selection")
     end
 
+    function control:readUnknownRowAlias()
+        return fields.Rows:read(1, "Enabled")
+    end
+
     return control
 end
 
@@ -176,6 +180,58 @@ function KeyedFlag.createUi(fields, instance)
 end
 
 function KeyedFlag.draw() end
+
+local FilteredValue = {}
+
+function FilteredValue.storage()
+    return {
+        {
+            key = "Value",
+            type = "int",
+            default = 1,
+            min = 0,
+            max = 10,
+        },
+        {
+            key = "Filter",
+            type = "string",
+            persist = false,
+            hash = false,
+            default = "",
+            maxLen = 64,
+        },
+    }
+end
+
+function FilteredValue.createRuntime(fields)
+    return {
+        read = function()
+            return fields.Value:read()
+        end,
+        hasFilter = function()
+            return fields.Filter ~= nil
+        end,
+    }
+end
+
+function FilteredValue.createUi(fields)
+    return {
+        read = function()
+            return fields.Value:read()
+        end,
+        hasFilter = function()
+            return fields.Filter ~= nil
+        end,
+        writeFilter = function(_, value)
+            return fields.Filter:write(value)
+        end,
+        readFilter = function()
+            return fields.Filter:read()
+        end,
+    }
+end
+
+function FilteredValue.draw() end
 
 function TestControls:setUp()
     self.h = createModuleHostHarness()
@@ -219,6 +275,9 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
                 min = 2,
             })
             capturedUiControl:field("Mode"):write("Tartarus")
+            lu.assertErrorMsgContains("controls.unknown_field_alias", function()
+                capturedUiControl:field("Mode"):readAlias("Enabled")
+            end)
             lu.assertErrorMsgContains("storage.private_alias", function()
                 ui.data.read("_PrioritySlot:Mode")
             end)
@@ -315,6 +374,80 @@ function TestControls:testControlsAreCachedPerPhase()
     lu.assertEquals(uiFirst, uiSecond)
 end
 
+function TestControls:testRuntimeControlsSkipUiOnlyFields()
+    local config = {}
+    local capturedUiControl = nil
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-ui-only-field",
+        config = config,
+        id = "ControlsUiOnlyField",
+        name = "Controls UI Only Field",
+        templates = {
+            FilteredValue = FilteredValue,
+        },
+        controls = {
+            Searchable = {
+                template = "FilteredValue",
+            },
+        },
+        drawTab = function(_, ui)
+            capturedUiControl = ui.controls.get("Searchable")
+            lu.assertTrue(capturedUiControl:hasFilter())
+            capturedUiControl:writeFilter("Zeus")
+            lu.assertEquals(capturedUiControl:readFilter(), "Zeus")
+        end,
+    })
+
+    lu.assertTrue(module.activate())
+    local liveModule = self.h:liveModule("test-controls-ui-only-field")
+    local record = self.h.moduleHost.getRecord(liveModule)
+    local runtimeControl = record.runtime.controls.get("Searchable")
+    lu.assertEquals(runtimeControl:read(), 1)
+    lu.assertFalse(runtimeControl:hasFilter())
+
+    liveModule.drawTab()
+    liveModule.flush()
+
+    lu.assertEquals(capturedUiControl:read(), 1)
+    lu.assertEquals(config["_Searchable:Value"], 1)
+    lu.assertNil(config["_Searchable:Filter"])
+end
+
+function TestControls:testControlsRejectRuntimeOwnedStorage()
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-runtime-owned-field",
+        config = {},
+        id = "ControlsRuntimeOwnedField",
+        name = "Controls Runtime Owned Field",
+        templates = {
+            RuntimeOwnedValue = {
+                storage = function()
+                    return {
+                        {
+                            key = "Marker",
+                            type = "bool",
+                            mode = "runtime",
+                            persist = false,
+                            hash = false,
+                            default = false,
+                        },
+                    }
+                end,
+                draw = function() end,
+            },
+        },
+        controls = {
+            Recording = {
+                template = "RuntimeOwnedValue",
+            },
+        },
+    })
+
+    local ok, err = module.activate()
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "controls cannot declare runtime-owned storage")
+end
+
 function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     local results = {}
     local module = createModule(self.h, {
@@ -364,6 +497,9 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
             local rewards = ui.controls.get("Rewards")
             rewards:setCount(2)
             rewards:selectionField(2):write(5)
+            lu.assertErrorMsgContains("controls.unknown_field_alias", function()
+                rewards:readUnknownRowAlias()
+            end)
         end,
     })
 

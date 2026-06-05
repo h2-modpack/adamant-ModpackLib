@@ -21,17 +21,38 @@ local function createGate(phase)
     return phaseGate.requireRuntime
 end
 
-local function mapAlias(binding, alias)
-    if binding == nil then
-        return alias
+local function findMappedAlias(mapping, alias)
+    if type(mapping) ~= "table" then
+        return nil
     end
-    if binding.rowAliases and binding.rowAliases[alias] then
-        return binding.rowAliases[alias]
+    local mapped = mapping[alias]
+    if mapped ~= nil then
+        return mapped
     end
-    if binding.bitAliases and binding.bitAliases[alias] then
-        return binding.bitAliases[alias]
+    for _, internalAlias in pairs(mapping) do
+        if alias == internalAlias then
+            return internalAlias
+        end
     end
-    return alias
+    return nil
+end
+
+local function mapFieldAlias(binding, alias, context)
+    local internalAlias = findMappedAlias(binding and binding.bitAliases or nil, alias)
+    if internalAlias == nil then
+        logging.violate("controls.unknown_field_alias", "%s: unknown control field alias '%s'",
+            tostring(context), tostring(alias))
+    end
+    return internalAlias
+end
+
+local function mapRowAlias(binding, alias, context)
+    local internalAlias = findMappedAlias(binding and binding.rowAliases or nil, alias)
+    if internalAlias == nil then
+        logging.violate("controls.unknown_field_alias", "%s: unknown control table row alias '%s'",
+            tostring(context), tostring(alias))
+    end
+    return internalAlias
 end
 
 local function wrapField(rawField, binding, gate, writable)
@@ -46,7 +67,7 @@ local function wrapField(rawField, binding, gate, writable)
 
     function field.readAlias(self, alias)
         requireSelf("control field readAlias", self, field)
-        return rawField:readAlias(mapAlias(binding, alias))
+        return rawField:readAlias(mapFieldAlias(binding, alias, "control field readAlias"))
     end
 
     function field.schema(self)
@@ -74,7 +95,7 @@ local function wrapField(rawField, binding, gate, writable)
         function field.writeAlias(self, alias, value)
             requireSelf("control field writeAlias", self, field)
             gate()
-            return rawField:writeAlias(mapAlias(binding, alias), value)
+            return rawField:writeAlias(mapFieldAlias(binding, alias, "control field writeAlias"), value)
         end
 
         function field.reset(self)
@@ -93,7 +114,7 @@ local function translateRowValues(binding, rowValues)
     end
     local mapped = {}
     for key, value in pairs(rowValues) do
-        mapped[mapAlias(binding, key)] = value
+        mapped[mapRowAlias(binding, key, "control table row values")] = value
     end
     return mapped
 end
@@ -124,13 +145,13 @@ local function wrapTable(rawTable, binding, gate, writable)
 
     function handle.read(self, rowIndex, rowAlias)
         requireSelf("control table read", self, handle)
-        return rawTable:read(rowIndex, mapAlias(binding, rowAlias))
+        return rawTable:read(rowIndex, mapRowAlias(binding, rowAlias, "control table read"))
     end
 
     function handle.get(self, rowIndex, rowAlias)
         requireSelf("control table get", self, handle)
         rowIndex = math.floor(tonumber(rowIndex) or 0)
-        local internalAlias = mapAlias(binding, rowAlias)
+        local internalAlias = mapRowAlias(binding, rowAlias, "control table get")
         local rowFields = fieldCache[rowIndex]
         if not rowFields then
             rowFields = {}
@@ -167,13 +188,13 @@ local function wrapTable(rawTable, binding, gate, writable)
         function handle.write(self, rowIndex, rowAlias, value)
             requireSelf("control table write", self, handle)
             gate()
-            return rawTable:write(rowIndex, mapAlias(binding, rowAlias), value)
+            return rawTable:write(rowIndex, mapRowAlias(binding, rowAlias, "control table write"), value)
         end
 
         function handle.reset(self, rowIndex, rowAlias)
             requireSelf("control table reset", self, handle)
             gate()
-            return rawTable:reset(rowIndex, mapAlias(binding, rowAlias))
+            return rawTable:reset(rowIndex, mapRowAlias(binding, rowAlias, "control table reset"))
         end
 
         function handle.append(self, rowValues)
@@ -217,15 +238,27 @@ local function createFieldSet(root, entry, phase, writable)
     local fields = {}
 
     for key, binding in pairs(entry.bindings or {}) do
-        local raw = root.get(binding.alias)
-        if raw == nil then
+        local schema = root.getAliasSchema(binding.alias)
+        if schema == nil then
             logging.violate("controls.invalid_field", "control '%s': compiled field '%s' is missing",
                 tostring(entry.name), tostring(key))
-        end
-        if storage.field.is(raw) then
-            fields[key] = wrapField(raw, binding, gate, writable)
         else
-            fields[key] = wrapTable(raw, binding, gate, writable)
+            local bindField = true
+            if phase == "runtime" and not schema._persist then
+                bindField = false
+            end
+
+            if bindField then
+                local raw = root.get(binding.alias)
+                if raw == nil then
+                    logging.violate("controls.invalid_field", "control '%s': compiled field '%s' is missing",
+                        tostring(entry.name), tostring(key))
+                elseif storage.field.is(raw) then
+                    fields[key] = wrapField(raw, binding, gate, writable)
+                else
+                    fields[key] = wrapTable(raw, binding, gate, writable)
+                end
+            end
         end
     end
 
@@ -273,10 +306,15 @@ local function resetBoundRoots(root, entry)
         if alias ~= nil and not seen[alias] then
             seen[alias] = true
             local schema = root.getAliasSchema(alias)
-            local current = root.read(alias)
-            if not storage.valuesEqual(schema, current, schema.default) then
-                root.reset(alias)
-                changedCount = changedCount + 1
+            if schema == nil then
+                logging.violate("controls.invalid_field", "control '%s': compiled field '%s' is missing",
+                    tostring(entry.name), tostring(binding.key))
+            else
+                local current = root.read(alias)
+                if not storage.valuesEqual(schema, current, schema.default) then
+                    root.reset(alias)
+                    changedCount = changedCount + 1
+                end
             end
         end
     end
