@@ -1,12 +1,11 @@
-# Runtime Status
+# Runtime Status And Future Tasks
 
-This note records the target shape for replacing the public `runtimeOwned`
-storage lane with a clearer `status` capability. It is an audit target before
-implementation, not a committed API yet.
+This note records the implemented `status` capability and the deferred design
+question around bundling status with actions.
 
-## Current Pressure
+## Original Pressure
 
-The current public primitives are mechanically correct but conceptually noisy:
+The old public primitives were mechanically correct but conceptually noisy:
 
 ```lua
 ui.actions.trigger("StartRecording", payload)
@@ -20,9 +19,8 @@ but putting runtime-authored state under `data.runtimeOwned` makes it look like
 a special case of normal configuration storage.
 
 The LiveSplit module is the concrete consumer that keeps this lane load-bearing:
-it stores `RecordingReady` as `mode = "runtime"`, `persist = true`, and
-`hash = false` so recording readiness can survive reloads. The capability should
-be reframed, not removed.
+it stores `RecordingReady` as persisted status so recording readiness can
+survive reloads. The capability was reframed, not removed.
 
 ## Capability Boundaries
 
@@ -39,9 +37,9 @@ shared  = cross-module state/events
 `status` is not normal storage with a `mode` flag. It is its own module-level
 capability because it has the opposite ownership direction from `data`.
 
-## Target Declaration
+## Declaration
 
-Status declarations should move out of `module.data.define(...)`:
+Status declarations live outside `module.data.define(...)`:
 
 ```lua
 module.status.define({
@@ -73,7 +71,7 @@ Rules:
   model. Status is for bounded runtime-to-UI state, including small logs or
   recent event lists.
 
-## Target Access
+## Access
 
 Expose phase-specific facades over one backing value:
 
@@ -87,19 +85,17 @@ ui.status.read("RecordingReady")
 ui.status.get("InfoFeed"):snapshot()
 ```
 
-Runtime owns writes and resets. UI gets read-only access. This mirrors the
-existing `runtime.data.runtimeOwned` and `ui.data.runtimeOwned` mechanics, but
-the author-facing namespace says what the lane means instead of how it is
+Runtime owns writes and resets. UI gets read-only access. Internally this can
+still compile through runtime-owned persistent/staged state machinery, but the
+author-facing namespace says what the lane means instead of how it is
 implemented.
 
-Implementation can initially compile `module.status.define(...)` into the same
-internal runtime-owned persistent/staged state machinery. The public name should
-be `status`; the backend can be renamed later if that cleanup is worthwhile.
+The backend can be renamed later if that cleanup is worthwhile.
 
 ## Public Surface Reduction
 
-The target is not to add `status` beside the current runtime-owned public API.
-The target is to narrow the author-facing surface:
+`status` is not an extra namespace beside runtime-owned public API. It is the
+author-facing surface:
 
 ```text
 runtime.data.runtimeOwned -> runtime.status
@@ -107,14 +103,13 @@ ui.data.runtimeOwned      -> ui.status
 mode = "runtime"          -> module.status.define(...)
 ```
 
-After migration, `data` should only expose UI-authored storage. Runtime-authored
+After migration, `data` only exposes UI-authored storage. Runtime-authored
 state should not appear as a sub-namespace of `data`, and normal storage
-declarations should not accept `mode = "runtime"` as the public way to define
+declarations do not accept `mode = "runtime"` as the public way to define
 that lane.
 
 The existing runtime-owned backend can remain as an implementation detail while
-the public API is narrowed. Compatibility shims, if used, should be temporary
-and should not be documented as the primary module-author path.
+the public API stays narrowed.
 
 ## Actions Stay Separate
 
@@ -190,14 +185,19 @@ module-level status and pass it to the control view. If many controls start
 hand-threading action refs or status refs through bespoke option shapes, that is
 evidence for a later first-class binding design.
 
-## Build Order
+## Implemented And Deferred Work
 
-1. Add `module.status.define(...)`, `runtime.status`, and `ui.status` as the
-   public names for runtime-authored state.
-2. Compile status declarations through the existing runtime-owned backend.
-3. Keep `runtimeOwned` as a compatibility/internal term only as long as needed.
-4. Migrate docs and modules away from `mode = "runtime"` and
-   `data.runtimeOwned`.
-5. Keep actions command-only.
-6. Revisit action/status bundling only after real modules show repeated
+Implemented:
+
+- `module.status.define(...)`, `runtime.status`, and `ui.status` are the public
+  names for runtime-authored state.
+- Status declarations compile through the existing runtime-owned backend.
+- `data` is narrowed back to UI-authored storage.
+- Actions remain command-only.
+
+Deferred:
+
+- Rename the internal backend away from `runtimeOwned` if the name keeps leaking
+  into diagnostics or contributor code.
+- Revisit action/status bundling only after real modules show repeated
    hand-wired pairings.

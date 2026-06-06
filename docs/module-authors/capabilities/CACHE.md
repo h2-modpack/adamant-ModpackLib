@@ -8,8 +8,8 @@ One cache domain exists today:
 
 - `currentRun`: mutable table buckets that follow the lifetime of active `CurrentRun`
 
-For runtime-owned scalar or table values that need normal module storage
-semantics, use managed storage with `mode = "runtime"` instead of cache.
+For runtime-authored scalar or table values that UI needs to read, use
+`module.status.define(...)` instead of cache.
 
 ## Declaration
 
@@ -45,8 +45,8 @@ runScratch.seen = true
 ```
 
 Current-run cache is not exposed through draw `state`. If UI needs to display a
-runtime-derived value, write that value to managed `mode = "runtime"` storage
-through `runtime.data.runtimeOwned` or publish shared data from runtime code.
+runtime-derived value, write that value to status through `runtime.status` or
+publish shared data from runtime code.
 
 Rules:
 
@@ -81,9 +81,9 @@ Use current-run cache for:
 - per-run transient state attached to `CurrentRun`
 - data that should disappear when `CurrentRun` is replaced
 
-Use `mode = "runtime"` storage for:
+Use status for:
 
-- runtime-owned values that UI can read
+- runtime-authored values that UI can read
 - values that may persist through reloads or restarts
 - values that should stay outside hashes/profiles and staged UI writes
 

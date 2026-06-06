@@ -51,7 +51,18 @@ local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
 moduleState.uiState = uiStateModule
 
 local storeModule = import('core/module_state/persistent/store.lua', nil, {
+    logging = logging,
+    storageRefAdapter = storageRefAdapter,
+})
+
+local runtimeStatusModule = import('core/status/adapters/runtime_status.lua', nil, {
+    logging = logging,
     phaseGate = phaseGate,
+    storageRefAdapter = storageRefAdapter,
+})
+
+local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
+    logging = logging,
     storageRefAdapter = storageRefAdapter,
 })
 
@@ -112,7 +123,16 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field cache table|nil
 ---@field shared table|nil
----@field runtimeOwned RuntimeOwnedState|nil
+---@field read fun(alias: string, ...): any
+
+---@class RuntimeStatusState
+---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
+---@field read fun(alias: string, ...): any
+---@field write fun(alias: string, ...): boolean
+---@field reset fun(alias: string, ...): boolean
+
+---@class UiStatusState
+---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
@@ -175,6 +195,14 @@ end
 -- Internal API: narrows persistent state to the runtime store.
 function moduleState.createStore(persistentState, cache, shared)
     return storeModule.create(persistentState, cache, shared)
+end
+
+function moduleState.createRuntimeStatus(persistentState)
+    return runtimeStatusModule.create(persistentState)
+end
+
+function moduleState.createUiStatus(stagedState)
+    return uiStatusModule.create(stagedState)
 end
 
 function moduleState.createActionBuffer(actionCatalog)

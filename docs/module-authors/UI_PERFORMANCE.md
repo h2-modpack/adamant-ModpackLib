@@ -27,8 +27,8 @@ This document assumes:
 - draw code reads staged values through `ui.data.get(...)`
 - runtime/gameplay code reads committed setting values through
   `runtime.data.get(...)`
-- runtime-owned values are written through `runtime.data.runtimeOwned` and read
-  from UI through `ui.data.runtimeOwned`
+- status values are written through `runtime.status` and read from UI through
+  `ui.status`
 - draw-callback objects are shaped by variant type; read methods are
   phase-neutral, while mutation methods remain scoped
 - debug toggles write persisted values through the host/framework flow

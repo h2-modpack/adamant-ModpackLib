@@ -105,7 +105,7 @@ end
 
 Draw emits are staged during the draw callback and delivered during commit
 after staged state flush, mutation sync, action handlers, and queued
-runtime-owned resets.
+status resets.
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
 order.
 

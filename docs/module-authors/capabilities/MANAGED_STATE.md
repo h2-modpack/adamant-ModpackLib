@@ -8,9 +8,9 @@ state, draw actions, and hash/profile participation.
 | Surface | Use it for | Phase |
 | --- | --- | --- |
 | `runtime.data` | committed setting reads | runtime callbacks |
-| `runtime.data.runtimeOwned` | read/write `mode = "runtime"` storage | runtime callbacks |
+| `runtime.status` | read/write runtime-authored status | runtime callbacks |
 | `ui.data` | staged UI reads/writes | draw callbacks |
-| `ui.data.runtimeOwned` | read `mode = "runtime"` storage | draw callbacks |
+| `ui.status` | read runtime-authored status | draw callbacks |
 | `ui.actions` | one-shot draw intent | draw callbacks |
 | `ui.controls` | declared composite control refs | draw callbacks |
 | `ui.resetAll` | queue a full module reset | draw callbacks |
@@ -53,37 +53,36 @@ Rules:
 - normal roots persist and hash by default
 - `persist = false, hash = false` creates draw-only transient UI state
 - `hash = false` keeps a persisted value out of hashes/profiles
-- `mode = "runtime"` creates runtime-owned storage and cannot hash
 - `Enabled` and `DebugMode` are Lib-owned built-ins
 
-## Runtime-Owned Storage
+## Status
 
-Use runtime-owned storage for values written by gameplay/runtime code and read
-by UI:
+Use status for values written by gameplay/runtime code and read by UI:
 
 ```lua
-module.data.define({
-    {
+module.status.define({
+    RecordingReady = {
         type = "bool",
-        alias = "RecordingReady",
-        mode = "runtime",
         persist = true,
-        hash = false,
         default = false,
     },
 })
 ```
 
+Status declarations use the same scalar/table type shapes as managed storage,
+but the map key is the alias. Declare `persist` explicitly. Do not declare
+`alias`, `mode`, or `hash`; status never participates in hashes.
+
 Runtime code writes:
 
 ```lua
-runtime.data.runtimeOwned.write("RecordingReady", true)
+runtime.status.write("RecordingReady", true)
 ```
 
-Draw code reads through the runtime-owned lane:
+Draw code reads through the status lane:
 
 ```lua
-local ready = ui.data.runtimeOwned.read("RecordingReady")
+local ready = ui.status.read("RecordingReady")
 ```
 
 ## Tables
@@ -120,13 +119,12 @@ Runtime read use:
 local limit = runtime.data.read("Tiers", 1, "Limit")
 ```
 
-Table handles use colon syntax. Runtime-owned table roots use the same handle
-model:
+Table handles use colon syntax. Status table roots use the same handle model:
 
 ```lua
-runtime.data.runtimeOwned.write("Rows", 1, "Enabled", true)
-local enabled = ui.data.runtimeOwned.read("Rows", 1, "Enabled")
-local rows = ui.data.runtimeOwned.get("Rows"):snapshots()
+runtime.status.write("Rows", 1, "Enabled", true)
+local enabled = ui.status.read("Rows", 1, "Enabled")
+local rows = ui.status.get("Rows"):snapshots()
 ```
 
 Use `snapshot(rowIndex)` or `snapshots()` when you need copied table data.
@@ -142,8 +140,8 @@ end
 ```
 
 `ui.resetAll(...)` resets UI-owned, transient, and control-backed storage during
-draw, then queues `mode = "runtime"` storage to reset during the current commit.
-Pass `exclude = { Alias = true }` to skip specific root aliases.
+draw, then queues status storage to reset during the current commit. Pass
+`exclude = { Alias = true }` to skip specific root aliases.
 
 ## Packed Values
 
@@ -163,7 +161,7 @@ Actions are declared before activation:
 module.actions.define({
     StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        runtime.data.runtimeOwned.write("RecordingReady", value == true)
+        runtime.status.write("RecordingReady", value == true)
     end,
 })
 ```
@@ -193,10 +191,9 @@ They receive:
 `runtime.data` reads the values just committed by the draw that staged the
 action.
 
-Action handlers may update `runtime.data.runtimeOwned`, but runtime-owned state
-is not a mutation input. Mutation sync is triggered by committed UI-owned
-settings changes; if mutation behavior should change, declare normal UI-owned
-storage for that setting.
+Action handlers may update `runtime.status`, but status is not a mutation input.
+Mutation sync is triggered by committed UI-owned settings changes; if mutation
+behavior should change, declare normal UI-owned storage for that setting.
 
 ## Commit Observer
 

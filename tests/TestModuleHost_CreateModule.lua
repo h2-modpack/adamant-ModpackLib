@@ -19,6 +19,9 @@ local function createTestModule(h, opts)
     if opts.storage ~= nil then
         module.data.define(opts.storage)
     end
+    if opts.status ~= nil then
+        module.status.define(opts.status)
+    end
     if opts.cache ~= nil then
         module.cache.define(opts.cache)
     end
@@ -446,13 +449,15 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
 
     module.data.define({
         { type = "bool", alias = "Flag", default = false },
-        { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
+    })
+    module.status.define({
+        RuntimeFlag = { type = "bool", default = false, persist = true },
     })
     module.actions.define({
         setRuntime = function(host, runtime, value)
             capturedActionHost = host
             capturedActionRuntime = runtime
-            runtime.data.runtimeOwned.write("RuntimeFlag", value)
+            runtime.status.write("RuntimeFlag", value)
         end,
     })
     module.onCommit(function(host, runtime, commit)
@@ -481,11 +486,11 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
 
     lu.assertTrue(liveModule.commitIfDirty())
     lu.assertEquals(capturedActionHost.getHostId(), "test-create-module-declarative-facade")
-    lu.assertEquals(capturedActionRuntime.data.runtimeOwned.read("RuntimeFlag"), true)
+    lu.assertEquals(capturedActionRuntime.status.read("RuntimeFlag"), true)
     lu.assertEquals(config.Flag, true)
     lu.assertEquals(capturedCommitRuntime.data.read("Flag"), true)
-    lu.assertEquals(capturedCommitRuntime.data.runtimeOwned.read("RuntimeFlag"), true)
-    lu.assertErrorMsgContains("runtime-owned", function()
+    lu.assertEquals(capturedCommitRuntime.status.read("RuntimeFlag"), true)
+    lu.assertErrorMsgContains("status, not data storage", function()
         capturedCommitRuntime.data.read("RuntimeFlag")
     end)
     lu.assertEquals(capturedCommitHost.getHostId(), "test-create-module-declarative-facade")
@@ -711,6 +716,34 @@ function TestModuleHost_CreateModule:testCreateModuleRejectsLegacyTopLevelDeclar
             id = "DrawTabTopLevel",
             name = "Draw Tab Top Level",
             drawTab = function() end,
+        })
+    end)
+end
+
+function TestModuleHost_CreateModule:testModuleDataDefineTreatsModeAsUnknownPublicField()
+    local module = self.h:createModuleOrThrow({
+        pluginGuid = "test-create-module-data-mode-unknown",
+        config = {},
+        id = "DataModeUnknown",
+        name = "Data Mode Unknown",
+    })
+
+    lu.assertErrorMsgContains("unknown storage field 'mode'", function()
+        module.data.define({
+            { type = "bool", alias = "Marker", mode = "runtime", default = false },
+        })
+    end)
+
+    lu.assertErrorMsgContains("unknown storage field 'mode'", function()
+        module.data.define({
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Marker", mode = "setting", default = false },
+                },
+            },
         })
     end)
 end

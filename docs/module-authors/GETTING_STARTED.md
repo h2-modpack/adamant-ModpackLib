@@ -115,7 +115,7 @@ Rules:
 - aliases are direct flat storage identifiers
 - normal values persist and hash by default
 - transient UI values use `persist = false, hash = false`
-- runtime-owned markers use `mode = "runtime"`
+- runtime-authored status values use `module.status.define(...)`
 - `Enabled` and `DebugMode` are reserved Lib aliases
 
 ## Drawing UI

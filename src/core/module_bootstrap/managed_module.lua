@@ -162,9 +162,10 @@ local function validateLifecycleObservers(opts)
     return opts.onCommit
 end
 
-local function createRuntimeContext(store)
+local function createRuntimeContext(store, status)
     return {
         data = store,
+        status = status,
         cache = store and store.cache or nil,
         shared = store and store.shared or nil,
         controls = store and store.controls or nil,
@@ -484,7 +485,7 @@ function managedModule.create(opts)
         source = "store.shared",
     }))
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
-    runtimeContext = createRuntimeContext(store)
+    runtimeContext = createRuntimeContext(store, moduleState.createRuntimeStatus(persistentState))
     record.store = store
     record.runtime = runtimeContext
 
@@ -500,6 +501,7 @@ function managedModule.create(opts)
         actionBuffer = actionBuffer,
         host = host,
         controls = controls.refs.createUi(stagedState, controlCatalog),
+        status = moduleState.createUiStatus(stagedState),
         resetAll = function(resetOpts)
             return stageResetAll(resetOpts)
         end,

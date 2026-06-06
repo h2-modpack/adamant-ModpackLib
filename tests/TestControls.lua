@@ -446,14 +446,14 @@ function TestControls:testRuntimeControlsSkipUiOnlyFields()
     lu.assertNil(config["_Searchable:Filter"])
 end
 
-function TestControls:testControlsRejectRuntimeOwnedStorage()
+function TestControls:testControlsRejectStatusStorage()
     local module = createModule(self.h, {
-        pluginGuid = "test-controls-runtime-owned-field",
+        pluginGuid = "test-controls-status-field",
         config = {},
-        id = "ControlsRuntimeOwnedField",
-        name = "Controls Runtime Owned Field",
+        id = "ControlsStatusField",
+        name = "Controls Status Field",
         templates = {
-            RuntimeOwnedValue = {
+            StatusValue = {
                 storage = function()
                     return {
                         {
@@ -471,14 +471,14 @@ function TestControls:testControlsRejectRuntimeOwnedStorage()
         },
         controls = {
             Recording = {
-                template = "RuntimeOwnedValue",
+                template = "StatusValue",
             },
         },
     })
 
     local ok, err = module.activate()
     lu.assertFalse(ok)
-    lu.assertStrContains(err, "controls cannot declare runtime-owned storage")
+    lu.assertStrContains(err, "controls cannot declare status storage")
 end
 
 function TestControls:testControlSchemasExposeSemanticAliasesOnly()
@@ -530,6 +530,7 @@ function TestControls:testNestedControlPackedSchemaAliasesStaySemanticForWidgets
                             {
                                 key = "Packed",
                                 type = "packedInt",
+                                width = 2,
                                 default = 0,
                                 bits = {
                                     { key = "Alpha", offset = 0, width = 1, type = "bool", default = false },
@@ -546,6 +547,7 @@ function TestControls:testNestedControlPackedSchemaAliasesStaySemanticForWidgets
                         end,
                     }
                 end,
+                draw = function() end,
             },
         },
         controls = {

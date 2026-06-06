@@ -22,6 +22,7 @@ local module, err = lib.createModule({
 if not module then return end
 
 module.data.define(data.buildStorage())
+module.status.define(data.buildStatus())
 module.actions.define(data.buildActions())
 module.cache.define(data.buildCache())
 module.controls.defineTemplates(data.buildControlTemplates())
@@ -54,6 +55,7 @@ Module code usually names it `module`.
 Common surfaces:
 
 - `module.data.define(...)`
+- `module.status.define(...)`
 - `module.actions.define(...)`
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
@@ -125,11 +127,10 @@ Storage roots live in `module.data.define(...)`.
 
 - Normal roots persist and hash by default.
 - `persist = false, hash = false` creates transient draw-only UI state.
-- `mode = "runtime"` creates runtime-owned storage read/written through
-  `runtime.data.runtimeOwned`, `ui.data.runtimeOwned`, or action runtime
-  bridges.
-- Runtime-owned storage is runtime state, not mutation configuration. Use
-  normal UI-owned storage for values that should affect `module.mutation.patch`.
+- `module.status.define(...)` declares runtime-authored state that runtime
+  writes through `runtime.status` and UI reads through `ui.status`.
+- Status is runtime state, not mutation configuration. Use normal UI-owned
+  storage for values that should affect `module.mutation.patch`.
 - `Enabled` and `DebugMode` are Lib-owned built-ins; do not declare them.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.

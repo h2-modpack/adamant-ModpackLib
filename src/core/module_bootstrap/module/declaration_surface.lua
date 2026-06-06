@@ -40,6 +40,42 @@ local function requireActiveRecord(lifecycle, context)
     return record
 end
 
+local function rejectPublicDataModeField(context, node)
+    if type(node) ~= "table" or node.mode == nil then
+        return
+    end
+    logging.violate(
+        "storage.unknown_field",
+        "%s: unknown storage field 'mode'",
+        context
+    )
+end
+
+local function validatePublicDataNode(context, node)
+    rejectPublicDataModeField(context, node)
+
+    if type(node) ~= "table" then
+        return
+    end
+
+    for index, bit in ipairs(type(node.bits) == "table" and node.bits or {}) do
+        rejectPublicDataModeField(context .. " bit #" .. tostring(index), bit)
+    end
+
+    for index, rowNode in ipairs(type(node.row) == "table" and node.row or {}) do
+        validatePublicDataNode(context .. " row storage #" .. tostring(index), rowNode)
+    end
+end
+
+local function validatePublicDataStorage(storage)
+    if type(storage) ~= "table" then
+        return
+    end
+    for index, node in ipairs(storage) do
+        validatePublicDataNode("module.data.define storage #" .. tostring(index), node)
+    end
+end
+
 function declarationSurface.attach(module, declarations, lifecycle, overlayOrder)
     local function setOnce(field, value, context)
         lifecycle.requireOpen(context)
@@ -58,7 +94,14 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
 
     module.data = {
         define = function(storage)
+            validatePublicDataStorage(storage)
             setOnce("storage", storage, "module.data.define")
+        end,
+    }
+
+    module.status = {
+        define = function(status)
+            setOnce("status", status, "module.status.define")
         end,
     }
 

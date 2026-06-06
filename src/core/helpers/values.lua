@@ -1,29 +1,5 @@
 local values = {}
 
-function values.readPath(tbl, key)
-    if type(key) == "table" then
-        if #key == 0 then return nil, nil, nil end
-        for i = 1, #key - 1 do
-            tbl = tbl[key[i]]
-            if not tbl then return nil, nil, nil end
-        end
-        return tbl[key[#key]], tbl, key[#key]
-    end
-    return tbl[key], tbl, key
-end
-
-function values.writePath(tbl, key, value)
-    if type(key) == "table" then
-        for i = 1, #key - 1 do
-            tbl[key[i]] = tbl[key[i]] or {}
-            tbl = tbl[key[i]]
-        end
-        tbl[key[#key]] = value
-        return
-    end
-    tbl[key] = value
-end
-
 function values.deepCopy(value, seen)
     if type(value) ~= "table" then
         return value

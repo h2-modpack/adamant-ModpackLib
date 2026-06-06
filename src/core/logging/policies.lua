@@ -304,11 +304,19 @@ return {
     },
     ["staged_state.invalid_surface"] = {
         severity = "error",
-        description = "Staged state writes cannot mutate runtime-owned storage.",
+        description = "Staged state writes cannot mutate status storage.",
     },
     ["staged_state.readonly_view_write"] = {
         severity = "error",
         description = "Staged state view is read-only; writes must go through stagedState.write.",
+    },
+    ["status.unknown_alias"] = {
+        severity = "error",
+        description = "Status operations only accept aliases declared through module.status.define.",
+    },
+    ["status.invalid_surface"] = {
+        severity = "error",
+        description = "Status operations can only access runtime-authored status aliases.",
     },
     ["storage.invalid_field_alias"] = {
         severity = "error",

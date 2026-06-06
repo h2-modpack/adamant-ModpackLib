@@ -115,17 +115,18 @@ function TestModuleState_DataDefaults:testChalkBackendSavesStagedWrites()
     local wrapper, raw, restore = makeChalkConfig(self.harness)
     local definition = {
         storage = {
-            { type = "bool", alias = "Enabled", default = false },
+            { type = "bool", alias = "MyFlag", default = false },
         },
     }
 
     local _, stagedState = makeStore(self.harness, definition, wrapper)
-    lu.assertEquals(raw.saved, 1)
+    local initialSaveCount = raw.saved
+    lu.assertTrue(initialSaveCount >= 1)
 
-    stagedState.write("Enabled", true)
+    stagedState.write("MyFlag", true)
     stagedState._flushToConfig()
 
-    lu.assertTrue(raw.saved >= 2)
+    lu.assertTrue(raw.saved > initialSaveCount)
     restore()
 end
 

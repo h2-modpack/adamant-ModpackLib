@@ -8,44 +8,6 @@ function TestValues:setUp()
     self.values = self.harness.values
 end
 
-function TestValues:testReadPathReturnsValueParentAndLeaf()
-    local nested = {
-        root = {
-            child = "value",
-        },
-    }
-
-    local value, parent, leaf = self.values.readPath(nested, { "root", "child" })
-
-    lu.assertEquals(value, "value")
-    lu.assertIs(parent, nested.root)
-    lu.assertEquals(leaf, "child")
-end
-
-function TestValues:testReadPathHandlesMissingAndSimpleKeys()
-    local tbl = {
-        Enabled = true,
-    }
-
-    lu.assertEquals({ self.values.readPath(tbl, "Enabled") }, { true, tbl, "Enabled" })
-    lu.assertEquals({ self.values.readPath(tbl, {}) }, { nil, nil, nil })
-    lu.assertEquals({ self.values.readPath(tbl, { "missing", "child" }) }, { nil, nil, nil })
-end
-
-function TestValues:testWritePathCreatesNestedTables()
-    local tbl = {}
-
-    self.values.writePath(tbl, { "root", "child", "leaf" }, 42)
-
-    lu.assertEquals(tbl, {
-        root = {
-            child = {
-                leaf = 42,
-            },
-        },
-    })
-end
-
 function TestValues:testDeepCopyPreservesCyclesWithoutSharingTables()
     local key = { name = "key" }
     local source = {

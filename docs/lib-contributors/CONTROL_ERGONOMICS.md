@@ -102,7 +102,7 @@ Controls should not own:
 - cross-screen orchestration
 - module lifecycle behavior
 - hooks, overlays, mutation plans, shared events, or cache declarations
-- runtime-owned coordination state or command actions
+- status coordination state or command actions
 
 If visibility depends only on fields owned by the control, keep it inside the
 control. If visibility depends on sibling controls or screen state, keep that in

@@ -22,10 +22,9 @@ Current-run cache:
 - inaccessible from draw `ui.data`
 - backed by one Lib-owned root on `CurrentRun`
 
-Runtime-owned storage replaces the old persistent-cache use case. If a module
-needs a value that runtime writes and UI reads, declare managed storage with
-`mode = "runtime"` and access it through the `runtimeOwned` lane on runtime
-and draw data.
+Status replaces the old persistent-cache use case. If a module needs a value
+that runtime writes and UI reads, declare it with `module.status.define(...)`
+and access it through `runtime.status` and `ui.status`.
 
 Cross-module read models are not cache domains. They are declared through
 `module.shared.data.*` and implemented by the shared subsystem.

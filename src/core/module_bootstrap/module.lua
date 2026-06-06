@@ -21,6 +21,7 @@ local activationFinalizer = import('core/module_bootstrap/module/activation_fina
     moduleState = deps.moduleState,
     fallbackUi = deps.fallbackUi,
     controlCompiler = deps.controlCompiler,
+    statusDeclarations = deps.statusDeclarations,
 })
 local declarationFacade = import('core/module_bootstrap/module/declaration_facade.lua', nil, {
     logging = logging,

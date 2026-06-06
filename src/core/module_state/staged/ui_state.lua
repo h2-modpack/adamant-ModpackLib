@@ -12,6 +12,22 @@ local uiState = {}
 ---@field read fun(alias: string, ...): any
 ---@field write fun(alias: string, ...): boolean|nil
 
+local function createDataRoot(stagedState)
+    return {
+        get = function(alias)
+            local node = stagedState.getAliasSchema(alias)
+            if node and node._mode == "runtime" then
+                logging.violate(
+                    "staged_state.invalid_surface",
+                    "ui.data.get: alias '%s' is status, not data storage",
+                    tostring(alias))
+                return nil
+            end
+            return stagedState.get(alias)
+        end,
+    }
+end
+
 --- Narrows full staged state to the module UI surface.
 --- Host internals keep the private commit/reload/snapshot methods.
 ---@param stagedState StagedState
@@ -19,35 +35,18 @@ local uiState = {}
 ---@return DrawState
 function uiState.create(stagedState, shared)
     local refs = storageRefAdapter.create({
-        root = stagedState,
+        root = createDataRoot(stagedState),
         phase = "draw",
-        source = "state.get",
+        source = "ui.data.get",
         writable = true,
-    })
-    local runtimeOwnedRefs = storageRefAdapter.create({
-        root = stagedState.runtimeOwned,
-        phase = "draw",
-        source = "state.runtimeOwned.get",
-        writable = false,
     })
 
     return {
         get = refs.get,
         shared = shared,
-        runtimeOwned = {
-            get = runtimeOwnedRefs.get,
-            read = function(alias, ...)
-                storageRefAdapter.rejectPrivateAlias("state.runtimeOwned.read", alias)
-                local ref = stagedState.runtimeOwned.get(alias)
-                if ref == nil then
-                    return nil
-                end
-                return ref:read(...)
-            end,
-        },
         read = function(alias, ...)
-            storageRefAdapter.rejectPrivateAlias("state.read", alias)
-            local ref = stagedState.get(alias)
+            storageRefAdapter.rejectPrivateAlias("ui.data.read", alias)
+            local ref = refs.get(alias)
             if ref == nil then
                 return nil
             end
@@ -55,15 +54,15 @@ function uiState.create(stagedState, shared)
         end,
         write = function(alias, ...)
             phaseGate.requireAnyDraw()
-            storageRefAdapter.rejectPrivateAlias("state.write", alias)
-            local ref = stagedState.get(alias)
+            storageRefAdapter.rejectPrivateAlias("ui.data.write", alias)
+            local ref = refs.get(alias)
             if ref == nil then
                 return nil
             end
             if type(ref.write) ~= "function" then
                 logging.violate(
                     "staged_state.invalid_surface",
-                    "state.write: alias '%s' is not writable from draw state",
+                    "ui.data.write: alias '%s' is not writable from draw state",
                     tostring(alias))
                 return nil
             end

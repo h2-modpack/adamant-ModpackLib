@@ -130,7 +130,7 @@ ui.controls.reset("RewardPriority")
 This helper resets the Lib-compiled storage roots for one control instance. It
 does not call template-defined reset methods. Use `ui.resetAll()` when the
 interaction should reset the entire module, including non-control and
-runtime-owned storage.
+status storage.
 
 ## Rules
 
@@ -141,6 +141,6 @@ runtime-owned storage.
   catalogs, and screen composition.
 - Do not use controls for one-off leaf fields. `ui.draw.widgets.*` is simpler.
 - Do not use generated `_` aliases directly; they are private Lib storage.
-- Do not declare `mode = "runtime"` inside control storage. Runtime-owned
+- Do not declare runtime-authored status inside control storage. Status
   coordination state belongs at module level and can be passed into control
   views when needed.

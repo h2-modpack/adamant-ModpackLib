@@ -14,7 +14,6 @@ local lib = {}
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
 ---@field alias string Public alias used by runtime/UI data and widget APIs as the managed storage key.
----@field mode? "setting"|"runtime" Storage ownership mode. Defaults to "setting"; "runtime" is written through `data.runtimeOwned`.
 ---@field label? string UI label.
 ---@field tooltip? string UI tooltip.
 ---@field default? any Default value for this storage node.
@@ -81,7 +80,7 @@ local lib = {}
 ---@field reset fun(self: AdamantModpackLib.StorageField): boolean?
 
 ---@alias AdamantModpackLib.StoreDataRef AdamantModpackLib.StorageFieldReadOnly|AdamantModpackLib.StorageTableReadOnly
----@alias AdamantModpackLib.RuntimeOwnedDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
+---@alias AdamantModpackLib.StatusDataRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.DrawStateRef AdamantModpackLib.StorageField|AdamantModpackLib.StorageTableStagedState
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
@@ -99,21 +98,23 @@ local lib = {}
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting storage object.
 ---@field cache AdamantModpackLib.StoreCache
 ---@field shared AdamantModpackLib.SharedData
----@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
----@class AdamantModpackLib.RuntimeOwnedState
----@field get fun(alias: string): AdamantModpackLib.RuntimeOwnedDataRef? Return writable runtime-owned storage object.
----@field read fun(alias: string, ...): any Read a declared `mode = "runtime"` storage alias or table cell.
----@field write fun(alias: string, ...): boolean Write a declared `mode = "runtime"` storage alias or table cell.
----@field reset fun(alias: string, ...): boolean Reset a declared `mode = "runtime"` storage alias or table cell.
+---@class AdamantModpackLib.RuntimeStatus
+---@field get fun(alias: string): AdamantModpackLib.StatusDataRef? Return writable runtime-authored status object.
+---@field read fun(alias: string, ...): any Read a declared status alias or table cell.
+---@field write fun(alias: string, ...): boolean Write a declared status alias or table cell.
+---@field reset fun(alias: string, ...): boolean Reset a declared status alias or table cell.
+
+---@class AdamantModpackLib.RuntimeOwnedState: AdamantModpackLib.RuntimeStatus
+---@field countResettable fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
 ---Internal trusted staged state. Module authors access this through `ui.data`.
 ---@class AdamantModpackLib.StagedState
 ---@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
----@field runtimeOwned AdamantModpackLib.UiRuntimeOwnedState
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
 ---@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
@@ -131,13 +132,30 @@ local lib = {}
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field shared AdamantModpackLib.SharedData
----@field runtimeOwned AdamantModpackLib.UiRuntimeOwnedState
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 
----@class AdamantModpackLib.UiRuntimeOwnedState
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-owned storage object.
----@field read fun(alias: string, ...): any Read a declared `mode = "runtime"` storage alias or table cell.
+---@class AdamantModpackLib.UiStatus
+---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only runtime-authored status object.
+---@field read fun(alias: string, ...): any Read a declared status alias or table cell.
+
+---@class AdamantModpackLib.StatusNode
+---@field type "bool"|"int"|"string"|"packedInt"|"table"
+---@field label? string UI label.
+---@field tooltip? string UI tooltip.
+---@field default? any Default value for this status node.
+---@field persist boolean Whether the status survives config reloads.
+---@field min? number Integer lower bound.
+---@field max? number Integer upper bound.
+---@field width? number Packed/hash bit width for bounded `int`; required root bit width for `packedInt`.
+---@field maxLen? number String max length for normalization.
+---@field bits? AdamantModpackLib.PackedBitNode[] Packed child bit aliases for `packedInt`.
+---@field row? AdamantModpackLib.StorageSchema Row schema for `table` roots.
+---@field minRows? integer Minimum row count for `table` roots.
+---@field maxRows? integer Maximum row count for `table` roots.
+---@field defaultRows? integer Default row count for `table` roots.
+
+---@alias AdamantModpackLib.StatusDeclarationMap table<string, AdamantModpackLib.StatusNode>
 
 ---Draw-phase transient action surface. Reads are phase-neutral; staging/emitting remains draw-scoped.
 ---@class AdamantModpackLib.DrawActions
@@ -211,6 +229,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.RuntimeContext
 ---@field data AdamantModpackLib.Store
+---@field status AdamantModpackLib.RuntimeStatus
 ---@field controls AdamantModpackLib.RuntimeControls
 ---@field cache AdamantModpackLib.StoreCache?
 ---@field shared AdamantModpackLib.SharedData?
@@ -218,6 +237,7 @@ local lib = {}
 ---@class AdamantModpackLib.UiContext
 ---@field draw AdamantModpackLib.DrawContext
 ---@field data AdamantModpackLib.DrawState
+---@field status AdamantModpackLib.UiStatus
 ---@field actions AdamantModpackLib.DrawActions
 ---@field controls AdamantModpackLib.UiControls
 ---@field shared AdamantModpackLib.SharedData?
@@ -242,6 +262,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.AuthorModule
 ---@field data { define: fun(storage: AdamantModpackLib.StorageSchema): nil }
+---@field status { define: fun(status: AdamantModpackLib.StatusDeclarationMap): nil }
 ---@field actions { define: fun(actions: table<string, AdamantModpackLib.ModuleActionHandler>): nil }
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls

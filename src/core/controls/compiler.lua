@@ -51,7 +51,7 @@ local function copyDescriptor(descriptor)
 end
 
 local function rejectRuntimeOwnedField(controlName, fieldKey)
-    local message = "controls cannot declare runtime-owned storage; declare runtime-owned storage at module level " ..
+    local message = "controls cannot declare status storage; declare status at module level " ..
         "and pass the value into the control view"
     logging.violate("controls.invalid_field",
         "control '%s' field '%s': %s",

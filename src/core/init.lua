@@ -59,6 +59,11 @@ local controlsBundle = import('core/controls/00_init.lua', nil, {
     actionRefs = moduleState.actionBuffer,
 })
 
+local statusDeclarations = import('core/status/declarations.lua', nil, {
+    logging = logging,
+    values = values,
+})
+
 local coordinator = import('core/coordinator/coordinator.lua', nil, {
     logging = logging,
     coordinatorRegistry = registry.coordinators,
@@ -183,6 +188,7 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     fallbackUi = fallbackUiBundle.service,
     controlDeclarations = controlsBundle.declarations,
     controlCompiler = controlsBundle.compiler,
+    statusDeclarations = statusDeclarations,
 })
 public.createModule = moduleBundle.public.createModule
 

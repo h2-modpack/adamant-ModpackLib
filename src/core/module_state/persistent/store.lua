@@ -1,9 +1,25 @@
 local deps = ...
 
-local phaseGate = deps.phaseGate
+local logging = deps.logging
 local storageRefAdapter = deps.storageRefAdapter
 
 local store = {}
+
+local function createDataRoot(persistentState)
+    return {
+        get = function(alias)
+            local node = persistentState.getAliasSchema(alias)
+            if node and node._mode == "runtime" then
+                logging.violate(
+                    "store.invalid_surface",
+                    "runtime.data.get: alias '%s' is status, not data storage",
+                    tostring(alias))
+                return nil
+            end
+            return persistentState.get(alias)
+        end,
+    }
+end
 
 ---@param persistentState PersistentState
 ---@param cache table|nil
@@ -11,48 +27,19 @@ local store = {}
 ---@return Store
 function store.create(persistentState, cache, shared)
     local refs = storageRefAdapter.create({
-        root = persistentState,
+        root = createDataRoot(persistentState),
         phase = "runtime",
-        source = "store.get",
+        source = "runtime.data.get",
         writable = false,
     })
-    local runtimeOwnedRefs = storageRefAdapter.create({
-        root = persistentState.runtimeOwned,
-        phase = "runtime",
-        source = "store.runtimeOwned.get",
-        writable = true,
-    })
-
-    local runtimeOwned = persistentState.runtimeOwned
 
     return {
         get = refs.get,
         cache = cache,
         shared = shared,
-        runtimeOwned = runtimeOwned and {
-            get = runtimeOwnedRefs.get,
-            read = function(alias, ...)
-                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.read", alias)
-                local ref = runtimeOwnedRefs.get(alias)
-                if ref == nil then
-                    return nil
-                end
-                return ref:read(...)
-            end,
-            write = function(alias, ...)
-                phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.write", alias)
-                return runtimeOwned.write(alias, ...)
-            end,
-            reset = function(alias, ...)
-                phaseGate.requireRuntime()
-                storageRefAdapter.rejectPrivateAlias("store.runtimeOwned.reset", alias)
-                return runtimeOwned.reset(alias, ...)
-            end,
-        } or nil,
         read = function(alias, ...)
-            storageRefAdapter.rejectPrivateAlias("store.read", alias)
-            local ref = persistentState.get(alias)
+            storageRefAdapter.rejectPrivateAlias("runtime.data.read", alias)
+            local ref = refs.get(alias)
             if ref == nil then
                 return nil
             end

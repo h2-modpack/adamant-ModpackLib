@@ -16,6 +16,7 @@ local declarationFacade = {}
 local function createDeclarationState()
     return {
         storage = nil,
+        status = nil,
         internalStorage = nil,
         internalActions = nil,
         cache = nil,

@@ -661,8 +661,8 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
                 observedCallbackHost = callbackHost
                 observedRuntime = runtime
                 observedCommittedFlagInAction = runtime.data.read("Flag")
-                runtime.data.runtimeOwned.write("RuntimeFlag", value == true)
-                observedRuntimeValue = runtime.data.runtimeOwned.read("RuntimeFlag")
+                runtime.status.write("RuntimeFlag", value == true)
+                observedRuntimeValue = runtime.status.read("RuntimeFlag")
             end,
         },
     })

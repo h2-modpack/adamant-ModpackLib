@@ -271,9 +271,9 @@ Rules:
 - cache is namespaced under one Lib-owned root on `CurrentRun`
 - current-run cache is unavailable from `ui.data`
 
-For runtime-owned values that UI needs to read, declare managed storage with
-`mode = "runtime"`. Runtime code writes through
-`runtime.data.runtimeOwned`; UI code reads through `ui.data.runtimeOwned`.
+For runtime-authored values that UI needs to read, declare status with
+`module.status.define(...)`. Runtime code writes through `runtime.status`; UI
+code reads through `ui.status`.
 
 ## Runtime And UI Data
 
@@ -300,6 +300,7 @@ local module, err = lib.createModule({
 if not module then return end
 
 module.data.define(data.buildStorage())
+module.status.define(data.buildStatus())
 module.ui.tab(ui.drawTab)
 module.ui.quickContent(ui.drawQuickContent)
 module.mutation.patch(logic.buildPatchPlan)
@@ -319,10 +320,11 @@ and all declaration namespaces.
 raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
 `imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
 `ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs;
-`ui.resetAll(...)` resets staged module state and queues runtime-owned reset for commit.
+`ui.status` reads runtime-authored status; `ui.resetAll(...)` resets staged
+module state and queues status reset for commit.
 
 Runtime callbacks receive `(host, runtime)`. `runtime.data` reads committed
-settings, `runtime.data.runtimeOwned` reads/writes runtime-owned storage,
+settings, `runtime.status` reads/writes runtime-authored status,
 `runtime.data.cache` owns current-run cache, and `runtime.shared` /
 `runtime.controls` expose shared/control surfaces.
 
@@ -348,12 +350,14 @@ end
 The runtime data surface provides:
 - `runtime.data.get(alias)`
 - `runtime.data.read(alias, ...)`
-- `runtime.data.runtimeOwned.get(alias)`
-- `runtime.data.runtimeOwned.read(alias, ...)`
-- `runtime.data.runtimeOwned.write(alias, ...)`
-- `runtime.data.runtimeOwned.reset(alias, ...)`
 - `runtime.data.cache.currentRun.get(name)`
 - `runtime.data.cache.currentRun.clear(name)`
+
+The runtime status surface provides:
+- `runtime.status.get(alias)`
+- `runtime.status.read(alias, ...)`
+- `runtime.status.write(alias, ...)`
+- `runtime.status.reset(alias, ...)`
 
 Persisted writes happen through host-owned semantic helpers or staged-state flushes:
 
@@ -374,17 +378,17 @@ module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 `runtime.data.read(alias, ...)` is syntax sugar for `runtime.data.get(alias):read(...)`.
 Scalar fields accept no extra path arguments; table handles accept the same row
 path arguments as `tableHandle:read(...)`.
-`runtime.data.runtimeOwned.read(alias, ...)` follows the same rule. For
-runtime-owned table roots, read cells through `read(alias, rowIndex, rowAlias)`
-or use `runtime.data.runtimeOwned.get(alias):snapshot(...)` /
+`runtime.status.read(alias, ...)` follows the same rule. For status table roots,
+read cells through `read(alias, rowIndex, rowAlias)` or use
+`runtime.status.get(alias):snapshot(...)` /
 `:snapshots()` for explicit copied rows.
 
 Rules:
 - widgets and draw code should usually read staged values through `ui.data.get(...)`
 - runtime/gameplay code should read committed setting values through `runtime.data.get(...):read()` or `runtime.data.read(...)`
-- runtime-owned storage declares `mode = "runtime"` and writes through `runtime.data.runtimeOwned`
-- draw code reads runtime-owned storage through `ui.data.runtimeOwned`
-- runtime-owned storage cannot participate in hashes
+- status declares through `module.status.define(...)` and writes through `runtime.status`
+- draw code reads status through `ui.status`
+- status cannot participate in hashes
 - enabled toggles should write through the host/framework flow
 - debug toggles should write through the host/framework flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
@@ -443,11 +447,11 @@ local field = tiers:get(1, "ChoiceMode")
 
 Table handles:
 - `runtime.data.get(alias)` returns a read-only field or table handle for committed setting aliases
-- `runtime.data.runtimeOwned.get(alias)` returns a runtime-owned field or table handle
+- `runtime.status.get(alias)` returns a status field or table handle
 - `ui.data.get(alias)` returns a writable staged field or table handle
-- `ui.data.runtimeOwned.get(alias)` returns a read-only runtime-owned field or table handle
-- `runtime.data.runtimeOwned.write(alias, ...)` writes scalar roots, packed child aliases, or table cells
-- `runtime.data.runtimeOwned.reset(alias, ...)` resets scalar roots, packed child aliases, table roots, or table cells
+- `ui.status.get(alias)` returns a read-only status field or table handle
+- `runtime.status.write(alias, ...)` writes scalar roots, packed child aliases, or table cells
+- `runtime.status.reset(alias, ...)` resets scalar roots, packed child aliases, table roots, or table cells
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
 - full internal stores expose `store.table(alias)` for framework plumbing
 - full internal staged-state objects expose `stagedState.table(alias)` for framework plumbing
@@ -505,8 +509,10 @@ restricted author-facing `ui.data` view with:
 - `get(alias)`
 - `read(alias, ...)`
 - `write(alias, ...)`
-- `runtimeOwned.get(alias)`
-- `runtimeOwned.read(alias, ...)`
+
+Draw callbacks also receive a read-only `ui.status` view with:
+- `get(alias)`
+- `read(alias, ...)`
 
 Use `ui.resetAll(opts?)` for module-wide resets from draw code.
 
@@ -545,8 +551,8 @@ Draw callbacks use `ui.resetAll(opts?)` when one interaction should restore the
 whole module to defaults.
 
 `ui.resetAll(...)` resets staged UI-owned, transient, and control-backed roots
-during draw, then queues runtime-owned roots to reset during commit. The
-runtime-owned reset is hidden from `commit.actions`.
+during draw, then queues status roots to reset during commit. The status reset
+is hidden from `commit.actions`.
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
@@ -557,7 +563,7 @@ Framework/runtime orchestration can reset a live managed module directly through
 the live-module object returned by Lib's Framework runtime lookup. This is not
 part of the module-author facade returned by `lib.createModule(...)`.
 
-It resets changed UI-owned and runtime-owned storage roots back to their defaults
+It resets changed UI-owned and status storage roots back to their defaults
 for the live module.
 
 Returns:
@@ -980,16 +986,15 @@ values just committed by the draw that staged the action:
 module.actions.define({
     StartRecording = function(host, runtime, value)
         host.logIf("Starting recording")
-        runtime.data.runtimeOwned.write("RecordingEnabled", value == true)
+        runtime.status.write("RecordingEnabled", value == true)
     end,
 })
 ```
 
 Handlers receive the callback host, runtime context, and staged action `value`.
-Actions may update runtime-owned state, but runtime-owned state is not a
-mutation input. Mutation sync is driven by committed UI-owned settings changes;
-use normal UI-owned storage for values that should affect
-`module.mutation.patch(...)`.
+Actions may update status, but status is not a mutation input. Mutation sync is
+driven by committed UI-owned settings changes; use normal UI-owned storage for
+values that should affect `module.mutation.patch(...)`.
 
 ## Draw Widgets
 
