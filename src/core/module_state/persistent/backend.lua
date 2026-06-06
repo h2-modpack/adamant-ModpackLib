@@ -99,6 +99,9 @@ local function create(config)
         local entry = backend.getEntry(section, key)
         if entry then
             entry:set(value)
+            if type(rawConfig.save) == "function" then
+                rawConfig:save()
+            end
             return true
         end
         return false
@@ -108,6 +111,9 @@ local function create(config)
         local entry = backend.getEntry(section, key)
         if entry then
             entry:set(nil)
+            if type(rawConfig.save) == "function" then
+                rawConfig:save()
+            end
             return true
         end
         return false

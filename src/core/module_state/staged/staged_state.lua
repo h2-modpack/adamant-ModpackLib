@@ -56,14 +56,6 @@ local function createStagedState(storageConfig, storage, persistentState)
         if not root._persist then
             return
         end
-        local entry = configEntries and configEntries[root.alias] or nil
-        if entry then
-            entry:set(value)
-            if persistentState and type(persistentState._replaceRoot) == "function" then
-                persistentState._replaceRoot(root, value)
-            end
-            return
-        end
         storageConfig.writeValue(root._storageKey, value)
         if persistentState and type(persistentState._replaceRoot) == "function" then
             persistentState._replaceRoot(root, value)

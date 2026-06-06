@@ -111,6 +111,24 @@ function TestModuleState_DataDefaults:testLiveConfigValueOverridesDefault()
     lu.assertFalse(stagedState.read("MyFlag"))
 end
 
+function TestModuleState_DataDefaults:testChalkBackendSavesStagedWrites()
+    local wrapper, raw, restore = makeChalkConfig(self.harness)
+    local definition = {
+        storage = {
+            { type = "bool", alias = "Enabled", default = false },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    lu.assertEquals(raw.saved, 1)
+
+    stagedState.write("Enabled", true)
+    stagedState._flushToConfig()
+
+    lu.assertTrue(raw.saved >= 2)
+    restore()
+end
+
 function TestModuleState_DataDefaults:testMissingStorageDefaultFails()
     local definition = {
         storage = {

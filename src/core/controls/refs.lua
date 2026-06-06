@@ -46,8 +46,14 @@ local function semanticFieldSchema(rawSchema, binding)
         return schema
     end
     schema.alias = binding.key or schema.alias
+    schema._packedAliasViews = nil
     if type(schema.bits) == "table" then
         for _, bit in ipairs(schema.bits) do
+            bit.alias = toSemanticAlias(binding.bitAliases, bit.alias)
+        end
+    end
+    if type(schema._bitAliases) == "table" then
+        for _, bit in ipairs(schema._bitAliases) do
             bit.alias = toSemanticAlias(binding.bitAliases, bit.alias)
         end
     end

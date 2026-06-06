@@ -513,6 +513,60 @@ function TestControls:testControlSchemasExposeSemanticAliasesOnly()
     self.h:liveModule("test-controls-semantic-schema").drawTab()
 end
 
+function TestControls:testNestedControlPackedSchemaAliasesStaySemanticForWidgets()
+    local module = createModule(self.h, {
+        pluginGuid = "test-controls-nested-semantic-schema",
+        config = {},
+        id = "ControlsNestedSemanticSchema",
+        name = "Controls Nested Semantic Schema",
+        templates = {
+            Rows = {
+                storage = {
+                    {
+                        key = "Rows",
+                        type = "table",
+                        defaultRows = 1,
+                        row = {
+                            {
+                                key = "Packed",
+                                type = "packedInt",
+                                default = 0,
+                                bits = {
+                                    { key = "Alpha", offset = 0, width = 1, type = "bool", default = false },
+                                    { key = "Beta", offset = 1, width = 1, type = "bool", default = false },
+                                },
+                            },
+                        },
+                    },
+                },
+                createUi = function(fields)
+                    return {
+                        packedField = function()
+                            return fields.Rows:get(1, "Packed")
+                        end,
+                    }
+                end,
+            },
+        },
+        controls = {
+            Rows = {
+                template = "Rows",
+            },
+        },
+        drawTab = function(_, ui)
+            local field = ui.controls.get("Rows"):packedField()
+            local children = self.h.harness.storage.packed.getPackedAliases(field:schema())
+            lu.assertEquals(children[1].alias, "Alpha")
+            lu.assertEquals(children[2].alias, "Beta")
+            field:writeAlias("Alpha", true)
+            lu.assertTrue(field:readAlias(children[1].alias))
+        end,
+    })
+
+    lu.assertTrue(module.activate())
+    self.h:liveModule("test-controls-nested-semantic-schema").drawTab()
+end
+
 function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     local results = {}
     local module = createModule(self.h, {
