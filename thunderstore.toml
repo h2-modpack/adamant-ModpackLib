@@ -43,4 +43,4 @@ repository = "https://thunderstore.io"
 communities = [ "hades-ii", ]
 
 [publish.categories]
-hades-ii = [ "modpacks", ]
+hades-ii = ["modpacks"]
