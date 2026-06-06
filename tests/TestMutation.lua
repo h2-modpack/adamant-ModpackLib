@@ -310,7 +310,7 @@ function TestMutation:testFailedPlanRetryRestoresToLatestSnapshot()
 end
 
 function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
-    local definition = self.harness.moduleHost.prepareDefinition({}, {
+    local definition = self.harness.managedModule.prepareDefinition({}, {
         id = "NoopMutationReceipt",
         name = "Noop Mutation Receipt",
         storage = {},
@@ -319,14 +319,14 @@ function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.harness.moduleHost.create({
+    local host = self.harness.managedModule.create({
         pluginGuid = "test-noop-mutation-receipt",
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
         drawTab = function() end,
     })
-    local receipt = self.mutation.syncForHost(host)
+    local receipt = self.mutation.syncForModule(host)
 
     local ok, err = receipt.commit()
     lu.assertTrue(ok, tostring(err))

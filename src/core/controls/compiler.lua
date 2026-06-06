@@ -50,7 +50,7 @@ local function copyDescriptor(descriptor)
     return copy
 end
 
-local function rejectRuntimeOwnedField(controlName, fieldKey)
+local function rejectStatusField(controlName, fieldKey)
     local message = "controls cannot declare status storage; declare status at module level " ..
         "and pass the value into the control view"
     logging.violate("controls.invalid_field",
@@ -79,7 +79,7 @@ local function compileBitNodes(bits, controlName, parentKey, binding)
         local key = bit.key or bit.alias
         requireStableIdentifier("control packed bit key", key)
         if bit.mode == "runtime" then
-            rejectRuntimeOwnedField(controlName, parentKey .. ":" .. key)
+            rejectStatusField(controlName, parentKey .. ":" .. key)
         end
         local bitCopy = copyDescriptor(bit)
         bitCopy.alias = generatedName(controlName, parentKey, key)
@@ -109,7 +109,7 @@ local function compileRowNodes(row, controlName, parentKey, binding)
         local rowKey = rowNode.key or rowNode.alias
         requireStableIdentifier("control row field key", rowKey)
         if rowNode.mode == "runtime" then
-            rejectRuntimeOwnedField(controlName, parentKey .. ":" .. rowKey)
+            rejectStatusField(controlName, parentKey .. ":" .. rowKey)
         end
         local child = copyDescriptor(rowNode)
         child.alias = generatedName(controlName, parentKey, rowKey)
@@ -144,7 +144,7 @@ local function compileStorageNodes(controlName, descriptors)
         local key = descriptor.key or descriptor.alias
         requireStableIdentifier("control storage field key", key)
         if descriptor.mode == "runtime" then
-            rejectRuntimeOwnedField(controlName, key)
+            rejectStatusField(controlName, key)
         end
         if bindings[key] ~= nil then
             logging.violate("controls.duplicate_name", "control '%s' has duplicate field '%s'",

@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local moduleRegistry = deps.moduleRegistry
 local declarations = deps.declarations
-local hostInstall = deps.hostInstall
+local ownerInstall = deps.ownerInstall
 local moduleAdapter = {}
 
 local function requireModuleRecord(module, apiName)
@@ -16,7 +16,7 @@ end
 
 function moduleAdapter.installForModule(module, declare)
     local record = requireModuleRecord(module, "hooks.installForModule")
-    local ownerId = module.getHostId()
+    local ownerId = module.getOwnerId()
     local hookDeclarations
     if declare ~= nil then
         if type(declare) ~= "function" then
@@ -27,7 +27,7 @@ function moduleAdapter.installForModule(module, declare)
     else
         hookDeclarations = record.hookDeclarations or declarations.create()
     end
-    return hostInstall.createReceipt(ownerId, module, hookDeclarations)
+    return ownerInstall.createReceipt(ownerId, module, hookDeclarations)
 end
 
 return moduleAdapter

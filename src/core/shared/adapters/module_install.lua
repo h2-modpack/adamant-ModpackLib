@@ -16,7 +16,7 @@ end
 
 function moduleAdapter.installForModule(module)
     local record = requireModuleRecord(module, "shared.installForModule")
-    local ownerId = module.getHostId()
+    local ownerId = module.getOwnerId()
     local dataReceipt = data.install(ownerId, record.sharedDataDeclarations)
     local eventReceipt = registrations.install(ownerId, record.sharedEventRegistrations)
     local committedData = false

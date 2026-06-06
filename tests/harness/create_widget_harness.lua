@@ -104,7 +104,7 @@ end
 
 local function createPackedDefinition(base, fields)
     fields = fields or {}
-    return base.moduleHost.prepareDefinition({}, {
+    return base.managedModule.prepareDefinition({}, {
         modpack = fields.modpack or "test-pack",
         id = fields.id or "PackedWidgetTest",
         name = fields.name or "Packed Widget Test",
@@ -133,7 +133,7 @@ local function createWidgetHarness(opts)
         uiDraw = base.uiDraw,
         phaseGate = base.phaseGate,
         storage = base.storage,
-        moduleHost = base.moduleHost,
+        managedModule = base.managedModule,
         moduleState = base.moduleState,
         uiActions = base.uiActions,
 

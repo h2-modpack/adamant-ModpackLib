@@ -108,7 +108,7 @@ local function createOverlayHarness(opts)
         rendererState = base.registry.overlays.renderer,
         retainedState = base.registry.overlays.retained,
         overlays = base.overlays,
-        moduleHost = base.moduleHost,
+        managedModule = base.managedModule,
         moduleState = base.moduleState,
         createSystem = base.createSystem,
         game = game,
@@ -118,14 +118,14 @@ local function createOverlayHarness(opts)
             return createModuleState(base, config, definition)
         end,
 
-        createHostWithOverlays = function(pluginGuid, declareOverlays, hostOpts)
-            hostOpts = hostOpts or {}
-            local definition = base.moduleHost.prepareDefinition({}, {
-                id = hostOpts.id or "OverlayHost",
-                name = hostOpts.name or "Overlay Host",
-                storage = hostOpts.storage or {},
+        createModuleWithOverlays = function(pluginGuid, declareOverlays, moduleOpts)
+            moduleOpts = moduleOpts or {}
+            local definition = base.managedModule.prepareDefinition({}, {
+                id = moduleOpts.id or "OverlayHost",
+                name = moduleOpts.name or "Overlay Host",
+                storage = moduleOpts.storage or {},
             })
-            local store, stagedState = createModuleState(base, hostOpts.config or {
+            local store, stagedState = createModuleState(base, moduleOpts.config or {
                 Enabled = true,
                 DebugMode = false,
             }, definition)
@@ -172,16 +172,16 @@ local function createOverlayHarness(opts)
             if type(declareOverlays) == "function" then
                 declareOverlays(overlayRegistrar, nil, store)
             end
-            local host = base.moduleHost.create({
+            local host = base.managedModule.create({
                 pluginGuid = pluginGuid,
                 definition = definition,
                 persistentState = store,
                 stagedState = stagedState,
                 mutationBundle = {
-                    patchMutation = hostOpts.patchMutation,
+                    patchMutation = moduleOpts.patchMutation,
                 },
                 overlayDeclarations = overlayDeclarations,
-                onCommit = hostOpts.onCommit,
+                onCommit = moduleOpts.onCommit,
                 drawTab = function() end,
             })
             return host, host, store, stagedState, definition

@@ -11,8 +11,8 @@ function TestOverlays:dispatch(owner)
     return self.h.overlays.dispatchCommit(owner, {})
 end
 
-function TestOverlays:activateHostWithOverlays(pluginGuid, declareOverlays, opts)
-    local host, authorModule, store, stagedState = self.h.createHostWithOverlays(pluginGuid, declareOverlays, opts)
+function TestOverlays:activateModuleWithOverlays(pluginGuid, declareOverlays, opts)
+    local host, authorModule, store, stagedState = self.h.createModuleWithOverlays(pluginGuid, declareOverlays, opts)
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
     return host, authorModule, store, stagedState
@@ -111,7 +111,7 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
 end
 
 function TestOverlays:testRetainedTableUsesStableColumnSpacing()
-    local host = self:activateHostWithOverlays("test.overlay.table", function(overlays)
+    local host = self:activateModuleWithOverlays("test.overlay.table", function(overlays)
         overlays.createTable("timer", {
             componentName = "TimerTable",
             region = "middleRightStack",

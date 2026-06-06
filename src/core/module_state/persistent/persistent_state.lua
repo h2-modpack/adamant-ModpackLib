@@ -14,9 +14,9 @@ local function create(storageConfig, storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local committedRoots = {}
     local tableHandles = {}
-    local runtimeOwnedTableHandles = {}
+    local statusTableHandles = {}
     local fieldHandles = {}
-    local runtimeOwnedFieldHandles = {}
+    local statusFieldHandles = {}
     local readRootNode
 
     local function readRaw(alias)
@@ -124,7 +124,7 @@ local function create(storageConfig, storage)
             if node._mode == "runtime" then
                 logging.violate(
                     "store.invalid_surface",
-                    "store.read: alias '%s' is runtime-owned; use store.runtimeOwned.read",
+                    "persistentState.read: alias '%s' is status; use persistentState.status.read",
                     tostring(alias))
                 return false
             end
@@ -142,71 +142,71 @@ local function create(storageConfig, storage)
         end,
     }
 
-    local function getRuntimeNode(alias, context, allowBitAlias)
+    local function getStatusNode(alias, context, allowBitAlias)
         local node = type(alias) == "string" and aliasNodes[alias] or nil
         if not node then
-            logging.violate("store.unknown_alias", "%s: unknown storage alias '%s'", context, tostring(alias))
+            logging.violate("status.unknown_alias", "%s: unknown status alias '%s'", context, tostring(alias))
             return nil
         end
         if node._mode ~= "runtime" then
-            logging.violate("store.invalid_surface", "%s: alias '%s' is not runtime-owned storage",
+            logging.violate("status.invalid_surface", "%s: alias '%s' is not status storage",
                 context, tostring(alias))
             return nil
         end
         if node._isBitAlias and allowBitAlias ~= true then
-            logging.violate("store.invalid_surface", "%s: alias '%s' is a packed child; set the runtime root instead",
+            logging.violate("status.invalid_surface", "%s: alias '%s' is a packed child; set the status root instead",
                 context, tostring(alias))
             return nil
         end
         return node
     end
 
-    local runtimeOwnedWriteBackend = {
+    local statusWriteBackend = {
         readRoot = readRootNode,
         canWrite = function(_, alias)
-            return getRuntimeNode(alias, "store.runtimeOwned.write", true) ~= nil
+            return getStatusNode(alias, "persistentState.status.write", true) ~= nil
         end,
         writeRoot = writeCommittedRoot,
         onUnknownWrite = function(alias)
-            logging.violate("store.unknown_alias", "store.runtimeOwned.write: unknown storage alias '%s'",
+            logging.violate("status.unknown_alias", "persistentState.status.write: unknown status alias '%s'",
                 tostring(alias))
         end,
     }
 
-    local function writeRuntimeValue(alias, value)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.write", true)
+    local function writeStatusValue(alias, value)
+        local node = getStatusNode(alias, "persistentState.status.write", true)
         if not node then
             return false
         end
         if node.type == "table" and not node._isBitAlias then
-            logging.violate("store.invalid_surface",
-                "store.runtimeOwned.write: alias '%s' is table storage; use a table handle or table cell write",
+            logging.violate("status.invalid_surface",
+                "persistentState.status.write: alias '%s' is table storage; use a table handle or table cell write",
                 tostring(alias))
             return false
         end
-        return storageInternal.writeAlias(aliasNodes, runtimeOwnedWriteBackend, alias, value)
+        return storageInternal.writeAlias(aliasNodes, statusWriteBackend, alias, value)
     end
 
-    local function resetRuntimeRoot(alias)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.reset")
+    local function resetStatusRoot(alias)
+        local node = getStatusNode(alias, "persistentState.status.reset")
         if not node then
             return false
         end
         return writeCommittedRoot(node, node.default)
     end
 
-    local function resetRuntimeValue(alias)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.reset", true)
+    local function resetStatusValue(alias)
+        local node = getStatusNode(alias, "persistentState.status.reset", true)
         if not node then
             return false
         end
         if node._isBitAlias then
-            return writeRuntimeValue(alias, node.default)
+            return writeStatusValue(alias, node.default)
         end
-        return resetRuntimeRoot(alias)
+        return resetStatusRoot(alias)
     end
 
-    local function countResettableRuntimeRoots(opts)
+    local function countResettableStatusRoots(opts)
         local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
         local count = 0
 
@@ -223,7 +223,7 @@ local function create(storageConfig, storage)
         return count > 0, count
     end
 
-    local function resetAllRuntimeRoots(opts)
+    local function resetAllStatusRoots(opts)
         local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
         local count = 0
 
@@ -231,7 +231,7 @@ local function create(storageConfig, storage)
             local alias = root.alias
             if root._mode == "runtime" and alias ~= nil and not exclude[alias] then
                 local current = readRootNode(root)
-                if not storageInternal.valuesEqual(root, current, root.default) and resetRuntimeRoot(alias) then
+                if not storageInternal.valuesEqual(root, current, root.default) and resetStatusRoot(alias) then
                     count = count + 1
                 end
             end
@@ -248,90 +248,90 @@ local function create(storageConfig, storage)
         return aliasNodes[alias]
     end
 
-    local runtimeOwnedReadBackend = {
+    local statusReadBackend = {
         readRoot = readRootNode,
         canRead = function(_, alias)
-            return getRuntimeNode(alias, "store.runtimeOwned.read", true) ~= nil
+            return getStatusNode(alias, "persistentState.status.read", true) ~= nil
         end,
         onUnknownRead = function(alias)
-            logging.violate("store.unknown_alias", "store.runtimeOwned.read: unknown storage alias '%s'",
+            logging.violate("status.unknown_alias", "persistentState.status.read: unknown status alias '%s'",
                 tostring(alias))
         end,
     }
 
     local getTableHandleForNode
-    local getRuntimeOwnedTableHandleForNode
+    local getStatusTableHandleForNode
     local getFieldHandleForNode
 
-    local runtimeOwnedFieldOwner = {
+    local statusFieldOwner = {
         read = function(alias)
-            local node = getRuntimeNode(alias, "store.runtimeOwned.read", true)
+            local node = getStatusNode(alias, "persistentState.status.read", true)
             if not node then
                 return nil
             end
-            return storageInternal.readAlias(aliasNodes, runtimeOwnedReadBackend, alias)
+            return storageInternal.readAlias(aliasNodes, statusReadBackend, alias)
         end,
-        write = writeRuntimeValue,
-        reset = resetRuntimeValue,
+        write = writeStatusValue,
+        reset = resetStatusValue,
         getAliasSchema = function(alias)
             return aliasNodes[alias]
         end,
     }
 
-    local function getRuntimeOwnedFieldHandleForNode(alias, node)
-        local cached = runtimeOwnedFieldHandles[alias]
+    local function getStatusFieldHandleForNode(alias, node)
+        local cached = statusFieldHandles[alias]
         if cached then
             return cached
         end
 
-        local field = storageInternal.field.createKnown(runtimeOwnedFieldOwner, alias, node, "store.runtimeOwned.get")
-        runtimeOwnedFieldHandles[alias] = field
+        local field = storageInternal.field.createKnown(statusFieldOwner, alias, node, "persistentState.status.get")
+        statusFieldHandles[alias] = field
         return field
     end
 
-    local function getRuntimeOwnedDataObject(alias)
-        local node = getRuntimeNode(alias, "store.runtimeOwned.get", true)
+    local function getStatusDataObject(alias)
+        local node = getStatusNode(alias, "persistentState.status.get", true)
         if not node then
             return nil
         end
         if node.type == "table" and not node._isBitAlias then
-            return getRuntimeOwnedTableHandleForNode(alias, node)
+            return getStatusTableHandleForNode(alias, node)
         end
-        return getRuntimeOwnedFieldHandleForNode(alias, node)
+        return getStatusFieldHandleForNode(alias, node)
     end
 
-    persistentState.runtimeOwned = {
+    persistentState.status = {
         read = function(alias, ...)
-            local ref = getRuntimeOwnedDataObject(alias)
+            local ref = getStatusDataObject(alias)
             if ref == nil then
                 return nil
             end
             return ref:read(...)
         end,
-        get = getRuntimeOwnedDataObject,
+        get = getStatusDataObject,
         table = function(alias)
-            local node = getRuntimeNode(alias, "store.runtimeOwned.table", true)
+            local node = getStatusNode(alias, "persistentState.status.table", true)
             if not node then
                 return nil
             end
             if node.type ~= "table" or node._isBitAlias then
-                logging.violate("store.invalid_table_alias",
-                    "store.runtimeOwned.table: alias '%s' is not table storage", tostring(alias))
+                logging.violate("status.invalid_table_alias",
+                    "persistentState.status.table: alias '%s' is not table storage", tostring(alias))
                 return nil
             end
-            return getRuntimeOwnedTableHandleForNode(alias, node)
+            return getStatusTableHandleForNode(alias, node)
         end,
         write = function(alias, ...)
             local argc = select("#", ...)
             if argc == 1 then
-                return writeRuntimeValue(alias, ...)
+                return writeStatusValue(alias, ...)
             end
-            local ref = getRuntimeOwnedDataObject(alias)
+            local ref = getStatusDataObject(alias)
             if ref == nil then
                 return nil
             end
             if type(ref.write) ~= "function" then
-                logging.violate("store.invalid_surface", "store.runtimeOwned.write: alias '%s' is not writable",
+                logging.violate("status.invalid_surface", "persistentState.status.write: alias '%s' is not writable",
                     tostring(alias))
                 return nil
             end
@@ -340,21 +340,21 @@ local function create(storageConfig, storage)
         reset = function(alias, ...)
             local argc = select("#", ...)
             if argc == 0 then
-                return resetRuntimeValue(alias)
+                return resetStatusValue(alias)
             end
-            local ref = getRuntimeOwnedDataObject(alias)
+            local ref = getStatusDataObject(alias)
             if ref == nil then
                 return nil
             end
             if type(ref.reset) ~= "function" then
-                logging.violate("store.invalid_surface", "store.runtimeOwned.reset: alias '%s' is not resettable",
+                logging.violate("status.invalid_surface", "persistentState.status.reset: alias '%s' is not resettable",
                     tostring(alias))
                 return nil
             end
             return ref:reset(...)
         end,
-        countResettable = countResettableRuntimeRoots,
-        resetAll = resetAllRuntimeRoots,
+        countResettable = countResettableStatusRoots,
+        resetAll = resetAllStatusRoots,
     }
 
     getTableHandleForNode = function(alias, node)
@@ -371,8 +371,8 @@ local function create(storageConfig, storage)
         return handle
     end
 
-    getRuntimeOwnedTableHandleForNode = function(alias, node)
-        local cached = runtimeOwnedTableHandles[alias]
+    getStatusTableHandleForNode = function(alias, node)
+        local cached = statusTableHandles[alias]
         if cached then
             return cached
         end
@@ -382,7 +382,7 @@ local function create(storageConfig, storage)
             writeRoot = writeCommittedRoot,
             normalizedRoot = true,
         })
-        runtimeOwnedTableHandles[alias] = handle
+        statusTableHandles[alias] = handle
         return handle
     end
 
@@ -409,7 +409,7 @@ local function create(storageConfig, storage)
         end
         if node._mode == "runtime" then
             logging.violate("store.invalid_surface",
-                "store.table: alias '%s' is runtime-owned; use store.runtimeOwned.table", tostring(alias))
+                "persistentState.table: alias '%s' is status; use persistentState.status.table", tostring(alias))
             return nil
         end
         if not node._persist then
@@ -429,7 +429,7 @@ local function create(storageConfig, storage)
         if node._mode == "runtime" then
             logging.violate(
                 "store.invalid_surface",
-                "store.get: alias '%s' is runtime-owned; use store.runtimeOwned.get",
+                "persistentState.get: alias '%s' is status; use persistentState.status.get",
                 tostring(alias))
             return nil
         end

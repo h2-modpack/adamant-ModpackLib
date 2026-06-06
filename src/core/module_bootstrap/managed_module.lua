@@ -16,7 +16,7 @@ local managedModule = {
     prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
     prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
-local INTERNAL_RESET_RUNTIME_OWNED_ACTION = "_ResetRuntimeOwned"
+local INTERNAL_RESET_STATUS_ACTION = "_ResetStatus"
 local phaseGate = deps.phaseGate
 local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
     uiDraw = uiDraw,
@@ -94,7 +94,7 @@ end
 ---@field has fun(self: DrawActionRef): boolean
 
 ---@class ManagedModule
----@field getHostId fun(): string
+---@field getOwnerId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string|nil
 ---@field getMeta fun(): table
@@ -246,26 +246,26 @@ function managedModule.create(opts)
         return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
     end
 
-    local function queueRuntimeOwnedReset(resetOpts)
+    local function queueStatusReset(resetOpts)
         actionBuffer.clearPublicIntent()
-        local runtimeChanged, runtimeCount = persistentState.runtimeOwned.countResettable(resetOpts)
-        actionBuffer.stageInternal(INTERNAL_RESET_RUNTIME_OWNED_ACTION, runtimeChanged and (resetOpts or true) or nil)
-        return runtimeChanged, runtimeCount
+        local statusChanged, statusCount = persistentState.status.countResettable(resetOpts)
+        actionBuffer.stageInternal(INTERNAL_RESET_STATUS_ACTION, statusChanged and (resetOpts or true) or nil)
+        return statusChanged, statusCount
     end
 
     local function stageResetAll(resetOpts)
         local stagedChanged, stagedCount = stagedState.resetAll(resetOpts)
-        local runtimeChanged, runtimeCount = queueRuntimeOwnedReset(resetOpts)
-        return stagedChanged or runtimeChanged, (stagedCount or 0) + (runtimeCount or 0)
+        local statusChanged, statusCount = queueStatusReset(resetOpts)
+        return stagedChanged or statusChanged, (stagedCount or 0) + (statusCount or 0)
     end
 
     local function executeInternalActionsDuringCommit(internalSnapshot)
-        if internalSnapshot and internalSnapshot[INTERNAL_RESET_RUNTIME_OWNED_ACTION] ~= nil then
-            local resetOpts = internalSnapshot[INTERNAL_RESET_RUNTIME_OWNED_ACTION]
+        if internalSnapshot and internalSnapshot[INTERNAL_RESET_STATUS_ACTION] ~= nil then
+            local resetOpts = internalSnapshot[INTERNAL_RESET_STATUS_ACTION]
             if type(resetOpts) ~= "table" then
                 resetOpts = nil
             end
-            persistentState.runtimeOwned.resetAll(resetOpts)
+            persistentState.status.resetAll(resetOpts)
         end
     end
 
@@ -280,7 +280,7 @@ function managedModule.create(opts)
         end
     end
 
-    function module.getHostId()
+    function module.getOwnerId()
         return pluginGuid
     end
 
@@ -424,7 +424,7 @@ function managedModule.create(opts)
     end
 
     host = {
-        getHostId = module.getHostId,
+        getOwnerId = module.getOwnerId,
         getModuleId = module.getModuleId,
         getPackId = module.getPackId,
         getMeta = module.getMeta,
@@ -433,19 +433,19 @@ function managedModule.create(opts)
         logIf = module.logIf,
         shared = {
             emit = function(id, eventName, payload)
-                return shared.emitForHost(module, id, eventName, payload)
+                return shared.emitForModule(module, id, eventName, payload)
             end,
         },
     }
 
     function module.applyMutation()
         requireActivated("applyMutation")
-        return mutation.applyForHost(module)
+        return mutation.applyForModule(module)
     end
 
     function module.revertMutation()
         requireActivated("revertMutation")
-        return mutation.revertForHost(module)
+        return mutation.revertForModule(module)
     end
 
     function module.activate()

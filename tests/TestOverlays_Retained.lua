@@ -28,8 +28,8 @@ function TestOverlays_Retained:captureWarnings()
     return warnings
 end
 
-function TestOverlays_Retained:createHostWithOverlays(pluginGuid, declareOverlays, opts)
-    return self.h.createHostWithOverlays(pluginGuid, declareOverlays, opts)
+function TestOverlays_Retained:createModuleWithOverlays(pluginGuid, declareOverlays, opts)
+    return self.h.createModuleWithOverlays(pluginGuid, declareOverlays, opts)
 end
 
 function TestOverlays_Retained:testSystemOverlayLineProjectsThroughCommitContext()
@@ -92,7 +92,7 @@ function TestOverlays_Retained:testRetainedTableCapsRowsAndHidesUnusedRows()
         alphas[#alphas + 1] = args
     end
 
-    local host, authorModule = self:createHostWithOverlays("test.retained.table", function(overlays)
+    local host, authorModule = self:createModuleWithOverlays("test.retained.table", function(overlays)
         overlays.createTable("runs", {
             region = "middleRightStack",
             maxRows = 2,
@@ -129,7 +129,7 @@ end
 
 function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeShape()
     local seen = nil
-    local host, authorModule = self:createHostWithOverlays("test.retained.standard-shape", function(overlays)
+    local host, authorModule = self:createModuleWithOverlays("test.retained.standard-shape", function(overlays)
         overlays.createLine("line", {
             region = "middleRightStack",
             columns = {
@@ -139,7 +139,7 @@ function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeSha
         overlays.onCommit(function(callbackHost, runtime, overlay, commit)
             overlay.setLine("line", runtime.data.read("Flag") and "enabled" or "disabled")
             seen = {
-                hostId = callbackHost.getHostId(),
+                ownerId = callbackHost.getOwnerId(),
                 hasLifecycleSetEnabled = type(callbackHost.setEnabled) == "function",
                 runtimeValue = runtime.data.read("Flag"),
                 commitValue = commit.reason,
@@ -161,7 +161,7 @@ function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeSha
     self.h.overlays.dispatchCommit(host, { reason = "test" })
 
     lu.assertEquals(seen, {
-        hostId = host.getHostId(),
+        ownerId = host.getOwnerId(),
         hasLifecycleSetEnabled = false,
         runtimeValue = true,
         commitValue = "test",
@@ -171,12 +171,12 @@ end
 function TestOverlays_Retained:testHostOverlayVisibilityReceivesStandardRuntimeShape()
     local lineSeen = nil
     local columnSeen = nil
-    local host, authorModule = self:createHostWithOverlays("test.retained.visibility-shape", function(overlays)
+    local host, authorModule = self:createModuleWithOverlays("test.retained.visibility-shape", function(overlays)
         overlays.createLine("line", {
             region = "middleRightStack",
             visible = function(callbackHost, runtime)
                 lineSeen = {
-                    hostId = callbackHost.getHostId(),
+                    ownerId = callbackHost.getOwnerId(),
                     runtimeValue = runtime.data.read("Flag"),
                 }
                 return runtime.data.read("Flag") == true
@@ -187,7 +187,7 @@ function TestOverlays_Retained:testHostOverlayVisibilityReceivesStandardRuntimeS
                     minWidth = 40,
                     visible = function(callbackHost, runtime)
                         columnSeen = {
-                            hostId = callbackHost.getHostId(),
+                            ownerId = callbackHost.getOwnerId(),
                             runtimeValue = runtime.data.read("Flag"),
                         }
                         return runtime.data.read("Flag") == true
@@ -209,7 +209,7 @@ function TestOverlays_Retained:testHostOverlayVisibilityReceivesStandardRuntimeS
     lu.assertTrue(ok, tostring(err))
 
     lu.assertEquals(lineSeen, {
-        hostId = host.getHostId(),
+        ownerId = host.getOwnerId(),
         runtimeValue = true,
     })
     lu.assertEquals(columnSeen, lineSeen)
@@ -217,7 +217,7 @@ end
 
 function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     lu.assertErrorMsgContains("maxRows must be a positive integer", function()
-        self:createHostWithOverlays("test.retained.table.invalid", function(overlays)
+        self:createModuleWithOverlays("test.retained.table.invalid", function(overlays)
             overlays.createTable("runs", {
                 region = "middleRightStack",
                 columns = {
@@ -259,7 +259,7 @@ function TestOverlays_Retained:testHostOverlayDeclarationsRejectAfterActivation(
 end
 
 function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnModuleRegistry()
-    local host = self:createHostWithOverlays("test.retained.state-declarations", function(overlays)
+    local host = self:createModuleWithOverlays("test.retained.state-declarations", function(overlays)
         overlays.createLine("line", {
             region = "middleRightStack",
             columns = {
@@ -296,7 +296,7 @@ end
 function TestOverlays_Retained:testHostCommitDispatchesOverlaysAfterSettingsObserver()
     local pluginGuid = "test-retained-overlay-commit"
     local order = {}
-    local host, authorModule, _, stagedState = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, authorModule, _, stagedState = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.onCommit(function()
             order[#order + 1] = "overlay"
         end)
@@ -327,7 +327,7 @@ function TestOverlays_Retained:testHostCommitDispatchesOverlaysWhenSettingsObser
     local warnings = self:captureWarnings()
     local pluginGuid = "test-retained-overlay-commit-observer-failure"
     local order = {}
-    local host, authorModule, _, stagedState = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, authorModule, _, stagedState = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.onCommit(function()
             order[#order + 1] = "overlay"
         end)
@@ -362,7 +362,7 @@ end
 function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit()
     local pluginGuid = "test-retained-overlay-staging"
     local ownerId = pluginGuid
-    local host, _, store = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local host, _, store = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("candidate", {
             region = "middleRightStack",
             columns = {
@@ -401,7 +401,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local pluginGuid = "test-retained-overlay-same-name-reload"
     local ownerId = pluginGuid
     local rowKey = "middleRightStack\0" .. ownerId .. ":current:shared"
-    local firstHost, firstAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local firstHost, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("shared", {
             region = "middleRightStack",
             columns = {
@@ -417,7 +417,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local firstRow = self.h.rendererState.stackRows[rowKey]
     lu.assertNotNil(firstRow)
 
-    local secondHost, secondAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local secondHost, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("shared", {
             region = "middleRightStack",
             columns = {
@@ -434,7 +434,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
     local secondRegistry = self.h.retainedState.tableRegistries[secondHost]
 
-    lu.assertEquals(self.h.harness.moduleHost.getLiveModule(pluginGuid), secondHost)
+    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), secondHost)
     lu.assertNotNil(secondRow)
     lu.assertNotEquals(firstRow, secondRow)
     lu.assertTrue(firstRegistry == nil or firstRegistry.elements.shared == nil)
@@ -443,7 +443,7 @@ end
 
 function TestOverlays_Retained:testRetainedIntervalDispatchesWhenDue()
     local calls = 0
-    local _, authorModule = self:createHostWithOverlays("test.retained.interval", function(overlays)
+    local _, authorModule = self:createModuleWithOverlays("test.retained.interval", function(overlays)
         overlays.onInterval("tick", 1.0, function()
             calls = calls + 1
         end)
@@ -463,11 +463,11 @@ function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext(
     local seen = nil
     local callbackEvent = nil
     local host, authorModule
-    host, authorModule = self:createHostWithOverlays("test.retained.interval.when-context", function(overlays)
+    host, authorModule = self:createModuleWithOverlays("test.retained.interval.when-context", function(overlays)
         overlays.onInterval("tick", 1.0, function(callbackHost, runtime, _, event)
             calls = calls + 1
             callbackEvent = {
-                hostId = callbackHost.getHostId(),
+                ownerId = callbackHost.getOwnerId(),
                 runtimeValue = runtime.data.read("Flag"),
                 name = event.name,
                 now = event.now,
@@ -475,12 +475,12 @@ function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext(
         end, {
             when = function(callbackHost, runtime, event)
                 seen = {
-                    hostId = callbackHost.getHostId(),
+                    ownerId = callbackHost.getOwnerId(),
                     runtimeValue = runtime.data.read("Flag"),
                     name = event.name,
                     now = event.now,
                 }
-                return callbackHost.getHostId() == host.getHostId() and runtime.data.read("Flag") == true
+                return callbackHost.getOwnerId() == host.getOwnerId() and runtime.data.read("Flag") == true
             end,
         })
     end, {
@@ -500,7 +500,7 @@ function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext(
 
     lu.assertEquals(calls, 1)
     lu.assertEquals(seen, {
-        hostId = host.getHostId(),
+        ownerId = host.getOwnerId(),
         runtimeValue = true,
         name = "tick",
         now = 2.5,
@@ -528,7 +528,7 @@ function TestOverlays_Retained.testRetainedIntervalDriverUsesInjectedRom()
     }
     local baselineCallbacks = #alwaysDrawCallbacks
     local calls = 0
-    local _, authorModule = h.createHostWithOverlays("test.retained.interval.driver", function(overlays)
+    local _, authorModule = h.createModuleWithOverlays("test.retained.interval.driver", function(overlays)
         overlays.onInterval("tick", 1.0, function()
             calls = calls + 1
         end)
@@ -543,7 +543,7 @@ end
 
 function TestOverlays_Retained:testExplicitOwnerIntervalPredicateRunsOncePerDispatch()
     local whenCalls = 0
-    local _, authorModule = self:createHostWithOverlays("test.retained.interval.once", function(overlays)
+    local _, authorModule = self:createModuleWithOverlays("test.retained.interval.once", function(overlays)
         overlays.onInterval("tick", 1.0, function() end, {
             when = function()
                 whenCalls = whenCalls + 1
@@ -568,7 +568,7 @@ function TestOverlays_Retained:testAfterHookObservesResultsWithoutChangingReturn
     end
 
     local pluginGuid = "test-retained-overlay-after-hook"
-    local _, authorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local _, authorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.afterHook("StartNewRunAfter", function(_, _, _, event)
             observed = {
                 arg = event.args[1],
@@ -598,7 +598,7 @@ function TestOverlays_Retained:testAfterHookPreservesNilResultArity()
         wrapped = handler
     end
 
-    local _, authorModule = self:createHostWithOverlays("test-retained-overlay-after-hook-nil-results", function(overlays)
+    local _, authorModule = self:createModuleWithOverlays("test-retained-overlay-after-hook-nil-results", function(overlays)
         overlays.afterHook("StartNewRunNilResults", function(_, _, _, event)
             observed = event.results
         end)
@@ -638,7 +638,7 @@ function TestOverlays_Retained:testHostAfterHookIsRemovedWhenOmitted()
         wrapped = handler
     end
 
-    local _, firstAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local _, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.afterHook("StartNewRunOmit", function()
             observed = true
         end)
@@ -646,7 +646,7 @@ function TestOverlays_Retained:testHostAfterHookIsRemovedWhenOmitted()
     local ok, err = firstAuthorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    local _, secondAuthorModule = self:createHostWithOverlays(pluginGuid, function() end)
+    local _, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, function() end)
     ok, err = secondAuthorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
@@ -668,7 +668,7 @@ function TestOverlays_Retained:testHostAfterHookRollsBackOnActivationFailure()
         wrapped = handler
     end
 
-    local _, firstAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local _, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.afterHook("StartNewRunRollback", function()
             observed = "first"
         end)
@@ -676,7 +676,7 @@ function TestOverlays_Retained:testHostAfterHookRollsBackOnActivationFailure()
     local ok, err = firstAuthorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    local _, secondAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local _, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.afterHook("StartNewRunRollback", function()
             observed = "second"
         end)
@@ -699,7 +699,7 @@ end
 
 function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations()
     local pluginGuid = "test-retained-rollback"
-    local firstHost, firstAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local firstHost, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("stable", {
             region = "middleRightStack",
             columns = {
@@ -712,7 +712,7 @@ function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations
     local ok, err = firstAuthorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    local _, secondAuthorModule = self:createHostWithOverlays(pluginGuid, function(overlays)
+    local _, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("replacement", {
             region = "middleRightStack",
             columns = {
@@ -733,5 +733,5 @@ function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations
     local retained = self.h.retainedState.tableRegistries[firstHost]
     lu.assertNotNil(retained.elements.stable)
     lu.assertNil(retained.elements.replacement)
-    lu.assertEquals(self.h.harness.moduleHost.getLiveModule(pluginGuid), firstHost)
+    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), firstHost)
 end

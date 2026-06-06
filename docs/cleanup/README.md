@@ -1,0 +1,61 @@
+# Cleanup Tracking
+
+This folder is a working area for post-migration cleanup. It is not module-author
+documentation and should not be treated as an API contract.
+
+## Process
+
+1. Save audit commands and raw outputs under `audits/`.
+2. Classify findings before editing.
+3. Work in narrow passes with one cleanup theme per patch.
+4. Check production callers before deleting or collapsing helpers.
+5. Keep tests as behavior coverage, not as the only reason an obsolete surface exists.
+6. Update or delete stale docs in the same pass that changes the public shape.
+
+## Finding Labels
+
+- `keep`: current name or shape is intentional.
+- `rename`: concept is still valid, but the vocabulary is stale.
+- `delete`: concept is obsolete and has no production caller.
+- `collapse`: helper/file exists only as a redirection layer.
+- `move`: useful code lives in the wrong subsystem.
+- `document`: behavior is intentional but needs a doc anchor.
+- `test-only`: code only exists for tests and should be replaced with behavioral coverage or removed.
+
+## Initial Cleanup Checklist
+
+- [x] `runtimeOwned` naming residue now that public API is `status`.
+- [ ] `host` versus `module` vocabulary residue in diagnostics, docs, and internal APIs.
+  Audit: [2026-06-06-host-module.md](audits/2026-06-06-host-module.md).
+- [ ] old `service` terminology that is either real Lib internals or leftover author-facing wording.
+- [ ] stale `integration`, `poll`, and `provider` references.
+- [ ] `compat`, `legacy`, `deprecated`, `shim`, and `migration` references.
+- [ ] broad context objects or adapter layers that survived the native API migration.
+- [ ] one-line helpers that only hide direct calls without adding policy.
+- [ ] docs that describe historical migration plans instead of current behavior.
+
+## Production Caller Rule
+
+Before removing a helper or file:
+
+1. Search production code first: `src`, then module consumers if relevant.
+2. Search tests second.
+3. If only tests call it, decide whether the test should move to a public behavior.
+4. If production calls it, classify whether it is a real boundary or an accidental redirection.
+
+## Suggested Audit Commands
+
+Run from `adamant-ModpackLib`.
+
+```powershell
+rg -n "runtimeOwned|store\.runtimeOwned|stagedState\.runtimeOwned|RuntimeOwned" src tests docs API.md
+rg -n "\bservices?\b|\bintegration\b|\bintegrations\b|\bpoll\b|\bprovider\b|\bproviders\b" src tests docs API.md
+rg -n "\bcompat\b|\blegacy\b|\bdeprecated\b|\bshim\b|\bmigration\b|\bold\b" src tests docs API.md
+rg -n "\bhost\b|Host|host\." src
+rg -n "\bhost\b|Host|host\." docs API.md
+rg -n "\bhost\b|Host|host\." tests
+rg -n "moduleHost|hostLifecycle|applyForHost|syncForHost|revertForHost|emitForHost|installForHost|getOwnerId|HostGui" src tests docs API.md
+```
+
+Save large outputs as separate audit files instead of trying to clean them from
+terminal scrollback.

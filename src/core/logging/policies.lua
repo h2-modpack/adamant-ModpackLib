@@ -318,6 +318,10 @@ return {
         severity = "error",
         description = "Status operations can only access runtime-authored status aliases.",
     },
+    ["status.invalid_table_alias"] = {
+        severity = "error",
+        description = "Status table access requires a table root alias, not scalar or packed-bit aliases.",
+    },
     ["storage.invalid_field_alias"] = {
         severity = "error",
         description = "Storage fields require a non-empty storage alias.",

@@ -1,7 +1,7 @@
 local lu = require("luaunit")
-local createModuleHostHarness = require("tests/harness/create_module_host_harness")
+local createManagedModuleHarness = require("tests/harness/create_managed_module_harness")
 
-TestModuleHost_CreateModule = {}
+TestCreateModule = {}
 
 local function createTestModule(h, opts)
     local module, err = h.public.createModule({
@@ -46,20 +46,20 @@ end
 
 local function getLiveStore(h, pluginGuid)
     local liveModule = h:liveModule(pluginGuid)
-    local record = h.moduleHost.getRecord(liveModule)
+    local record = h.managedModule.getRecord(liveModule)
     return record and record.store or nil
 end
 
-function TestModuleHost_CreateModule:setUp()
-    self.h = createModuleHostHarness()
+function TestCreateModule:setUp()
+    self.h = createManagedModuleHarness()
     self.h:captureWarnings()
 end
 
-function TestModuleHost_CreateModule:tearDown()
+function TestCreateModule:tearDown()
     self.h:restoreWarnings()
 end
 
-function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
+function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     local drawContext = nil
     local drawImgui = nil
     local capturedState = nil
@@ -156,7 +156,7 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(capturedUi.draw, drawContext)
     lu.assertEquals(capturedUi.data, capturedState)
     lu.assertEquals(capturedUi.actions, capturedActions)
-    lu.assertEquals(capturedCallbackHost.getHostId(), "test-create-module")
+    lu.assertEquals(capturedCallbackHost.getOwnerId(), "test-create-module")
     lu.assertFalse(capturedCallbackHost.isEnabled())
     lu.assertNil(capturedActions.hasAny)
     lu.assertEquals(type(drawWidgets.checkbox), "function")
@@ -229,11 +229,11 @@ function TestModuleHost_CreateModule:testCreateModuleRunsCanonicalPipeline()
         authorRows:write(1, "Limit", 4)
     end)
     lu.assertEquals(authorRowField:read(), 3)
-    local liveRecord = self.h.moduleHost.getRecord(liveModule)
+    local liveRecord = self.h.managedModule.getRecord(liveModule)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
 
-function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
+function TestCreateModule:testDrawCallbacksReuseStableFacades()
     local calls = {}
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-stable-draw-objects",
@@ -276,7 +276,7 @@ function TestModuleHost_CreateModule:testDrawCallbacksReuseStableFacades()
     lu.assertEquals(calls[1].actions, calls[3].actions)
 end
 
-function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases()
+function TestCreateModule:testPackedWidgetsUseDrawStateScopedAliases()
     local config = { Packed = 0 }
     local checkboxLabels = {}
     local changed = false
@@ -329,7 +329,7 @@ function TestModuleHost_CreateModule:testPackedWidgetsUseDrawStateScopedAliases(
     lu.assertEquals(config.Packed, 1)
 end
 
-function TestModuleHost_CreateModule:testDrawFacadeIsSharedAcrossHosts()
+function TestCreateModule:testDrawFacadeIsSharedAcrossHosts()
     local firstDraw = nil
     local secondDraw = nil
     local firstUi = nil
@@ -375,11 +375,11 @@ function TestModuleHost_CreateModule:testDrawFacadeIsSharedAcrossHosts()
     lu.assertNotEquals(firstUi, secondUi)
     lu.assertEquals(firstUi.draw, firstDraw)
     lu.assertEquals(secondUi.draw, secondDraw)
-    lu.assertEquals(firstCallbackHost.getHostId(), "test-create-module-shared-draw-a")
-    lu.assertEquals(secondCallbackHost.getHostId(), "test-create-module-shared-draw-b")
+    lu.assertEquals(firstCallbackHost.getOwnerId(), "test-create-module-shared-draw-a")
+    lu.assertEquals(secondCallbackHost.getOwnerId(), "test-create-module-shared-draw-b")
 end
 
-function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyModuleDeclarationSurface()
+function TestCreateModule:testCreateModuleReturnsOnlyModuleDeclarationSurface()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-author-surface",
         config = {},
@@ -390,7 +390,7 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyModuleDeclaratio
     })
 
     lu.assertEquals(type(host.isEnabled), "function")
-    lu.assertEquals(type(host.getHostId), "function")
+    lu.assertEquals(type(host.getOwnerId), "function")
     lu.assertEquals(type(host.getModuleId), "function")
     lu.assertEquals(type(host.getPackId), "function")
     lu.assertNil(host.getIdentity)
@@ -424,7 +424,7 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsOnlyModuleDeclaratio
     lu.assertNil(host.setEnabled)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFacade()
+function TestCreateModule:testCreateModuleSupportsDeclarativeModuleFacade()
     local config = {}
     local capturedUi = nil
     local capturedHost = nil
@@ -442,7 +442,7 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     })
 
     lu.assertNil(err)
-    lu.assertEquals(module.getHostId(), "test-create-module-declarative-facade")
+    lu.assertEquals(module.getOwnerId(), "test-create-module-declarative-facade")
     lu.assertEquals(module.getModuleId(), "DeclarativeFacade")
     lu.assertEquals(module.getPackId(), "create-module-pack")
     lu.assertFalse(module.isEnabled())
@@ -479,13 +479,13 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     lu.assertNotNil(liveModule)
     liveModule.drawTab()
 
-    lu.assertEquals(capturedHost.getHostId(), "test-create-module-declarative-facade")
+    lu.assertEquals(capturedHost.getOwnerId(), "test-create-module-declarative-facade")
     lu.assertNotNil(capturedUi.draw)
     lu.assertEquals(type(capturedUi.actions.trigger), "function")
     lu.assertNil(capturedActionHost)
 
     lu.assertTrue(liveModule.commitIfDirty())
-    lu.assertEquals(capturedActionHost.getHostId(), "test-create-module-declarative-facade")
+    lu.assertEquals(capturedActionHost.getOwnerId(), "test-create-module-declarative-facade")
     lu.assertEquals(capturedActionRuntime.status.read("RuntimeFlag"), true)
     lu.assertEquals(config.Flag, true)
     lu.assertEquals(capturedCommitRuntime.data.read("Flag"), true)
@@ -493,11 +493,11 @@ function TestModuleHost_CreateModule:testCreateModuleSupportsDeclarativeModuleFa
     lu.assertErrorMsgContains("status, not data storage", function()
         capturedCommitRuntime.data.read("RuntimeFlag")
     end)
-    lu.assertEquals(capturedCommitHost.getHostId(), "test-create-module-declarative-facade")
+    lu.assertEquals(capturedCommitHost.getOwnerId(), "test-create-module-declarative-facade")
     lu.assertTrue(capturedCommit.hadConfigChanges())
 end
 
-function TestModuleHost_CreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHostAndPayload()
+function TestCreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHostAndPayload()
     local received = nil
     local listener = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-listener",
@@ -538,12 +538,12 @@ function TestModuleHost_CreateModule:testDeclarativeModuleSharedListenerReceives
     lu.assertTrue(ok)
     lu.assertEquals(count, 1)
     lu.assertEquals(received.payload.value, 7)
-    lu.assertEquals(received.host.getHostId(), "test-create-module-declarative-listener")
+    lu.assertEquals(received.host.getOwnerId(), "test-create-module-declarative-listener")
     lu.assertTrue(received.runtime.data.read("Enabled"))
     lu.assertFalse(received.runtime.data.read("Flag"))
 end
 
-function TestModuleHost_CreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArgs()
+function TestCreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArgs()
     local captured = nil
     local module = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-hooks",
@@ -569,19 +569,19 @@ function TestModuleHost_CreateModule:testDeclarativeModuleHooksReceiveHostRuntim
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-create-module-declarative-hooks")
-    local record = self.h.moduleHost.getRecord(liveModule)
+    local record = self.h.managedModule.getRecord(liveModule)
     local slot = record.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
     local result = slot.value(function(value)
         return value + 1
     end, 4)
 
     lu.assertEquals(result, 8)
-    lu.assertEquals(captured.host.getHostId(), "test-create-module-declarative-hooks")
+    lu.assertEquals(captured.host.getOwnerId(), "test-create-module-declarative-hooks")
     lu.assertEquals(captured.runtime.data.read("Bonus"), 3)
     lu.assertEquals(captured.value, 4)
 end
 
-function TestModuleHost_CreateModule:testDeclarativeModuleActivationIsSingleUse()
+function TestCreateModule:testDeclarativeModuleActivationIsSingleUse()
     local module = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-single-activate",
         config = {},
@@ -598,16 +598,16 @@ function TestModuleHost_CreateModule:testDeclarativeModuleActivationIsSingleUse(
     lu.assertStrContains(err, "already activated")
 end
 
-function TestModuleHost_CreateModule:testHostMutationPatchDeclaresActivationMutation()
+function TestCreateModule:testModuleMutationPatchDeclaresActivationMutation()
     local target = { Value = "base" }
     local patchRuntime = nil
     local patchCallbackHost = nil
     local host = createTestModule(self.h, {
-        pluginGuid = "test-create-module-host-mutation-patch",
+        pluginGuid = "test-create-module-module-mutation-patch",
         config = {
             Enabled = true,
         },
-        id = "HostMutationPatch",
+        id = "ModuleMutationPatch",
         name = "Host Mutation Patch",
         drawTab = function() end,
     })
@@ -623,16 +623,16 @@ function TestModuleHost_CreateModule:testHostMutationPatchDeclaresActivationMuta
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(target.Value, "patched")
     lu.assertNotNil(patchRuntime.data)
-    lu.assertEquals(patchCallbackHost.getHostId(), "test-create-module-host-mutation-patch")
+    lu.assertEquals(patchCallbackHost.getOwnerId(), "test-create-module-module-mutation-patch")
     lu.assertNil(patchRuntime.data.table)
     lu.assertNil(patchRuntime.data.getAliasSchema)
 end
 
-function TestModuleHost_CreateModule:testHostMutationPatchRejectsAfterActivation()
+function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()
     local host = createTestModule(self.h, {
-        pluginGuid = "test-create-module-host-mutation-after-activation",
+        pluginGuid = "test-create-module-module-mutation-after-activation",
         config = {},
-        id = "HostMutationAfterActivation",
+        id = "ModuleMutationAfterActivation",
         name = "Host Mutation After Activation",
         drawTab = function() end,
     })
@@ -643,7 +643,7 @@ function TestModuleHost_CreateModule:testHostMutationPatchRejectsAfterActivation
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleReturnsErrorAndLogsWarning()
+function TestCreateModule:testCreateModuleReturnsErrorAndLogsWarning()
     local host, err = self.h.public.createModule({
         pluginGuid = "test-try-create-module-invalid",
         id = "TryCreateInvalid",
@@ -657,7 +657,7 @@ function TestModuleHost_CreateModule:testCreateModuleReturnsErrorAndLogsWarning(
     lu.assertNil(self.h:liveModule("test-try-create-module-invalid"))
 end
 
-function TestModuleHost_CreateModule:testCreateModuleActivationIsSingleUse()
+function TestCreateModule:testCreateModuleActivationIsSingleUse()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-single-activate",
         config = {},
@@ -674,7 +674,7 @@ function TestModuleHost_CreateModule:testCreateModuleActivationIsSingleUse()
     lu.assertStrContains(err, "already activated")
 end
 
-function TestModuleHost_CreateModule:testCreateModuleRejectsOwnerOption()
+function TestCreateModule:testCreateModuleRejectsOwnerOption()
     lu.assertErrorMsgContains("unknown option 'owner'", function()
         self.h:createModuleOrThrow({
             owner = {},
@@ -686,7 +686,7 @@ function TestModuleHost_CreateModule:testCreateModuleRejectsOwnerOption()
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleRejectsLegacyDefinitionOption()
+function TestCreateModule:testCreateModuleRejectsLegacyDefinitionOption()
     lu.assertErrorMsgContains("definition table is no longer supported", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-legacy-definition",
@@ -699,7 +699,7 @@ function TestModuleHost_CreateModule:testCreateModuleRejectsLegacyDefinitionOpti
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleRejectsLegacyTopLevelDeclarations()
+function TestCreateModule:testCreateModuleRejectsLegacyTopLevelDeclarations()
     lu.assertErrorMsgContains("unknown option 'storage'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-storage-top-level",
@@ -720,7 +720,7 @@ function TestModuleHost_CreateModule:testCreateModuleRejectsLegacyTopLevelDeclar
     end)
 end
 
-function TestModuleHost_CreateModule:testModuleDataDefineTreatsModeAsUnknownPublicField()
+function TestCreateModule:testModuleDataDefineTreatsModeAsUnknownPublicField()
     local module = self.h:createModuleOrThrow({
         pluginGuid = "test-create-module-data-mode-unknown",
         config = {},
@@ -748,7 +748,7 @@ function TestModuleHost_CreateModule:testModuleDataDefineTreatsModeAsUnknownPubl
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
+function TestCreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerManualMutation'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-manual-mutation-unknown",
@@ -763,7 +763,7 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsManualMutationAsUnkno
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterPatchMutationAsUnknownOption()
+function TestCreateModule:testCreateModuleTreatsRegisterPatchMutationAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerPatchMutation'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-patch-mutation-unknown",
@@ -775,7 +775,7 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterPatchMutation
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterSharedAsUnknownOption()
+function TestCreateModule:testCreateModuleTreatsRegisterSharedAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerShared'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-shared-unknown",
@@ -787,7 +787,7 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterSharedAsUnkno
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterHooksAsUnknownOption()
+function TestCreateModule:testCreateModuleTreatsRegisterHooksAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerHooks'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-hooks-unknown",
@@ -799,7 +799,7 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterHooksAsUnknow
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterOverlaysAsUnknownOption()
+function TestCreateModule:testCreateModuleTreatsRegisterOverlaysAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerOverlays'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-overlays-unknown",
@@ -811,7 +811,7 @@ function TestModuleHost_CreateModule:testCreateModuleTreatsRegisterOverlaysAsUnk
     end)
 end
 
-function TestModuleHost_CreateModule:testCreateModuleFingerprintTracksQuickContentPresenceOnly()
+function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceOnly()
     local stableHost = createTestModule(self.h, {
         pluginGuid = "test-create-module-quick-content-stable",
         config = {},

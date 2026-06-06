@@ -1,22 +1,22 @@
 local lu = require("luaunit")
-local createModuleHostHarness = require("tests/harness/create_module_host_harness")
+local createManagedModuleHarness = require("tests/harness/create_managed_module_harness")
 
-TestModuleHost = {}
+TestManagedModule = {}
 
-function TestModuleHost:setUp()
-    self.h = createModuleHostHarness()
+function TestManagedModule:setUp()
+    self.h = createManagedModuleHarness()
     self.h:captureWarnings()
     self.previousImGui = self.h.rom.ImGui
     self.previousImGuiCond = self.h.rom.ImGuiCond
 end
 
-function TestModuleHost:tearDown()
+function TestManagedModule:tearDown()
     self.h.rom.ImGui = self.previousImGui
     self.h.rom.ImGuiCond = self.previousImGuiCond
     self.h:restoreWarnings()
 end
 
-local function createActivatedHost(h, pluginGuid, opts)
+local function createActivatedManagedModule(h, pluginGuid, opts)
     local function adaptDrawCallback(callback)
         if type(callback) ~= "function" then
             return callback
@@ -54,17 +54,17 @@ local function createActivatedHost(h, pluginGuid, opts)
         h.sharedBundle.registrations.stageListener(
             sharedEventRegistrations,
             function()
-                local record = h.moduleHost.getRecord(host)
+                local record = h.managedModule.getRecord(host)
                 return record and record.host or nil
             end,
             listener.id,
             listener.eventName,
             function(payload)
-                local record = h.moduleHost.getRecord(host)
+                local record = h.managedModule.getRecord(host)
                 return listener.callback(record and record.host or nil, record and record.runtime or nil, payload)
             end)
     end
-    host, store = h.moduleHost.create({
+    host, store = h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = opts.definition,
         persistentState = opts.persistentState,
@@ -83,7 +83,7 @@ local function createActivatedHost(h, pluginGuid, opts)
 end
 
 local function createSimpleActivatedHost(h, pluginGuid, id)
-    local definition = h.moduleHost.prepareDefinition({}, {
+    local definition = h.managedModule.prepareDefinition({}, {
         id = id or pluginGuid,
         name = id or pluginGuid,
         storage = {},
@@ -92,7 +92,7 @@ local function createSimpleActivatedHost(h, pluginGuid, id)
         Enabled = true,
         DebugMode = false,
     }, definition)
-    return createActivatedHost(h, pluginGuid, {
+    return createActivatedManagedModule(h, pluginGuid, {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -101,14 +101,14 @@ local function createSimpleActivatedHost(h, pluginGuid, id)
 end
 
 local function emitShared(h, module, id, eventName, payload)
-    local record = h.moduleHost.getRecord(module)
+    local record = h.managedModule.getRecord(module)
     return record.host.shared.emit(id, eventName, payload)
 end
 
-function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
+function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
     local drawCalls = 0
     local pluginGuid = "test-fallback-ui-commit"
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         modpack = "fallback-pack",
         id = "FallbackUiTest",
         name = "Fallback UI Test",
@@ -135,7 +135,7 @@ function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
         Spacing = noop,
     }
 
-    createActivatedHost(self.h, pluginGuid, {
+    createActivatedManagedModule(self.h, pluginGuid, {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -146,8 +146,8 @@ function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
             drawCalls = drawCalls + 1
         end,
     })
-    local moduleHost = self.h.moduleHost.getLiveModule(pluginGuid)
-    moduleHost.commitIfDirty = function()
+    local managedModule = self.h.managedModule.getLiveModule(pluginGuid)
+    managedModule.commitIfDirty = function()
         return false, "commit boom", false
     end
 
@@ -159,12 +159,12 @@ function TestModuleHost:testFallbackUiWarnsWhenStagedStateCommitFails()
     lu.assertEquals(#self.h.warnings, 1)
     lu.assertStrContains(self.h.warnings[1], "Fallback UI Test staged state commit failed")
     lu.assertStrContains(self.h.warnings[1], "commit boom")
-    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), moduleHost)
+    lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), managedModule)
 end
 
-function TestModuleHost:testFallbackUiInstallsDuringActivation()
+function TestManagedModule:testFallbackUiInstallsDuringActivation()
     local pluginGuid = "test-fallback-ui-activation"
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "FallbackUiRegistryHost",
         name = "Fallback UI Registry Host",
         storage = {},
@@ -174,7 +174,7 @@ function TestModuleHost:testFallbackUiInstallsDuringActivation()
         DebugMode = false,
     }, definition)
     local attached = nil
-    createActivatedHost(self.h, pluginGuid, {
+    createActivatedManagedModule(self.h, pluginGuid, {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -183,20 +183,20 @@ function TestModuleHost:testFallbackUiInstallsDuringActivation()
         end,
         drawTab = function() end,
     })
-    local host = self.h.moduleHost.getLiveModule(pluginGuid)
+    local host = self.h.managedModule.getLiveModule(pluginGuid)
 
     local runtime = self.h.registry.fallback.runtimes[pluginGuid]
 
     lu.assertTrue(attached)
     lu.assertEquals(type(runtime.renderWindow), "function")
     lu.assertEquals(type(runtime.addMenuBar), "function")
-    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), host)
+    lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), host)
 end
 
-function TestModuleHost:testFlushNotifiesSettingsObserver()
+function TestManagedModule:testFlushNotifiesSettingsObserver()
     local calls = 0
     local observedValue = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "SettingsObserverHost",
         name = "Settings Observer Host",
         storage = {
@@ -206,7 +206,7 @@ function TestModuleHost:testFlushNotifiesSettingsObserver()
     local store, stagedState = self.h:createModuleState({
         Value = false,
     }, definition)
-    createActivatedHost(self.h, "test-settings-observer-host", {
+    createActivatedManagedModule(self.h, "test-settings-observer-host", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -216,7 +216,7 @@ function TestModuleHost:testFlushNotifiesSettingsObserver()
         end,
         drawTab = function() end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-settings-observer-host")
+    local host = self.h.managedModule.getLiveModule("test-settings-observer-host")
 
     host.stage("Value", true)
     local ok, err = host.flush()
@@ -227,11 +227,11 @@ function TestModuleHost:testFlushNotifiesSettingsObserver()
     lu.assertTrue(observedValue)
 end
 
-function TestModuleHost:testPatchMutationReceivesCallbackHostAndRuntimeData()
+function TestManagedModule:testPatchMutationReceivesCallbackHostAndRuntimeData()
     local target = { Value = false }
     local patchHost = nil
     local patchStore = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "PatchHostModule",
         name = "Patch Host Module",
         storage = {},
@@ -240,7 +240,7 @@ function TestModuleHost:testPatchMutationReceivesCallbackHostAndRuntimeData()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = createActivatedHost(self.h, "test-patch-host", {
+    local host = createActivatedManagedModule(self.h, "test-patch-host", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -254,20 +254,20 @@ function TestModuleHost:testPatchMutationReceivesCallbackHostAndRuntimeData()
     local ok, err = host.applyMutation()
 
     lu.assertTrue(ok, tostring(err))
-    lu.assertEquals(patchHost, self.h.moduleHost.getRecord(host).host)
-    lu.assertEquals(patchStore, self.h.moduleHost.getRecord(host).store)
+    lu.assertEquals(patchHost, self.h.managedModule.getRecord(host).host)
+    lu.assertEquals(patchStore, self.h.managedModule.getRecord(host).store)
     lu.assertNotEquals(patchStore, store)
     lu.assertTrue(target.Value)
 end
 
-function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+function TestManagedModule:testSideEffectingManagedModuleMethodsRequireActivation()
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "InactiveHost",
         name = "Inactive Host",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({}, definition)
-    local host = self.h.moduleHost.create({
+    local host = self.h.managedModule.create({
         pluginGuid = "test-inactive-host",
         definition = definition,
         persistentState = store,
@@ -280,9 +280,9 @@ function TestModuleHost:testSideEffectingHostMethodsRequireActivation()
     end)
 end
 
-function TestModuleHost:testHostResetAllResetsStagedAndRuntimeOwnedState()
+function TestManagedModule:testManagedModuleResetAllResetsStagedAndStatusState()
     local capturedUi = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ResetHost",
         name = "Reset Host",
         storage = {
@@ -291,20 +291,20 @@ function TestModuleHost:testHostResetAllResetsStagedAndRuntimeOwnedState()
             { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
         },
     })
-    local store, stagedState = self.h:createModuleState({
+    local persistentState, stagedState = self.h:createModuleState({
         EnabledFlag = true,
         Count = 7,
     }, definition)
-    createActivatedHost(self.h, "test-reset-host", {
+    createActivatedManagedModule(self.h, "test-reset-host", {
         definition = definition,
-        persistentState = store,
+        persistentState = persistentState,
         stagedState = stagedState,
         drawTab = function(_, _, _, ui)
             capturedUi = ui
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-reset-host")
-    store.runtimeOwned.write("RuntimeFlag", true)
+    local host = self.h.managedModule.getLiveModule("test-reset-host")
+    persistentState.status.write("RuntimeFlag", true)
 
     host.drawTab()
 
@@ -313,25 +313,25 @@ function TestModuleHost:testHostResetAllResetsStagedAndRuntimeOwnedState()
     lu.assertEquals(count, 3)
     lu.assertEquals(stagedState.read("EnabledFlag"), false)
     lu.assertEquals(stagedState.read("Count"), 2)
-    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
 
     local ok, err = host.commitIfDirty()
     lu.assertTrue(ok, tostring(err))
-    lu.assertFalse(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
 
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
         capturedUi.resetAll()
     end)
 end
 
-function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
+function TestManagedModule:testUiResetAllQueuesModuleResetDuringCommit()
     local capturedUi = nil
     local doReset = false
     local commitHadActions = nil
     local publicActionRan = false
     local delivered = nil
     local sharedId = "test.ui-reset-clears-intent"
-    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local listenerDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "UiResetAllListener",
         name = "UI Reset All Listener",
         storage = {},
@@ -340,7 +340,7 @@ function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
         Enabled = true,
         DebugMode = false,
     }, listenerDefinition)
-    createActivatedHost(self.h, "test-ui-reset-all-listener", {
+    createActivatedManagedModule(self.h, "test-ui-reset-all-listener", {
         definition = listenerDefinition,
         persistentState = listenerStore,
         stagedState = listenerState,
@@ -356,7 +356,7 @@ function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
         drawTab = function() end,
     })
 
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "UiResetAll",
         name = "UI Reset All",
         storage = {
@@ -370,13 +370,13 @@ function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
             end,
         },
     })
-    local store, stagedState = self.h:createModuleState({
+    local persistentState, stagedState = self.h:createModuleState({
         EnabledFlag = true,
         Count = 7,
     }, definition)
-    createActivatedHost(self.h, "test-ui-reset-all", {
+    createActivatedManagedModule(self.h, "test-ui-reset-all", {
         definition = definition,
-        persistentState = store,
+        persistentState = persistentState,
         stagedState = stagedState,
         onCommit = function(_, _, commit)
             commitHadActions = commit.actions.hasAny()
@@ -392,21 +392,21 @@ function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
             end
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-ui-reset-all")
-    store.runtimeOwned.write("RuntimeFlag", true)
+    local host = self.h.managedModule.getLiveModule("test-ui-reset-all")
+    persistentState.status.write("RuntimeFlag", true)
 
     doReset = true
     host.drawTab()
     lu.assertFalse(stagedState.read("EnabledFlag"))
     lu.assertEquals(stagedState.read("Count"), 7)
-    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
 
     local ok, err, committed = host.commitIfDirty()
     lu.assertTrue(ok, tostring(err))
     lu.assertTrue(committed)
     lu.assertFalse(stagedState.read("EnabledFlag"))
     lu.assertEquals(stagedState.read("Count"), 7)
-    lu.assertFalse(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
     lu.assertFalse(commitHadActions)
     lu.assertFalse(publicActionRan)
     lu.assertNil(delivered)
@@ -416,10 +416,10 @@ function TestModuleHost:testUiResetAllQueuesModuleResetDuringCommit()
     end)
 end
 
-function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
+function TestManagedModule:testManagedModulePassesCallbackHostToCallbacks()
     local callbackHost = nil
     local quickArgs = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         modpack = "author-pack",
         id = "AuthorModuleModule",
         name = "author module Module",
@@ -429,7 +429,7 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
         Enabled = true,
         DebugMode = true,
     }, definition)
-    createActivatedHost(self.h, "test-author-module", {
+    createActivatedManagedModule(self.h, "test-author-module", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -441,7 +441,7 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
         end,
     })
 
-    local host = self.h.moduleHost.getLiveModule("test-author-module")
+    local host = self.h.managedModule.getLiveModule("test-author-module")
     host.drawTab()
     host.drawQuickContent()
 
@@ -453,7 +453,7 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
     lu.assertEquals(type(quickArgs.actions.trigger), "function")
     lu.assertEquals(type(quickArgs.actions.emit), "function")
     lu.assertNil(quickArgs.actions.hasAny)
-    lu.assertEquals(callbackHost.getHostId(), "test-author-module")
+    lu.assertEquals(callbackHost.getOwnerId(), "test-author-module")
     lu.assertEquals(callbackHost.getModuleId(), "AuthorModuleModule")
     lu.assertEquals(callbackHost.getPackId(), "author-pack")
     lu.assertNil(callbackHost.getIdentity)
@@ -476,9 +476,9 @@ function TestModuleHost:testCreateModuleHostPassesCallbackHostToCallbacks()
     lu.assertEquals(#self.h.warnings, warningCount + 2)
 end
 
-function TestModuleHost:testDrawPhaseClearsAfterDrawCallbackError()
+function TestManagedModule:testDrawPhaseClearsAfterDrawCallbackError()
     local secondDraws = 0
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawPhaseError",
         name = "Draw Phase Error",
         storage = {},
@@ -492,7 +492,7 @@ function TestModuleHost:testDrawPhaseClearsAfterDrawCallbackError()
         DebugMode = false,
     }, definition)
 
-    local firstHost = createActivatedHost(self.h, "test-draw-phase-error-first", {
+    local firstHost = createActivatedManagedModule(self.h, "test-draw-phase-error-first", {
         definition = definition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -500,7 +500,7 @@ function TestModuleHost:testDrawPhaseClearsAfterDrawCallbackError()
             error("draw boom")
         end,
     })
-    local secondHost = createActivatedHost(self.h, "test-draw-phase-error-second", {
+    local secondHost = createActivatedManagedModule(self.h, "test-draw-phase-error-second", {
         definition = definition,
         persistentState = secondStore,
         stagedState = secondStagedState,
@@ -518,9 +518,9 @@ function TestModuleHost:testDrawPhaseClearsAfterDrawCallbackError()
     lu.assertEquals(secondDraws, 1)
 end
 
-function TestModuleHost:testNestedDrawEntryIsRejected()
+function TestManagedModule:testNestedDrawEntryIsRejected()
     local nestedDraws = 0
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "NestedDraw",
         name = "Nested Draw",
         storage = {},
@@ -534,7 +534,7 @@ function TestModuleHost:testNestedDrawEntryIsRejected()
         DebugMode = false,
     }, definition)
     local secondHost
-    local firstHost = createActivatedHost(self.h, "test-nested-draw-first", {
+    local firstHost = createActivatedManagedModule(self.h, "test-nested-draw-first", {
         definition = definition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -542,7 +542,7 @@ function TestModuleHost:testNestedDrawEntryIsRejected()
             secondHost.drawTab()
         end,
     })
-    secondHost = createActivatedHost(self.h, "test-nested-draw-second", {
+    secondHost = createActivatedManagedModule(self.h, "test-nested-draw-second", {
         definition = definition,
         persistentState = secondStore,
         stagedState = secondStagedState,
@@ -560,9 +560,9 @@ function TestModuleHost:testNestedDrawEntryIsRejected()
     lu.assertEquals(nestedDraws, 1)
 end
 
-function TestModuleHost:testDrawDoesNotExposeLogging()
+function TestManagedModule:testDrawDoesNotExposeLogging()
     local drawContext = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawNoLog",
         name = "Draw No Log",
         storage = {},
@@ -571,7 +571,7 @@ function TestModuleHost:testDrawDoesNotExposeLogging()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-draw-no-log", {
+    createActivatedManagedModule(self.h, "test-draw-no-log", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -579,7 +579,7 @@ function TestModuleHost:testDrawDoesNotExposeLogging()
             drawContext = draw
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-draw-no-log")
+    local host = self.h.managedModule.getLiveModule("test-draw-no-log")
 
     host.drawTab()
 
@@ -587,11 +587,11 @@ function TestModuleHost:testDrawDoesNotExposeLogging()
     lu.assertNil(drawContext.logIf)
 end
 
-function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
+function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
     local actions = nil
     local actionRef = nil
     local observed = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawActionsPhase",
         name = "Draw Actions Phase",
         storage = {},
@@ -603,7 +603,7 @@ function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-draw-actions-phase", {
+    createActivatedManagedModule(self.h, "test-draw-actions-phase", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -617,7 +617,7 @@ function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
             }
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-draw-actions-phase")
+    local host = self.h.managedModule.getLiveModule("test-draw-actions-phase")
 
     host.drawTab()
 
@@ -639,7 +639,7 @@ function TestModuleHost:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
     end)
 end
 
-function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
+function TestManagedModule:testDeclaredActionsExecuteDuringCommit()
     local observedActionHost = nil
     local observedCallbackHost = nil
     local observedRuntime = nil
@@ -647,7 +647,7 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
     local observedCommittedFlagInAction = nil
     local observedCommitAction = nil
     local observedConfigChange = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "DeclaredDrawActions",
         name = "Declared Draw Actions",
         storage = {
@@ -666,15 +666,15 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
             end,
         },
     })
-    local store, stagedState = self.h:createModuleState({
+    local persistentState, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
         Flag = false,
         RuntimeFlag = false,
     }, definition)
-    createActivatedHost(self.h, "test-declared-draw-actions", {
+    createActivatedManagedModule(self.h, "test-declared-draw-actions", {
         definition = definition,
-        persistentState = store,
+        persistentState = persistentState,
         stagedState = stagedState,
         onCommit = function(_, _, commit)
             observedCommitAction = commit.actions.get("setFlag"):read()
@@ -685,35 +685,35 @@ function TestModuleHost:testDeclaredActionsExecuteDuringCommit()
             actions.trigger("setFlag")
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-declared-draw-actions")
+    local host = self.h.managedModule.getLiveModule("test-declared-draw-actions")
 
     host.drawTab()
 
     lu.assertNil(observedActionHost)
     lu.assertTrue(stagedState.read("Flag"))
-    lu.assertFalse(store.read("Flag"))
+    lu.assertFalse(persistentState.read("Flag"))
 
     local ok, err = host.commitIfDirty()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(err)
-    lu.assertEquals(observedActionHost.getHostId(), "test-declared-draw-actions")
-    lu.assertEquals(observedCallbackHost.getHostId(), "test-declared-draw-actions")
+    lu.assertEquals(observedActionHost.getOwnerId(), "test-declared-draw-actions")
+    lu.assertEquals(observedCallbackHost.getOwnerId(), "test-declared-draw-actions")
     lu.assertEquals(observedCallbackHost.isEnabled(), true)
     lu.assertEquals(type(observedRuntime.data.read), "function")
     lu.assertTrue(observedCommittedFlagInAction)
     lu.assertEquals(observedRuntimeValue, true)
-    lu.assertTrue(store.read("Flag"))
-    lu.assertTrue(store.runtimeOwned.read("RuntimeFlag"))
+    lu.assertTrue(persistentState.read("Flag"))
+    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
     lu.assertTrue(observedCommitAction)
     lu.assertTrue(observedConfigChange)
 end
 
-function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
+function TestManagedModule:testDeclaredActionsRunAfterSuccessfulMutationOnly()
     local target = { Value = false }
     local actionSawMutation = nil
     local failedActionRan = false
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ActionAfterMutation",
         name = "Action After Mutation",
         storage = {
@@ -730,7 +730,7 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
         DebugMode = false,
         Flag = false,
     }, definition)
-    createActivatedHost(self.h, "test-action-after-mutation", {
+    createActivatedManagedModule(self.h, "test-action-after-mutation", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -742,7 +742,7 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
             actions.trigger("mark", true)
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-action-after-mutation")
+    local host = self.h.managedModule.getLiveModule("test-action-after-mutation")
     target.Value = false
 
     host.drawTab()
@@ -750,7 +750,7 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
     lu.assertTrue(ok, tostring(err))
     lu.assertTrue(actionSawMutation)
 
-    local failingDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local failingDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "ActionAfterFailedMutation",
         name = "Action After Failed Mutation",
         storage = {
@@ -767,7 +767,7 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
         DebugMode = false,
         Flag = false,
     }, failingDefinition)
-    createActivatedHost(self.h, "test-action-after-failed-mutation", {
+    createActivatedManagedModule(self.h, "test-action-after-failed-mutation", {
         definition = failingDefinition,
         persistentState = failingStore,
         stagedState = failingState,
@@ -780,7 +780,7 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
             actions.trigger("mark", true)
         end,
     })
-    local failingHost = self.h.moduleHost.getLiveModule("test-action-after-failed-mutation")
+    local failingHost = self.h.managedModule.getLiveModule("test-action-after-failed-mutation")
 
     failingHost.drawTab()
     ok, err = failingHost.commitIfDirty()
@@ -789,11 +789,11 @@ function TestModuleHost:testDeclaredActionsRunAfterSuccessfulMutationOnly()
     lu.assertFalse(failedActionRan)
 end
 
-function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()
+function TestManagedModule:testOnCommitReceivesRuntimeAndCallbackHost()
     local observedRuntime = nil
     local observedHost = nil
     local observedCommit = nil
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "OnCommit",
         name = "On Commit",
         storage = {
@@ -805,7 +805,7 @@ function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()
         DebugMode = false,
         Flag = false,
     }, definition)
-    local host = createActivatedHost(self.h, "test-on-commit", {
+    local host = createActivatedManagedModule(self.h, "test-on-commit", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -823,17 +823,17 @@ function TestModuleHost:testOnCommitReceivesRuntimeAndCallbackHost()
     lu.assertTrue(host.commitIfDirty())
 
     lu.assertEquals(observedRuntime.data.read("Flag"), true)
-    lu.assertEquals(observedHost.getHostId(), "test-on-commit")
+    lu.assertEquals(observedHost.getOwnerId(), "test-on-commit")
     lu.assertTrue(observedHost.isEnabled())
     lu.assertTrue(observedCommit.hadConfigChanges())
 end
 
-function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
+function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommit()
     local delivered = nil
     local actionRan = false
     local actionRanAtDelivery = nil
     local sharedId = "test.draw-action-emit"
-    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local listenerDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawActionEmitListener",
         name = "Draw Action Emit Listener",
         storage = {
@@ -846,7 +846,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
         ListenerFlag = true,
     }, listenerDefinition)
     local listenerStoreRead = nil
-    createActivatedHost(self.h, "test-draw-action-emit-listener", {
+    createActivatedManagedModule(self.h, "test-draw-action-emit-listener", {
         definition = listenerDefinition,
         persistentState = listenerStore,
         stagedState = listenerState,
@@ -864,7 +864,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
         drawTab = function() end,
     })
 
-    local emitterDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local emitterDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawActionEmitEmitter",
         name = "Draw Action Emit Emitter",
         storage = {},
@@ -878,7 +878,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
         Enabled = true,
         DebugMode = false,
     }, emitterDefinition)
-    createActivatedHost(self.h, "test-draw-action-emit-emitter", {
+    createActivatedManagedModule(self.h, "test-draw-action-emit-emitter", {
         definition = emitterDefinition,
         persistentState = emitterStore,
         stagedState = emitterState,
@@ -888,7 +888,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
             lu.assertNil(delivered)
         end,
     })
-    local emitter = self.h.moduleHost.getLiveModule("test-draw-action-emit-emitter")
+    local emitter = self.h.managedModule.getLiveModule("test-draw-action-emit-emitter")
 
     emitter.drawTab()
 
@@ -900,10 +900,10 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommit()
     lu.assertEquals(#self.h.warnings, 0)
 end
 
-function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction()
+function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommitWithoutAction()
     local delivered = nil
     local sharedId = "test.draw-action-emit-only"
-    local listenerDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local listenerDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawActionEmitOnlyListener",
         name = "Draw Action Emit Only Listener",
         storage = {},
@@ -912,7 +912,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction
         Enabled = true,
         DebugMode = false,
     }, listenerDefinition)
-    createActivatedHost(self.h, "test-draw-action-emit-only-listener", {
+    createActivatedManagedModule(self.h, "test-draw-action-emit-only-listener", {
         definition = listenerDefinition,
         persistentState = listenerStore,
         stagedState = listenerState,
@@ -928,7 +928,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction
         drawTab = function() end,
     })
 
-    local emitterDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local emitterDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "DrawActionEmitOnlyEmitter",
         name = "Draw Action Emit Only Emitter",
         storage = {},
@@ -937,7 +937,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction
         Enabled = true,
         DebugMode = false,
     }, emitterDefinition)
-    createActivatedHost(self.h, "test-draw-action-emit-only-emitter", {
+    createActivatedManagedModule(self.h, "test-draw-action-emit-only-emitter", {
         definition = emitterDefinition,
         persistentState = emitterStore,
         stagedState = emitterState,
@@ -946,7 +946,7 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction
             lu.assertNil(delivered)
         end,
     })
-    local emitter = self.h.moduleHost.getLiveModule("test-draw-action-emit-only-emitter")
+    local emitter = self.h.managedModule.getLiveModule("test-draw-action-emit-only-emitter")
 
     emitter.drawTab()
 
@@ -956,8 +956,8 @@ function TestModuleHost:testDrawActionsEmitSharedEventsDuringCommitWithoutAction
     lu.assertEquals(#self.h.warnings, 0)
 end
 
-function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+function TestManagedModule:testDrawActionsRejectUndeclaredKeys()
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "UndeclaredDrawAction",
         name = "Undeclared Draw Action",
         storage = {},
@@ -967,7 +967,7 @@ function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-undeclared-draw-action", {
+    createActivatedManagedModule(self.h, "test-undeclared-draw-action", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -975,15 +975,15 @@ function TestModuleHost:testDrawActionsRejectUndeclaredKeys()
             actions.trigger("missing")
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-undeclared-draw-action")
+    local host = self.h.managedModule.getLiveModule("test-undeclared-draw-action")
 
     lu.assertErrorMsgContains("actions.unknown_key", function()
         host.drawTab()
     end)
 end
 
-function TestModuleHost:testDrawActionsRejectPrivateActionKeys()
-    local definition = self.h.moduleHost.prepareDefinitionWithInternalDeclarations({}, {
+function TestManagedModule:testDrawActionsRejectPrivateActionKeys()
+    local definition = self.h.managedModule.prepareDefinitionWithInternalDeclarations({}, {
         id = "PrivateDrawAction",
         name = "Private Draw Action",
         storage = {},
@@ -996,7 +996,7 @@ function TestModuleHost:testDrawActionsRejectPrivateActionKeys()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedHost(self.h, "test-private-draw-action", {
+    createActivatedManagedModule(self.h, "test-private-draw-action", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -1004,14 +1004,14 @@ function TestModuleHost:testDrawActionsRejectPrivateActionKeys()
             actions.trigger("_PrivateAction")
         end,
     })
-    local host = self.h.moduleHost.getLiveModule("test-private-draw-action")
+    local host = self.h.managedModule.getLiveModule("test-private-draw-action")
 
     lu.assertErrorMsgContains("actions.private_key", function()
         host.drawTab()
     end)
 end
 
-function TestModuleHost:testCommitActionsRejectPrivateActionKeys()
+function TestManagedModule:testCommitActionsRejectPrivateActionKeys()
     local commitActions = self.h.moduleState.createCommitActions({
         _PrivateAction = true,
     })
@@ -1021,18 +1021,18 @@ function TestModuleHost:testCommitActionsRejectPrivateActionKeys()
     end)
 end
 
-function TestModuleHost:testFullHostOwnsManagedModuleCapabilities()
-    local definition = self.h.moduleHost.prepareDefinition({}, {
-        id = "FullHostCapabilities",
-        name = "Full Host Capabilities",
+function TestManagedModule:testLiveModuleOwnsManagedModuleCapabilities()
+    local definition = self.h.managedModule.prepareDefinition({}, {
+        id = "LiveModuleCapabilities",
+        name = "Live Module Capabilities",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.moduleHost.create({
-        pluginGuid = "test-full-host-capabilities",
+    local host = self.h.managedModule.create({
+        pluginGuid = "test-live-module-capabilities",
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -1040,7 +1040,7 @@ function TestModuleHost:testFullHostOwnsManagedModuleCapabilities()
     })
 
     lu.assertEquals(type(host.isEnabled), "function")
-    lu.assertEquals(type(host.getHostId), "function")
+    lu.assertEquals(type(host.getOwnerId), "function")
     lu.assertEquals(type(host.getModuleId), "function")
     lu.assertEquals(type(host.getPackId), "function")
     lu.assertNil(host.getIdentity)
@@ -1051,7 +1051,7 @@ function TestModuleHost:testFullHostOwnsManagedModuleCapabilities()
     lu.assertNil(host.tryActivate)
 end
 
-function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuild()
+function TestManagedModule:testManagedModuleSyncsMutationBeforeCoordinatedRebuild()
     local packId = "reload-pack"
     local rebuildReason = nil
 
@@ -1060,7 +1060,7 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
         rebuildReason = reason
         return true
     end)
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         modpack = packId,
         id = "ReloadHost",
         name = "Reload Host",
@@ -1073,7 +1073,7 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
         DebugMode = false,
         EnabledFlag = false,
     }, definition)
-    createActivatedHost(self.h, "reload-pack.ReloadHost", {
+    createActivatedManagedModule(self.h, "reload-pack.ReloadHost", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -1082,8 +1082,8 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
 
     local applyCalls = 0
 
-    local previousRecord = self.h.moduleHost.getRecord(self.h.moduleHost.getLiveModule("reload-pack.ReloadHost"))
-    local prepared = self.h.moduleHost.prepareDefinition({
+    local previousRecord = self.h.managedModule.getRecord(self.h.managedModule.getLiveModule("reload-pack.ReloadHost"))
+    local prepared = self.h.managedModule.prepareDefinition({
         _definitionStructuralFingerprint = previousRecord.definition._structuralFingerprint,
     }, {
         modpack = packId,
@@ -1098,7 +1098,7 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    createActivatedHost(self.h, "reload-pack.ReloadHost", {
+    createActivatedManagedModule(self.h, "reload-pack.ReloadHost", {
         definition = prepared,
         persistentState = reloadStore,
         stagedState = reloadStagedState,
@@ -1108,16 +1108,16 @@ function TestModuleHost:testCreateModuleHostSyncsMutationBeforeCoordinatedRebuil
         end,
         drawTab = function() end,
     })
-    local reloadedHost = self.h.moduleHost.getLiveModule("reload-pack.ReloadHost")
+    local reloadedHost = self.h.managedModule.getLiveModule("reload-pack.ReloadHost")
 
     self.h.coordinator.register(packId, nil)
     self.h.coordinator.registerRebuild(packId, nil)
     lu.assertEquals(applyCalls, 1)
     lu.assertNotNil(rebuildReason)
-    lu.assertEquals(self.h.moduleHost.getLiveModule("reload-pack.ReloadHost"), reloadedHost)
+    lu.assertEquals(self.h.managedModule.getLiveModule("reload-pack.ReloadHost"), reloadedHost)
 end
 
-function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAndMutation()
+function TestManagedModule:testStructuralRebuildFailureRestoresPreviousLiveModuleAndMutation()
     local packId = "reload-rollback-pack"
     local pluginGuid = "reload-rollback-pack.ReloadHost"
     local target = { Value = "base" }
@@ -1127,7 +1127,7 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAn
         return false
     end)
 
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         modpack = packId,
         id = "ReloadRollbackHost",
         name = "Reload Rollback Host",
@@ -1140,7 +1140,7 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAn
         DebugMode = false,
         EnabledFlag = false,
     }, definition)
-    local firstHost = createActivatedHost(self.h, pluginGuid, {
+    local firstHost = createActivatedManagedModule(self.h, pluginGuid, {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
@@ -1150,8 +1150,8 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAn
         drawTab = function() end,
     })
 
-    local previousRecord = self.h.moduleHost.getRecord(firstHost)
-    local prepared = self.h.moduleHost.prepareDefinition({
+    local previousRecord = self.h.managedModule.getRecord(firstHost)
+    local prepared = self.h.managedModule.prepareDefinition({
         _definitionStructuralFingerprint = previousRecord.definition._structuralFingerprint,
     }, {
         modpack = packId,
@@ -1166,7 +1166,7 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAn
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local replacementHost = self.h:createHost(pluginGuid, {
+    local replacementHost = self.h:createManagedModule(pluginGuid, {
         definition = prepared,
         persistentState = reloadStore,
         stagedState = reloadStagedState,
@@ -1182,16 +1182,16 @@ function TestModuleHost:testStructuralRebuildFailureRestoresPreviousLiveModuleAn
     self.h.coordinator.registerRebuild(packId, nil)
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
-    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), firstHost)
+    lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), firstHost)
     lu.assertEquals(target.Value, "first")
 end
 
-function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
+function TestManagedModule:testActivationFailureRestoresLiveModuleAndShared()
     local pluginGuid = "test-activation-rollback"
     local sharedId = "test.activation.rollback"
     local previousValue = nil
 
-    local firstDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local firstDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "ActivationRollback",
         name = "Activation Rollback",
         storage = {},
@@ -1200,7 +1200,7 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
-    local firstHost = createActivatedHost(self.h, pluginGuid, {
+    local firstHost = createActivatedManagedModule(self.h, pluginGuid, {
         definition = firstDefinition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -1216,7 +1216,7 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
         drawTab = function() end,
     })
 
-    local secondDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local secondDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "ActivationRollback",
         name = "Activation Rollback Replacement",
         storage = {},
@@ -1230,7 +1230,7 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
     self.h.sharedBundle.registrations.stageListener(
         secondSharedRegistrations,
         function()
-            local record = self.h.moduleHost.getRecord(secondHost)
+            local record = self.h.managedModule.getRecord(secondHost)
             return record and record.host or nil
         end,
         sharedId,
@@ -1238,7 +1238,7 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
         function(payload)
             previousValue = "replacement:" .. tostring(payload.value)
         end)
-    secondHost = self.h.moduleHost.create({
+    secondHost = self.h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
         persistentState = secondStore,
@@ -1258,7 +1258,7 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "shared boom")
-    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), firstHost)
+    lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), firstHost)
     lu.assertEquals(self.h.moduleRegistry.getPluginInfo(pluginGuid), {
         pluginGuid = pluginGuid,
         packId = nil,
@@ -1271,12 +1271,12 @@ function TestModuleHost:testActivationFailureRestoresLiveModuleAndShared()
     end)
 end
 
-function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
+function TestManagedModule:testActivationFailureDropsNewStagedSharedListener()
     local pluginGuid = "test-activation-new-shared-rollback"
     local sharedId = "test.activation.new.rollback"
     local delivered = 0
 
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ActivationNewSharedRollback",
         name = "Activation New Shared Rollback",
         storage = {},
@@ -1290,7 +1290,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
     self.h.sharedBundle.registrations.stageListener(
         sharedEventRegistrations,
         function()
-            local record = self.h.moduleHost.getRecord(host)
+            local record = self.h.managedModule.getRecord(host)
             return record and record.host or nil
         end,
         sharedId,
@@ -1298,7 +1298,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
         function()
             delivered = delivered + 1
         end)
-    host = self.h.moduleHost.create({
+    host = self.h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
@@ -1321,7 +1321,7 @@ function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "new shared boom")
-    lu.assertNil(self.h.moduleHost.getLiveModule(pluginGuid))
+    lu.assertNil(self.h.managedModule.getLiveModule(pluginGuid))
     lu.assertNil(self.h.moduleRegistry.getPluginInfo(pluginGuid))
     lu.assertTrue(emitOk)
     lu.assertEquals(count, 0)
@@ -1331,14 +1331,14 @@ function TestModuleHost:testActivationFailureDropsNewStagedSharedListener()
     end)
 end
 
-function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
+function TestManagedModule:testRuntimeSyncFailureRestoresPreviousPatchMutation()
     local packId = "activation-runtime-rollback-pack"
     local pluginGuid = "test-activation-runtime-rollback"
     local target = { Value = "base" }
 
     self.h.coordinator.register(packId, { ModEnabled = true })
 
-    local firstDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local firstDefinition = self.h.managedModule.prepareDefinition({}, {
         modpack = packId,
         id = "ActivationRuntimeRollback",
         name = "Activation Runtime Rollback",
@@ -1348,7 +1348,7 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
-    local firstHost = createActivatedHost(self.h, pluginGuid, {
+    local firstHost = createActivatedManagedModule(self.h, pluginGuid, {
         definition = firstDefinition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -1358,7 +1358,7 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         drawTab = function() end,
     })
 
-    local secondDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local secondDefinition = self.h.managedModule.prepareDefinition({}, {
         modpack = packId,
         id = "ActivationRuntimeRollback",
         name = "Activation Runtime Rollback",
@@ -1368,7 +1368,7 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
-    local secondHost = self.h.moduleHost.create({
+    local secondHost = self.h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
         persistentState = secondStore,
@@ -1382,7 +1382,7 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
     })
 
     local ok, err = secondHost.activate()
-    local liveModule = self.h.moduleHost.getLiveModule(pluginGuid)
+    local liveModule = self.h.managedModule.getLiveModule(pluginGuid)
     local targetValue = target.Value
 
     lu.assertFalse(ok)
@@ -1395,9 +1395,9 @@ function TestModuleHost:testRuntimeSyncFailureRestoresPreviousPatchMutation()
     lu.assertStrContains(self.h.warnings[1], "replacement boom")
 end
 
-function TestModuleHost:testactivateModuleReturnsErrorAndDoesNotPublishBrokenHost()
+function TestManagedModule:testActivateModuleReturnsErrorAndDoesNotPublishBrokenModule()
     local pluginGuid = "test-try-activate-failure"
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "activateFailure",
         name = "Try Activate Failure",
         storage = {},
@@ -1406,7 +1406,7 @@ function TestModuleHost:testactivateModuleReturnsErrorAndDoesNotPublishBrokenHos
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.moduleHost.create({
+    local host = self.h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
@@ -1426,15 +1426,15 @@ function TestModuleHost:testactivateModuleReturnsErrorAndDoesNotPublishBrokenHos
     lu.assertEquals(#self.h.warnings, 1)
     lu.assertStrContains(self.h.warnings[1], "managed_module.activate_failed")
     lu.assertStrContains(self.h.warnings[1], "try activate boom")
-    lu.assertNil(self.h.moduleHost.getLiveModule(pluginGuid))
+    lu.assertNil(self.h.managedModule.getLiveModule(pluginGuid))
     lu.assertErrorMsgContains("managed_module.not_activated", function()
         host.flush()
     end)
 end
 
-function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
+function TestManagedModule:testActivateModuleSucceedsThroughLiveModule()
     local pluginGuid = "test-try-activate-success"
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "activateSuccess",
         name = "Try Activate Success",
         storage = {},
@@ -1443,7 +1443,7 @@ function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.moduleHost.create({
+    local host = self.h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
@@ -1455,15 +1455,15 @@ function TestModuleHost:testactivateModuleSucceedsThroughFullHost()
 
     lu.assertTrue(ok)
     lu.assertNil(err)
-    lu.assertEquals(self.h.moduleHost.getLiveModule(pluginGuid), host)
+    lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), host)
 end
 
-function TestModuleHost:testActivationRefreshRemovesOmittedShared()
+function TestManagedModule:testActivationRefreshRemovesOmittedShared()
     local pluginGuid = "test-activation-shared-refresh"
     local sharedId = "test.activation.refresh"
     local delivered = 0
 
-    local firstDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local firstDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "ActivationRefresh",
         name = "Activation Refresh",
         storage = {},
@@ -1472,7 +1472,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedShared()
         Enabled = true,
         DebugMode = false,
     }, firstDefinition)
-    createActivatedHost(self.h, pluginGuid, {
+    createActivatedManagedModule(self.h, pluginGuid, {
         definition = firstDefinition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -1494,7 +1494,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedShared()
     lu.assertEquals(firstCount, 1)
     lu.assertEquals(delivered, 1)
 
-    local secondDefinition = self.h.moduleHost.prepareDefinition({}, {
+    local secondDefinition = self.h.managedModule.prepareDefinition({}, {
         id = "ActivationRefresh",
         name = "Activation Refresh",
         storage = {},
@@ -1503,7 +1503,7 @@ function TestModuleHost:testActivationRefreshRemovesOmittedShared()
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
-    createActivatedHost(self.h, pluginGuid, {
+    createActivatedManagedModule(self.h, pluginGuid, {
         definition = secondDefinition,
         persistentState = secondStore,
         stagedState = secondStagedState,
@@ -1515,8 +1515,8 @@ function TestModuleHost:testActivationRefreshRemovesOmittedShared()
     lu.assertEquals(delivered, 1)
 end
 
-function TestModuleHost:testActivationRejectsReentrantActivateCalls()
-    local definition = self.h.moduleHost.prepareDefinition({}, {
+function TestManagedModule:testActivationRejectsReentrantActivateCalls()
+    local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ReentrantActivate",
         name = "Reentrant Activate",
         storage = {},
@@ -1526,7 +1526,7 @@ function TestModuleHost:testActivationRejectsReentrantActivateCalls()
         DebugMode = false,
     }, definition)
     local host
-    host = self.h.moduleHost.create({
+    host = self.h.managedModule.create({
         pluginGuid = "test-reentrant-activate",
         definition = definition,
         persistentState = store,
@@ -1543,7 +1543,7 @@ function TestModuleHost:testActivationRejectsReentrantActivateCalls()
 
     lu.assertTrue(ok)
     lu.assertNil(err)
-    lu.assertEquals(self.h.moduleHost.getLiveModule("test-reentrant-activate"), host)
+    lu.assertEquals(self.h.managedModule.getLiveModule("test-reentrant-activate"), host)
     lu.assertEquals(#self.h.warnings, 1)
     lu.assertStrContains(self.h.warnings[1], "managed_module.activation_in_progress")
 end

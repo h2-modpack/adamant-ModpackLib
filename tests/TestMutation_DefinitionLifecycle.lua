@@ -20,8 +20,8 @@ function TestMutation_DefinitionLifecycle:setUp()
     self.harness = createLibHarness()
     self.mutation = self.harness.mutation
     self.mutationPlan = self.harness.mutationPlan
-    self.moduleHost = self.harness.moduleHost
-    self.hostLifecycle = self.harness.hostLifecycle
+    self.managedModule = self.harness.managedModule
+    self.managedModuleLifecycle = self.harness.managedModuleLifecycle
     self.coordinator = self.harness.coordinator
 end
 
@@ -34,7 +34,7 @@ function TestMutation_DefinitionLifecycle:revertPlan(plan)
 end
 
 function TestMutation_DefinitionLifecycle:makeStore(enabled)
-    return createModuleState(self.harness, { Enabled = enabled }, self.moduleHost.prepareDefinition({}, {
+    return createModuleState(self.harness, { Enabled = enabled }, self.managedModule.prepareDefinition({}, {
         id = "LifecycleStore",
         name = "Lifecycle Store",
         storage = {},
@@ -44,7 +44,7 @@ end
 function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
     pluginGuid = pluginGuid or ("test-" .. tostring(def and def.id or "mutation"))
     local host = {
-        getHostId = function()
+        getOwnerId = function()
             return pluginGuid
         end,
     }
@@ -64,28 +64,28 @@ end
 
 function TestMutation_DefinitionLifecycle:applyMutation(pluginGuid, def, mutationBundle, callbackHost, store)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.applyForHost(host)
+    return self.mutation.applyForModule(host)
 end
 
 function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutationBundle, callbackHost, store)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.revertForHost(host)
+    return self.mutation.revertForModule(host)
 end
 
 function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, callbackHost, store, stagedState,
         pluginGuid, actions)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.hostLifecycle.commitStagedState(host, def, mutationBundle, commitNotifier, store, stagedState, actions, nil, nil)
+    return self.managedModuleLifecycle.commitStagedState(host, def, mutationBundle, commitNotifier, store, stagedState, actions, nil, nil)
 end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, stagedState, enabled, pluginGuid)
     local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.hostLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, nil, nil, nil, enabled)
+    return self.managedModuleLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, nil, nil, nil, enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, patchCallback)
     local store, stagedState = createModuleState(self.harness, config, definition)
-    local host = self.moduleHost.create({
+    local host = self.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
@@ -328,7 +328,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
         Enabled = true,
         Value = false,
     }
-    local definition = self.moduleHost.prepareDefinition({}, {
+    local definition = self.managedModule.prepareDefinition({}, {
         id = "CommitStagedStateObserver",
         name = "Commit stagedState Observer",
         storage = {
@@ -369,7 +369,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
     local config = {
         Enabled = true,
     }
-    local definition = self.moduleHost.prepareDefinition({}, {
+    local definition = self.managedModule.prepareDefinition({}, {
         id = "CommitStagedStateActionObserver",
         name = "Commit stagedState Action Observer",
         storage = {},
@@ -411,7 +411,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateAppliesMutationFr
         Enabled = true,
         Value = false,
     }
-    local definition = self.moduleHost.prepareDefinition({}, {
+    local definition = self.managedModule.prepareDefinition({}, {
         modpack = "test-pack-disabled-commit",
         id = "CommitStagedStateRawEnabled",
         name = "Commit stagedState Raw Enabled",
@@ -499,7 +499,7 @@ end
 function TestMutation_DefinitionLifecycle:testActivationSyncRevertsStablePatchWhenReloadedDisabled()
     local target = { Value = 1 }
     local pluginGuid = "test-disabled-reload-patch-runtime"
-    local def = self.moduleHost.prepareDefinition({}, {
+    local def = self.managedModule.prepareDefinition({}, {
         id = "DisabledReloadPatchRuntime",
         name = "Disabled Reload Patch Runtime",
         storage = {},
@@ -619,7 +619,7 @@ end
 function TestMutation_DefinitionLifecycle:testActivationSyncDisabledDoesNotBuildInactivePatch()
     local buildCalls = 0
     local pluginGuid = "test-inactive-patch-revert"
-    local def = self.moduleHost.prepareDefinition({}, {
+    local def = self.managedModule.prepareDefinition({}, {
         id = "InactivePatchRevert",
         name = "Inactive Patch Revert",
         storage = {},

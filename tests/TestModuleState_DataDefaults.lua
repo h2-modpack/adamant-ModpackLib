@@ -16,7 +16,7 @@ local function makeStore(harness, definition, config)
     definition.id = definition.id or "DataDefaults"
     definition.name = definition.name or "Data Defaults"
     if not (type(definition) == "table" and rawget(definition, "_preparedDefinition") == true) then
-        definition = harness.moduleHost.prepareDefinition({}, definition)
+        definition = harness.managedModule.prepareDefinition({}, definition)
     end
     local state = harness.moduleState.create(config, definition)
     return state.persistentState, state.stagedState, config
@@ -328,7 +328,7 @@ function TestModuleState_DataDefaults:testMissingAliasUsesStorageDefault()
 end
 
 function TestModuleState_DataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
-    local definition = self.harness.moduleHost.prepareDefinition({}, {
+    local definition = self.harness.managedModule.prepareDefinition({}, {
         id = "StablePreparedDefaults",
         name = "Stable Prepared Defaults",
         storage = {

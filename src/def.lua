@@ -89,7 +89,7 @@ local lib = {}
 ---@class AdamantModpackLib.PersistentState
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting storage object.
 ---@field read fun(alias: string): any
----@field runtimeOwned AdamantModpackLib.RuntimeOwnedState
+---@field status AdamantModpackLib.StatusState
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
@@ -106,7 +106,7 @@ local lib = {}
 ---@field write fun(alias: string, ...): boolean Write a declared status alias or table cell.
 ---@field reset fun(alias: string, ...): boolean Reset a declared status alias or table cell.
 
----@class AdamantModpackLib.RuntimeOwnedState: AdamantModpackLib.RuntimeStatus
+---@class AdamantModpackLib.StatusState: AdamantModpackLib.RuntimeStatus
 ---@field countResettable fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 
@@ -219,7 +219,7 @@ local lib = {}
 ---@field reset fun(name: string): boolean, integer
 
 ---@class AdamantModpackLib.Host
----@field getHostId fun(): string
+---@field getOwnerId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string?
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
@@ -275,7 +275,7 @@ local lib = {}
 ---@field mutation { patch: fun(callback: AdamantModpackLib.MutationPatchCallback): nil }
 ---@field overlays AuthorOverlays
 ---@field activate fun(): boolean, string?
----@field getHostId fun(): string
+---@field getOwnerId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string?
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
@@ -453,7 +453,7 @@ local lib = {}
 ---@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
 
 ---@class AdamantModpackLib.ManagedModule
----@field getHostId fun(): string
+---@field getOwnerId fun(): string
 ---@field getModuleId fun(): string
 ---@field getPackId fun(): string?
 ---@field getMeta fun(): AdamantModpackLib.ModuleMeta
@@ -492,7 +492,7 @@ local lib = {}
 ---@class AdamantModpackLib.FallbackUiBridge
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
----@field handleHostGuiClosed fun()
+---@field handleGuiClosed fun()
 
 ---@class AdamantModpackLib.CoordinatorConfig
 ---@field ModEnabled boolean

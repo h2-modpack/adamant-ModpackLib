@@ -205,7 +205,7 @@ when needed.
 
 ## Common Mistakes
 
-- Do not put runtime-owned values under `module.data.define(...)`.
+- Do not put status values under `module.data.define(...)`.
 - Do not use `status` for values that should affect `module.mutation.patch(...)`.
 - Do not use `cache` because a value feels temporary if UI needs to read it.
 - Do not use actions to remember state.

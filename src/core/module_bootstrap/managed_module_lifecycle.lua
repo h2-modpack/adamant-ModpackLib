@@ -105,16 +105,16 @@ local function isEnabled(persistentState)
     return persistentState.read("Enabled") == true
 end
 
-local function restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, primaryErr)
+local function restoreConfigAndRuntime(module, def, stagedState, snapshot, previousEffective, primaryErr)
     stagedState._restoreConfigSnapshot(snapshot)
     stagedState._reloadFromConfig()
 
     local rollbackOk
     local rollbackErr
     if previousEffective then
-        rollbackOk, rollbackErr = mutation.applyForHost(host)
+        rollbackOk, rollbackErr = mutation.applyForModule(module)
     else
-        rollbackOk, rollbackErr = mutation.revertForHost(host)
+        rollbackOk, rollbackErr = mutation.revertForModule(module)
     end
     if not rollbackOk then
         logging.violate("lifecycle.staged_state_rollback_reapply_failed", "%s: staged state rollback reapply failed: %s",
@@ -150,7 +150,7 @@ local function resyncStagedState(def, stagedState, actionBuffer)
     return mismatches
 end
 
-local function commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                  actionExecutor, sharedEventFlusher, internalActionExecutor)
     local hasPendingActions = actionBuffer and actionBuffer.hasAny()
     if not stagedState.isDirty() and not hasPendingActions then
@@ -180,9 +180,9 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
     local ok
     local err
     if nextEffective then
-        ok, err = mutation.applyForHost(host)
+        ok, err = mutation.applyForModule(module)
     elseif previousEffective then
-        ok, err = mutation.revertForHost(host)
+        ok, err = mutation.revertForModule(module)
     else
         ok, err = true, nil
     end
@@ -199,27 +199,27 @@ local function commitStagedState(host, def, mutationBundle, commitNotifier, pers
     if actionBuffer then
         actionBuffer.clearAll()
     end
-    return restoreConfigAndRuntime(host, def, stagedState, snapshot, previousEffective, err)
+    return restoreConfigAndRuntime(module, def, stagedState, snapshot, previousEffective, err)
 end
 
-local function setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                           actionExecutor, sharedEventFlusher, internalActionExecutor, enabled)
     local previousEffective = isEnabled(persistentState)
     stagedState.write("Enabled", enabled == true)
     if not stagedState.isDirty() and not (actionBuffer and actionBuffer.hasAny()) then
         if previousEffective and enabled == true and mutation.affectsRunData(mutationBundle) then
-            return mutation.applyForHost(host)
+            return mutation.applyForModule(module)
         end
         return true, nil
     end
-    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    return commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
-local function setDebugMode(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function setDebugMode(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                             actionExecutor, sharedEventFlusher, internalActionExecutor, enabled)
     stagedState.write("DebugMode", enabled == true)
-    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    return commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
@@ -235,21 +235,21 @@ local function stagePackTransitionReceipt(stagedState, receipt)
     stagedState.write("Enabled", receipt and receipt.previousEnabled == true)
 end
 
-local function suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function suspendForPackDisable(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                      actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
     local marker = receipt.previousEnabled and PACK_RESTORE_ENABLED or PACK_RESTORE_DISABLED
     stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, marker)
-    local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor, false)
     return ok, err, receipt
 end
 
-local function ensureSuspendedForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState,
+local function ensureSuspendedForPackDisable(module, def, mutationBundle, commitNotifier, persistentState, stagedState,
                                              actionBuffer, actionExecutor, sharedEventFlusher, internalActionExecutor)
     local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
     if marker == PACK_RESTORE_NONE or marker == nil then
-        return suspendForPackDisable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+        return suspendForPackDisable(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
             actionExecutor, sharedEventFlusher, internalActionExecutor)
     end
     if persistentState.read("Enabled") ~= true then
@@ -257,11 +257,11 @@ local function ensureSuspendedForPackDisable(host, def, mutationBundle, commitNo
     end
 
     stagedState.write("Enabled", false)
-    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    return commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 
-local function restoreForPackEnable(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function restoreForPackEnable(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                     actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
     local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
@@ -273,15 +273,15 @@ local function restoreForPackEnable(host, def, mutationBundle, commitNotifier, p
     end
 
     stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, PACK_RESTORE_NONE)
-    local ok, err = setEnabled(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor, target)
     return ok, err, receipt
 end
 
-local function rollbackPackTransition(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+local function rollbackPackTransition(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                       actionExecutor, sharedEventFlusher, internalActionExecutor, receipt)
     stagePackTransitionReceipt(stagedState, receipt)
-    return commitStagedState(host, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    return commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor)
 end
 

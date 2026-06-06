@@ -46,7 +46,7 @@ local function attachModuleUtilitySurface(module, opts, lifecycle)
         return opts.config and opts.config.Enabled == true
     end
 
-    function module.getHostId()
+    function module.getOwnerId()
         return opts.pluginGuid
     end
 

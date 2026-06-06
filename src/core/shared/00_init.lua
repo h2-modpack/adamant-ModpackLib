@@ -37,15 +37,15 @@ local service = {
     data = data,
 }
 
-function service.emitForHost(host, id, eventName, payload)
-    local record = deps.moduleRegistry.getRecord(host)
+function service.emitForModule(module, id, eventName, payload)
+    local record = deps.moduleRegistry.getRecord(module)
     if not record then
         deps.logging.violate("shared.invalid_args", "module.shared.emit: expected managed module record")
     end
     if record.activated ~= true then
         deps.logging.violate("shared.invalid_args", "module.shared.emit requires module.activate() before it can run")
     end
-    if host.isEnabled() ~= true then
+    if module.isEnabled() ~= true then
         return true, 0
     end
     return events.emit("module.shared.emit", id, eventName, payload)

@@ -2,7 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local declarations = deps.declarations
-local hostInstall = deps.hostInstall
+local ownerInstall = deps.ownerInstall
 
 local systemAdapter = {}
 local activeReceipts = {}
@@ -23,7 +23,7 @@ local function define(systemScope, ownerId, register)
     register(declarations.createRegistrar(hookDeclarations, "system.hooks.define"))
 
     local previous = activeReceipts[ownerId]
-    local receipt = hostInstall.createReceipt(ownerId, systemScope, hookDeclarations)
+    local receipt = ownerInstall.createReceipt(ownerId, systemScope, hookDeclarations)
     if previous and previous.systemScope == systemScope then
         previous.receipt.dispose()
         activeReceipts[ownerId] = nil

@@ -498,7 +498,7 @@ Internal surface:
 - `stagedState.isDirty()`
 - `stagedState.auditMismatches()`
 
-Host/framework plumbing methods:
+Framework plumbing methods:
 - `stagedState._flushToConfig()`
 - `stagedState._reloadFromConfig()`
 - `stagedState._captureDirtyConfigSnapshot()`
@@ -577,7 +577,7 @@ Options:
 
 Reload-stable wrappers around ModUtil path hooks.
 
-Hosted modules declare hooks on the module object returned by
+Modules declare hooks on the module object returned by
 `lib.createModule(...)`. Lib scopes those declarations to the host's
 module owner id, derived from `pluginGuid`.
 
@@ -672,7 +672,7 @@ same module owner id.
 
 ## `module.overlays` And `frameworkRuntime.overlays`
 
-Host-scoped module overlays and Framework-scoped retained HUD projections for shared overlay placement.
+Module-scoped overlays and Framework-scoped retained HUD projections for shared overlay placement.
 
 Overlay visibility has two layers:
 - Lib applies a global game-HUD gate, currently based on `ShowingCombatUI`.

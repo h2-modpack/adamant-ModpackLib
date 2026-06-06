@@ -9,15 +9,15 @@ end
 
 local function activateAndEnableHost(harness, host, pluginGuid)
     lu.assertTrue(host.activate())
-    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
-    lu.assertNotNil(fullHost)
-    lu.assertTrue(fullHost.setEnabled(true))
-    return fullHost
+    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
+    lu.assertNotNil(liveModule)
+    lu.assertTrue(liveModule.setEnabled(true))
+    return liveModule
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local fullHost = harness.moduleHost.getLiveModule(pluginGuid)
-    local record = harness.moduleHost.getRecord(fullHost)
+    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
+    local record = harness.managedModule.getRecord(liveModule)
     return record and record.store or nil
 end
 
@@ -64,9 +64,9 @@ function TestCache:testDeclaredCacheSurfacesArePhaseGated()
         end,
     })
 
-    local fullHost = activateAndEnableHost(self.harness, host, "test-cache-declared-phase-gating")
+    local liveModule = activateAndEnableHost(self.harness, host, "test-cache-declared-phase-gating")
     store = getLiveStore(self.harness, "test-cache-declared-phase-gating")
-    fullHost.drawTab()
+    liveModule.drawTab()
 
     lu.assertNotNil(capturedState)
 end
@@ -129,7 +129,7 @@ function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
     lu.assertTrue(store.cache.currentRun.clear("RunScratch"))
     lu.assertEquals(store.cache.currentRun.get("RunScratch").Count, 0)
 
-    self.harness.moduleHost.getLiveModule("test-cache-declared-current-run").drawTab()
+    self.harness.managedModule.getLiveModule("test-cache-declared-current-run").drawTab()
     lu.assertFalse(drawHasCurrentRunCache)
 end
 

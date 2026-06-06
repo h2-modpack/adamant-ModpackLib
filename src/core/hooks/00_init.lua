@@ -19,7 +19,7 @@ local declarations = import('core/hooks/declarations.lua', nil, {
     logging = deps.logging,
 })
 
-local hostInstall = import('core/hooks/host_install.lua', nil, {
+local ownerInstall = import('core/hooks/owner_install.lua', nil, {
     logging = deps.logging,
     dispatchers = dispatchers,
 })
@@ -28,13 +28,13 @@ local moduleAdapter = import('core/hooks/adapters/module_install.lua', nil, {
     logging = deps.logging,
     moduleRegistry = deps.moduleRegistry,
     declarations = declarations,
-    hostInstall = hostInstall,
+    ownerInstall = ownerInstall,
 })
 
 local system = import('core/hooks/adapters/system_declarations.lua', nil, {
     logging = deps.logging,
     declarations = declarations,
-    hostInstall = hostInstall,
+    ownerInstall = ownerInstall,
 })
 
 local service = {

@@ -4,7 +4,7 @@ local createLibHarness = require('tests/harness/create_lib_harness')
 TestStorageValidation = {}
 
 local function prepareDefinition(harness, definition)
-    return harness.moduleHost.prepareDefinition({}, definition)
+    return harness.managedModule.prepareDefinition({}, definition)
 end
 
 local function createModuleState(harness, config, definition)

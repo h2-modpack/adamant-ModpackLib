@@ -42,7 +42,7 @@ end
 
 function moduleAdapter.installForModule(module, store)
     local record = requireModuleRecord(module, "overlays.installForModule")
-    local ownerId = module.getHostId()
+    local ownerId = module.getOwnerId()
     if type(ownerId) ~= "string" or ownerId == "" then
         logging.violate("overlays.invalid_registration", "overlays.installForModule: module ownerId is required")
     end

@@ -96,7 +96,7 @@ local function createFallbackUiHarness(opts)
         game = game,
         fallbackUi = base.fallbackUi,
         overlays = base.overlays,
-        moduleHost = base.moduleHost,
+        managedModule = base.managedModule,
         moduleState = base.moduleState,
         registry = base.registry,
         moduleRegistry = base.moduleRegistry,
@@ -124,7 +124,7 @@ local function createFallbackUiHarness(opts)
         self.previousPrint = nil
     end
 
-    function h:installHost(host, pluginGuid)
+    function h:installModule(host, pluginGuid)
         self.moduleRegistry.setLiveModule(pluginGuid or PLUGIN_GUID, host)
     end
 
@@ -133,19 +133,19 @@ local function createFallbackUiHarness(opts)
         return state.persistentState, state.stagedState
     end
 
-    function h:createLibHost(pluginGuid, hostOpts)
-        hostOpts = hostOpts or {}
-        local definition = self.moduleHost.prepareDefinition({}, {
-            modpack = hostOpts.modpack or "fallback-pack",
-            id = hostOpts.id or "FallbackUiTest",
-            name = hostOpts.name or "Fallback UI Test",
+    function h:createLibModule(pluginGuid, moduleOpts)
+        moduleOpts = moduleOpts or {}
+        local definition = self.managedModule.prepareDefinition({}, {
+            modpack = moduleOpts.modpack or "fallback-pack",
+            id = moduleOpts.id or "FallbackUiTest",
+            name = moduleOpts.name or "Fallback UI Test",
             storage = {},
         })
         local store, stagedState = self:createModuleState({
-            Enabled = hostOpts.enabled ~= false,
-            DebugMode = hostOpts.debugMode == true,
+            Enabled = moduleOpts.enabled ~= false,
+            DebugMode = moduleOpts.debugMode == true,
         }, definition)
-        local host = self.moduleHost.create({
+        local host = self.managedModule.create({
             pluginGuid = pluginGuid,
             definition = definition,
             persistentState = store,
@@ -155,15 +155,15 @@ local function createFallbackUiHarness(opts)
         return host, host
     end
 
-    function h:createActivatedLibHost(pluginGuid, hostOpts)
-        hostOpts = hostOpts or {}
-        local host = self:createLibHost(pluginGuid, hostOpts)
-        if hostOpts.attachFallbackUi == true then
-            self.fallbackUi.attachGuiOnce(host, hostOpts.registerGui or function() end)
+    function h:createActivatedLibModule(pluginGuid, moduleOpts)
+        moduleOpts = moduleOpts or {}
+        local host = self:createLibModule(pluginGuid, moduleOpts)
+        if moduleOpts.attachFallbackUi == true then
+            self.fallbackUi.attachGuiOnce(host, moduleOpts.registerGui or function() end)
         end
         local ok, err = host.activate()
         assert(ok, tostring(err))
-        return self.moduleHost.getLiveModule(pluginGuid), host
+        return self.managedModule.getLiveModule(pluginGuid), host
     end
 
     function h:getFallbackUiRuntime(pluginGuid)
@@ -174,7 +174,7 @@ local function createFallbackUiHarness(opts)
         local receipt = self.fallbackUi.installForModule(host)
         local ok, err = receipt.commit()
         assert(ok, tostring(err))
-        return self:getFallbackUiRuntime(host.getHostId())
+        return self:getFallbackUiRuntime(host.getOwnerId())
     end
 
     function h:getFallbackMarkerRow()

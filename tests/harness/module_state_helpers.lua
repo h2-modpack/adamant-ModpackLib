@@ -6,7 +6,7 @@ helpers.createLibHarness = createLibHarness
 function helpers.prepareDefinition(harness, definition)
     definition.id = definition.id or "StagedStateTest"
     definition.name = definition.name or "stagedState Test"
-    return harness.moduleHost.prepareDefinition({}, definition)
+    return harness.managedModule.prepareDefinition({}, definition)
 end
 
 function helpers.createModuleState(harness, config, definition)

@@ -84,7 +84,7 @@ function moduleActivation.activateOrThrow(module)
         logging.violate("managed_module.invalid_activate_opts", "managedModule.activateOrThrow: module is required")
     end
 
-    local pluginGuid = module.getHostId()
+    local pluginGuid = module.getOwnerId()
     local store = record.store
     local def = record.definition
 
@@ -122,7 +122,7 @@ function moduleActivation.activateOrThrow(module)
         addReceipt("shared", shared.installForModule(module), true)
         addReceipt("hooks", hooks.installForModule(module), true)
         addReceipt("overlays", overlays.installForModule(module, store), true)
-        addReceipt("mutation", mutation.syncForHost(module), false)
+        addReceipt("mutation", mutation.syncForModule(module), false)
         if record.fallbackUiRequested == true then
             addReceipt("fallbackUi", fallbackUi.installForModule(module), true)
         end

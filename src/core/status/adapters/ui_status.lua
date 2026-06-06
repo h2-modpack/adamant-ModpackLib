@@ -20,7 +20,7 @@ local function createStatusRoot(stagedState)
                     tostring(alias))
                 return nil
             end
-            return stagedState.runtimeOwned.get(alias)
+            return stagedState.status.get(alias)
         end,
     }
 end

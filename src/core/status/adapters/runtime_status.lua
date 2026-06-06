@@ -6,7 +6,7 @@ local storageRefAdapter = deps.storageRefAdapter
 
 local runtimeStatus = {}
 
-local function createStatusRoot(persistentState, runtimeOwned)
+local function createStatusRoot(persistentState, status)
     return {
         get = function(alias)
             local node = persistentState.getAliasSchema(alias)
@@ -21,19 +21,19 @@ local function createStatusRoot(persistentState, runtimeOwned)
                     tostring(alias))
                 return nil
             end
-            return runtimeOwned.get(alias)
+            return status.get(alias)
         end,
     }
 end
 
 function runtimeStatus.create(persistentState)
-    local runtimeOwned = persistentState.runtimeOwned
-    if not runtimeOwned then
+    local status = persistentState.status
+    if not status then
         return nil
     end
 
     local statusRefs = storageRefAdapter.create({
-        root = createStatusRoot(persistentState, runtimeOwned),
+        root = createStatusRoot(persistentState, status),
         phase = "runtime",
         source = "runtime.status.get",
         writable = true,
@@ -73,7 +73,7 @@ function runtimeStatus.create(persistentState)
                 return nil
             end
             if select("#", ...) == 0 then
-                return runtimeOwned.reset(alias)
+                return status.reset(alias)
             end
             if type(ref.reset) ~= "function" then
                 logging.violate(

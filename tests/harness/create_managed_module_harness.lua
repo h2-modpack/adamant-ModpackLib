@@ -1,6 +1,6 @@
 local createLibHarness = require("tests/harness/create_lib_harness")
 
-local function createModuleHostHarness(harnessOpts)
+local function createManagedModuleHarness(harnessOpts)
     local base = createLibHarness(harnessOpts)
     local h = {
         harness = base,
@@ -8,10 +8,10 @@ local function createModuleHostHarness(harnessOpts)
         config = base.config,
         runtime = base.runtime,
         rom = base.rom,
-        moduleHost = base.moduleHost,
+        managedModule = base.managedModule,
         moduleBundle = base.moduleBundle,
         moduleState = base.moduleState,
-        hostLifecycle = base.hostLifecycle,
+        managedModuleLifecycle = base.managedModuleLifecycle,
         registry = base.registry,
         moduleRegistry = base.moduleRegistry,
         coordinator = base.coordinator,
@@ -39,7 +39,7 @@ local function createModuleHostHarness(harnessOpts)
     end
 
     function h:prepareDefinition(owner, definition, structuralOpts)
-        return self.moduleHost.prepareDefinition(owner or {}, definition, structuralOpts)
+        return self.managedModule.prepareDefinition(owner or {}, definition, structuralOpts)
     end
 
     function h:createModuleState(config, definition)
@@ -78,34 +78,34 @@ local function createModuleHostHarness(harnessOpts)
         end
     end
 
-    function h:createHost(pluginGuid, hostOpts)
-        hostOpts = hostOpts or {}
-        local host, store = self.moduleHost.create({
+    function h:createManagedModule(pluginGuid, moduleOpts)
+        moduleOpts = moduleOpts or {}
+        local host, store = self.managedModule.create({
             pluginGuid = pluginGuid,
-            definition = hostOpts.definition,
-            persistentState = hostOpts.persistentState,
-            stagedState = hostOpts.stagedState,
+            definition = moduleOpts.definition,
+            persistentState = moduleOpts.persistentState,
+            stagedState = moduleOpts.stagedState,
             mutationBundle = {
-                patchMutation = adaptPatchMutation(hostOpts.patchMutation),
+                patchMutation = adaptPatchMutation(moduleOpts.patchMutation),
             },
-            onCommit = adaptCommitCallback(hostOpts.onCommit),
-            drawTab = adaptDrawCallback(hostOpts.drawTab),
-            drawQuickContent = adaptDrawCallback(hostOpts.drawQuickContent),
+            onCommit = adaptCommitCallback(moduleOpts.onCommit),
+            drawTab = adaptDrawCallback(moduleOpts.drawTab),
+            drawQuickContent = adaptDrawCallback(moduleOpts.drawQuickContent),
         })
         return host, host, store
     end
 
-    function h:createActivatedHost(pluginGuid, hostOpts)
-        local host, _, store = self:createHost(pluginGuid, hostOpts)
+    function h:createActivatedManagedModule(pluginGuid, moduleOpts)
+        local host, _, store = self:createManagedModule(pluginGuid, moduleOpts)
         local ok, err = host.activate()
         return host, host, ok, err, store
     end
 
     function h:liveModule(pluginGuid)
-        return self.moduleHost.getLiveModule(pluginGuid)
+        return self.managedModule.getLiveModule(pluginGuid)
     end
 
     return h
 end
 
-return createModuleHostHarness
+return createManagedModuleHarness

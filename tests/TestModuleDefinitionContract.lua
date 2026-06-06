@@ -1,18 +1,18 @@
 local lu = require("luaunit")
-local createModuleHostHarness = require("tests/harness/create_module_host_harness")
+local createManagedModuleHarness = require("tests/harness/create_managed_module_harness")
 
-TestModuleHost_DefinitionContract = {}
+TestModuleDefinitionContract = {}
 
-function TestModuleHost_DefinitionContract:setUp()
-    self.h = createModuleHostHarness()
+function TestModuleDefinitionContract:setUp()
+    self.h = createManagedModuleHarness()
     self.h:captureWarnings()
 end
 
-function TestModuleHost_DefinitionContract:tearDown()
+function TestModuleDefinitionContract:tearDown()
     self.h:restoreWarnings()
 end
 
-function TestModuleHost_DefinitionContract:testCreateStoreErrorsOnUnknownTopLevelDefinitionKey()
+function TestModuleDefinitionContract:testCreateStoreErrorsOnUnknownTopLevelDefinitionKey()
     lu.assertErrorMsgContains("unknown definition key 'ui'", function()
         self.h:prepareDefinition({}, {
             id = "Example",
@@ -25,7 +25,7 @@ function TestModuleHost_DefinitionContract:testCreateStoreErrorsOnUnknownTopLeve
     end)
 end
 
-function TestModuleHost_DefinitionContract:testValidateDefinitionErrorsOnOldVocabularyKeysAsUnknown()
+function TestModuleDefinitionContract:testValidateDefinitionErrorsOnOldVocabularyKeysAsUnknown()
     lu.assertErrorMsgContains("unknown definition key 'category'", function()
         self.h:prepareDefinition({}, {
             modpack = "test-pack",
@@ -39,7 +39,7 @@ function TestModuleHost_DefinitionContract:testValidateDefinitionErrorsOnOldVoca
     end)
 end
 
-function TestModuleHost_DefinitionContract:testPrepareDefinitionRejectsBehaviorFieldsAsUnknownKeys()
+function TestModuleDefinitionContract:testPrepareDefinitionRejectsBehaviorFieldsAsUnknownKeys()
     lu.assertErrorMsgContains("unknown definition key 'affectsRunData'", function()
         self.h:prepareDefinition({}, {
             id = "Example",

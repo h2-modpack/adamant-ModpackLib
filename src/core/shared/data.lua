@@ -345,7 +345,7 @@ local function createOwnerRef(context, declarations, declaration, host)
     local ref = {}
     ref.get = function()
         local ownerRecord = records[id]
-        if ownerRecord and ownerRecord.ownerId == host.getHostId()
+        if ownerRecord and ownerRecord.ownerId == host.getOwnerId()
             and ownerRecord.ownerToken == declarations.ownerToken
         then
             return readView(id, snapshot)
@@ -354,7 +354,7 @@ local function createOwnerRef(context, declarations, declaration, host)
     end
     ref.set = function(_, value)
         validateValue(context .. ".set", value)
-        local ownerRecord = requireOwnerRecord(context .. ".set", host.getHostId(), declarations.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".set", host.getOwnerId(), declarations.ownerToken, id)
         ownerRecord.value = values.deepCopy(value)
         ownerRecord.valueView = protectOptional(ownerRecord.value)
         ownerRecord.hasValue = true
@@ -362,7 +362,7 @@ local function createOwnerRef(context, declarations, declaration, host)
         return true
     end
     ref.clear = function()
-        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getHostId(), declarations.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getOwnerId(), declarations.ownerToken, id)
         ownerRecord.value = nil
         ownerRecord.valueView = nil
         ownerRecord.hasValue = false

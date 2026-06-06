@@ -2,9 +2,9 @@ local deps = ...
 
 local logging = deps.logging
 local dispatchers = deps.dispatchers
-local hostInstall = {}
+local ownerInstall = {}
 
-function hostInstall.createReceipt(ownerId, owner, hookDeclarations)
+function ownerInstall.createReceipt(ownerId, owner, hookDeclarations)
     if type(ownerId) ~= "string" or ownerId == "" then
         logging.violate("hooks.invalid_registration", "hooks.installForModule: ownerId is required")
     end
@@ -47,4 +47,4 @@ function hostInstall.createReceipt(ownerId, owner, hookDeclarations)
     }
 end
 
-return hostInstall
+return ownerInstall

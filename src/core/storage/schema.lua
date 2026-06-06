@@ -18,7 +18,7 @@ local NormalizeInteger = storage.NormalizeInteger
 --   persist=true,  hash=true   -> config-backed UI/profile/hash state.
 --   persist=true,  hash=false  -> config-backed UI state excluded from hashes.
 --   persist=false, hash=false  -> transient staged-only UI state.
---   mode=runtime               -> runtime-owned state; hash=false required.
+--   mode=runtime               -> status state; hash=false required.
 --
 -- hash=true requires persist=true. Table rows inherit their table root axes.
 

@@ -14,7 +14,7 @@ local SetupRunData = deps.gameDeps.runData.SetupRunData
 ---@field host table|nil
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
----@field handleHostGuiClosed fun()
+---@field handleGuiClosed fun()
 
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
@@ -72,8 +72,8 @@ local function disposeFallbackUiRuntime(ownerId, activeRuntime)
     end
 
     local closeOk, closeErr = true, nil
-    if type(activeRuntime.handleHostGuiClosed) == "function" then
-        closeOk, closeErr = pcall(activeRuntime.handleHostGuiClosed)
+    if type(activeRuntime.handleGuiClosed) == "function" then
+        closeOk, closeErr = pcall(activeRuntime.handleGuiClosed)
     end
 
     if runtimes[ownerId] == activeRuntime then
@@ -116,8 +116,8 @@ local function getOrCreateBridge(ownerId)
         addMenuBar = function()
             return callRuntime("addMenuBar")
         end,
-        handleHostGuiClosed = function()
-            return callRuntime("handleHostGuiClosed")
+        handleGuiClosed = function()
+            return callRuntime("handleGuiClosed")
         end,
     }
     bridges[ownerId] = bridge
@@ -129,7 +129,7 @@ function fallbackUi.attachGuiOnce(module, register)
         logging.violate("fallback_ui.invalid_args", "module.fallbackUi.attachGuiOnce: register must be a function")
     end
     local state = requireAttachmentOpen(module)
-    local ownerId = module.getHostId()
+    local ownerId = module.getOwnerId()
     state.fallbackUiRequested = true
     local bridge = getOrCreateBridge(ownerId)
     if guiAttached[ownerId] == true then
@@ -182,7 +182,7 @@ local function createRuntime(host)
         end
     end
 
-    local function handleHostGuiClosed()
+    local function handleGuiClosed()
         flushPendingRunData()
         releaseOverlaySuppression()
     end
@@ -293,13 +293,13 @@ local function createRuntime(host)
         host = host,
         renderWindow = renderWindow,
         addMenuBar = addMenuBar,
-        handleHostGuiClosed = handleHostGuiClosed,
+        handleGuiClosed = handleGuiClosed,
     }
     return activeRuntime
 end
 
 function fallbackUi.installForModule(module)
-    local ownerId = module.getHostId()
+    local ownerId = module.getOwnerId()
     local activeRuntime = createRuntime(module)
     local previousRuntime = nil
     local installed = false
@@ -341,10 +341,10 @@ function fallbackUi.create(module)
     }
 end
 
-function fallbackUi.handleHostGuiClosed()
+function fallbackUi.handleGuiClosed()
     for _, activeRuntime in pairs(runtimes) do
-        if type(activeRuntime.handleHostGuiClosed) == "function" then
-            activeRuntime.handleHostGuiClosed()
+        if type(activeRuntime.handleGuiClosed) == "function" then
+            activeRuntime.handleGuiClosed()
         end
     end
 end
@@ -367,14 +367,14 @@ local function installGuiCloseWatcher()
     rom.gui.add_always_draw_imgui(function()
         local isGuiOpen = rom.gui.is_open() == true
         if fallbackRegistry.wasGuiOpen and not isGuiOpen
-            and type(fallbackRegistry.handleHostGuiClosed) == "function" then
-            fallbackRegistry.handleHostGuiClosed()
+            and type(fallbackRegistry.handleGuiClosed) == "function" then
+            fallbackRegistry.handleGuiClosed()
         end
         fallbackRegistry.wasGuiOpen = isGuiOpen
     end)
 end
 
-fallbackRegistry.handleHostGuiClosed = fallbackUi.handleHostGuiClosed
+fallbackRegistry.handleGuiClosed = fallbackUi.handleGuiClosed
 
 installGuiCloseWatcher()
 

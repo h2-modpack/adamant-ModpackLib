@@ -8,31 +8,31 @@ local moduleAdapter = {
     affectsRunData = lifecycle.affectsRunData,
 }
 
-local function requireHostRecord(host, apiName)
-    local record = moduleRegistry.getRecord(host)
+local function requireModuleRecord(module, apiName)
+    local record = moduleRegistry.getRecord(module)
     if not record then
         logging.violate("mutation.invalid_registration", "%s: expected managed module record", apiName)
     end
     return record
 end
 
-local function getHostRecord(host, apiName)
-    return requireHostRecord(host, apiName)
+local function getModuleRecord(module, apiName)
+    return requireModuleRecord(module, apiName)
 end
 
-function moduleAdapter.applyForHost(host)
-    local record = getHostRecord(host, "mutation.applyForHost")
-    return lifecycle.apply(host.getHostId(), record.mutationBundle, record.runtime, record.host)
+function moduleAdapter.applyForModule(module)
+    local record = getModuleRecord(module, "mutation.applyForModule")
+    return lifecycle.apply(module.getOwnerId(), record.mutationBundle, record.runtime, record.host)
 end
 
-function moduleAdapter.syncForHost(host)
-    local record = getHostRecord(host, "mutation.syncForHost")
-    return lifecycle.sync(host.getHostId(), record.definition, record.mutationBundle, record.runtime, record.host)
+function moduleAdapter.syncForModule(module)
+    local record = getModuleRecord(module, "mutation.syncForModule")
+    return lifecycle.sync(module.getOwnerId(), record.definition, record.mutationBundle, record.runtime, record.host)
 end
 
-function moduleAdapter.revertForHost(host)
-    getHostRecord(host, "mutation.revertForHost")
-    return lifecycle.revert(host.getHostId())
+function moduleAdapter.revertForModule(module)
+    getModuleRecord(module, "mutation.revertForModule")
+    return lifecycle.revert(module.getOwnerId())
 end
 
 return moduleAdapter

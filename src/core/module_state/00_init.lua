@@ -107,11 +107,11 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@class PersistentState
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
 ---@field read fun(alias: string): any
----@field runtimeOwned RuntimeOwnedState
+---@field status StatusState
 ---@field table fun(alias: string): StorageTableReadOnly|nil
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
 
----@class RuntimeOwnedState
+---@class StatusState
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
 ---@field read fun(alias: string, ...): any
 ---@field write fun(alias: string, ...): boolean
@@ -139,7 +139,7 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field view table<string, any>
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
 ---@field read fun(alias: string): any
----@field runtimeOwned table
+---@field status table
 ---@field table fun(alias: string): StorageTableStagedState|nil
 ---@field field fun(alias: string): StorageField
 ---@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil

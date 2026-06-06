@@ -18,7 +18,7 @@ local function makeHost(opts)
     local debugMode = opts.debugMode == true
     local host = {
         calls = calls,
-        getHostId = function()
+        getOwnerId = function()
             return opts.pluginGuid or PLUGIN_GUID
         end,
         getModuleId = function()
@@ -138,7 +138,7 @@ end
 
 local function createBridge(h, pluginGuid)
     local bridge = nil
-    local host = h:createLibHost(pluginGuid or PLUGIN_GUID)
+    local host = h:createLibModule(pluginGuid or PLUGIN_GUID)
     h.fallbackUi.attachGuiOnce(host, function(ui)
         bridge = ui
     end)
@@ -161,7 +161,7 @@ function TestFallbackUi:testAttachGuiOnceRequiresManagedHost()
 end
 
 function TestFallbackUi:testAttachGuiOnceRequiresRegisterCallback()
-    local host = self.h:createLibHost(PLUGIN_GUID)
+    local host = self.h:createLibModule(PLUGIN_GUID)
     lu.assertErrorMsgContains("register must be a function", function()
         self.h.fallbackUi.attachGuiOnce(host)
     end)
@@ -169,14 +169,14 @@ end
 
 function TestFallbackUi:testBridgeCallbacksNoOpBeforeRuntimeExists()
     local bridge = nil
-    local host = self.h:createLibHost(PLUGIN_GUID)
+    local host = self.h:createLibModule(PLUGIN_GUID)
     self.h.fallbackUi.attachGuiOnce(host, function(ui)
         bridge = ui
     end)
 
     local okMenu, errMenu = pcall(bridge.addMenuBar)
     local okRender, errRender = pcall(bridge.renderWindow)
-    local okClosed, errClosed = pcall(bridge.handleHostGuiClosed)
+    local okClosed, errClosed = pcall(bridge.handleGuiClosed)
 
     lu.assertTrue(okMenu, errMenu)
     lu.assertTrue(okRender, errRender)
@@ -191,7 +191,7 @@ function TestFallbackUi:testCreatesRuntimeWhenModuleIsNotCoordinated()
 
     lu.assertEquals(type(runtime.renderWindow), "function")
     lu.assertEquals(type(runtime.addMenuBar), "function")
-    lu.assertEquals(type(runtime.handleHostGuiClosed), "function")
+    lu.assertEquals(type(runtime.handleGuiClosed), "function")
 end
 
 function TestFallbackUi:testBridgeDispatchesInstalledRuntime()
@@ -299,13 +299,13 @@ function TestFallbackUi:testFallbackRuntimeIsRetiredWithOwningHost()
     local pluginGuid = "test-fallback-ui-retired-with-host"
     self.h.coordinator.register("fallback-pack", nil)
 
-    local firstHost = self.h:createActivatedLibHost(pluginGuid, {
+    local firstHost = self.h:createActivatedLibModule(pluginGuid, {
         id = "FallbackUiRuntimeRetire",
         name = "Fallback UI Runtime Retire",
         attachFallbackUi = true,
     })
     local firstRuntime = self.h:getFallbackUiRuntime(pluginGuid)
-    local secondHost = self.h:createActivatedLibHost(pluginGuid, {
+    local secondHost = self.h:createActivatedLibModule(pluginGuid, {
         id = "FallbackUiRuntimeRetire",
         name = "Fallback UI Runtime Retire",
         attachFallbackUi = true,
@@ -466,7 +466,7 @@ function TestFallbackUi:testFallbackWindowSuppressesOverlaysUntilClose()
     lu.assertEquals(self.h:countUiSuppressors(), 0)
 end
 
-function TestFallbackUi:testHostGuiClosedReleasesSuppressionWithoutClosingWindow()
+function TestFallbackUi:testGuiClosedReleasesSuppressionWithoutClosingWindow()
     local host = makeHost({ modpack = "fallback-pack" })
     self.h.coordinator.register("fallback-pack", nil)
     local imgui = makeImgui({ menuClicked = true })
@@ -476,7 +476,7 @@ function TestFallbackUi:testHostGuiClosedReleasesSuppressionWithoutClosingWindow
     runtime.addMenuBar()
     lu.assertEquals(self.h:countUiSuppressors(), 1)
 
-    runtime.handleHostGuiClosed()
+    runtime.handleGuiClosed()
     lu.assertEquals(self.h:countUiSuppressors(), 0)
 
     runtime.renderWindow()
