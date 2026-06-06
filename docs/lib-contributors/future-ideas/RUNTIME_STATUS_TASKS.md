@@ -1,45 +1,53 @@
-# Runtime Status And Future Tasks
+# Runtime Status Intents
 
-This note records the implemented `status` capability and the deferred design
-question around bundling status with actions.
-
-## Original Pressure
-
-The old public primitives were mechanically correct but conceptually noisy:
-
-```lua
-ui.actions.trigger("StartRecording", payload)
-runtime.data.runtimeOwned.write("RecordingReady", true)
-ui.data.runtimeOwned.read("RecordingReady")
-```
-
-`actions` are UI intent crossing into runtime after UI commit. `runtimeOwned`
-storage is runtime-authored state that UI can read. Both concepts are useful,
-but putting runtime-authored state under `data.runtimeOwned` makes it look like
-a special case of normal configuration storage.
-
-The LiveSplit module is the concrete consumer that keeps this lane load-bearing:
-it stores `RecordingReady` as persisted status so recording readiness can
-survive reloads. The capability was reframed, not removed.
-
-## Capability Boundaries
-
-Use one public concept for each direction:
+`status` is implemented as the runtime-authored state lane:
 
 ```text
-data    = UI-authored configuration/state that runtime reads
-status  = runtime-authored state that UI reads
-actions = UI intent executed by runtime after commit
-cache   = runtime-internal working memory
-shared  = cross-module state/events
+runtime.status = runtime writes state
+ui.status      = UI reads state
+ui.actions     = UI sends one-shot runtime intent
 ```
 
-`status` is not normal storage with a `mode` flag. It is its own module-level
-capability because it has the opposite ownership direction from `data`.
+This note keeps the only remaining open design question: whether some status
+entries should also be able to declare their own UI-to-runtime intents.
 
-## Declaration
+## Pressure
 
-Status declarations live outside `module.data.define(...)`:
+Some features are naturally a pair:
+
+- UI sends an intent such as `startRecording`.
+- Runtime performs work and updates status such as `RecordingReady`.
+- UI reads that status on later frames.
+
+Today that is expressed as two module-level declarations:
+
+```lua
+module.actions.define({
+    recordingStart = function(host, runtime, payload)
+        runtime.status.write("RecordingReady", false)
+        -- start runtime work
+    end,
+})
+
+module.status.define({
+    RecordingReady = {
+        type = "bool",
+        default = false,
+        persist = true,
+    },
+})
+```
+
+That is mechanically clean, but repeated action/status pairings may become
+ceremony if more modules follow this pattern.
+
+## Possible Direction
+
+If this becomes common enough, status could grow an optional intent section.
+The status state remains the primary concept; the intent is attached because it
+advances or requests work for that state.
+
+Sketch only:
 
 ```lua
 module.status.define({
@@ -47,157 +55,41 @@ module.status.define({
         type = "bool",
         default = false,
         persist = true,
-    },
-
-    InfoFeed = {
-        type = "table",
-        default = {},
-        persist = false,
+        intents = {
+            start = function(host, runtime, payload)
+                runtime.status.write("RecordingReady", false)
+                -- start runtime work
+            end,
+            stop = function(host, runtime)
+                -- stop runtime work
+            end,
+        },
     },
 })
+
+ui.status.get("RecordingReady"):trigger("start", payload)
 ```
 
-Rules:
+The exact API should wait for another real module that repeats this shape.
 
-- No `mode = "runtime"` in author-facing declarations.
-- No `hash` option. Status is never part of the run hash.
-- `persist` remains available because some runtime-authored state, such as
-  LiveSplit recording readiness, intentionally survives reloads.
-- New status declarations should not inherit storage's broad defaults blindly.
-  Prefer explicit persistence in docs/examples so authors choose the lifetime.
-- Scalar, packed, bounded, and table shapes should reuse the existing storage
-  schema vocabulary where it fits.
-- Tables and collections are supported through the existing handle/snapshot
-  model. Status is for bounded runtime-to-UI state, including small logs or
-  recent event lists.
+## Rules
 
-## Access
+- Status state is mandatory. Intent-only entries remain normal actions.
+- Intents execute through the existing post-commit action buffer.
+- Do not add a runtime pull/consume model.
+- Status remains runtime-authored and UI-readable.
+- Actions remain the right tool for pure one-shot commands with no UI-readable
+  runtime state.
+- Controls should not declare status or status intents. UI composition can pass
+  status or action refs into control views when needed.
 
-Expose phase-specific facades over one backing value:
+## Design Questions
 
-```lua
-runtime.status.read("RecordingReady")
-runtime.status.write("RecordingReady", true)
-runtime.status.reset("RecordingReady")
-runtime.status.get("InfoFeed"):append(row)
-
-ui.status.read("RecordingReady")
-ui.status.get("InfoFeed"):snapshot()
-```
-
-Runtime owns writes and resets. UI gets read-only access. Internally this can
-still compile through runtime-owned persistent/staged state machinery, but the
-author-facing namespace says what the lane means instead of how it is
-implemented.
-
-The backend can be renamed later if that cleanup is worthwhile.
-
-## Public Surface Reduction
-
-`status` is not an extra namespace beside runtime-owned public API. It is the
-author-facing surface:
-
-```text
-runtime.data.runtimeOwned -> runtime.status
-ui.data.runtimeOwned      -> ui.status
-mode = "runtime"          -> module.status.define(...)
-```
-
-After migration, `data` only exposes UI-authored storage. Runtime-authored
-state should not appear as a sub-namespace of `data`, and normal storage
-declarations do not accept `mode = "runtime"` as the public way to define
-that lane.
-
-The existing runtime-owned backend can remain as an implementation detail while
-the public API stays narrowed.
-
-## Actions Stay Separate
-
-Do not bundle actions into status in the first implementation.
-
-LiveSplit currently has three commands around one runtime marker:
-
-```lua
-recordingStart
-recordingStop
-recordingClear
-```
-
-That shape argues against a single `status:trigger(...)` API for now. Actions
-remain the command lane:
-
-```lua
-ui.actions.trigger("recordingStart")
-```
-
-Status remains the runtime-authored state lane:
-
-```lua
-runtime.status.write("RecordingReady", true)
-```
-
-If multiple modules later repeat the same action/status pairing pattern, a
-first-class bundled design can be added. Until then, bundling would overfit the
-API around recording.
-
-## Execution Model
-
-Do not introduce a runtime pull/consume model.
-
-If a future bundled status command exists, it should still use the existing
-post-commit action buffer:
-
-```text
-ui trigger -> existing action buffer -> runtime callback -> status write
-```
-
-Avoid an API such as `runtime.tasks.get("Recording"):consume()` as the default
-shape. That would create a second execution model where runtime pulls pending
-intent on its own schedule.
-
-## Status Vs Cache
-
-Status is the public runtime-to-UI read surface. Cache remains runtime-internal
-working memory.
-
-Use status for:
-
-- runtime counters, flags, and status strings
-- bounded collections such as small logs or recent event snapshots
-- persisted runtime intent/state that should survive reloads
-
-Use cache for:
-
-- runtime-only scratch data
-- large or lifecycle-bound working sets the UI does not read directly
-
-If a future UI needs a large runtime-produced buffer, prefer adding a
-buffer-backed status field type over exposing cache as a second UI-readable
-lane. That keeps the public model contract-first.
-
-## Relationship To Controls
-
-Controls remain configuration composites. They should not declare status fields
-or command actions.
-
-If a control needs to display runtime status, UI composition should read the
-module-level status and pass it to the control view. If many controls start
-hand-threading action refs or status refs through bespoke option shapes, that is
-evidence for a later first-class binding design.
-
-## Implemented And Deferred Work
-
-Implemented:
-
-- `module.status.define(...)`, `runtime.status`, and `ui.status` are the public
-  names for runtime-authored state.
-- Status declarations compile through the existing runtime-owned backend.
-- `data` is narrowed back to UI-authored storage.
-- Actions remain command-only.
-
-Deferred:
-
-- Rename the internal backend away from `runtimeOwned` if the name keeps leaking
-  into diagnostics or contributor code.
-- Revisit action/status bundling only after real modules show repeated
-   hand-wired pairings.
+- Is `ui.status.get("Name"):trigger("intent")` the right author-facing shape,
+  or should intent refs stay under `ui.actions`?
+- Should an intent callback receive the status ref directly, or just
+  `host, runtime, payload` like actions do today?
+- How should multiple intents on one status value be named in diagnostics and
+  tests?
+- Would this actually reduce real module boilerplate, or just move the same
+  concept under a cleverer namespace?

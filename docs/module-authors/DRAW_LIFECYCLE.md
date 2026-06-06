@@ -6,6 +6,8 @@ state; draw callbacks edit staged state and queue intent that Lib commits later.
 This split keeps UI code immediate-mode friendly without making runtime/gameplay
 code depend on half-edited UI values.
 
+Use [DATA_LANES.md](DATA_LANES.md) to decide which state lane owns a value.
+
 ## Callback Shape
 
 Draw callbacks receive:

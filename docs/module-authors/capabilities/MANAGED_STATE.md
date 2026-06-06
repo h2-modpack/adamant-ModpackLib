@@ -19,7 +19,8 @@ state, draw actions, and hash/profile participation.
 
 Draw callbacks receive `(host, ui)`. Runtime callbacks receive `(host, runtime)`.
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
-order.
+order, and [../DATA_LANES.md](../DATA_LANES.md) for choosing between data,
+status, cache, shared state, actions, and controls.
 
 ```lua
 local function drawTab(host, ui)

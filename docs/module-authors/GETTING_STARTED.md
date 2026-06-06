@@ -4,7 +4,8 @@ This guide is for first-time module authors using adamant ModpackLib and
 ModpackFramework.
 
 For exact API types, use [API.md](../../API.md). For the fuller contract, use
-[MODULE_AUTHORING.md](MODULE_AUTHORING.md).
+[MODULE_AUTHORING.md](MODULE_AUTHORING.md). For the state ownership model, use
+[DATA_LANES.md](DATA_LANES.md).
 
 ## Start From The Tools
 
@@ -179,5 +180,6 @@ end)
 ## Next Reads
 
 1. [MODULE_AUTHORING.md](MODULE_AUTHORING.md)
-2. [capabilities/README.md](capabilities/README.md)
-3. [API.md](../../API.md)
+2. [DATA_LANES.md](DATA_LANES.md)
+3. [capabilities/README.md](capabilities/README.md)
+4. [API.md](../../API.md)

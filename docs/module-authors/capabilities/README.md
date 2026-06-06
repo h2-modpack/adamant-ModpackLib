@@ -2,7 +2,10 @@
 
 These guides explain the main ModpackLib capabilities from a module author's point of view.
 
-Read [../GETTING_STARTED.md](../GETTING_STARTED.md) first if you are creating your first module. Use [../MODULE_AUTHORING.md](../MODULE_AUTHORING.md) for the full module lifecycle contract, then come here for the feature you need.
+Read [../GETTING_STARTED.md](../GETTING_STARTED.md) first if you are creating
+your first module. Use [../MODULE_AUTHORING.md](../MODULE_AUTHORING.md) for the
+full module lifecycle contract and [../DATA_LANES.md](../DATA_LANES.md) for the
+state ownership model, then come here for the feature you need.
 
 Recommended order:
 

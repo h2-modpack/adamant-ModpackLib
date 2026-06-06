@@ -96,7 +96,9 @@ objects. Reads are phase-neutral, but staged writes, action staging, and other
 mutations remain draw-scoped.
 
 Use [DRAW_LIFECYCLE.md](DRAW_LIFECYCLE.md) for the full draw/commit order and
-the runtime-vs-UI data boundary.
+the runtime-vs-UI data boundary. Use [DATA_LANES.md](DATA_LANES.md) to decide
+whether a value belongs in data, transient data, status, cache, shared state, or
+actions.
 
 ## Runtime Callbacks
 
@@ -134,6 +136,7 @@ Storage roots live in `module.data.define(...)`.
 - `Enabled` and `DebugMode` are Lib-owned built-ins; do not declare them.
 
 Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.
+Use [DATA_LANES.md](DATA_LANES.md) for the overall state ownership model.
 Use [capabilities/CONTROLS.md](capabilities/CONTROLS.md) when a repeated
 domain concept needs its own bundled storage, runtime reader, and draw path.
 
