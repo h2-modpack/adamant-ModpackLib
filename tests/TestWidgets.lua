@@ -116,6 +116,17 @@ function TestWidgets:testInputTextHonorsLabelWidth()
     lu.assertEquals(state.inputText, { id = "##Filter", value = "abc", maxLen = 64 })
 end
 
+function TestWidgets:testInputTextSupportsExplicitControlId()
+    local imgui, state = self.h.makeDropdownImgui()
+    local stagedState = self.h.createValueStagedState("abc")
+
+    DrawWidgets(self.h, imgui).inputText(Field(self.h, stagedState, "Filter"), {
+        id = "Filter_2",
+    })
+
+    lu.assertEquals(state.inputText.id, "##Filter_2")
+end
+
 function TestWidgets:testColoredDropdownUsesCustomPreview()
     local imgui, state = self.h.makeDropdownImgui()
     local stagedState = self.h.createValueStagedState(2)

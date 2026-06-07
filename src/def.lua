@@ -7,6 +7,7 @@ local lib = {}
 ---@alias AdamantModpackLib.Color number[]
 ---@alias AdamantModpackLib.ChoiceValue any
 ---@alias AdamantModpackLib.ChoiceDisplayValues table<any, string>
+---@alias AdamantModpackLib.ChoiceVisibilityMap table<any, boolean>
 ---@alias AdamantModpackLib.ValueColorMap table<any, AdamantModpackLib.Color>
 ---@alias AdamantModpackLib.PackedSelectionMode "singleEnabled"|"singleDisabled"
 ---@alias AdamantModpackLib.MutationShape "patch"
@@ -545,9 +546,11 @@ local lib = {}
 ---@field value? any Staged action payload.
 
 ---@class AdamantModpackLib.InputTextOpts
+---@field id? string|number
 ---@field label? string
 ---@field tooltip? string
 ---@field maxLen? number
+---@field labelWidth? number
 ---@field controlWidth? number
 ---@field controlGap? number
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when edited.
@@ -561,6 +564,8 @@ local lib = {}
 ---@field default? AdamantModpackLib.ChoiceValue
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
 ---@field valueColors? AdamantModpackLib.ValueColorMap
+---@field visibleValues? AdamantModpackLib.ChoiceVisibilityMap
+---@field labelWidth? number
 ---@field controlWidth? number
 ---@field controlGap? number
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.
@@ -570,6 +575,7 @@ local lib = {}
 ---@field id? string|number
 ---@field label? string
 ---@field tooltip? string
+---@field labelWidth? number
 ---@field controlWidth? number
 ---@field controlGap? number
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
@@ -586,6 +592,7 @@ local lib = {}
 ---@field default? AdamantModpackLib.ChoiceValue
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
 ---@field valueColors? AdamantModpackLib.ValueColorMap
+---@field visibleValues? AdamantModpackLib.ChoiceVisibilityMap
 ---@field optionsPerLine? number
 ---@field optionGap? number
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when selection changes.

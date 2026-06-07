@@ -3,7 +3,7 @@ local widgets = {}
 
 function widgets.inputText(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
-    local fieldControlId = field:controlId()
+    local controlId = opts.id ~= nil and tostring(opts.id) or field:controlId()
     local current = tostring(field:read() or "")
     local maxLen = math.max(math.floor(tonumber(opts.maxLen) or 256), 1)
     local label = tostring(opts.label or "")
@@ -16,7 +16,7 @@ function widgets.inputText(imgui, field, opts)
     if controlWidth > 0 then
         imgui.PushItemWidth(controlWidth)
     end
-    local nextValue, changed = imgui.InputText("##" .. tostring(fieldControlId), current, maxLen)
+    local nextValue, changed = imgui.InputText("##" .. tostring(controlId), current, maxLen)
     if controlWidth > 0 then
         imgui.PopItemWidth()
     end

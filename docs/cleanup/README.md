@@ -42,6 +42,28 @@ documentation and should not be treated as an API contract.
 - [x] implementation-side LuaCAT annotations that duplicated the canonical public definition file.
   Audit: [2026-06-07-luacat-surface.md](audits/2026-06-07-luacat-surface.md).
 
+## Subsystem Audit Progress
+
+Work from low-dependency primitives toward higher-level composition. When a
+subsystem was audited before this table existed, keep the row marked complete
+and add a dedicated audit note only if a future pass finds new issues.
+
+| Order | Subsystem | Status | Notes |
+| --- | --- | --- | --- |
+| 1 | Bootstrap primitives: logging, registry, module registry, system scope, game deps, values | Done | Policy naming and duplicated diagnostics were cleaned during the bootstrap pass. |
+| 2 | Storage core and hash serialization | Done | Removed obsolete hash-packing direction, tightened profile decode behavior, and kept hash compression as a future optional direction. |
+| 3 | Module-state backend and storage frontends | Done | Backend adapters, persistent/staged state, and standard `ui.data`/`runtime.data` surfaces were reviewed together. |
+| 4 | Status lane | Done | Public API is `module.status`, `runtime.status`, and `ui.status`; old runtime-owned vocabulary is internal only where it names backend implementation. |
+| 5 | Actions, reset, and draw commit lifecycle | Done | Commit ordering is centralized and documented; reset is exposed as one UI/module operation rather than lane-specific public reset helpers. |
+| 6 | Cache and shared data/events | Done | Shared emit is variant-typed through `runtime.shared` and `ui.shared`; shared publication writes are documented as immediate publication writes. |
+| 7 | Controls | Done | Controls compile config storage only; status/actions remain module-level coordination lanes. |
+| 8 | Widgets | Done | Hot draw-path helpers, option validation, and docs/API alignment were audited. Audit: [2026-06-07-widgets.md](audits/2026-06-07-widgets.md). |
+| 9 | Hooks | Pending | Audit declaration/install boundaries, context wrapping, and ModUtil registry interactions. |
+| 10 | Overlays | Pending | Audit retained overlay lifecycle, suppression, renderer boundaries, and docs. |
+| 11 | Mutations | Pending | Audit plan generation, lifecycle sync, and framework/module integration points. |
+| 12 | Fallback UI and framework runtime | Pending | Audit module listing, profile controls, hashing facade, and framework-facing names. |
+| 13 | Module bootstrap and activation | Pending | Audit last because it composes every lower subsystem. |
+
 ## Production Caller Rule
 
 Before removing a helper or file:
