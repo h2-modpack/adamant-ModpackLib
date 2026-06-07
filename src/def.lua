@@ -452,9 +452,7 @@ local lib = {}
 ---@field imgui table Raw ImGui backend table for custom layout and controls.
 ---@field widgets AdamantModpackLib.DrawWidgetsApi
 ---@field nav AdamantModpackLib.DrawNavApi
----@field control fun(control: AdamantModpackLib.ControlRef, opts?: table): any Render a declared control ref through its template renderer.
----@field log fun(fmt: string, ...) Print a module-scoped log line from draw code.
----@field logIf fun(fmt: string, ...) Print a module-scoped log line from draw code when DebugMode is enabled.
+---@field control fun(control: AdamantModpackLib.ControlRef, viewName?: string, ...): any Render a control template view.
 
 ---@class AdamantModpackLib.ManagedModule
 ---@field getOwnerId fun(): string

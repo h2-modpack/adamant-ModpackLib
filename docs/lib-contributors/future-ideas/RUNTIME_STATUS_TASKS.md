@@ -41,6 +41,10 @@ module.status.define({
 That is mechanically clean, but repeated action/status pairings may become
 ceremony if more modules follow this pattern.
 
+This pairing should stay module-level. Controls are composite configuration
+objects; they can render or read status supplied by the surrounding UI, but
+they should not own runtime coordination state.
+
 ## Possible Direction
 
 If this becomes common enough, status could grow an optional intent section.
@@ -80,8 +84,29 @@ The exact API should wait for another real module that repeats this shape.
 - Status remains runtime-authored and UI-readable.
 - Actions remain the right tool for pure one-shot commands with no UI-readable
   runtime state.
-- Controls should not declare status or status intents. UI composition can pass
-  status or action refs into control views when needed.
+- Controls should not declare status or status intents. UI composition can read
+  or retrieve module-level status/action refs and pass them into control views
+  as explicit view arguments.
+
+## Controls Boundary
+
+Controls remain leaf configuration objects backed by private generated storage.
+That keeps the compiler single-purpose: it lowers control fields to normal
+config storage and builds UI/runtime refs over that storage.
+
+Status is different. It is runtime-authored coordination state for the module's
+behavior loop. A control may display status, but the status declaration belongs
+to the module:
+
+```lua
+local recording = ui.status.read("RecordingReady")
+ui.draw.control(ui.controls.get("Recorder"), "default", recording)
+```
+
+If status intents are added later, controls should consume them the same way:
+the UI composition layer retrieves the module-level ref and passes it to the
+control view. The control remains a consumer of coordination lanes, not their
+owner.
 
 ## Design Questions
 

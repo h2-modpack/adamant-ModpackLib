@@ -77,8 +77,7 @@ end
 ---@field imgui table
 ---@field widgets DrawWidgets
 ---@field nav DrawNav
----@field log fun(fmt: string, ...): nil
----@field logIf fun(fmt: string, ...): nil
+---@field control fun(control: table, viewName: string|nil, ...): any
 
 ---@class DrawActions
 ---@field get fun(actionKey: string): DrawActionRef
