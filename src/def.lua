@@ -307,11 +307,8 @@ local lib = {}
 ---@field order table<string, integer> Shared overlay order bands.
 ---@field define fun(packId: string, name: string, register: fun(overlays: AdamantModpackLib.SystemOverlayRegistrar)): boolean
 
----@alias AdamantModpackLib.StorageAliasMap table<string, AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode>
-
 ---@class AdamantModpackLib.FrameworkHashingApi
 ---@field getRoots fun(storage: AdamantModpackLib.StorageSchema): AdamantModpackLib.StorageNode[]
----@field getAliases fun(storage: AdamantModpackLib.StorageSchema): AdamantModpackLib.StorageAliasMap
 ---@field valuesEqual fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode?, a: any, b: any): boolean
 ---@field toHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, value: any): string?
 ---@field fromHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, str: string): any

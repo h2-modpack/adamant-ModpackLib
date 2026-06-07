@@ -58,7 +58,7 @@ function declarations.compileStorage(statusDeclarations)
         return {}
     end
     if type(statusDeclarations) ~= "table" then
-        logging.violate("status.invalid_declarations", "module.status.define expects a table")
+        logging.violate("status.invalid_declaration_set", "module.status.define expects a table")
     end
 
     local storage = {}

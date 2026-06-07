@@ -38,8 +38,6 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field _isBitAlias boolean|nil
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
----@field _hashPackable boolean|nil
----@field _packWidth number|nil
 
 ---@class StorageNode
 ---@field alias string
@@ -64,8 +62,6 @@ local NormalizeInteger = storage.NormalizeInteger
 ---@field _storageKey string|nil
 ---@field _valueKind StorageValueKind|nil
 ---@field _bitAliases PackedBitNode[]|nil
----@field _hashPackable boolean|nil
----@field _packWidth number|nil
 
 ---@class StorageSchema: StorageNode[]
 ---@field _rootNodes StorageNode[]|nil Hash/profile root nodes.
@@ -128,7 +124,6 @@ local RootNodeFieldsByType = {
     int = {
         max = true,
         min = true,
-        width = true,
     },
     string = {
         maxLen = true,
@@ -159,32 +154,6 @@ end
 
 local function PrepareRootNodeMetadata(node)
     node._storageKey = node.alias
-end
-
-local function GetRangePackWidth(min, max)
-    local range = max - min
-    if range <= 0 then
-        return 1
-    end
-    return math.ceil(math.log(range + 1) / math.log(2))
-end
-
-local function PrepareHashPackMetadata(node)
-    node._hashPackable = nil
-    node._packWidth = nil
-
-    if node.type == "bool" then
-        node._hashPackable = true
-        node._packWidth = 1
-    elseif node.type == "int" then
-        if storage.IsInteger(node.min) and storage.IsInteger(node.max) then
-            node._hashPackable = true
-            node._packWidth = node.width or GetRangePackWidth(node.min, node.max)
-        end
-    elseif node.type == "packedInt" then
-        node._hashPackable = true
-        node._packWidth = node.width
-    end
 end
 
 local function NormalizeMode(prefix, mode)
@@ -248,8 +217,6 @@ local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases
         _mode = root._mode,
         _storageKey = root._storageKey .. "." .. bitNode.alias,
         _valueKind = storageType and storageType.valueKind or bitNode.type,
-        _hashPackable = nil,
-        _packWidth = nil,
     }
     if child.type == "bool" and child.default == nil then
         child.default = false
@@ -401,8 +368,6 @@ function schema.validate(storageSchema, label, opts)
                 elseif node.type == "table" then
                     tableStorage.PrepareTableNode(node, prefix, opts)
                 end
-                PrepareHashPackMetadata(node)
-
                 if node._persist then
                     table.insert(storageSchema._persistRootNodes, node)
                 end

@@ -38,7 +38,7 @@ end
 function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
     local storage = prepareStorage(self.storage)
     local roots = self.hashing.getRoots(storage)
-    local aliases = self.hashing.getAliases(storage)
+    local aliases = self.storage.getAliases(storage)
 
     lu.assertEquals(#roots, 4)
     lu.assertEquals(roots[1].alias, "EnabledFlag")
@@ -50,7 +50,7 @@ end
 
 function TestHashing:testHashCodecRoundTripsSupportedStorageTypes()
     local storage = prepareStorage(self.storage)
-    local aliases = self.hashing.getAliases(storage)
+    local aliases = self.storage.getAliases(storage)
 
     lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, true), "1")
     lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, false), "0")
@@ -66,7 +66,7 @@ end
 
 function TestHashing:testPackedAliasesResolveFromPreparedNode()
     local storage = prepareStorage(self.storage)
-    local aliases = self.hashing.getAliases(storage)
+    local aliases = self.storage.getAliases(storage)
     local packedAliases = self.storage.packed.getPackedAliases(aliases.Packed)
 
     lu.assertEquals(#packedAliases, 2)

@@ -56,9 +56,6 @@ StorageTypes.bool = {
     isHashTokenValid = function(_, str)
         return str == "0" or str == "1"
     end,
-    packWidth = function(_)
-        return 1
-    end,
 }
 
 StorageTypes.int = {
@@ -82,18 +79,6 @@ StorageTypes.int = {
         if type(node.min) == "number" and type(node.max) == "number" and node.min > node.max then
             logging.violate("storage.invalid_axis_type", "%s: int min cannot exceed max", prefix)
         end
-        if node.width ~= nil and (type(node.width) ~= "number" or node.width < 1 or node.width > 32 or not IsInteger(node.width)) then
-            logging.violate("storage.invalid_axis_type", "%s: int width must be a positive integer no greater than 32", prefix)
-        elseif node.width ~= nil and node.offset == nil and (node.min == nil or node.max == nil) then
-            logging.violate("storage.invalid_axis_type", "%s: int width requires min and max", prefix)
-        elseif node.width ~= nil and node.offset == nil and node.min ~= nil and node.max ~= nil then
-            local range = node.max - node.min
-            local maxEncoded = range <= 0 and 0 or range
-            local mask = bit32.rshift(0xFFFFFFFF, 32 - node.width)
-            if maxEncoded > mask then
-                logging.violate("storage.invalid_axis_type", "%s: int width cannot encode min/max range", prefix)
-            end
-        end
     end,
     normalize = function(node, value)
         return NormalizeInteger(node, value)
@@ -106,9 +91,6 @@ StorageTypes.int = {
     end,
     isHashTokenValid = function(_, str)
         return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
-    end,
-    packWidth = function(node)
-        return node and node._packWidth or nil
     end,
 }
 
@@ -174,9 +156,6 @@ StorageTypes.packedInt = {
     end,
     isHashTokenValid = function(_, str)
         return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
-    end,
-    packWidth = function(node)
-        return node and node._packWidth or nil
     end,
 }
 

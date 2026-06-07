@@ -314,6 +314,30 @@ return {
         severity = "error",
         description = "Status operations only accept aliases declared through module.status.define.",
     },
+    ["status.invalid_alias"] = {
+        severity = "error",
+        description = "Status aliases must be stable public identifiers declared through module.status.define.",
+    },
+    ["status.invalid_declaration_set"] = {
+        severity = "error",
+        description = "Status declarations must be provided as a table keyed by status alias.",
+    },
+    ["status.invalid_declaration"] = {
+        severity = "error",
+        description = "Each status declaration must be a valid storage descriptor table.",
+    },
+    ["status.invalid_field"] = {
+        severity = "error",
+        description = "Status declarations cannot override fields owned by Lib status compilation.",
+    },
+    ["status.missing_persist"] = {
+        severity = "error",
+        description = "Status declarations must explicitly choose whether values persist across sessions.",
+    },
+    ["status.invalid_persist"] = {
+        severity = "error",
+        description = "Status declaration persist values must be boolean.",
+    },
     ["status.invalid_surface"] = {
         severity = "error",
         description = "Status operations can only access runtime-authored status aliases.",
@@ -325,6 +349,10 @@ return {
     ["storage.invalid_field_alias"] = {
         severity = "error",
         description = "Storage fields require a non-empty storage alias.",
+    },
+    ["storage.private_alias"] = {
+        severity = "error",
+        description = "Private Lib storage aliases are not accessible through author-facing storage refs.",
     },
     ["storage.invalid_field_owner"] = {
         severity = "error",

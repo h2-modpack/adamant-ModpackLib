@@ -6,6 +6,19 @@ TestLogging = {}
 
 local ActiveLines = nil
 
+local function CoreLuaFiles()
+    local files = {}
+    local isWindows = package.config:sub(1, 1) == "\\"
+    local command = isWindows and 'dir /b /s "src\\core\\*.lua"' or 'find src/core -type f -name "*.lua"'
+    local handle = assert(io.popen(command))
+    for path in handle:lines() do
+        files[#files + 1] = string.gsub(path, "\\", "/")
+    end
+    handle:close()
+    table.sort(files)
+    return files
+end
+
 local function CaptureHarnessPrint(harness)
     local previousPrint = harness.env.print
     if ActiveLines ~= nil then
@@ -69,75 +82,7 @@ function TestLogging.testViolationPolicyCarriesDescriptions()
 end
 
 function TestLogging.testViolationPolicyMatchesSourceCallSites()
-    local files = {
-        "src/core/module_bootstrap/definition.lua",
-        "src/core/module_bootstrap/ui/phase.lua",
-        "src/core/module_bootstrap/ui/phase_gate.lua",
-        "src/core/cache/00_init.lua",
-        "src/core/cache/adapters/data_cache.lua",
-        "src/core/cache/current_run_cache.lua",
-        "src/core/controls/00_init.lua",
-        "src/core/controls/compiler.lua",
-        "src/core/controls/declarations.lua",
-        "src/core/controls/draw_controls.lua",
-        "src/core/controls/refs.lua",
-        "src/core/hooks/00_init.lua",
-        "src/core/hooks/adapters/module_install.lua",
-        "src/core/hooks/declarations.lua",
-        "src/core/hooks/dispatchers.lua",
-        "src/core/hooks/owner_install.lua",
-        "src/core/hooks/adapters/system_declarations.lua",
-        "src/core/hooks/modutil_registry.lua",
-        "src/core/module_bootstrap/managed_module.lua",
-        "src/core/module_bootstrap/managed_module_activation.lua",
-        "src/core/module_bootstrap/managed_module_lifecycle.lua",
-        "src/core/shared/00_init.lua",
-        "src/core/shared/adapters/data_shared.lua",
-        "src/core/shared/adapters/module_install.lua",
-        "src/core/shared/events/events.lua",
-        "src/core/shared/events/registrations.lua",
-        "src/core/shared/data.lua",
-        "src/core/lib_bootstrap/framework_runtime.lua",
-        "src/core/lib_bootstrap/system_scope.lua",
-        "src/core/coordinator/coordinator.lua",
-        "src/core/game_deps/game_deps.lua",
-        "src/core/module_bootstrap/module.lua",
-        "src/core/overlays/00_init.lua",
-        "src/core/overlays/adapters/framework_overlays.lua",
-        "src/core/overlays/adapters/module_install.lua",
-        "src/core/overlays/adapters/system_retained.lua",
-        "src/core/overlays/renderer.lua",
-        "src/core/overlays/retained_dispatch.lua",
-        "src/core/overlays/retained.lua",
-        "src/core/overlays/registry.lua",
-        "src/core/mutations/00_init.lua",
-        "src/core/mutations/adapters/module_lifecycle.lua",
-        "src/core/mutations/lifecycle.lua",
-        "src/core/fallback/fallback_ui.lua",
-        "src/core/module_state/00_init.lua",
-        "src/core/module_state/actions/action_buffer.lua",
-        "src/core/module_state/actions/ui_actions.lua",
-        "src/core/logging/logging.lua",
-        "src/core/helpers/values.lua",
-        "src/core/module_state/staged/staged_state.lua",
-        "src/core/module_state/persistent/persistent_state.lua",
-        "src/core/status/adapters/runtime_status.lua",
-        "src/core/status/adapters/ui_status.lua",
-        "src/core/storage/00_init.lua",
-        "src/core/storage/alias_access.lua",
-        "src/core/storage/schema.lua",
-        "src/core/storage/storage_field.lua",
-        "src/core/storage/packed.lua",
-        "src/core/storage/table.lua",
-        "src/core/storage/types.lua",
-        "src/core/module_state/persistent/store.lua",
-        "src/core/widgets/00_init.lua",
-        "src/core/widgets/ui_draw.lua",
-        "src/core/widgets/widget_helpers.lua",
-        "src/core/widgets/buttons.lua",
-    }
-
-    for _, path in ipairs(files) do
+    for _, path in ipairs(CoreLuaFiles()) do
         local handle = assert(io.open(path, "r"))
         local source = handle:read("*a")
         handle:close()
@@ -148,76 +93,9 @@ function TestLogging.testViolationPolicyMatchesSourceCallSites()
 end
 
 function TestLogging.testViolationPolicyHasNoOrphanIds()
-    local files = {
-        "src/core/module_bootstrap/definition.lua",
-        "src/core/module_bootstrap/ui/phase.lua",
-        "src/core/module_bootstrap/ui/phase_gate.lua",
-        "src/core/cache/00_init.lua",
-        "src/core/cache/adapters/data_cache.lua",
-        "src/core/cache/current_run_cache.lua",
-        "src/core/controls/00_init.lua",
-        "src/core/controls/compiler.lua",
-        "src/core/controls/declarations.lua",
-        "src/core/controls/draw_controls.lua",
-        "src/core/controls/refs.lua",
-        "src/core/hooks/00_init.lua",
-        "src/core/hooks/adapters/module_install.lua",
-        "src/core/hooks/declarations.lua",
-        "src/core/hooks/dispatchers.lua",
-        "src/core/hooks/owner_install.lua",
-        "src/core/hooks/adapters/system_declarations.lua",
-        "src/core/hooks/modutil_registry.lua",
-        "src/core/module_bootstrap/managed_module.lua",
-        "src/core/module_bootstrap/managed_module_activation.lua",
-        "src/core/module_bootstrap/managed_module_lifecycle.lua",
-        "src/core/shared/00_init.lua",
-        "src/core/shared/adapters/data_shared.lua",
-        "src/core/shared/adapters/module_install.lua",
-        "src/core/shared/events/events.lua",
-        "src/core/shared/events/registrations.lua",
-        "src/core/shared/data.lua",
-        "src/core/lib_bootstrap/framework_runtime.lua",
-        "src/core/lib_bootstrap/system_scope.lua",
-        "src/core/coordinator/coordinator.lua",
-        "src/core/game_deps/game_deps.lua",
-        "src/core/module_bootstrap/module.lua",
-        "src/core/overlays/00_init.lua",
-        "src/core/overlays/adapters/framework_overlays.lua",
-        "src/core/overlays/adapters/module_install.lua",
-        "src/core/overlays/adapters/system_retained.lua",
-        "src/core/overlays/renderer.lua",
-        "src/core/overlays/retained_dispatch.lua",
-        "src/core/overlays/retained.lua",
-        "src/core/overlays/registry.lua",
-        "src/core/mutations/00_init.lua",
-        "src/core/mutations/adapters/module_lifecycle.lua",
-        "src/core/mutations/lifecycle.lua",
-        "src/core/fallback/fallback_ui.lua",
-        "src/core/module_state/00_init.lua",
-        "src/core/module_state/actions/action_buffer.lua",
-        "src/core/module_state/actions/ui_actions.lua",
-        "src/core/logging/logging.lua",
-        "src/core/helpers/values.lua",
-        "src/core/module_state/staged/staged_state.lua",
-        "src/core/module_state/persistent/persistent_state.lua",
-        "src/core/status/adapters/runtime_status.lua",
-        "src/core/status/adapters/ui_status.lua",
-        "src/core/storage/00_init.lua",
-        "src/core/storage/alias_access.lua",
-        "src/core/storage/schema.lua",
-        "src/core/storage/storage_field.lua",
-        "src/core/storage/packed.lua",
-        "src/core/storage/table.lua",
-        "src/core/storage/types.lua",
-        "src/core/module_state/persistent/store.lua",
-        "src/core/widgets/00_init.lua",
-        "src/core/widgets/ui_draw.lua",
-        "src/core/widgets/widget_helpers.lua",
-        "src/core/widgets/buttons.lua",
-    }
     local referenced = {}
 
-    for _, path in ipairs(files) do
+    for _, path in ipairs(CoreLuaFiles()) do
         local handle = assert(io.open(path, "r"))
         local source = handle:read("*a")
         handle:close()

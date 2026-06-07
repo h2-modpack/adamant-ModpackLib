@@ -10,12 +10,6 @@ function hashing.getRoots(storage)
     return storageService.getRoots(storage)
 end
 
----@param storage StorageSchema
----@return table<string, StorageNode|PackedBitNode>
-function hashing.getAliases(storage)
-    return storageService.getAliases(storage)
-end
-
 ---@param node StorageNode|PackedBitNode|nil
 ---@param a any
 ---@param b any

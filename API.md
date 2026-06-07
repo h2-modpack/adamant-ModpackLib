@@ -866,17 +866,6 @@ Framework-only hash/profile serialization helpers returned by
 Returns prepared root nodes that participate in hash/profile serialization.
 The returned nodes are read-only metadata owned by Lib storage preparation; callers must not mutate them.
 
-### `frameworkRuntime.hashing.getAliases(storage)`
-
-Returns the prepared alias map.
-The returned map and nodes are read-only metadata owned by Lib storage preparation; callers must not mutate them.
-
-Includes:
-- hash/profile root aliases
-- non-hash staged aliases
-- transient staged-state aliases
-- packed child aliases
-
 ### `frameworkRuntime.hashing.valuesEqual(node, a, b)`
 
 Storage-aware equality helper for comparing persisted/hash values.

@@ -444,10 +444,10 @@ function TestStorageValidation:testPackedIntRejectsBitsOutsideDeclaredWidth()
     end)
 end
 
-function TestStorageValidation:testStandaloneIntWidthRequiresBoundedRange()
-    lu.assertErrorMsgContains("int width requires min and max", function()
+function TestStorageValidation:testStandaloneIntRejectsWidthField()
+    lu.assertErrorMsgContains("unknown storage field 'width'", function()
         self.storage.validate({
             { type = "int", alias = "Count", default = 0, width = 4 },
-        }, "IntWidth")
+        }, "StandaloneInt")
     end)
 end

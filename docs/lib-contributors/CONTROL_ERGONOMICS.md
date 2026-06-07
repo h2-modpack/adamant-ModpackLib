@@ -17,7 +17,7 @@ can become hard to trace when the same concept is split across:
 - draw-time widget calls
 - option tables
 - labels/tooltips
-- hash/profile grouping
+- hash/profile participation
 - module catalogs
 
 The problem is not that widgets are weak. Widgets are good leaf renderers. The
