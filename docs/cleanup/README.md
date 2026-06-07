@@ -37,7 +37,8 @@ documentation and should not be treated as an API contract.
   Audit: [2026-06-07-context-adapters.md](audits/2026-06-07-context-adapters.md).
 - [x] one-line helpers that only hide direct calls without adding policy.
   Audit: [2026-06-07-one-line-helpers.md](audits/2026-06-07-one-line-helpers.md).
-- [ ] docs that describe historical migration plans instead of current behavior.
+- [x] docs that describe historical migration plans instead of current behavior.
+  Audit: [2026-06-07-historical-docs.md](audits/2026-06-07-historical-docs.md).
 
 ## Production Caller Rule
 

@@ -464,8 +464,8 @@ Table handles:
 - table storage participates in hash/profile serialization when `hash` is true
 
 Aliases are direct flat storage identifiers. Managed storage reads and writes the
-declared alias key directly; future composite storage should own any generated
-backing keys internally.
+declared alias key directly; Lib-managed composite storage owns generated backing
+keys internally.
 
 Storage axis defaults:
 
