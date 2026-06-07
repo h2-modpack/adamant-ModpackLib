@@ -306,9 +306,9 @@ return {
         severity = "error",
         description = "Staged state writes cannot mutate status storage.",
     },
-    ["staged_state.readonly_view_write"] = {
+    ["storage_ref.invalid_phase"] = {
         severity = "error",
-        description = "Staged state view is read-only; writes must go through stagedState.write.",
+        description = "Storage ref adapters must declare whether they are draw or runtime projections.",
     },
     ["status.unknown_alias"] = {
         severity = "error",

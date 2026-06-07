@@ -9,9 +9,9 @@ local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
 ---@param storageConfig StorageConfigAdapter
 ---@param storage StorageSchema
----@param persistentState PersistentState|nil
+---@param committedRoots CommittedRootState|nil
 ---@return StagedState
-local function createStagedState(storageConfig, storage, persistentState)
+local function createStagedState(storageConfig, storage, committedRoots)
     local stagedRootNodes = storageInternal.getStagedRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
@@ -39,15 +39,37 @@ local function createStagedState(storageConfig, storage, persistentState)
         return storageConfig.readValue(root._storageKey)
     end
 
+    local function readCommittedRoot(root)
+        if committedRoots == nil then
+            return nil
+        end
+        return committedRoots.readRoot(root)
+    end
+
+    local function replaceCommittedRoot(root, value)
+        if committedRoots == nil then
+            return
+        end
+        committedRoots.replaceRoot(root, value)
+    end
+
+    local function reloadCommittedRoots()
+        if committedRoots == nil then
+            return
+        end
+        committedRoots.reloadFromConfig()
+    end
+
     local function readConfigValue(root)
         if not root._persist then
-            if root._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
-                return persistentState._readRoot(root)
+            if root._mode == "runtime" then
+                return readCommittedRoot(root)
             end
             return nil
         end
-        if persistentState and type(persistentState._readRoot) == "function" then
-            return persistentState._readRoot(root)
+        local committedValue = readCommittedRoot(root)
+        if committedValue ~= nil then
+            return committedValue
         end
         return readPersistedConfigValue(root)
     end
@@ -57,9 +79,7 @@ local function createStagedState(storageConfig, storage, persistentState)
             return
         end
         storageConfig.writeValue(root._storageKey, value)
-        if persistentState and type(persistentState._replaceRoot) == "function" then
-            persistentState._replaceRoot(root, value)
-        end
+        replaceCommittedRoot(root, value)
     end
 
     local function syncPackedChildren(root, packedValue)
@@ -156,10 +176,7 @@ local function createStagedState(storageConfig, storage, persistentState)
 
     local statusReadBackend = {
         readRoot = function(root)
-            if persistentState and type(persistentState._readRoot) == "function" then
-                return persistentState._readRoot(root)
-            end
-            return nil
+            return readCommittedRoot(root)
         end,
         canRead = function(node, alias)
             if node._mode ~= "runtime" then
@@ -203,36 +220,6 @@ local function createStagedState(storageConfig, storage, persistentState)
         end,
     }
 
-    local readonlyProxy = setmetatable({}, {
-        __index = function(_, key)
-            local value = staging[key]
-            local node = aliasNodes[key]
-            if node and node._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
-                value = persistentState._readRoot(node)
-            end
-            if node and node.type == "table" then
-                return ClonePersistedValue(value)
-            end
-            return value
-        end,
-        __newindex = function()
-            logging.violate("staged_state.readonly_view_write", "stagedState.view is read-only; use stagedState.write")
-        end,
-        __pairs = function()
-            return function(_, key)
-                local nextKey, value = next(staging, key)
-                local node = aliasNodes[nextKey]
-                if node and node._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
-                    value = persistentState._readRoot(node)
-                end
-                if node and node.type == "table" then
-                    value = ClonePersistedValue(value)
-                end
-                return nextKey, value
-            end, staging, nil
-        end,
-    })
-
     local function readStagingValue(alias)
         return storageInternal.readAlias(aliasNodes, stagedReadBackend, alias)
     end
@@ -271,8 +258,8 @@ local function createStagedState(storageConfig, storage, persistentState)
 
         local tableOpts = {
             readRoot = function(root)
-                if root._mode == "runtime" and persistentState and type(persistentState._readRoot) == "function" then
-                    return persistentState._readRoot(root)
+                if root._mode == "runtime" then
+                    return readCommittedRoot(root)
                 end
                 if staging[root.alias] == nil then
                     loadRootIntoStaging(root)
@@ -412,7 +399,6 @@ local function createStagedState(storageConfig, storage, persistentState)
     end
 
     stagedState = {
-        view = readonlyProxy,
         get = function(alias)
             return getDataObject(alias)
         end,
@@ -441,9 +427,7 @@ local function createStagedState(storageConfig, storage, persistentState)
         end,
         resetAll = resetAll,
         _reloadFromConfig = function()
-            if persistentState and type(persistentState._reloadFromConfig) == "function" then
-                persistentState._reloadFromConfig()
-            end
+            reloadCommittedRoots()
             copyConfigToStaging()
             clearDirty()
         end,

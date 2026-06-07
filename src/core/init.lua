@@ -56,7 +56,6 @@ local controlsBundle = import('core/controls/00_init.lua', nil, {
     values = values,
     storage = storage,
     phaseGate = phaseGate,
-    actionRefs = moduleState.actionBuffer,
 })
 
 local statusDeclarations = import('core/status/declarations.lua', nil, {

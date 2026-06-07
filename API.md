@@ -486,7 +486,6 @@ Managed staged UI state for the module. This is a Lib/Framework plumbing
 object; module draw callbacks receive the narrower `ui.data` adapter below.
 
 Internal surface:
-- `stagedState.view`
 - `stagedState.get(alias)`
 - `stagedState.read(alias)`
 - `stagedState.table(alias)`
@@ -915,8 +914,7 @@ Behavior:
   - `Enabled`
   - `Debug Mode`
   - `Resync State`
-- then calls the live module's `drawTab(...)` when the module is enabled
-- commits dirty staged state through the live module's `commitIfDirty()`
+- then runs the live module's draw-and-commit lifecycle when the module is enabled
 
 ## `frameworkRuntime.modules`
 
@@ -984,6 +982,11 @@ Handlers receive the callback host, runtime context, and staged action `value`.
 Actions may update status, but status is not a mutation input. Mutation sync is
 driven by committed UI-owned settings changes; use normal UI-owned storage for
 values that should affect `module.mutation.patch(...)`.
+
+Action handlers, queued shared events, and `module.onCommit(...)` observers are
+post-commit side effects. If one fails after config flush and mutation sync
+succeed, Lib logs the failure and continues cleanup; it does not roll back the
+committed config.
 
 ## Draw Widgets
 

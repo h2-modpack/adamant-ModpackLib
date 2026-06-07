@@ -115,7 +115,9 @@ end
 ---@field revertMutation fun(): boolean, string|nil
 ---@field activate fun(): boolean, string|nil
 ---@field drawTab fun()
+---@field drawTabAndCommit fun(): boolean, string|nil, boolean
 ---@field drawQuickContent fun()|nil
+---@field drawQuickContentAndCommit fun(): boolean, string|nil, boolean|nil
 
 function managedModule.getLiveModule(pluginGuid)
     return moduleRegistry.getLiveModule(pluginGuid)
@@ -507,15 +509,30 @@ function managedModule.create(opts)
         end,
     })
 
+    local function runDrawLifecycle(drawCallback)
+        uiPhase.run(drawCallback)
+        return module.commitIfDirty()
+    end
+
     function module.drawTab()
         requireActivated("drawTab")
         return uiPhase.run(drawTab)
+    end
+
+    function module.drawTabAndCommit()
+        requireActivated("drawTabAndCommit")
+        return runDrawLifecycle(drawTab)
     end
 
     if type(drawQuickContent) == "function" then
         function module.drawQuickContent()
             requireActivated("drawQuickContent")
             return uiPhase.run(drawQuickContent)
+        end
+
+        function module.drawQuickContentAndCommit()
+            requireActivated("drawQuickContentAndCommit")
+            return runDrawLifecycle(drawQuickContent)
         end
     end
 

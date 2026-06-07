@@ -68,6 +68,11 @@ local function makeHost(opts)
             calls.commitIfDirty = calls.commitIfDirty + 1
             return true, nil, opts.committed == true
         end,
+        drawTabAndCommit = function()
+            calls.drawTab = calls.drawTab + 1
+            calls.commitIfDirty = calls.commitIfDirty + 1
+            return true, nil, opts.committed == true
+        end,
     }
     return host
 end

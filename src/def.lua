@@ -112,7 +112,6 @@ local lib = {}
 
 ---Internal trusted staged state. Module authors access this through `ui.data`.
 ---@class AdamantModpackLib.StagedState
----@field view table<string, any>
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?

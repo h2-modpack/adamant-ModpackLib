@@ -709,6 +709,42 @@ function TestManagedModule:testDeclaredActionsExecuteDuringCommit()
     lu.assertTrue(observedConfigChange)
 end
 
+function TestManagedModule:testDrawTabAndCommitRunsFullDrawLifecycle()
+    local observedConfigChange = nil
+    local definition = self.h.managedModule.prepareDefinition({}, {
+        id = "DrawLifecycle",
+        name = "Draw Lifecycle",
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+    })
+    local persistentState, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+        Flag = false,
+    }, definition)
+    createActivatedManagedModule(self.h, "test-draw-lifecycle", {
+        definition = definition,
+        persistentState = persistentState,
+        stagedState = stagedState,
+        onCommit = function(_, _, commit)
+            observedConfigChange = commit.hadConfigChanges()
+        end,
+        drawTab = function(_, state)
+            state.write("Flag", true)
+        end,
+    })
+
+    local host = self.h.managedModule.getLiveModule("test-draw-lifecycle")
+    local ok, err, committed = host.drawTabAndCommit()
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNil(err)
+    lu.assertTrue(committed)
+    lu.assertTrue(persistentState.read("Flag"))
+    lu.assertTrue(observedConfigChange)
+end
+
 function TestManagedModule:testDeclaredActionsRunAfterSuccessfulMutationOnly()
     local target = { Value = false }
     local actionSawMutation = nil

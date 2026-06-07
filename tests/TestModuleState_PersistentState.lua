@@ -225,7 +225,7 @@ function TestModuleState_PersistentState:testTransientAliasesAreNotReadableThrou
     lu.assertErrorMsgContains("store.invalid_surface", function()
         persistentState.read("FilterText")
     end)
-    lu.assertEquals(stagedState.view.FilterText, "")
+    lu.assertEquals(stagedState.read("FilterText"), "")
 end
 
 function TestModuleState_PersistentState:testPersistentStateGetRejectsTransientAndUnknownAliases()

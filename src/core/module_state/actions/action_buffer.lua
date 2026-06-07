@@ -105,15 +105,6 @@ local function createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
     return createDrawActionRef(actionBuffer, actionKey, phaseGate)
 end
 
-local function createInternalDrawActionRef(actionBuffer, actionKey, phaseGate)
-    if type(actionBuffer.validateAction) == "function" then
-        actionBuffer.validateAction("internal actions.get", actionKey)
-    else
-        validateActionKey("internal actions.get", actionKey)
-    end
-    return createDrawActionRef(actionBuffer, actionKey, phaseGate)
-end
-
 local function createCommitActionRef(snapshot, actionKey)
     local ref
     ref = markActionRef({
@@ -134,7 +125,6 @@ local function createBuffer(actionCatalog)
     local slots = {}
     local internalSlots = {}
     local pendingEvents = {}
-    local refs = {}
     local buffer = {}
 
     function buffer.stage(actionKey, value)
@@ -197,17 +187,6 @@ local function createBuffer(actionCatalog)
         pendingEvents = {}
     end
 
-    function buffer.getRef(actionKey)
-        validateDeclaredAction(catalog, "actions.get", actionKey)
-        local ref = refs[actionKey]
-        if ref ~= nil then
-            return ref
-        end
-        ref = createDrawActionRef(buffer, actionKey)
-        refs[actionKey] = ref
-        return ref
-    end
-
     function buffer.emitShared(id, eventName, payload)
         pendingEvents[#pendingEvents + 1] = {
             id = id,
@@ -265,10 +244,5 @@ return {
     createBuffer = createBuffer,
     createCommitActions = createCommitActions,
     createGatedDrawActionRef = createGatedDrawActionRef,
-    createInternalDrawActionRef = createInternalDrawActionRef,
     isDrawActionRef = isDrawActionRef,
-    createActionCatalog = createActionCatalog,
-    validateDeclaredAction = validateDeclaredAction,
-    rejectPrivateActionKey = rejectPrivateActionKey,
-    isPrivateActionKey = isPrivateActionKey,
 }

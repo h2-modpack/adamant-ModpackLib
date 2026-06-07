@@ -12,11 +12,19 @@ local function requireMethodSelf(context, self, expected)
     end
 end
 
-local function createGate(isDrawPhase)
-    if isDrawPhase then
+local function createGate(phase)
+    if phase == "draw" then
         return function()
             phaseGate.requireAnyDraw()
         end
+    end
+
+    if phase ~= "runtime" then
+        logging.violate(
+            "storage_ref.invalid_phase",
+            "storageRefAdapter.create: phase must be 'draw' or 'runtime', got '%s'",
+            tostring(phase)
+        )
     end
 
     return function()
@@ -220,7 +228,7 @@ end
 function storageRefAdapter.create(opts)
     local root = opts.root
     local source = opts.source
-    local gate = createGate(opts.phase == "draw")
+    local gate = createGate(opts.phase)
     local isWritable = opts.writable == true
     local refs = {}
 

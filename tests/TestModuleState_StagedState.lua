@@ -28,17 +28,34 @@ function TestModuleState_StagedState:tearDown()
     self.harness = nil
 end
 
+function TestModuleState_StagedState:testStorageRefAdapterRejectsUnknownPhase()
+    local storageRefAdapter = self.harness.imports["core/module_state/storage_ref_adapter.lua"]
+
+    lu.assertErrorMsgContains("phase", function()
+        storageRefAdapter.create({
+            root = {
+                get = function()
+                    return nil
+                end,
+            },
+            phase = "commit",
+            source = "test.data.get",
+            writable = false,
+        })
+    end)
+end
+
 function TestModuleState_StagedState:testStagedStateStagesScalarAliases()
     local config = { Enabled = true, MaxGods = 5 }
     local _, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
-    lu.assertTrue(stagedState.view.Enabled)
-    lu.assertEquals(stagedState.view.MaxGods, 5)
+    lu.assertTrue(stagedState.read("Enabled"))
+    lu.assertEquals(stagedState.read("MaxGods"), 5)
     lu.assertFalse(stagedState.isDirty())
 
     stagedState.write("Enabled", false)
     lu.assertTrue(stagedState.isDirty())
-    lu.assertFalse(stagedState.view.Enabled)
+    lu.assertFalse(stagedState.read("Enabled"))
 
     stagedState._flushToConfig()
     lu.assertFalse(stagedState.isDirty())
@@ -52,8 +69,8 @@ function TestModuleState_StagedState:testPackedAliasEditReencodesPackedRootOnFlu
     stagedState.write("ModeBits", 2)
 
     lu.assertTrue(stagedState.isDirty())
-    lu.assertEquals(stagedState.view.ModeBits, 2)
-    lu.assertEquals(stagedState.view.Packed, 4)
+    lu.assertEquals(stagedState.read("ModeBits"), 2)
+    lu.assertEquals(stagedState.read("Packed"), 4)
     lu.assertEquals(config.Packed, 0)
 
     stagedState._flushToConfig()
@@ -69,9 +86,9 @@ function TestModuleState_StagedState:testInternalReloadFromConfigRebuildsPackedC
     config.Packed = 5
     stagedState._reloadFromConfig()
 
-    lu.assertEquals(stagedState.view.Packed, 5)
-    lu.assertTrue(stagedState.view.EnabledBit)
-    lu.assertEquals(stagedState.view.ModeBits, 2)
+    lu.assertEquals(stagedState.read("Packed"), 5)
+    lu.assertTrue(stagedState.read("EnabledBit"))
+    lu.assertEquals(stagedState.read("ModeBits"), 2)
 end
 
 function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
@@ -83,36 +100,24 @@ function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })
-    lu.assertTrue(stagedState.view.EnabledBit)
-    lu.assertEquals(stagedState.view.ModeBits, 2)
-    lu.assertEquals(stagedState.view.Packed, 5)
-end
-
-function TestModuleState_StagedState:testReadonlyViewRejectsWrites()
-    local config = { Enabled = true, MaxGods = 5 }
-    local _, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
-
-    local ok, err = pcall(function()
-        stagedState.view.Enabled = false
-    end)
-
-    lu.assertFalse(ok)
-    lu.assertStrContains(err, "read-only")
+    lu.assertTrue(stagedState.read("EnabledBit"))
+    lu.assertEquals(stagedState.read("ModeBits"), 2)
+    lu.assertEquals(stagedState.read("Packed"), 5)
 end
 
 function TestModuleState_StagedState:testTransientAliasesLiveOnlyInStagedState()
     local config = { Enabled = false }
     local _, stagedState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
 
-    lu.assertEquals(stagedState.view.FilterText, "")
-    lu.assertEquals(stagedState.view.FilterMode, "all")
+    lu.assertEquals(stagedState.read("FilterText"), "")
+    lu.assertEquals(stagedState.read("FilterMode"), "all")
     lu.assertFalse(stagedState.isDirty())
 
     stagedState.write("FilterText", "Poseidon")
     stagedState.write("FilterMode", "allowed")
 
-    lu.assertEquals(stagedState.view.FilterText, "Poseidon")
-    lu.assertEquals(stagedState.view.FilterMode, "allowed")
+    lu.assertEquals(stagedState.read("FilterText"), "Poseidon")
+    lu.assertEquals(stagedState.read("FilterMode"), "allowed")
     lu.assertFalse(stagedState.isDirty())
 
     stagedState._flushToConfig()
@@ -123,9 +128,9 @@ end
 function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState()
     local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
 
-    lu.assertFalse(stagedState.view.RuntimeFlag)
+    lu.assertFalse(stagedState.status.read("RuntimeFlag"))
     lu.assertTrue(persistentState.status.write("RuntimeFlag", true))
-    lu.assertTrue(stagedState.view.RuntimeFlag)
+    lu.assertTrue(stagedState.status.read("RuntimeFlag"))
     lu.assertTrue(stagedState.status.read("RuntimeFlag"))
     lu.assertTrue(stagedState.status.get("RuntimeFlag"):read())
     lu.assertErrorMsgContains("status", function()
@@ -140,7 +145,7 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     lu.assertErrorMsgContains("status", function()
         stagedState.write("RuntimeBit", true)
     end)
-    lu.assertTrue(stagedState.view.RuntimeFlag)
+    lu.assertTrue(stagedState.status.read("RuntimeFlag"))
 
     local runtimeRows = stagedState.status.get("RuntimeRows")
     lu.assertEquals(runtimeRows:count(), 1)
@@ -205,9 +210,9 @@ function TestModuleState_StagedState:testInternalReloadFromConfigResetsTransient
 
     stagedState._reloadFromConfig()
 
-    lu.assertFalse(stagedState.view.Enabled)
-    lu.assertEquals(stagedState.view.FilterText, "")
-    lu.assertEquals(stagedState.view.FilterMode, "all")
+    lu.assertFalse(stagedState.read("Enabled"))
+    lu.assertEquals(stagedState.read("FilterText"), "")
+    lu.assertEquals(stagedState.read("FilterMode"), "all")
 end
 
 function TestModuleState_StagedState:testResetRestoresTransientAliasDefault()
@@ -217,7 +222,7 @@ function TestModuleState_StagedState:testResetRestoresTransientAliasDefault()
     stagedState.write("FilterText", "Hermes")
     stagedState.reset("FilterText")
 
-    lu.assertEquals(stagedState.view.FilterText, "")
+    lu.assertEquals(stagedState.read("FilterText"), "")
     lu.assertFalse(stagedState.isDirty())
 end
 
@@ -227,7 +232,7 @@ function TestModuleState_StagedState:testResetRestoresPersistedAliasDefaultAndMa
 
     stagedState.reset("Enabled")
 
-    lu.assertFalse(stagedState.view.Enabled)
+    lu.assertFalse(stagedState.read("Enabled"))
     lu.assertTrue(stagedState.isDirty())
 
     stagedState._flushToConfig()
@@ -242,9 +247,9 @@ function TestModuleState_StagedState:testResetRestoresPackedChildDefault()
     stagedState.write("ModeBits", 3)
     stagedState.reset("ModeBits")
 
-    lu.assertEquals(stagedState.view.ModeBits, 0)
-    lu.assertTrue(stagedState.view.EnabledBit)
-    lu.assertEquals(stagedState.view.Packed, 1)
+    lu.assertEquals(stagedState.read("ModeBits"), 0)
+    lu.assertTrue(stagedState.read("EnabledBit"))
+    lu.assertEquals(stagedState.read("Packed"), 1)
 end
 
 function TestModuleState_StagedState:testResetAllRestoresAllNonRuntimeRoots()
@@ -262,8 +267,8 @@ function TestModuleState_StagedState:testResetAllRestoresAllNonRuntimeRoots()
 
     lu.assertTrue(changed)
     lu.assertEquals(count, 2)
-    lu.assertEquals(stagedState.view.MaxGods, 3)
-    lu.assertEquals(stagedState.view.FilterText, "")
+    lu.assertEquals(stagedState.read("MaxGods"), 3)
+    lu.assertEquals(stagedState.read("FilterText"), "")
     lu.assertTrue(stagedState.isDirty())
 end
 
@@ -279,7 +284,7 @@ function TestModuleState_StagedState:testResetAllHonorsExcludedRoots()
 
     lu.assertFalse(changed)
     lu.assertEquals(count, 0)
-    lu.assertEquals(stagedState.view.MaxGods, 5)
+    lu.assertEquals(stagedState.read("MaxGods"), 5)
 end
 
 function TestModuleState_StagedState:testTableStorageHydratesDefaultRows()
@@ -607,15 +612,6 @@ function TestModuleState_StagedState.testDowngradedStagedStateTableErrorsReturnN
             lu.assertEquals(#lines, 2)
         end)
     end)
-end
-
-function TestModuleState_StagedState:testReadonlyViewDoesNotExposeMutableTableRoot()
-    local _, stagedState = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
-
-    local snapshot = stagedState.view.Tiers
-    snapshot[1].Limit = 5
-
-    lu.assertEquals(stagedState.table("Tiers"):read(1, "Limit"), 2)
 end
 
 function TestModuleState_StagedState:testTableStorageHashRoundTripsRows()

@@ -257,8 +257,7 @@ local function createRuntime(host)
             if enabled then
                 imgui.Separator()
                 imgui.Spacing()
-                host.drawTab()
-                local ok, err, committed = host.commitIfDirty()
+                local ok, err, committed = host.drawTabAndCommit()
                 if ok and committed and host.isEnabled() then
                     markRunDataDirty()
                 elseif ok == false then

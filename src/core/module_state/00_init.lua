@@ -88,6 +88,11 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field persistentState PersistentState
 ---@field stagedState StagedState
 
+---@class CommittedRootState
+---@field readRoot fun(root: StorageNode): any
+---@field replaceRoot fun(root: StorageNode, value: any)
+---@field reloadFromConfig fun()
+
 ---@class ActionBuffer
 ---@field stage fun(actionKey: string, value: any)
 ---@field read fun(actionKey: string): any
@@ -98,7 +103,6 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field captureInternalSnapshot fun(): table
 ---@field clearAll fun()
 ---@field clearPublicIntent fun()
----@field getRef fun(actionKey: string): table
 ---@field stageInternal fun(actionKey: string, value: any)
 ---@field emitShared fun(id: string, eventName: string, payload: any)
 ---@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table)
@@ -136,7 +140,6 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field read fun(alias: string, ...): any
 
 ---@class StagedState
----@field view table<string, any>
 ---@field get fun(alias: string): StorageField|StorageTableStagedState|nil
 ---@field read fun(alias: string): any
 ---@field status table
@@ -165,6 +168,20 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field actions table<string, fun(host: Host, runtime: RuntimeContext, value: any)>|nil
 ---@field _actionOrder string[]|nil
 
+local function createCommittedRootAdapter(persistentState)
+    return {
+        readRoot = function(root)
+            return persistentState._readRoot(root)
+        end,
+        replaceRoot = function(root, value)
+            persistentState._replaceRoot(root, value)
+        end,
+        reloadFromConfig = function()
+            persistentState._reloadFromConfig()
+        end,
+    }
+end
+
 --- Creates module state access surfaces around a prepared definition and config table.
 ---@param modConfig table Module config table used for persisted reads and writes.
 ---@param definition ModuleDefinition Prepared module definition declaring storage and mutation behavior.
@@ -184,7 +201,8 @@ function moduleState.create(modConfig, definition)
     local backend = persistenceBackend.create(modConfig)
     local storageConfig = storageConfigAdapter.create(modConfig, backend)
     local persistentState = persistentStateModule.create(storageConfig, storage)
-    local stagedState = stagedStateModule.createStagedState(storageConfig, storage, persistentState)
+    local committedRoots = createCommittedRootAdapter(persistentState)
+    local stagedState = stagedStateModule.createStagedState(storageConfig, storage, committedRoots)
 
     return {
         persistentState = persistentState,

@@ -748,6 +748,48 @@ function TestCreateModule:testModuleDataDefineTreatsModeAsUnknownPublicField()
     end)
 end
 
+function TestCreateModule:testModuleStatusDefineValidatesDeclarationShape()
+    local caseIndex = 0
+    local function assertStatusActivationError(expected, status)
+        caseIndex = caseIndex + 1
+        local module = self.h:createModuleOrThrow({
+            pluginGuid = "test-create-module-status-invalid-" .. tostring(caseIndex),
+            config = {},
+            id = "StatusInvalid" .. tostring(caseIndex),
+            name = "Status Invalid " .. tostring(caseIndex),
+        })
+        module.status.define(status)
+        module.ui.tab(function() end)
+
+        local ok, err = module.activate()
+        lu.assertFalse(ok)
+        lu.assertStrContains(tostring(err), expected)
+    end
+
+    assertStatusActivationError("module.status.define expects a table", "not status")
+    assertStatusActivationError("status alias 'Bad-Alias' must start with a letter", {
+        ["Bad-Alias"] = { type = "bool", default = false, persist = true },
+    })
+    assertStatusActivationError("status 'RuntimeFlag' must be a table", {
+        RuntimeFlag = true,
+    })
+    assertStatusActivationError("status 'RuntimeFlag' must not declare 'alias'", {
+        RuntimeFlag = { type = "bool", alias = "OtherFlag", default = false, persist = true },
+    })
+    assertStatusActivationError("status 'RuntimeFlag' must not declare 'hash'", {
+        RuntimeFlag = { type = "bool", hash = true, default = false, persist = true },
+    })
+    assertStatusActivationError("status 'RuntimeFlag' must not declare 'mode'", {
+        RuntimeFlag = { type = "bool", mode = "runtime", default = false, persist = true },
+    })
+    assertStatusActivationError("status 'RuntimeFlag' must declare persist", {
+        RuntimeFlag = { type = "bool", default = false },
+    })
+    assertStatusActivationError("status 'RuntimeFlag' persist must be boolean", {
+        RuntimeFlag = { type = "bool", default = false, persist = "yes" },
+    })
+end
+
 function TestCreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerManualMutation'", function()
         self.h:createModuleOrThrow({

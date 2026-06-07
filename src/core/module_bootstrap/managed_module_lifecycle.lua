@@ -150,6 +150,17 @@ local function resyncStagedState(def, stagedState, actionBuffer)
     return mismatches
 end
 
+local function finishSuccessfulCommit(def, commitNotifier, commitContext, actionBuffer, actionExecutor, actionSnapshot,
+                                      internalActionExecutor, internalActionSnapshot, sharedEventFlusher)
+    executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
+    executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
+    flushSharedEventsDuringCommit(def, sharedEventFlusher)
+    if actionBuffer then
+        actionBuffer.clearAll()
+    end
+    return notifyCommitAfterFlush(def, commitNotifier, commitContext)
+end
+
 local function commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                  actionExecutor, sharedEventFlusher, internalActionExecutor)
     local hasPendingActions = actionBuffer and actionBuffer.hasAny()
@@ -168,13 +179,8 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, pe
         and hadConfigChanges
 
     if not shouldSyncMutation then
-        executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
-        executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
-        flushSharedEventsDuringCommit(def, sharedEventFlusher)
-        if actionBuffer then
-            actionBuffer.clearAll()
-        end
-        return notifyCommitAfterFlush(def, commitNotifier, commitContext)
+        return finishSuccessfulCommit(def, commitNotifier, commitContext, actionBuffer, actionExecutor, actionSnapshot,
+            internalActionExecutor, internalActionSnapshot, sharedEventFlusher)
     end
 
     local ok
@@ -187,13 +193,8 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, pe
         ok, err = true, nil
     end
     if ok then
-        executeActionsDuringCommit(def, actionExecutor, actionSnapshot)
-        executeInternalActionsDuringCommit(def, internalActionExecutor, internalActionSnapshot)
-        flushSharedEventsDuringCommit(def, sharedEventFlusher)
-        if actionBuffer then
-            actionBuffer.clearAll()
-        end
-        return notifyCommitAfterFlush(def, commitNotifier, commitContext)
+        return finishSuccessfulCommit(def, commitNotifier, commitContext, actionBuffer, actionExecutor, actionSnapshot,
+            internalActionExecutor, internalActionSnapshot, sharedEventFlusher)
     end
 
     if actionBuffer then

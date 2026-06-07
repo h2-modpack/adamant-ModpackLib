@@ -39,8 +39,8 @@ and read controls through `runtime.controls`.
 
 ## One Draw Commit Cycle
 
-Framework owns the draw and commit timing. For a framework-rendered module, the
-normal cycle is:
+Framework owns the draw and commit timing. For a framework-rendered module, it
+uses the live module's draw-and-commit lifecycle entry point. The normal cycle is:
 
 1. Framework calls the module draw callback.
 2. Draw code renders immediate UI.
@@ -49,7 +49,7 @@ normal cycle is:
 5. Draw code may queue shared events through `ui.actions.emit(...)`.
 6. Draw code may reset staged module state and queue status reset through `ui.resetAll(...)`.
 7. The draw callback returns. Shared events are not delivered here.
-8. Framework asks the live module to commit if it has staged work.
+8. The live module commit step runs if draw staged work.
 9. Lib flushes dirty staged storage to config.
 10. Lib applies/reverts mutation state if committed UI-owned settings changed.
 11. Lib runs staged action handlers against committed runtime data.
@@ -155,6 +155,10 @@ sync is driven by committed UI-owned storage changes, not by status writes.
 Actions are one-shot intent, not storage. If a value needs to survive across
 frames, declare storage for that value.
 
+Action handlers are post-commit side effects. If an action handler fails after
+config flush and mutation sync succeed, Lib logs the failure and continues
+cleanup; it does not roll back the committed config.
+
 ## Shared Events
 
 Draw code can queue shared events:
@@ -172,6 +176,9 @@ captured draw refs.
 
 This keeps shared events from observing partially rendered UI state while still
 letting draw interactions emit module-to-module signals.
+
+Shared listeners and commit observers follow the same post-commit side-effect
+policy: failures are logged, not treated as config rollback boundaries.
 
 ## Commit Observers
 
