@@ -30,28 +30,6 @@ local function runCallback(callback, ...)
     return table.unpack(results, 2, results.n)
 end
 
----@class UiCallbackObjects
----@field draw DrawContext
----@field state DrawState
----@field actions DrawActions
----@field run fun(callback: fun(
----    draw: DrawContext,
----    state: DrawState,
----    actions: DrawActions
----): any): any
-
----@class UiCallbackCreateOpts
----@field definition ModuleDefinition
----@field stagedState StagedState
----@field shared table|nil
----@field actionBuffer ActionBuffer
----@field host Host
----@field controls table|nil
----@field status table|nil
----@field resetAll fun(opts: table|nil)|nil
-
----@param opts UiCallbackCreateOpts
----@return UiCallbackObjects
 function uiContext.create(opts)
     local objects = {
         draw = uiDraw.get(),

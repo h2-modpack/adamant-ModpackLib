@@ -63,58 +63,6 @@ function managedModule.addEffectReceipt(module, name, receipt)
     }
 end
 
----@class ManagedModuleCreateOpts
----@field definition ModuleDefinition
----@field pluginGuid string
----@field persistentState PersistentState
----@field stagedState StagedState
----@field onActivate fun(host: Host, runtime: RuntimeContext)|nil
----@field onCommit fun(host: Host, runtime: RuntimeContext, commit: table)|nil
----@field drawTab fun(host: Host, ui: UiContext)
----@field drawQuickContent fun(host: Host, ui: UiContext)|nil
-
----@class DrawContext
----@field imgui table
----@field widgets DrawWidgets
----@field nav DrawNav
----@field control fun(control: table, viewName: string|nil, ...): any
-
----@class DrawActions
----@field get fun(actionKey: string): DrawActionRef
----@field trigger fun(actionKey: string, value: any|nil)
-
----@class DrawActionRef
----@field stage fun(self: DrawActionRef, value: any)
----@field read fun(self: DrawActionRef): any
----@field clear fun(self: DrawActionRef)
----@field has fun(self: DrawActionRef): boolean
-
----@class ManagedModule
----@field getOwnerId fun(): string
----@field getModuleId fun(): string
----@field getPackId fun(): string|nil
----@field getMeta fun(): table
----@field affectsRunData fun(): boolean
----@field getStorage fun(): StorageSchema|nil
----@field read fun(alias: string): any
----@field writeAndFlush fun(alias: string, value: any): boolean
----@field stage fun(alias: string, value: any): boolean
----@field flush fun(): boolean
----@field reloadFromConfig fun()
----@field resync fun(): string[]
----@field resetAll fun(opts: table|nil): boolean, number
----@field commitIfDirty fun(): boolean, string|nil, boolean
----@field isEnabled fun(): boolean
----@field setEnabled fun(enabled: boolean): boolean, string|nil
----@field setDebugMode fun(enabled: boolean)
----@field applyMutation fun(): boolean, string|nil
----@field revertMutation fun(): boolean, string|nil
----@field activate fun(): boolean, string|nil
----@field drawTab fun()
----@field drawTabAndCommit fun(): boolean, string|nil, boolean
----@field drawQuickContent fun()|nil
----@field drawQuickContentAndCommit fun(): boolean, string|nil, boolean|nil
-
 function managedModule.getLiveModule(pluginGuid)
     return moduleRegistry.getLiveModule(pluginGuid)
 end
@@ -170,11 +118,6 @@ local function createRuntimeContext(store, status)
     }
 end
 
---- Creates a managed module for Framework and fallback UI.
---- Activation is explicit through the returned module.
----@param opts ManagedModuleCreateOpts
----@return ManagedModule module Managed lifecycle module.
----@return Store store Module runtime store view.
 function managedModule.create(opts)
     if type(opts) ~= "table" then
         logging.violate("module.invalid_create_opts", "managedModule.create: opts must be a table")
@@ -217,7 +160,6 @@ function managedModule.create(opts)
     if type(drawTab) ~= "function" then
         logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required")
     end
-    ---@type ManagedModule
     local module = {}
 
     local function notifyCommit(commit)
@@ -535,17 +477,10 @@ function managedModule.create(opts)
     return module, store
 end
 
---- Activates a constructed module by registering external side effects.
----@param module ManagedModule
 function managedModule.activateOrThrow(module)
     return moduleActivation.activateOrThrow(module)
 end
 
---- Safely activates a constructed module by registering external side effects.
---- Returns false plus the activation error instead of throwing.
----@param module ManagedModule
----@return boolean ok
----@return string|nil err
 function managedModule.activate(module)
     return moduleActivation.activate(module)
 end

@@ -1,23 +1,6 @@
 local helpers = ...
 local widgets = {}
 
----@class StepperOpts
----@field id string|number|nil
----@field label string|nil
----@field default number|nil
----@field min number|nil
----@field max number|nil
----@field step number|nil
----@field displayValues table<number, string>|nil
----@field valueWidth number|nil
----@field buttonSpacing number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@class SteppedRangeOpts: StepperOpts
----@field defaultMax number|nil
----@field rangeGap number|nil
-
 local function NormalizeStepperValue(value, defaultValue, minValue, maxValue)
     local num = tonumber(value)
     if num == nil then
@@ -107,10 +90,6 @@ local function DrawStepperControl(imgui, field, id, renderedValue, opts, minValu
     return changed, currentValue
 end
 
----@param imgui table
----@param field StorageField
----@param opts StepperOpts|nil
----@return boolean
 function widgets.stepper(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local id = opts.id ~= nil and tostring(opts.id) or field:controlId()
@@ -132,11 +111,6 @@ function widgets.stepper(imgui, field, opts)
     return changed
 end
 
----@param imgui table
----@param minField StorageField
----@param maxField StorageField
----@param opts SteppedRangeOpts|nil
----@return boolean
 function widgets.steppedRange(imgui, minField, maxField, opts)
     opts = opts or helpers.EMPTY_OPTS
     local minFieldControlId = minField:controlId()

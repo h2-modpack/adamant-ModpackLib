@@ -61,108 +61,6 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
     storageRefAdapter = storageRefAdapter,
 })
 
----@class ConfigBackendEntry
----@field get fun(self: ConfigBackendEntry): any
----@field set fun(self: ConfigBackendEntry, value: any)
-
----@class PersistenceBackend
----@field rawConfig table
----@field getEntry fun(section: string, key: string): ConfigBackendEntry|nil
----@field ensure fun(section: string, key: string, value: any): boolean
----@field read fun(section: string, key: string): any
----@field write fun(section: string, key: string, value: any): boolean
----@field clear fun(section: string, key: string): boolean
-
----@class StorageConfigAdapter
----@field getEntry fun(alias: string): ConfigBackendEntry|nil
----@field ensureValue fun(alias: string, value: any): boolean
----@field readValue fun(alias: string): any
----@field writeValue fun(alias: string, value: any): boolean
-
----@class ModuleState
----@field persistentState PersistentState
----@field stagedState StagedState
-
----@class CommittedRootState
----@field readRoot fun(root: StorageNode): any
----@field replaceRoot fun(root: StorageNode, value: any)
----@field reloadFromConfig fun()
-
----@class ActionBuffer
----@field stage fun(actionKey: string, value: any)
----@field read fun(actionKey: string): any
----@field clear fun(actionKey: string)
----@field has fun(actionKey: string): boolean
----@field hasAny fun(): boolean
----@field captureSnapshot fun(): table
----@field captureInternalSnapshot fun(): table
----@field clearAll fun()
----@field clearPublicIntent fun()
----@field stageInternal fun(actionKey: string, value: any)
----@field emitShared fun(id: string, eventName: string, payload: any)
----@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table)
----@field flushPendingSharedEvents fun(emitSharedEvent: fun(id: string, eventName: string, payload: any))
-
----@class PersistentState
----@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
----@field read fun(alias: string): any
----@field status StatusState
----@field table fun(alias: string): StorageTableReadOnly|nil
----@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
-
----@class StatusState
----@field get fun(alias: string): StorageField|StorageTableStagedState|nil
----@field read fun(alias: string, ...): any
----@field write fun(alias: string, ...): boolean
----@field reset fun(alias: string, ...): boolean
----@field countResettable fun(opts: table|nil): boolean, number
----@field resetAll fun(opts: table|nil): boolean, number
-
----@class Store
----@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
----@field cache table|nil
----@field shared table|nil
----@field read fun(alias: string, ...): any
-
----@class RuntimeStatusState
----@field get fun(alias: string): StorageField|StorageTableStagedState|nil
----@field read fun(alias: string, ...): any
----@field write fun(alias: string, ...): boolean
----@field reset fun(alias: string, ...): boolean
-
----@class UiStatusState
----@field get fun(alias: string): StorageField|StorageTableReadOnly|nil
----@field read fun(alias: string, ...): any
-
----@class StagedState
----@field get fun(alias: string): StorageField|StorageTableStagedState|nil
----@field read fun(alias: string): any
----@field status table
----@field table fun(alias: string): StorageTableStagedState|nil
----@field field fun(alias: string): StorageField
----@field getAliasSchema fun(alias: string): StorageNode|PackedBitNode|nil
----@field write fun(alias: string, value: any)
----@field reset fun(alias: string)
----@field resetAll fun(opts: table|nil): boolean, number
----@field _flushToConfig fun()
----@field _reloadFromConfig fun()
----@field _captureDirtyConfigSnapshot fun(): table[]
----@field _restoreConfigSnapshot fun(snapshot: table[]|nil)
----@field isDirty fun(): boolean
----@field auditMismatches fun(): string[]
-
----@class ModuleDefinition
----@field modpack string|nil
----@field id string|nil
----@field name string|nil
----@field shortName string|nil
----@field tooltip string|nil
----@field default boolean|nil
----@field storage StorageSchema|nil
----@field cache table|nil
----@field actions table<string, fun(host: Host, runtime: RuntimeContext, value: any)>|nil
----@field _actionOrder string[]|nil
-
 local function createCommittedRootAdapter(persistentState)
     return {
         readRoot = function(root)
@@ -177,10 +75,6 @@ local function createCommittedRootAdapter(persistentState)
     }
 end
 
---- Creates module state access surfaces around a prepared definition and config table.
----@param modConfig table Module config table used for persisted reads and writes.
----@param definition ModuleDefinition Prepared module definition declaring storage and mutation behavior.
----@return ModuleState state Managed state surfaces for runtime and staged UI access.
 function moduleState.create(modConfig, definition)
     if type(modConfig) ~= "table" then
         logging.violate("store.invalid_config", "createModuleState expects config to be a table")

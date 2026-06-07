@@ -21,10 +21,6 @@ local function createDataRoot(persistentState)
     }
 end
 
----@param persistentState PersistentState
----@param cache table|nil
----@param shared table|nil
----@return Store
 function store.create(persistentState, cache, shared)
     local refs = storageRefAdapter.create({
         root = createDataRoot(persistentState),

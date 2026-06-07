@@ -3,27 +3,6 @@ local widgets = {}
 
 local DEFAULT_PACKED_SLOT_COUNT = 32
 
----@class CheckboxOpts
----@field label string|nil
----@field tooltip string|nil
----@field color Color|nil
----@field action DrawActionRef|nil
----@field value any
-
----@class PackedCheckboxListOpts
----@field filterText string|nil
----@field filterMode "all"|"checked"|"unchecked"|nil
----@field valueColors table<string, Color>|nil
----@field slotCount number|nil
----@field optionsPerLine number|nil
----@field optionGap number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@param imgui table
----@param field StorageField
----@param opts CheckboxOpts|nil
----@return boolean
 function widgets.checkbox(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local fieldAlias = field:alias()
@@ -45,10 +24,6 @@ function widgets.checkbox(imgui, field, opts)
     return false
 end
 
----@param imgui table
----@param field StorageField
----@param opts PackedCheckboxListOpts|nil
----@return boolean
 function widgets.packedCheckboxList(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local fieldControlId = field:controlId()

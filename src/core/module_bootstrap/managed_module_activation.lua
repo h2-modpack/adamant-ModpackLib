@@ -76,8 +76,6 @@ local function retireOldModule(previousModule, replacementLabel)
     oldRecord.effectReceipts = {}
 end
 
---- Activates a constructed managed module by registering external side effects.
----@param module ManagedModule
 function moduleActivation.activateOrThrow(module)
     local record = moduleRegistry.getRecord(module)
     if not record then
@@ -185,11 +183,6 @@ function moduleActivation.activateOrThrow(module)
     return true, nil
 end
 
---- Safely activates a constructed managed module by registering external side effects.
---- Returns false plus the activation error instead of throwing.
----@param module ManagedModule
----@return boolean ok
----@return string|nil err
 function moduleActivation.activate(module)
     local ok, err = pcall(moduleActivation.activateOrThrow, module)
     if ok then

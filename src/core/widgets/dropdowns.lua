@@ -1,35 +1,6 @@
 local helpers = ...
 local imguiHelpers = helpers.imguiHelpers
 local widgets = {}
----@class DropdownOpts
----@field id string|number|nil
----@field label string|nil
----@field tooltip string|nil
----@field values ChoiceValue[]|nil
----@field default ChoiceValue|nil
----@field displayValues ChoiceDisplayValues|nil
----@field valueColors ValueColorMap|nil
----@field visibleValues ChoiceVisibilityMap|nil
----@field labelWidth number|nil
----@field controlWidth number|nil
----@field controlGap number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@class PackedDropdownOpts
----@field id string|number|nil
----@field label string|nil
----@field tooltip string|nil
----@field labelWidth number|nil
----@field controlWidth number|nil
----@field controlGap number|nil
----@field displayValues ChoiceDisplayValues|nil
----@field valueColors table<string, Color>|nil
----@field noneLabel string|nil
----@field multipleLabel string|nil
----@field selectionMode PackedSelectionMode|nil
----@field action DrawActionRef|nil
----@field value any
 
 local COMBO_FLAG_NONE = imguiHelpers.ImGuiComboFlags.None
 local IMGUI_COL_TEXT = imguiHelpers.ImGuiCol.Text
@@ -67,9 +38,6 @@ local function DrawComboPreviewText(imgui, previewText, previewColor)
     imgui.PopClipRect()
 end
 
----@param imgui table
----@param opts DropdownOpts|PackedDropdownOpts
----@return boolean pushedWidth
 local function BeginLabeledDropdownControl(imgui, opts)
     local labelText = tostring(opts.label or "")
     local controlWidth = tonumber(opts.controlWidth) or 0
@@ -84,9 +52,6 @@ local function BeginLabeledDropdownControl(imgui, opts)
     return controlWidth > 0
 end
 
----@param imgui table
----@param opts DropdownOpts|PackedDropdownOpts
----@param pushedWidth boolean
 local function EndLabeledDropdownControl(imgui, opts, pushedWidth)
     if pushedWidth then
         imgui.PopItemWidth()
@@ -113,10 +78,6 @@ local function GetDropdownPreview(opts, values, current, valueColors)
     return previewText, previewColor
 end
 
----@param imgui table
----@param field StorageField
----@param opts DropdownOpts|nil
----@return boolean
 function widgets.dropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
@@ -159,10 +120,6 @@ function widgets.dropdown(imgui, field, opts)
     return changed
 end
 
----@param imgui table
----@param field StorageField
----@param opts PackedDropdownOpts|nil
----@return boolean
 function widgets.packedDropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
@@ -223,9 +180,6 @@ function widgets.packedDropdown(imgui, field, opts)
     return changed
 end
 
----@param field StorageField
----@param opts PackedDropdownOpts|PackedRadioOpts|nil
----@return string|nil selectedAlias
 function widgets.getPackedChoiceAlias(field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)

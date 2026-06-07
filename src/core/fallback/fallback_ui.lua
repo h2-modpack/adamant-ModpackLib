@@ -10,12 +10,6 @@ local rom = deps.rom
 local modutil = deps.modutil
 local SetupRunData = deps.gameDeps.runData.SetupRunData
 
----@class FallbackUiRuntime
----@field module table|nil
----@field renderWindow fun()
----@field addMenuBar fun()
----@field handleGuiClosed fun()
-
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
 

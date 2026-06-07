@@ -5,12 +5,6 @@ local storageRefAdapter = deps.storageRefAdapter
 
 local uiState = {}
 
----@class DrawState
----@field get fun(alias: string): StorageField|StorageTableStagedState|nil
----@field shared table|nil
----@field read fun(alias: string, ...): any
----@field write fun(alias: string, ...): boolean|nil
-
 local function createDataRoot(stagedState)
     return {
         get = function(alias)
@@ -27,11 +21,6 @@ local function createDataRoot(stagedState)
     }
 end
 
---- Narrows full staged state to the module UI surface.
---- Module internals keep the private commit/reload/snapshot methods.
----@param stagedState StagedState
----@param shared table|nil
----@return DrawState
 function uiState.create(stagedState, shared)
     local refs = storageRefAdapter.create({
         root = createDataRoot(stagedState),

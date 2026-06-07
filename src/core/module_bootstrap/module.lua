@@ -36,9 +36,6 @@ local declarationFacade = import('core/module_bootstrap/module/declaration_facad
     controlDeclarations = deps.controlDeclarations,
 })
 
---- Creates a module declaration facade.
---- Throws on construction failure. Public module construction uses the safe
---- wrapper below so module load can skip cleanly on invalid identities.
 local function createModuleOrThrow(opts)
     if type(opts) ~= "table" then
         logging.violate("module.invalid_create_opts", "createModule: opts must be a table")
@@ -47,11 +44,6 @@ local function createModuleOrThrow(opts)
     return declarationFacade.create(opts)
 end
 
---- Safely creates a module declaration facade.
---- Returns nil plus the construction error instead of throwing.
----@param opts ModuleCreateOpts
----@return AuthorModule|nil module
----@return string|nil err
 local function createModule(opts)
     local ok, module = pcall(createModuleOrThrow, opts)
     if ok then

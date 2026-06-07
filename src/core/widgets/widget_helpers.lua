@@ -10,13 +10,6 @@ local widgetHelpers = {
 widgetHelpers.EMPTY_OPTS = {}
 widgetHelpers.EMPTY_LIST = {}
 
----@alias Color number[]
----@alias ChoiceValue any
----@alias ChoiceDisplayValues table<any, string>
----@alias ValueColorMap table<any, Color>
----@alias ChoiceVisibilityMap table<any, boolean>
----@alias PackedSelectionMode "singleEnabled"|"singleDisabled"
-
 local PACKED_CHOICE_NONE_VALUE = false
 
 local function ReadColorComponents(value)

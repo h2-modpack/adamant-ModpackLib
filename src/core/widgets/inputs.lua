@@ -1,20 +1,6 @@
 local helpers = ...
 local widgets = {}
 
----@class InputTextOpts
----@field label string|nil
----@field tooltip string|nil
----@field maxLen number|nil
----@field labelWidth number|nil
----@field controlWidth number|nil
----@field controlGap number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@param imgui table
----@param field StorageField
----@param opts InputTextOpts|nil
----@return boolean
 function widgets.inputText(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local fieldControlId = field:controlId()

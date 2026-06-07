@@ -7,10 +7,6 @@ local ClonePersistedValue = values.deepCopy
 local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
----@param storageConfig StorageConfigAdapter
----@param storage StorageSchema
----@param committedRoots CommittedRootState|nil
----@return StagedState
 local function createStagedState(storageConfig, storage, committedRoots)
     local stagedRootNodes = storageInternal.getStagedRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)

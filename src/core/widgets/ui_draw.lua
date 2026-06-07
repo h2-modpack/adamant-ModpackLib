@@ -18,25 +18,6 @@ local draw = {
     nav = {},
 }
 
----@class DrawWidgets
----@field separator fun()
----@field text fun(text: any, opts: TextOpts|nil)
----@field button fun(label: any, opts: ButtonOpts|nil): boolean
----@field confirmButton fun(id: string|number, label: any, opts: ConfirmButtonOpts|nil): boolean
----@field inputText fun(target: StorageField, opts: InputTextOpts|nil): boolean
----@field dropdown fun(target: StorageField, opts: DropdownOpts|nil): boolean
----@field packedDropdown fun(target: StorageField, opts: PackedDropdownOpts|nil): boolean
----@field getPackedChoiceAlias fun(target: StorageField, opts: PackedDropdownOpts|PackedRadioOpts|nil): string|nil
----@field radio fun(target: StorageField, opts: RadioOpts|nil): boolean
----@field packedRadio fun(target: StorageField, opts: PackedRadioOpts|nil): boolean
----@field stepper fun(target: StorageField, opts: StepperOpts|nil): boolean
----@field steppedRange fun(minTarget: StorageField, maxTarget: StorageField, opts: SteppedRangeOpts|nil): boolean
----@field checkbox fun(target: StorageField, opts: CheckboxOpts|nil): boolean
----@field packedCheckboxList fun(target: StorageField, opts: PackedCheckboxListOpts|nil): boolean
-
----@class DrawNav
----@field verticalTabs fun(opts: VerticalTabsOpts|nil): string|number|nil
-
 local function resolveField(target, methodName)
     if storage.field.is(target) then
         return target
@@ -123,7 +104,6 @@ function draw.control(control, viewName, ...)
     return controlsDraw.render(draw, control, viewName, ...)
 end
 
----@return DrawContext
 function uiDraw.get()
     return draw
 end

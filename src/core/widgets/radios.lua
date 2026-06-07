@@ -1,31 +1,6 @@
 local helpers = ...
 local widgets = {}
 
----@class RadioOpts
----@field label string|nil
----@field values ChoiceValue[]|nil
----@field default ChoiceValue|nil
----@field displayValues ChoiceDisplayValues|nil
----@field valueColors ValueColorMap|nil
----@field visibleValues ChoiceVisibilityMap|nil
----@field optionsPerLine number|nil
----@field optionGap number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@class PackedRadioOpts
----@field label string|nil
----@field displayValues ChoiceDisplayValues|nil
----@field valueColors table<string, Color>|nil
----@field noneLabel string|nil
----@field selectionMode PackedSelectionMode|nil
----@field optionsPerLine number|nil
----@field optionGap number|nil
----@field action DrawActionRef|nil
----@field value any
-
----@param imgui table
----@param labelText string
 local function DrawRadioLabel(imgui, labelText)
     if labelText ~= "" then
         imgui.AlignTextToFramePadding()
@@ -33,12 +8,6 @@ local function DrawRadioLabel(imgui, labelText)
     end
 end
 
----@param imgui table
----@param optionCount number
----@param optionsPerLine number|nil
----@param optionGap number|nil
----@return number optionsPerLine
----@return number optionGap
 local function ResolveRadioLayout(imgui, optionCount, optionsPerLine, optionGap)
     local normalizedPerLine = math.floor(tonumber(optionsPerLine) or 0)
     if normalizedPerLine < 1 then
@@ -55,10 +24,6 @@ local function AdvanceRadioOption(imgui, index, optionsPerLine, optionGap)
     end
 end
 
----@param imgui table
----@param field StorageField
----@param opts RadioOpts|nil
----@return boolean
 function widgets.radio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local current = helpers.NormalizeChoiceValue(opts, field:read())
@@ -100,10 +65,6 @@ function widgets.radio(imgui, field, opts)
     return changed
 end
 
----@param imgui table
----@param field StorageField
----@param opts PackedRadioOpts|nil
----@return boolean
 function widgets.packedRadio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)

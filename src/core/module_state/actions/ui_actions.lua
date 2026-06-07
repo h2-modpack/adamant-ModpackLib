@@ -4,8 +4,6 @@ local actionRefs = deps.actionRefs
 
 local uiActions = {}
 
----@param actionBuffer ActionBuffer
----@return DrawActions
 function uiActions.create(actionBuffer)
     local refs = {}
 

@@ -36,10 +36,6 @@ local function GetBitValueMask(width)
     return bit32.rshift(0xFFFFFFFF, 32 - normalizedWidth)
 end
 
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@return number
 local function readPackedBits(packedValue, offset, width)
     local normalizedPacked = math.floor(tonumber(packedValue) or 0)
     local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
@@ -48,11 +44,6 @@ local function readPackedBits(packedValue, offset, width)
     return bit32.band(bit32.rshift(normalizedPacked, normalizedOffset), mask)
 end
 
----@param packed number|nil
----@param offset number|nil
----@param width number|nil
----@param value number|nil
----@return number
 local function writePackedBits(packedValue, offset, width, value)
     local normalizedPacked = math.floor(tonumber(packedValue) or 0)
     local normalizedOffset = math.max(0, math.floor(tonumber(offset) or 0))
@@ -66,8 +57,6 @@ local function writePackedBits(packedValue, offset, width, value)
     return bit32.bor(cleared, bit32.lshift(normalizedValue, normalizedOffset))
 end
 
----@param node StorageNode
----@param prefix string
 local function validatePackedBits(node, prefix)
     local seenAliases = {}
     local occupiedBits = {}
@@ -142,9 +131,6 @@ local function validatePackedBits(node, prefix)
     end
 end
 
----@param node PackedBitNode
----@param packedValue number|nil
----@return any
 local function DecodePackedChild(node, packedValue)
     local rawValue = readPackedBits(packedValue, node.offset, node.width)
     if node.type == "bool" then
@@ -153,8 +139,6 @@ local function DecodePackedChild(node, packedValue)
     return storage.NormalizeStorageValue(node, rawValue)
 end
 
----@param node StorageNode|PackedBitNode|nil
----@return table[] aliases
 local function getPackedAliases(node)
     if not node or node.type ~= "packedInt" then
         return EMPTY_LIST

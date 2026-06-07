@@ -1,23 +1,6 @@
 local helpers = ...
 local widgets = {}
 
----@class ButtonOpts
----@field id string|number|nil
----@field tooltip string|nil
----@field action DrawActionRef|nil Staged action ref to replace when clicked.
----@field value any Staged action payload.
-
----@class ConfirmButtonOpts
----@field tooltip string|nil
----@field confirmLabel string|nil
----@field cancelLabel string|nil
----@field action DrawActionRef|nil Staged action ref to replace when confirmed.
----@field value any Staged action payload.
-
----@param imgui table
----@param label any
----@param opts ButtonOpts|nil
----@return boolean
 function widgets.button(imgui, label, opts)
     opts = opts or helpers.EMPTY_OPTS
     local id = tostring(opts.id or label or "")
@@ -29,11 +12,6 @@ function widgets.button(imgui, label, opts)
     return clicked == true
 end
 
----@param imgui table
----@param id string|number
----@param label any
----@param opts ConfirmButtonOpts|nil
----@return boolean
 function widgets.confirmButton(imgui, id, label, opts)
     opts = opts or helpers.EMPTY_OPTS
     local popupId = tostring(id) .. "##popup"

@@ -22,53 +22,6 @@ local NormalizeInteger = storage.NormalizeInteger
 --
 -- hash=true requires persist=true. Table rows inherit their table root axes.
 
----@alias StorageValueKind "'bool'"|"'int'"|"'string'"|"'table'"
----@alias StorageNodeType "'bool'"|"'int'"|"'string'"|"'packedInt'"|"'table'"
-
----@class PackedBitNode
----@field alias string
----@field label string|nil
----@field type "bool"|"int"
----@field default any
----@field min number|nil
----@field max number|nil
----@field offset number
----@field width number
----@field parent StorageNode|nil
----@field _isBitAlias boolean|nil
----@field _storageKey string|nil
----@field _valueKind StorageValueKind|nil
-
----@class StorageNode
----@field alias string
----@field label string|nil
----@field type StorageNodeType
----@field persist boolean|nil
----@field hash boolean|nil
----@field default any
----@field min number|nil
----@field max number|nil
----@field width number|nil
----@field maxLen number|nil
----@field bits PackedBitNode[]|nil
----@field row StorageSchema|nil
----@field minRows number|nil
----@field maxRows number|nil
----@field defaultRows number|nil
----@field _isRoot boolean|nil
----@field _persist boolean|nil
----@field _hash boolean|nil
----@field _mode "setting"|"runtime"|nil
----@field _storageKey string|nil
----@field _valueKind StorageValueKind|nil
----@field _bitAliases PackedBitNode[]|nil
-
----@class StorageSchema: StorageNode[]
----@field _rootNodes StorageNode[]|nil Hash/profile root nodes.
----@field _persistRootNodes StorageNode[]|nil
----@field _stagedRootNodes StorageNode[]|nil
----@field _aliasNodes table<string, StorageNode|PackedBitNode>|nil
-
 local CommonNodeFields = {
     alias = true,
     default = true,
@@ -244,9 +197,6 @@ local function ValidatePersistedDefaults(storageSchema, label)
     end
 end
 
---- Validates a storage schema and prepares its root, alias, and packed-bit metadata in place.
----@param storageSchema StorageSchema Ordered list of storage root descriptors to validate.
----@param label string Validation label used to prefix warnings.
 function schema.validate(storageSchema, label, opts)
     if type(storageSchema) ~= "table" then
         logging.violate("storage.invalid_schema", "%s: storage is not a table", label)
@@ -386,43 +336,26 @@ function schema.isPrivateAlias(alias)
     return IsPrivateAlias(alias)
 end
 
---- Returns the prepared hash/profile root nodes for a validated storage schema.
----@param storageSchema StorageSchema Validated storage schema.
----@return StorageNode[] roots Prepared list of hash/profile root storage nodes.
 function schema.getRoots(storageSchema)
     if type(storageSchema) ~= "table" then return {} end
     return rawget(storageSchema, "_rootNodes") or {}
 end
 
---- Returns prepared persisted root nodes for backing config hydration and access.
----@param storageSchema StorageSchema Validated storage schema.
----@return StorageNode[] roots Prepared list of persisted root storage nodes.
 function schema.getPersistRoots(storageSchema)
     if type(storageSchema) ~= "table" then return {} end
     return rawget(storageSchema, "_persistRootNodes") or {}
 end
 
---- Returns prepared root nodes for staged UI state.
----@param storageSchema StorageSchema Validated storage schema.
----@return StorageNode[] roots Prepared list of staged root storage nodes.
 function schema.getStagedRoots(storageSchema)
     if type(storageSchema) ~= "table" then return {} end
     return rawget(storageSchema, "_stagedRootNodes") or {}
 end
 
---- Returns the prepared alias map for a validated storage schema.
----@param storageSchema StorageSchema Validated storage schema.
----@return table<string, StorageNode|PackedBitNode> aliases Map from storage alias to prepared storage node.
 function schema.getAliases(storageSchema)
     if type(storageSchema) ~= "table" then return {} end
     return rawget(storageSchema, "_aliasNodes") or {}
 end
 
---- Compares two values using storage-type equality when available, falling back to deep equality.
----@param node StorageNode|PackedBitNode|nil Storage node whose type-specific equality should be used.
----@param a any First value to compare.
----@param b any Second value to compare.
----@return boolean equal True when the two values are considered equivalent for the storage node.
 function schema.valuesEqual(node, a, b)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
     if storageType and storageType.equals ~= nil then
@@ -439,10 +372,6 @@ function schema.NormalizeStorageValue(node, value)
     return value
 end
 
---- Checks whether a serialized hash/profile token is syntactically valid for a node.
----@param node StorageNode|PackedBitNode|nil Storage node whose type-specific hash grammar should be used.
----@param str string|nil Serialized hash token.
----@return boolean valid True when the token can be decoded without falling back because of malformed syntax.
 function schema.isHashTokenValid(node, str)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
     if storageType and storageType.isHashTokenValid ~= nil then

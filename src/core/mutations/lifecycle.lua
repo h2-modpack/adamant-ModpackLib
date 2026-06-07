@@ -118,20 +118,10 @@ function lifecycle.declarePatch(mutationBundle, callback)
     mutationBundle.patchMutation = callback
 end
 
---- Returns whether a module declares that it affects live run data.
----@param mutationBundle table|nil Candidate mutation bundle.
----@return boolean affects True when the definition opts into run-data mutation behavior.
 function lifecycle.affectsRunData(mutationBundle)
     return hasPatchMutation(mutationBundle)
 end
 
---- Applies a module's current mutation lifecycle to live run data.
----@param ownerId string Stable owner id owning the active mutation slot.
----@param mutationBundle table|nil Module mutation callbacks.
----@param runtime RuntimeContext Module runtime context passed to mutation builders.
----@param host Host Narrow callback-safe host passed to mutation builders.
----@return boolean ok True when the mutation lifecycle applied successfully.
----@return string|nil err Error message when the apply step fails.
 function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     local hasPatch = hasPatchMutation(mutationBundle)
     local previousMutation = captureActiveMutation(ownerId)
@@ -277,10 +267,6 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
     }
 end
 
---- Reverts a module's current mutation lifecycle from live run data.
----@param ownerId string Stable owner id owning the active mutation slot.
----@return boolean ok True when the mutation lifecycle reverted successfully.
----@return string|nil err Error message when the revert step fails.
 function lifecycle.revert(ownerId)
     local okPlan, errPlan = revertActivePlan(ownerId)
     if not okPlan then

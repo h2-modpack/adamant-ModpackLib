@@ -4,11 +4,6 @@ local storage = deps.storage
 local packed = deps.packed
 local aliasAccess = {}
 
---- Reads a declared alias through a backend that owns root-value storage.
----@param aliasNodes table<string, StorageNode|PackedBitNode>
----@param backend table
----@param alias string
----@return any
 function aliasAccess.readAlias(aliasNodes, backend, alias)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then
@@ -28,12 +23,6 @@ function aliasAccess.readAlias(aliasNodes, backend, alias)
     return backend.readRoot(node)
 end
 
---- Writes a declared alias through a backend that owns root-value storage.
----@param aliasNodes table<string, StorageNode|PackedBitNode>
----@param backend table
----@param alias string
----@param value any
----@return boolean changed
 function aliasAccess.writeAlias(aliasNodes, backend, alias, value)
     local node = type(alias) == "string" and aliasNodes[alias] or nil
     if not node then

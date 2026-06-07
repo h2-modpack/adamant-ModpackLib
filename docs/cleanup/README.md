@@ -39,6 +39,8 @@ documentation and should not be treated as an API contract.
   Audit: [2026-06-07-one-line-helpers.md](audits/2026-06-07-one-line-helpers.md).
 - [x] docs that describe historical migration plans instead of current behavior.
   Audit: [2026-06-07-historical-docs.md](audits/2026-06-07-historical-docs.md).
+- [x] implementation-side LuaCAT annotations that duplicated the canonical public definition file.
+  Audit: [2026-06-07-luacat-surface.md](audits/2026-06-07-luacat-surface.md).
 
 ## Production Caller Rule
 

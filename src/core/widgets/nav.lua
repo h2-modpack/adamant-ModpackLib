@@ -2,19 +2,6 @@ local nav = {}
 local EMPTY_OPTS = {}
 local EMPTY_TABS = {}
 
----@class NavTab
----@field key string|number
----@field label string|nil
----@field group string|nil
----@field color Color|nil
-
----@class VerticalTabsOpts
----@field id string|number|nil
----@field navWidth number|nil
----@field height number|nil
----@field tabs NavTab[]|nil
----@field activeKey string|number|nil
-
 local function NormalizeTabs(tabs)
     if type(tabs) ~= "table" then
         return EMPTY_TABS
@@ -22,9 +9,6 @@ local function NormalizeTabs(tabs)
     return tabs
 end
 
----@param imgui table
----@param opts VerticalTabsOpts|nil
----@return string|number|nil
 function nav.verticalTabs(imgui, opts)
     opts = opts or EMPTY_OPTS
     local id = tostring(opts.id or "verticalTabs")

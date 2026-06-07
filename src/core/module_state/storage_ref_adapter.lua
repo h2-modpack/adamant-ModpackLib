@@ -193,8 +193,6 @@ local function wrapTable(rawTable, contextSource, isWritable)
     return handle
 end
 
----@param opts table
----@return table
 function storageRefAdapter.create(opts)
     local root = opts.root
     local source = opts.source
