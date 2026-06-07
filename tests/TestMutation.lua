@@ -72,6 +72,29 @@ function TestMutation:testPlanSetSetManyAndTransformApplyAndRevert()
     lu.assertFalse(self:revertPlan(plan))
 end
 
+function TestMutation:testPlanSetManyClonesInputMapOnDeclaration()
+    local tbl = {}
+    local values = {
+        Name = "new",
+        Nested = {
+            Value = 1,
+        },
+    }
+    local plan = self.mutationPlan.createPlan()
+        :setMany(tbl, values)
+
+    values.Name = "changed"
+    values.Nested.Value = 99
+
+    lu.assertTrue(self:applyPlan(plan))
+    lu.assertEquals(tbl, {
+        Name = "new",
+        Nested = {
+            Value = 1,
+        },
+    })
+end
+
 function TestMutation:testPlanDoesNotExposeExecutionMethods()
     local plan = self.mutationPlan.createPlan()
 

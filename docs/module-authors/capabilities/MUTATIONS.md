@@ -36,7 +36,7 @@ Mutation plans support:
 - `plan:append(tbl, key, value)`
 - `plan:appendUnique(tbl, key, value)`
 - `plan:removeElement(tbl, key, value)`
-- `plan:setElement(tbl, key, index, value)`
+- `plan:setElement(tbl, key, oldValue, newValue, equivalentFn)`
 
 Use the narrowest operation that describes the intended change.
 

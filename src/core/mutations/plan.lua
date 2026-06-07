@@ -65,7 +65,7 @@ function planApi.createPlan()
         return appendOperation({
             kind = "setMany",
             tbl = tbl,
-            kv = kv,
+            kv = values.deepCopy(kv),
         })
     end
 

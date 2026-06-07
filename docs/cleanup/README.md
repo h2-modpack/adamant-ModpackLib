@@ -60,7 +60,7 @@ and add a dedicated audit note only if a future pass finds new issues.
 | 8 | Widgets | Done | Hot draw-path helpers, option validation, and docs/API alignment were audited. Audit: [2026-06-07-widgets.md](audits/2026-06-07-widgets.md). |
 | 9 | Hooks | Done | Declaration/install boundaries, context wrapping, and ModUtil registry interactions were audited. Audit: [2026-06-07-hooks.md](audits/2026-06-07-hooks.md). |
 | 10 | Overlays | Pending | Audit retained overlay lifecycle, suppression, renderer boundaries, and docs. |
-| 11 | Mutations | Pending | Audit plan generation, lifecycle sync, and framework/module integration points. |
+| 11 | Mutations | Done | Plan generation, lifecycle sync, and framework/module integration points were audited. Audit: [2026-06-07-mutations.md](audits/2026-06-07-mutations.md). |
 | 12 | Fallback UI and framework runtime | Pending | Audit module listing, profile controls, hashing facade, and framework-facing names. |
 | 13 | Module bootstrap and activation | Pending | Audit last because it composes every lower subsystem. |
 
