@@ -26,11 +26,6 @@ function uiActions.create(actionBuffer)
         actions.get(actionKey):stage(value == nil and true or value)
     end
 
-    function actions.emit(id, eventName, payload)
-        phaseGate.requireAnyDraw()
-        actionBuffer.emitShared(id, eventName, payload)
-    end
-
     return actions
 end
 

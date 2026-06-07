@@ -114,18 +114,18 @@ module.shared.data.owner("GodAvailability", {
 module.activate()
 ```
 
-Typical emitter:
+Runtime emitter:
 
 ```lua
-module.shared.emit("run-director.route-state", "routeChanged", {
+runtime.shared.emit("run-director.route-state", "routeChanged", {
     route = "Apollo",
 })
 ```
 
-Draw callbacks queue shared emits through the draw action bridge:
+Draw callbacks queue shared emits through the draw shared surface:
 
 ```lua
-ui.actions.emit("run-director.route-state", "routeChanged", {
+ui.shared.emit("run-director.route-state", "routeChanged", {
     route = ui.data.read("Route"),
 })
 ```
@@ -134,8 +134,8 @@ Surface:
 - `module.shared.data.owner(name, { id = string, default? = value })`
 - `module.shared.data.reader(name, { id = string, fallback? = value })`
 - `module.shared.listen(id, eventName, callback)`
-- `module.shared.emit(id, eventName, payload)`
-- `ui.actions.emit(id, eventName, payload)` from draw callbacks; delivery happens during commit
+- `runtime.shared.emit(id, eventName, payload)` outside draw callbacks; returns `true, deliveredCount`
+- `ui.shared.emit(id, eventName, payload)` from draw callbacks; returns `true` after staging, with delivery during commit
 
 Rules:
 - Shared ids should describe domain behavior, not consumer names
@@ -201,7 +201,9 @@ Shared data surface:
 Shared data rules:
 - owner and reader access is declared through `module.shared.data.*` before activation
 - only the publishing module can write or clear a shared data id
-- writes update live memory immediately; there is no flush or persistence
+- writes update live memory immediately; there is no staging, dirty flag, flush, rollback, or persistence
+- draw writes through `ui.shared.set(...)` publish immediately, unlike `ui.data.write(...)`
+- publish from `module.onCommit(...)` or runtime code when shared data must reflect only committed UI settings
 - reads return the fallback when no active publisher exists or the publisher is disabled
 - values may be scalars or tables with string/number keys
 - table writes are copied once and returned as cached recursive read-only views
@@ -936,7 +938,6 @@ Draw callbacks expose `ui.actions` for transient UI intent:
 
 - `ui.actions.get(actionKey)`
 - `ui.actions.trigger(actionKey, value?)`
-- `ui.actions.emit(id, eventName, payload?)`
 
 `ui.actions.get(actionKey)` returns a ref:
 
@@ -947,8 +948,8 @@ Draw callbacks expose `ui.actions` for transient UI intent:
 
 Action refs are object handles; call their methods with colon syntax.
 `ui.actions.trigger(actionKey, value?)` is shorthand for staging a declared action;
-when `value` is omitted it stages `true`. `ui.actions.emit(id, eventName, payload?)`
-queues a shared event to emit during commit.
+when `value` is omitted it stages `true`. Use `ui.shared.emit(...)` to queue
+shared events from draw callbacks.
 
 Runtime commit callbacks receive the same action snapshot through
 `commit.actions`:

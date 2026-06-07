@@ -97,7 +97,7 @@ local lib = {}
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting storage object.
 ---@field cache AdamantModpackLib.StoreCache
----@field shared AdamantModpackLib.SharedData
+---@field shared AdamantModpackLib.RuntimeSharedData
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 
 ---@class AdamantModpackLib.RuntimeStatus
@@ -130,7 +130,7 @@ local lib = {}
 ---Draw-phase staged UI state facade. Reads are phase-neutral; write methods remain draw-scoped.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
----@field shared AdamantModpackLib.SharedData
+---@field shared AdamantModpackLib.UiSharedData
 ---@field read fun(alias: string, ...): any Read through `get(alias):read(...)`.
 ---@field write fun(alias: string, ...): boolean? Write through `get(alias):write(...)`.
 
@@ -156,11 +156,10 @@ local lib = {}
 
 ---@alias AdamantModpackLib.StatusDeclarationMap table<string, AdamantModpackLib.StatusNode>
 
----Draw-phase transient action surface. Reads are phase-neutral; staging/emitting remains draw-scoped.
+---Draw-phase transient action surface. Reads are phase-neutral; staging remains draw-scoped.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field trigger fun(actionKey: string, value?: any) Stage a declared action. Omitted value stages `true`.
----@field emit fun(id: string, eventName: string, payload?: any) Queue a shared event to emit during commit.
 
 ---Draw-phase action ref. Use colon syntax; mutation methods remain draw-scoped.
 ---@class AdamantModpackLib.DrawActionRef
@@ -231,7 +230,7 @@ local lib = {}
 ---@field status AdamantModpackLib.RuntimeStatus
 ---@field controls AdamantModpackLib.RuntimeControls
 ---@field cache AdamantModpackLib.StoreCache?
----@field shared AdamantModpackLib.SharedData?
+---@field shared AdamantModpackLib.RuntimeSharedData?
 
 ---@class AdamantModpackLib.UiContext
 ---@field draw AdamantModpackLib.DrawContext
@@ -239,7 +238,7 @@ local lib = {}
 ---@field status AdamantModpackLib.UiStatus
 ---@field actions AdamantModpackLib.DrawActions
 ---@field controls AdamantModpackLib.UiControls
----@field shared AdamantModpackLib.SharedData?
+---@field shared AdamantModpackLib.UiSharedData?
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean Queue a full module reset for the current draw commit.
 
 ---@alias AdamantModpackLib.UiCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): nil
@@ -363,7 +362,6 @@ local lib = {}
 ---@class AdamantModpackLib.AuthorShared
 ---@field data AdamantModpackLib.AuthorSharedData
 ---@field listen fun(id: string, eventName: string, callback: AdamantModpackLib.SharedListener): table
----@field emit fun(id: string, eventName: string, payload: any): boolean, integer|string
 
 ---@class AdamantModpackLib.AuthorSharedData
 ---@field owner fun(name: string, opts: AdamantModpackLib.SharedDataOwnerDeclaration): boolean
@@ -403,6 +401,16 @@ local lib = {}
 ---@field read fun(name: string): boolean|number|string|table?
 ---@field set fun(name: string, value: boolean|number|string|table): boolean
 ---@field clear fun(name: string): boolean
+
+---@class AdamantModpackLib.RuntimeSharedData: AdamantModpackLib.SharedData
+---@field emit fun(
+---    id: string,
+---    eventName: string,
+---    payload?: any
+---): boolean, integer Runtime emits synchronously and returns delivered listener count.
+
+---@class AdamantModpackLib.UiSharedData: AdamantModpackLib.SharedData
+---@field emit fun(id: string, eventName: string, payload?: any): boolean Stages delivery for commit and does not return a listener count.
 
 ---@class AdamantModpackLib.ModuleDefinition
 ---@field modpack? string Coordinator pack id for coordinated modules.

@@ -85,7 +85,6 @@ end
 ---@class DrawActions
 ---@field get fun(actionKey: string): DrawActionRef
 ---@field trigger fun(actionKey: string, value: any|nil)
----@field emit fun(id: string, eventName: string, payload: any)
 
 ---@class DrawActionRef
 ---@field stage fun(self: DrawActionRef, value: any)
@@ -271,8 +270,12 @@ function managedModule.create(opts)
         end
     end
 
+    local function emitSharedEvent(id, eventName, payload)
+        return shared.emitForModule(module, id, eventName, payload)
+    end
+
     local function flushSharedEventsDuringCommit()
-        return actionBuffer.flushPendingSharedEvents(host)
+        return actionBuffer.flushPendingSharedEvents(emitSharedEvent)
     end
 
     local function requireActivated(methodName)
@@ -433,11 +436,6 @@ function managedModule.create(opts)
         isEnabled = module.isEnabled,
         log = module.log,
         logIf = module.logIf,
-        shared = {
-            emit = function(id, eventName, payload)
-                return shared.emitForModule(module, id, eventName, payload)
-            end,
-        },
     }
 
     function module.applyMutation()
@@ -499,6 +497,7 @@ function managedModule.create(opts)
             record = record,
             phase = "draw",
             source = "state.shared",
+            actionBuffer = actionBuffer,
         }),
         actionBuffer = actionBuffer,
         host = host,

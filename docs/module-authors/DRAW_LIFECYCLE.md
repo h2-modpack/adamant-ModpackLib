@@ -28,8 +28,8 @@ module operations such as logging and enabled-state checks.
 | `ui.draw` | ImGui, widgets, nav, and control drawing |
 | `ui.data` | staged UI storage reads/writes |
 | `ui.status` | read runtime-authored status |
-| `ui.actions` | stage one-shot runtime actions and shared emits |
-| `ui.shared` | read shared data |
+| `ui.actions` | stage one-shot runtime actions |
+| `ui.shared` | read shared data and queue shared events |
 | `ui.controls` | get draw refs for declared controls |
 | `ui.resetAll` | queue a full module reset for commit |
 
@@ -46,7 +46,7 @@ uses the live module's draw-and-commit lifecycle entry point. The normal cycle i
 2. Draw code renders immediate UI.
 3. Draw code stages storage edits through `ui.data`.
 4. Draw code stages runtime actions through `ui.actions.trigger(...)`.
-5. Draw code may queue shared events through `ui.actions.emit(...)`.
+5. Draw code may queue shared events through `ui.shared.emit(...)`.
 6. Draw code may reset staged module state and queue status reset through `ui.resetAll(...)`.
 7. The draw callback returns. Shared events are not delivered here.
 8. The live module commit step runs if draw staged work.
@@ -60,6 +60,11 @@ uses the live module's draw-and-commit lifecycle entry point. The normal cycle i
 
 The important boundary: runtime/gameplay code only sees committed settings.
 Values written through `ui.data` become runtime-visible after commit.
+
+Shared data is different from staged settings. `ui.shared.set(...)` publishes
+to the shared read model immediately during draw; it does not wait for this
+commit cycle and is not rolled back by a later commit failure. Shared events
+remain queued because listener delivery is a post-draw side effect.
 
 ## Staged Storage
 
@@ -164,7 +169,7 @@ cleanup; it does not roll back the committed config.
 Draw code can queue shared events:
 
 ```lua
-ui.actions.emit("run-director.route-state", "routeChanged", {
+ui.shared.emit("run-director.route-state", "routeChanged", {
     route = ui.data.read("Route"),
 })
 ```
@@ -173,6 +178,11 @@ The event is staged during draw and delivered during commit after mutation sync,
 action handlers, and queued status resets. Listeners run outside the draw
 callback and should use their runtime context or module-local dependencies, not
 captured draw refs.
+
+`ui.shared.emit(...)` returns `true` when the event has been staged. It does
+not return a listener delivery count because delivery happens later during the
+commit flush. Runtime code that emits through `runtime.shared.emit(...)`
+delivers immediately and returns `true, deliveredCount`.
 
 This keeps shared events from observing partially rendered UI state while still
 letting draw interactions emit module-to-module signals.
@@ -211,7 +221,6 @@ Use `ui.actions` for:
 
 - import/export/apply commands
 - draw interactions that should write status
-- shared events emitted from draw interactions
 
 Use `runtime.data` for:
 
@@ -232,6 +241,6 @@ Use `runtime.status` plus `ui.status` for:
 - Do not expect runtime hooks to see staged UI edits before commit.
 - Do not use actions as settings.
 - Do not use status action writes as mutation inputs.
-- Do not emit shared events directly from draw with `host.shared.emit(...)`; use
-  `ui.actions.emit(...)` so delivery happens during commit.
+- Use `ui.shared.emit(...)` for shared events from draw so delivery happens
+  during commit.
 - Do not use normal staged storage for runtime-authored status values.

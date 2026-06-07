@@ -256,10 +256,6 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 eventName,
                 wrappedCallback)
         end,
-        emit = function(...)
-            local record = requireActiveRecord(lifecycle, "module.shared.emit")
-            return record.host.shared.emit(...)
-        end,
     }
 
     module.mutation = {

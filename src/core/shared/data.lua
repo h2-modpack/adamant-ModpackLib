@@ -260,6 +260,9 @@ function sharedData.install(ownerId, declarations)
                         tostring(previous.ownerId))
                 end
                 install.previous[entry.id] = previous
+            end
+
+            for _, entry in ipairs(install.entries) do
                 records[entry.id] = {
                     id = entry.id,
                     ownerId = ownerId,

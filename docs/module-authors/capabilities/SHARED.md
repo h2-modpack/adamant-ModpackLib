@@ -7,8 +7,8 @@ It has two related parts:
 - shared data: owner-published read models available through
   `runtime.shared` / `runtime.data.shared` and draw `ui.shared` /
   `ui.data.shared`
-- shared events: optional runtime signals emitted through `module.shared.emit`
-  or draw `ui.actions.emit`
+- shared events: optional runtime signals emitted through `runtime.shared.emit`
+  or draw `ui.shared.emit`
 
 Both are declared on `module.shared` before activation.
 
@@ -73,6 +73,13 @@ Values may be scalars or tables with string/number keys. Table writes are
 copied once and reads return recursive read-only views. Cache repeated inner
 tables in locals when doing repeated reads in one function.
 
+Shared data writes publish immediately. `ui.shared.set(...)` and
+`ui.data.shared.set(...)` are not staged config writes, do not make the module
+dirty, and are not rolled back if a later config commit fails. Use them when
+the shared read model is meant to reflect the current owner state immediately.
+If the shared value should reflect only committed UI settings, publish it from
+`module.onCommit(...)` or runtime code after reading `runtime.data`.
+
 ## Shared Events
 
 Listener declaration:
@@ -86,7 +93,7 @@ end)
 Runtime emit:
 
 ```lua
-module.shared.emit("run-director.route-state", "routeChanged", {
+runtime.shared.emit("run-director.route-state", "routeChanged", {
     route = "Apollo",
 })
 ```
@@ -96,7 +103,7 @@ Draw emit:
 ```lua
 local function drawTab(host, ui)
     if ui.draw.widgets.button("Refresh route") then
-        ui.actions.emit("run-director.route-state", "routeChanged", {
+        ui.shared.emit("run-director.route-state", "routeChanged", {
             route = ui.data.read("Route"),
         })
     end
@@ -106,6 +113,9 @@ end
 Draw emits are staged during the draw callback and delivered during commit
 after staged state flush, mutation sync, action handlers, and queued
 status resets.
+`runtime.shared.emit(...)` returns `true, deliveredCount` because it delivers
+immediately. `ui.shared.emit(...)` returns `true` only; its delivery count is
+not available until the deferred commit flush runs.
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
 order.
 

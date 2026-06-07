@@ -57,6 +57,15 @@ local function createSharedRef(opts, name)
     return wrapReaderRef(opts.phase, rawRef)
 end
 
+local function emitShared(opts, id, eventName, payload)
+    requirePhase(opts.phase)
+    if opts.phase == "draw" then
+        service.validateEmit(opts.source .. ".emit", id, eventName)
+        return opts.actionBuffer.emitShared(id, eventName, payload)
+    end
+    return service.emitForModule(opts.host, id, eventName, payload)
+end
+
 function dataShared.create(opts)
     local refs = {}
     local source = opts.source
@@ -83,6 +92,9 @@ function dataShared.create(opts)
         clear = function(name)
             local sharedRef = ref(name)
             return requireMethod(sharedRef, "clear", name, source)()
+        end,
+        emit = function(id, eventName, payload)
+            return emitShared(opts, id, eventName, payload)
         end,
     }
 end

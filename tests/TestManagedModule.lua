@@ -102,7 +102,7 @@ end
 
 local function emitShared(h, module, id, eventName, payload)
     local record = h.managedModule.getRecord(module)
-    return record.host.shared.emit(id, eventName, payload)
+    return record.runtime.shared.emit(id, eventName, payload)
 end
 
 function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
@@ -385,7 +385,7 @@ function TestManagedModule:testUiResetAllQueuesModuleResetDuringCommit()
             capturedUi = ui
             if doReset then
                 actions.trigger("mark", true)
-                actions.emit(sharedId, "changed", { value = 7 })
+                ui.shared.emit(sharedId, "changed", { value = 7 })
                 lu.assertTrue(ui.resetAll({
                     exclude = { Count = true },
                 }))
@@ -436,8 +436,8 @@ function TestManagedModule:testManagedModulePassesCallbackHostToCallbacks()
         drawTab = function(_, _, _, _, activeHost)
             callbackHost = activeHost
         end,
-        drawQuickContent = function(draw, state, actions)
-            quickArgs = { draw = draw, state = state, actions = actions }
+        drawQuickContent = function(draw, state, actions, ui)
+            quickArgs = { draw = draw, state = state, actions = actions, ui = ui }
         end,
     })
 
@@ -451,7 +451,8 @@ function TestManagedModule:testManagedModulePassesCallbackHostToCallbacks()
     lu.assertEquals(type(quickArgs.state.get), "function")
     lu.assertEquals(type(quickArgs.actions.get), "function")
     lu.assertEquals(type(quickArgs.actions.trigger), "function")
-    lu.assertEquals(type(quickArgs.actions.emit), "function")
+    lu.assertNil(quickArgs.actions.emit)
+    lu.assertEquals(type(quickArgs.ui.shared.emit), "function")
     lu.assertNil(quickArgs.actions.hasAny)
     lu.assertEquals(callbackHost.getOwnerId(), "test-author-module")
     lu.assertEquals(callbackHost.getModuleId(), "AuthorModuleModule")
@@ -589,6 +590,7 @@ end
 
 function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
     local actions = nil
+    local shared = nil
     local actionRef = nil
     local observed = nil
     local definition = self.h.managedModule.prepareDefinition({}, {
@@ -607,8 +609,9 @@ function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhas
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
-        drawTab = function(_, _, drawActions)
+        drawTab = function(_, _, drawActions, ui)
             actions = drawActions
+            shared = ui.shared
             actionRef = actions.get("recording")
             actionRef:stage({ kind = "start" })
             observed = {
@@ -627,7 +630,7 @@ function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhas
         actions.trigger("recording")
     end)
     lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actions.emit("test.events", "changed", {})
+        shared.emit("test.events", "changed", {})
     end)
     lu.assertEquals(actionRef:read(), { kind = "start" })
     lu.assertTrue(actionRef:has())
@@ -864,7 +867,7 @@ function TestManagedModule:testOnCommitReceivesRuntimeAndCallbackHost()
     lu.assertTrue(observedCommit.hadConfigChanges())
 end
 
-function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommit()
+function TestManagedModule:testUiSharedEmitSharedEventsDuringCommit()
     local delivered = nil
     local actionRan = false
     local actionRanAtDelivery = nil
@@ -918,9 +921,9 @@ function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommit()
         definition = emitterDefinition,
         persistentState = emitterStore,
         stagedState = emitterState,
-        drawTab = function(_, _, actions)
+        drawTab = function(_, _, actions, ui)
             actions.trigger("mark", true)
-            actions.emit(sharedId, "changed", { value = 42 })
+            ui.shared.emit(sharedId, "changed", { value = 42 })
             lu.assertNil(delivered)
         end,
     })
@@ -936,7 +939,7 @@ function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommit()
     lu.assertEquals(#self.h.warnings, 0)
 end
 
-function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommitWithoutAction()
+function TestManagedModule:testUiSharedEmitSharedEventsDuringCommitWithoutAction()
     local delivered = nil
     local sharedId = "test.draw-action-emit-only"
     local listenerDefinition = self.h.managedModule.prepareDefinition({}, {
@@ -977,8 +980,8 @@ function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommitWithoutAct
         definition = emitterDefinition,
         persistentState = emitterStore,
         stagedState = emitterState,
-        drawTab = function(_, _, actions)
-            actions.emit(sharedId, "changed", { value = 7 })
+        drawTab = function(_, _, _, ui)
+            ui.shared.emit(sharedId, "changed", { value = 7 })
             lu.assertNil(delivered)
         end,
     })
@@ -989,6 +992,35 @@ function TestManagedModule:testDrawActionsEmitSharedEventsDuringCommitWithoutAct
     lu.assertNil(delivered)
     lu.assertTrue(emitter.commitIfDirty())
     lu.assertEquals(delivered, { value = 7 })
+    lu.assertEquals(#self.h.warnings, 0)
+end
+
+function TestManagedModule:testUiSharedEmitValidatesDuringDraw()
+    local definition = self.h.managedModule.prepareDefinition({}, {
+        id = "DrawSharedEmitValidation",
+        name = "Draw Shared Emit Validation",
+        storage = {},
+    })
+    local store, stagedState = self.h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    createActivatedManagedModule(self.h, "test-draw-shared-emit-validation", {
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        drawTab = function(_, _, _, ui)
+            lu.assertErrorMsgContains("id must be a non-empty string", function()
+                ui.shared.emit("", "changed", {})
+            end)
+            lu.assertErrorMsgContains("eventName must be a non-empty string", function()
+                ui.shared.emit("test.invalid", "", {})
+            end)
+        end,
+    })
+    local emitter = self.h.managedModule.getLiveModule("test-draw-shared-emit-validation")
+
+    emitter.drawTab()
     lu.assertEquals(#self.h.warnings, 0)
 end
 

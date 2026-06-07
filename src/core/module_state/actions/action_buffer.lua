@@ -193,6 +193,7 @@ local function createBuffer(actionCatalog)
             eventName = eventName,
             payload = CloneValue(payload),
         }
+        return true, nil
     end
 
     function buffer.executeCommittedActions(host, runtime, actionSnapshot)
@@ -205,12 +206,12 @@ local function createBuffer(actionCatalog)
         end
     end
 
-    function buffer.flushPendingSharedEvents(host)
+    function buffer.flushPendingSharedEvents(emitSharedEvent)
         if #pendingEvents > 0 then
             local events = pendingEvents
             pendingEvents = {}
             for _, event in ipairs(events) do
-                host.shared.emit(event.id, event.eventName, event.payload)
+                emitSharedEvent(event.id, event.eventName, event.payload)
             end
         end
     end

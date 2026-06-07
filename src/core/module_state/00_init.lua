@@ -106,7 +106,7 @@ local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
 ---@field stageInternal fun(actionKey: string, value: any)
 ---@field emitShared fun(id: string, eventName: string, payload: any)
 ---@field executeCommittedActions fun(host: Host, runtime: RuntimeContext, actionSnapshot: table)
----@field flushPendingSharedEvents fun(host: Host)
+---@field flushPendingSharedEvents fun(emitSharedEvent: fun(id: string, eventName: string, payload: any))
 
 ---@class PersistentState
 ---@field get fun(alias: string): StorageField|StorageTableReadOnly|nil

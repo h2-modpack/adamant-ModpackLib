@@ -14,8 +14,8 @@ draw/commit cycle. Use the capability guides for exact API details.
 | transient `data` | UI/session | `ui.data` | `ui.data` | current module session | no | selected tabs, filters, temporary view state |
 | `status` | runtime | `runtime.status` | `runtime.status`, `ui.status` | explicit `persist` | no | runtime counters, readiness flags, runtime-to-UI state |
 | `cache` | runtime lifecycle | runtime cache APIs | runtime code | lifecycle-bound | no | current-run scratch data and derived runtime worksets |
-| `shared.data` | one module | owner module | reader modules | shared subsystem | no | cross-module readable state |
-| `shared events` | emitting module | `ui.actions.emit` or `host.shared.emit` | listeners | event delivery only | no | cross-module notifications |
+| `shared.data` | one module | `runtime.shared` or `ui.shared` | reader modules | immediate publication | no | cross-module readable state |
+| `shared events` | emitting module | `ui.shared.emit` or `runtime.shared.emit` | listeners | event delivery only | no | cross-module notifications |
 | `actions` | UI intent | `ui.actions` | commit/runtime handlers | one commit | no | buttons and commands that should run after commit |
 | `controls` | module template | generated from data refs | UI/runtime control refs | follows inner storage | follows inner storage | reusable UI/data composites |
 
@@ -170,9 +170,16 @@ Shared data and shared events cross module boundaries.
 Use shared data when another module needs to read your module's published state.
 Use shared events when another module needs to react to a committed event.
 
-Draw code should emit shared events through `ui.actions.emit(...)` so delivery
-happens during commit. Runtime code can emit through `host.shared.emit(...)`
-when it is already outside the draw staging lane.
+Shared data writes publish immediately. They are not staged like `ui.data`
+writes, do not make the module dirty, and do not wait for `commitIfDirty()`.
+Use `module.onCommit(...)` or runtime code to publish shared data that must
+reflect only committed UI settings.
+
+Draw code should emit shared events through `ui.shared.emit(...)` so delivery
+happens during commit. UI emits return `true` when staged; they do not return
+a delivery count. Runtime code can emit through `runtime.shared.emit(...)` when
+it is already outside the draw staging lane, and runtime emits return
+`true, deliveredCount`.
 
 ## Actions
 

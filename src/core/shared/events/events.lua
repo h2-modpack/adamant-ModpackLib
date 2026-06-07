@@ -77,9 +77,13 @@ local function drainQueue()
     return delivered
 end
 
-function events.emit(context, id, eventName, payload)
+function events.validate(context, id, eventName)
     validateSharedId(context, id)
     validateEventName(context, eventName)
+end
+
+function events.emit(context, id, eventName, payload)
+    events.validate(context, id, eventName)
 
     enqueueEvent(id, eventName, payload)
 

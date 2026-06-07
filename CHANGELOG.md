@@ -12,7 +12,7 @@ All notable changes to this project will be documented in this file.
 - Module definitions now require both stable `id` and display `name`; `modpack` remains optional.
 - Module callbacks receive the narrow callback host consistently: UI callbacks receive `(host, ui)`, action handlers receive `(host, runtime, value)`, commit observers receive `(host, runtime, commit)`, and mutation patches receive `(host, runtime, plan)`.
 - Runtime hooks are now declared through `module.hooks.*` before activation; the old ownerless `lib.hooks.*` registration surface and `createModule({ registerHooks = ... })` path have been removed.
-- Shared events are now event-only: modules declare lifecycle-owned listeners with `module.shared.listen(...)` and emit runtime notifications through `module.shared.emit(...)`.
+- Shared events are now event-only: modules declare lifecycle-owned listeners with `module.shared.listen(...)`, emit from runtime through `runtime.shared.emit(...)`, and queue draw-time emits through `ui.shared.emit(...)`.
 - Removed old provider/polling APIs, scoped reads, reserved `providerChanged` events, and draw-time `services.pollIntegration(...)`; declared shared values are now the supported read-sharing path.
 - Retained module overlays are now declared with `module.overlays.*` before activation; the old `createModule({ registerOverlays = ... })` path has been removed.
 - The global `lib.overlays.*` namespace has been removed; use `module.overlays.*`, `lib.createFrameworkRuntime(...).overlays`, or `lib.createFrameworkRuntime(...).ui` depending on the consumer.

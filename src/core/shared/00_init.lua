@@ -40,15 +40,19 @@ local service = {
 function service.emitForModule(module, id, eventName, payload)
     local record = deps.moduleRegistry.getRecord(module)
     if not record then
-        deps.logging.violate("shared.invalid_args", "module.shared.emit: expected managed module record")
+        deps.logging.violate("shared.invalid_args", "shared.emit: expected managed module record")
     end
     if record.activated ~= true then
-        deps.logging.violate("shared.invalid_args", "module.shared.emit requires module.activate() before it can run")
+        deps.logging.violate("shared.invalid_args", "shared.emit requires module.activate() before it can run")
     end
     if module.isEnabled() ~= true then
         return true, 0
     end
-    return events.emit("module.shared.emit", id, eventName, payload)
+    return events.emit("shared.emit", id, eventName, payload)
+end
+
+function service.validateEmit(context, id, eventName)
+    return events.validate(context, id, eventName)
 end
 
 local dataAdapter = import('core/shared/adapters/data_shared.lua', nil, {
