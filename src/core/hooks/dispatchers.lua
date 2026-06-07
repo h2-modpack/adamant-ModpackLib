@@ -219,14 +219,6 @@ local function resetModUtilDispatcher(dispatcher)
     dispatcher.state = nil
 end
 
-local function installModUtilWrap(modutilOwner, path, key, handler)
-    return modutilHooks.installWrap(modutilOwner, path, key, handler)
-end
-
-local function installModUtilContextWrap(modutilOwner, path, key, context)
-    return modutilHooks.installContextWrap(modutilOwner, path, key, context)
-end
-
 local function validateScopedWrap(path, handler)
     if type(path) ~= "string" or path == "" then
         logging.violate("hooks.invalid_registration", "module.hooks.contextWrap context.wrap: path must be a non-empty string")
@@ -261,7 +253,7 @@ local function ensureWrapDispatcher(dispatcher)
     if dispatcher.installed then
         resetModUtilDispatcher(dispatcher)
     end
-    installModUtilWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(base, ...)
+    modutilHooks.installWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(base, ...)
         return dispatchWrap(dispatcher, base, ...)
     end)
     dispatcher.installed = true
@@ -275,7 +267,7 @@ local function ensureContextWrapDispatcher(dispatcher)
     if dispatcher.installed then
         resetModUtilDispatcher(dispatcher)
     end
-    installModUtilContextWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(...)
+    modutilHooks.installContextWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(...)
         return dispatchContextWrap(dispatcher, ...)
     end)
     dispatcher.installed = true
@@ -400,8 +392,6 @@ end
 
 return {
     getCurrentOwner = getCurrentOwner,
-    installModUtilWrap = installModUtilWrap,
-    installModUtilContextWrap = installModUtilContextWrap,
     createContextSurface = createContextSurface,
     attachOwner = attachOwner,
     detachOwner = detachOwner,
