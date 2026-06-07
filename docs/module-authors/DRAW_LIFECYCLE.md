@@ -236,8 +236,8 @@ Use `runtime.status` plus `ui.status` for:
 
 ## Common Mistakes
 
-- Do not capture `ui.data`, `ui.actions`, or draw refs and use them from runtime
-  callbacks.
+- Do not capture `ui.data`, `ui.status`, `ui.actions`, `ui.controls`,
+  `ui.shared`, or draw refs and use them from runtime callbacks.
 - Do not expect runtime hooks to see staged UI edits before commit.
 - Do not use actions as settings.
 - Do not use status action writes as mutation inputs.

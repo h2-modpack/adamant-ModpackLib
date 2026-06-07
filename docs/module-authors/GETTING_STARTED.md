@@ -138,9 +138,9 @@ local function drawTab(host, ui)
 end
 ```
 
-`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback
-objects. Use them in the callback that receives them. Do not retain them for
-runtime hooks or later callbacks.
+`ui.draw`, `ui.data`, `ui.status`, `ui.actions`, `ui.controls`, and
+`ui.shared` are draw-callback objects. Use them in the callback that receives
+them. Do not retain them for runtime hooks or later callbacks.
 
 ## Runtime Logic
 

@@ -7,9 +7,9 @@ Draw callbacks receive `host, ui`. Widget authoring normally uses
 making modules thread `imgui` through widget calls. Navigation helpers use
 `ui.draw.nav` the same way.
 
-`ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback objects.
-Use them from the draw callback that receives them. Do not cache draw objects
-for runtime use.
+`ui.draw`, `ui.data`, `ui.status`, `ui.actions`, `ui.controls`, and
+`ui.shared` are draw-callback objects. Use them from the draw callback that
+receives them. Do not cache draw objects for runtime use.
 
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
 order.

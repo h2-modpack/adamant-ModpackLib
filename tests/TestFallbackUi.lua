@@ -71,6 +71,9 @@ local function makeHost(opts)
         drawTabAndCommit = function()
             calls.drawTab = calls.drawTab + 1
             calls.commitIfDirty = calls.commitIfDirty + 1
+            if opts.drawTabAndCommitThrows then
+                error("draw tab boom")
+            end
             return true, nil, opts.committed == true
         end,
     }
@@ -395,6 +398,25 @@ function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     lu.assertEquals(host.calls.resync, 1)
     lu.assertEquals(host.calls.drawTab, 1)
     lu.assertEquals(host.calls.commitIfDirty, 1)
+end
+
+function TestFallbackUi:testFallbackWindowEndsImguiWindowWhenModuleDrawErrors()
+    local host = makeHost({
+        modpack = "fallback-pack",
+        drawTabAndCommitThrows = true,
+    })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({ menuClicked = true })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    local ok, err = pcall(runtime.renderWindow)
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(tostring(err), "draw tab boom")
+    lu.assertEquals(calls.begin, 1)
+    lu.assertEquals(calls.endWindow, 1)
 end
 
 function TestFallbackUi:testCloseFlushesRunDataAfterAffectingEnabledToggle()

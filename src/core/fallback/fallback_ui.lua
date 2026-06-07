@@ -221,51 +221,66 @@ local function createRuntime(module)
 
         local imgui = rom.ImGui
         local title = tostring(meta.name or moduleId or "Module") .. "###" .. tostring(moduleId)
-        seedWindowSize(imgui)
-        local open, shouldDraw = imgui.Begin(title, showWindow)
-        if shouldDraw then
-            local enabled = module.isEnabled()
-            local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
-            if enabledChanged then
-                local ok, err = module.setEnabled(enabledValue)
-                if ok then
-                    enabled = enabledValue == true
-                    markRunDataDirty()
-                else
-                    logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
-                        tostring(meta.name or moduleId or "module"),
-                        enabledValue and "enable" or "disable",
-                        tostring(err))
+        local beganWindow = false
+        local openState = showWindow
+
+        local ok, err = xpcall(function()
+            seedWindowSize(imgui)
+            local shouldDraw
+            openState, shouldDraw = imgui.Begin(title, showWindow)
+            beganWindow = true
+            if shouldDraw then
+                local enabled = module.isEnabled()
+                local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
+                if enabledChanged then
+                    local transitionOk, transitionErr = module.setEnabled(enabledValue)
+                    if transitionOk then
+                        enabled = enabledValue == true
+                        markRunDataDirty()
+                    else
+                        logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
+                            tostring(meta.name or moduleId or "module"),
+                            enabledValue and "enable" or "disable",
+                            tostring(transitionErr))
+                    end
+                end
+
+                local debugValue, debugChanged = imgui.Checkbox("Debug Mode", module.read("DebugMode") == true)
+                if debugChanged then
+                    module.setDebugMode(debugValue)
+                end
+
+                if imgui.Button("Resync State") then
+                    module.resync()
+                end
+
+                if enabled then
+                    imgui.Separator()
+                    imgui.Spacing()
+                    local commitOk, commitErr, committed = module.drawTabAndCommit()
+                    if commitOk and committed and module.isEnabled() then
+                        markRunDataDirty()
+                    elseif commitOk == false then
+                        logging.violate(
+                            "managed_module.staged_state_commit_failed",
+                            "%s staged state commit failed; restored previous config where possible: %s",
+                            tostring(meta.name or moduleId or "module"),
+                            tostring(commitErr)
+                        )
+                    end
                 end
             end
+        end, debug.traceback)
 
-            local debugValue, debugChanged = imgui.Checkbox("Debug Mode", module.read("DebugMode") == true)
-            if debugChanged then
-                module.setDebugMode(debugValue)
-            end
-
-            if imgui.Button("Resync State") then
-                module.resync()
-            end
-
-            if enabled then
-                imgui.Separator()
-                imgui.Spacing()
-                local ok, err, committed = module.drawTabAndCommit()
-                if ok and committed and module.isEnabled() then
-                    markRunDataDirty()
-                elseif ok == false then
-                    logging.violate(
-                        "managed_module.staged_state_commit_failed",
-                        "%s staged state commit failed; restored previous config where possible: %s",
-                        tostring(meta.name or moduleId or "module"),
-                        tostring(err)
-                    )
-                end
-            end
+        if beganWindow then
+            imgui.End()
         end
-        imgui.End()
-        if open == false then
+
+        if not ok then
+            error(err)
+        end
+
+        if openState == false then
             setWindowOpen(false)
         end
     end
