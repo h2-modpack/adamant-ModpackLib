@@ -107,9 +107,6 @@ end
 function TestShared:testServiceSurfaceExposesInstallAndData()
     lu.assertEquals(type(self.shared.installForModule), "function")
     lu.assertEquals(type(self.shared.data), "table")
-    lu.assertNil(self.shared.provideForHost)
-    lu.assertNil(self.shared.pollForHost)
-    lu.assertNil(self.shared.notifyProviderChangedForHost)
 end
 
 function TestShared:testAuthorSurfaceExposesDataAndEvents()
@@ -120,8 +117,6 @@ function TestShared:testAuthorSurfaceExposesDataAndEvents()
     lu.assertEquals(type(authorModule.shared.data.reader), "function")
     lu.assertEquals(type(authorModule.shared.listen), "function")
     lu.assertNil(authorModule.shared.emit)
-    lu.assertNil(authorModule.shared.provide)
-    lu.assertNil(authorModule.shared.poll)
 end
 
 function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()

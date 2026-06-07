@@ -72,7 +72,7 @@ local function retireOldModule(previousModule, replacementLabel)
     if type(receipts) ~= "table" or #receipts == 0 then
         return
     end
-    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " old module retirement failed")
+    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " previous module retirement failed")
     oldRecord.effectReceipts = {}
 end
 

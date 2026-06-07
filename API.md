@@ -962,9 +962,8 @@ Runtime commit callbacks receive the same action snapshot through
 - `action:read()`
 - `action:has()`
 
-The old `session.stageAction(...)` form has been removed. Use
-`ui.actions.trigger(actionKey, value)` in draw code, or `ui.actions.get(actionKey)`
-when a widget needs an action ref.
+Use `ui.actions.trigger(actionKey, value)` in draw code, or
+`ui.actions.get(actionKey)` when a widget needs an action ref.
 
 Declare action handlers with `module.actions.define(...)`. Handlers run during
 commit after staged state flush and mutation sync, so `runtime.data` reads the

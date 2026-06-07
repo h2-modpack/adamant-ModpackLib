@@ -15,7 +15,7 @@ function TestHashing:tearDown()
     self.hashing = nil
 end
 
-local function prepareStorage(storageService)
+local function prepareStorage(storageApi)
     local storage = {
         { type = "bool", alias = "EnabledFlag", default = false },
         { type = "int", alias = "Count", default = 1, min = 0, max = 7 },
@@ -31,7 +31,7 @@ local function prepareStorage(storageService)
             },
         },
     }
-    storageService.validate(storage, "HashingTest")
+    storageApi.validate(storage, "HashingTest")
     return storage
 end
 

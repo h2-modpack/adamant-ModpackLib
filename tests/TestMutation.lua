@@ -25,7 +25,7 @@ end
 function TestMutation:testBackupRestoresChangedAndRemovedValues()
     local tbl = {
         Count = 1,
-        Nested = { Value = "old" },
+        Nested = { Value = "before" },
     }
     local backup, restore = self.mutationPlan.createBackup()
 
@@ -36,14 +36,14 @@ function TestMutation:testBackupRestoresChangedAndRemovedValues()
     restore()
 
     lu.assertEquals(tbl.Count, 1)
-    lu.assertEquals(tbl.Nested, { Value = "old" })
+    lu.assertEquals(tbl.Nested, { Value = "before" })
     lu.assertNil(tbl.Missing)
 end
 
 function TestMutation:testPlanSetSetManyAndTransformApplyAndRevert()
     local tbl = {
         Count = 1,
-        Name = "old",
+        Name = "before",
         Flag = false,
     }
     local plan = self.mutationPlan.createPlan()
@@ -66,7 +66,7 @@ function TestMutation:testPlanSetSetManyAndTransformApplyAndRevert()
     lu.assertTrue(self:revertPlan(plan))
     lu.assertEquals(tbl, {
         Count = 1,
-        Name = "old",
+        Name = "before",
         Flag = false,
     })
     lu.assertFalse(self:revertPlan(plan))
@@ -181,7 +181,7 @@ function TestMutation:testPlanRemoveElementAndSetElementApplyAndRevert()
     local tbl = {
         Values = { "a", "b", "c" },
         Objects = {
-            { id = 1, value = "old" },
+            { id = 1, value = "before" },
             { id = 2, value = "keep" },
         },
     }
@@ -201,7 +201,7 @@ function TestMutation:testPlanRemoveElementAndSetElementApplyAndRevert()
     lu.assertTrue(self:revertPlan(plan))
     lu.assertEquals(tbl.Values, { "a", "b", "c" })
     lu.assertEquals(tbl.Objects, {
-        { id = 1, value = "old" },
+        { id = 1, value = "before" },
         { id = 2, value = "keep" },
     })
 end

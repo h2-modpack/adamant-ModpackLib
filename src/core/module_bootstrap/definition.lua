@@ -7,7 +7,7 @@ local coordinator = deps.coordinator
 local moduleRegistry = deps.moduleRegistry
 local plugin = deps.plugin
 
-local definitionService = {}
+local definitionApi = {}
 
 local KnownDefinitionKeys = {
     modpack = true,
@@ -86,21 +86,7 @@ local function NormalizeStructuralSurface(surface)
     if type(surface) ~= "table" then
         logging.violate(
             "definition.invalid_args",
-            "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
-        )
-    end
-
-    local hasKnownKey = false
-    for key in pairs(surface) do
-        if KnownStructuralSurfaceKeys[key] then
-            hasKnownKey = true
-        end
-    end
-
-    if not hasKnownKey and next(surface) ~= nil then
-        logging.violate(
-            "definition.invalid_args",
-            "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
+            "prepareDefinition: structural surface must be a table when provided"
         )
     end
 
@@ -499,7 +485,7 @@ local function prepareDefinition(structuralState, definition, structuralSurface,
     if select("#", ...) ~= 0 then
         logging.violate(
             "definition.invalid_args",
-            "prepareDefinition: pass storage defaults on definition.storage nodes, not as a separate argument"
+            "prepareDefinition: unexpected extra arguments"
         )
     end
     structuralSurface = NormalizeStructuralSurface(structuralSurface)
@@ -547,11 +533,11 @@ local function prepareDefinition(structuralState, definition, structuralSurface,
     return prepared
 end
 
-function definitionService.prepareDefinition(structuralState, definition, structuralSurface, ...)
+function definitionApi.prepareDefinition(structuralState, definition, structuralSurface, ...)
     return prepareDefinition(structuralState, definition, structuralSurface, nil, nil, ...)
 end
 
-function definitionService.prepareDefinitionWithInternalStorage(
+function definitionApi.prepareDefinitionWithInternalStorage(
     structuralState,
     definition,
     structuralSurface,
@@ -561,9 +547,9 @@ function definitionService.prepareDefinitionWithInternalStorage(
     return prepareDefinition(structuralState, definition, structuralSurface, internalStorage, internalActions)
 end
 
-function definitionService.prepareDefinitionWithInternalDeclarations(structuralState, definition, structuralSurface, internal)
+function definitionApi.prepareDefinitionWithInternalDeclarations(structuralState, definition, structuralSurface, internal)
     internal = internal or {}
     return prepareDefinition(structuralState, definition, structuralSurface, internal.storage, internal.actions)
 end
 
-return definitionService
+return definitionApi

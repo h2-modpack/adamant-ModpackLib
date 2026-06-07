@@ -307,7 +307,7 @@ Changes to:
 - `definition.storage`
 - module presence or discovery shape
 
-should be treated as structural compatibility work. In coordinated packs, Lib
+should be treated as structural coordination work. In coordinated packs, Lib
 can request a Framework rebuild after the replacement live module is created.
 Outside that coordinated path, use a full reload.
 

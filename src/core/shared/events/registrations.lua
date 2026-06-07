@@ -44,12 +44,12 @@ local function ensureHostRegistrations(state)
     return state.sharedEventRegistrations
 end
 
-local function createListener(hostProvider, callback)
+local function createListener(getModule, callback)
     return {
         callback = callback,
         isEnabled = function()
-            local host = hostProvider and hostProvider() or nil
-            return host ~= nil and host.isEnabled() == true
+            local module = getModule and getModule() or nil
+            return module ~= nil and module.isEnabled() == true
         end,
     }
 end
@@ -68,14 +68,14 @@ function registrations.create()
     return createRegistrationSet()
 end
 
-function registrations.stageListener(registrationSet, hostProvider, id, eventName, callback)
+function registrations.stageListener(registrationSet, getModule, id, eventName, callback)
     local context = "module.shared.listen"
     validateSharedId(context, id)
     validateEventName(context, eventName)
     if type(callback) ~= "function" then
         logging.violate("shared.invalid_args", "%s: callback must be a function", context)
     end
-    return recordStagedListener(registrationSet, id, eventName, createListener(hostProvider, callback))
+    return recordStagedListener(registrationSet, id, eventName, createListener(getModule, callback))
 end
 
 function registrations.stageAuthorListener(record, host, id, eventName, callback)

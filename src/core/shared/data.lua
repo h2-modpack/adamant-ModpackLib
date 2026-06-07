@@ -155,7 +155,7 @@ function sharedData.createDeclarations()
     }
 end
 
-local function stageDataDeclaration(context, access, declarations, hostProvider, name, opts)
+local function stageDataDeclaration(context, access, declarations, getModule, name, opts)
     validateName(context, name)
     if opts ~= nil and type(opts) ~= "table" then
         logging.violate("shared.invalid_args", "%s opts must be a table when provided", context)
@@ -191,8 +191,8 @@ local function stageDataDeclaration(context, access, declarations, hostProvider,
         hasDefault = opts.default ~= nil,
         hasFallback = opts.fallback ~= nil,
         isEnabled = function()
-            local host = hostProvider and hostProvider() or nil
-            return host ~= nil and host.isEnabled() == true
+            local module = getModule and getModule() or nil
+            return module ~= nil and module.isEnabled() == true
         end,
     }
     declarations.byName[name] = declaration
@@ -203,12 +203,12 @@ local function stageDataDeclaration(context, access, declarations, hostProvider,
     return true
 end
 
-function sharedData.stageOwnerDeclaration(declarations, hostProvider, name, opts)
-    return stageDataDeclaration("module.shared.data.owner", "owner", declarations, hostProvider, name, opts)
+function sharedData.stageOwnerDeclaration(declarations, getModule, name, opts)
+    return stageDataDeclaration("module.shared.data.owner", "owner", declarations, getModule, name, opts)
 end
 
-function sharedData.stageReaderDeclaration(declarations, hostProvider, name, opts)
-    return stageDataDeclaration("module.shared.data.reader", "reader", declarations, hostProvider, name, opts)
+function sharedData.stageReaderDeclaration(declarations, getModule, name, opts)
+    return stageDataDeclaration("module.shared.data.reader", "reader", declarations, getModule, name, opts)
 end
 
 function sharedData.stageOwner(record, host, name, opts)

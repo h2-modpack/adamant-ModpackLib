@@ -158,7 +158,7 @@ imgui = raw escape hatch
 
 Widgets remain first-class. They are still the right tool for custom draw code,
 simple modules, unusual UI, and control template internals. They should not be
-treated as deprecated just because large control-heavy modules benefit from a
+treated as obsolete just because large control-heavy modules benefit from a
 higher-level layer.
 
 ## Public Surface

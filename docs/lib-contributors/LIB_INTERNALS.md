@@ -40,11 +40,11 @@ end
 - Live-module, pending-rebuild, and weak module-record tables are activation anchors; keep the tables under `AdamantModpackLib_Runtime.registry.modules`, but keep lifecycle behavior on the returned `managedModule` service.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
-## Legacy Internal Shims
+## Temporary Internal Bridges
 
-- The old Lib internal namespace has been retired.
-- Do not add new compatibility assignments for ordinary services.
-- If a future migration genuinely needs a temporary bridge, keep it explicitly short-lived, behavior-only, and remove it before the subsystem is considered clean.
+- The retired Lib internal namespace should stay retired.
+- Do not add new mirror assignments for ordinary services.
+- If a future transition genuinely needs a temporary bridge, keep it explicitly short-lived, behavior-only, and remove it before the subsystem is considered clean.
 
 ## Dependency Flow
 
@@ -64,7 +64,7 @@ end
 
 ## Validation
 
-For each leaf migration:
+For each leaf cleanup:
 
 1. Run targeted tests for the touched subsystem.
 2. Run the full Lib suite.

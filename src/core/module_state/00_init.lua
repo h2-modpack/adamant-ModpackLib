@@ -1,7 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local storageService = deps.storage
+local storageApi = deps.storage
 local values = deps.values
 local chalk = deps.chalk
 
@@ -14,7 +14,7 @@ local storageConfigAdapter = import('core/module_state/persistent/storage_config
 
 local persistentStateModule = import('core/module_state/persistent/persistent_state.lua', nil, {
     logging = logging,
-    storage = storageService,
+    storage = storageApi,
     values = values,
 })
 
@@ -31,13 +31,13 @@ moduleState.uiActions = uiActionsModule
 
 local stagedStateModule = import('core/module_state/staged/staged_state.lua', nil, {
     logging = logging,
-    storage = storageService,
+    storage = storageApi,
     values = values,
 })
 
 local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', nil, {
     logging = logging,
-    storage = storageService,
+    storage = storageApi,
 })
 
 local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {

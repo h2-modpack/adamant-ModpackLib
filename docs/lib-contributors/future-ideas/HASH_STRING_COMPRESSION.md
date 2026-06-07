@@ -23,13 +23,13 @@ was high:
 - authors had to count bits and preserve manual layouts;
 - tables and controls did not fit the flat alias model cleanly;
 - generated private control aliases would have leaked into public hash policy;
-- changing a packed layout could make old hashes unrecoverable without keeping
+- changing a packed layout could make existing hashes unrecoverable without keeping
   historical layouts around.
 
 Automatic greedy packing has the opposite tradeoff: it removes author burden,
-but adding a storage field can shift positional bits and invalidate old profile
-data. A layout fingerprint can prevent silent corruption, but it cannot recover
-old values.
+but adding a storage field can shift positional bits and invalidate existing
+profile data. A layout fingerprint can prevent silent corruption, but it cannot
+recover existing values.
 
 For now, keep packing only where it is explicit storage behavior:
 `packedInt` roots and their declared bit children.
@@ -47,7 +47,7 @@ Candidate techniques:
   common values.
 
 This keeps ordinary schema additions additive: missing new keys still fall back
-to defaults, and old keys keep their meaning.
+to defaults, and existing keys keep their meaning.
 
 Whole-string compression has the better engineering profile:
 

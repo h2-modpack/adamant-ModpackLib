@@ -1,13 +1,13 @@
 local deps = ...
 
-local storageService = deps.storage
-local StorageTypes = storageService.types
+local storageApi = deps.storage
+local StorageTypes = storageApi.types
 local hashing = {}
 
 ---@param storage StorageSchema
 ---@return StorageNode[]
 function hashing.getRoots(storage)
-    return storageService.getRoots(storage)
+    return storageApi.getRoots(storage)
 end
 
 ---@param node StorageNode|PackedBitNode|nil
@@ -15,7 +15,7 @@ end
 ---@param b any
 ---@return boolean
 function hashing.valuesEqual(node, a, b)
-    return storageService.valuesEqual(node, a, b)
+    return storageApi.valuesEqual(node, a, b)
 end
 
 ---@param node StorageNode|PackedBitNode
@@ -44,7 +44,7 @@ end
 ---@param str string|nil
 ---@return boolean
 function hashing.isHashTokenValid(node, str)
-    return storageService.isHashTokenValid(node, str)
+    return storageApi.isHashTokenValid(node, str)
 end
 
 return {

@@ -59,11 +59,11 @@ What would remove it:
 
 ## Module Activation Rollback Covers Managed Effects Only
 
-Lib module activation is designed to keep the old live module active until the replacement module has usable managed runtime effects.
+Lib module activation is designed to keep the previous live module active until the replacement module has usable managed runtime effects.
 
 What this means in practice:
 
-- failed activation preserves the old live module when rollback succeeds
+- failed activation preserves the previous live module when rollback succeeds
 - Lib-managed hooks, shared events, overlays, patch mutation state, and live-module publication participate in activation cleanup
 - omitted managed registrations are cleaned up during successful module reload
 - direct module writes to game globals, ROM APIs, ModUtil APIs, or other public environment state are outside Lib rollback
@@ -111,7 +111,7 @@ What this means in practice:
 
 - v1 has no mutation batch mode; each activation, profile load, enable/disable, or staged-state/runtime transition owns its own recompute
 - `SetupRunData()` is treated as a trusted base-game recompute boundary, not an atomic commit primitive
-- if candidate mutation activation fails, Lib attempts to restore the prior raw patch state and keep the old module live
+- if candidate mutation activation fails, Lib attempts to restore the prior raw patch state and keep the previous module live
 - if the base-game recompute or rollback recompute fails, derived game state can be uncertain until restart or another clean game recompute
 
 Why this exists:
@@ -198,7 +198,7 @@ What this means in practice:
 - package manifests must declare the required dependency edges
 - shell release validation checks that required dependency edges are present
 - release validation does not require the dependency pin in each `thunderstore.toml` to equal the checked-out source package version
-- lower dependency pins can be intentional compatibility metadata, not release drift
+- lower dependency pins can be intentional dependency-range metadata, not release drift
 
 Why this exists:
 

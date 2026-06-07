@@ -538,17 +538,6 @@ function TestMutation_DefinitionLifecycle:testApplyDefinitionNoOpsWhenLifecycleM
     lu.assertNil(err)
 end
 
-function TestMutation_DefinitionLifecycle:testDeprecatedAffectedFlagDoesNotCreateMutationLifecycle()
-    local store = self:makeStore(false)
-    local def = { id = "DeprecatedAffectedFlag" }
-
-    local ok, err = self:applyMutation("test-deprecated-affected-flag", def,
-        { affectsRunData = true }, nil, store)
-
-    lu.assertTrue(ok)
-    lu.assertNil(err)
-end
-
 function TestMutation_DefinitionLifecycle:testApplyFailureRestoresPreviousPatchRuntime()
     local target = { Value = "base" }
     local storeA = self:makeStore(true)

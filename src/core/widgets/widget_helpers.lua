@@ -1,7 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local storageService = deps.storage
+local storageApi = deps.storage
 local widgetHelpers = {
     actions = deps.actions,
     imguiHelpers = deps.imguiHelpers,
@@ -105,7 +105,7 @@ function widgetHelpers.ChoiceDisplay(node, value)
 end
 
 function widgetHelpers.NormalizeInteger(node, value)
-    return storageService.NormalizeInteger(node, value)
+    return storageApi.NormalizeInteger(node, value)
 end
 
 function widgetHelpers.ShowTooltip(imgui, tooltip)
@@ -333,14 +333,14 @@ function widgetHelpers.ClearPackedChoiceSelection(field, children, selection)
 end
 
 function widgetHelpers.ResolvePackedChildren(field)
-    if not storageService.field.is(field) then
+    if not storageApi.field.is(field) then
         logging.violate(
             "widgets.invalid_field_target",
             "packed widgets require a StorageField target"
         )
     end
 
-    return storageService.packed.getPackedAliases(field:schema())
+    return storageApi.packed.getPackedAliases(field:schema())
 end
 
 return widgetHelpers

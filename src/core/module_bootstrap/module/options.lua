@@ -16,12 +16,6 @@ local KnownModuleOpts = {
 
 function options.validateKnown(opts)
     for key in pairs(opts) do
-        if key == "definition" then
-            logging.violate(
-                "module.unknown_opt",
-                "createModule: definition table is no longer supported; put definition fields at top level"
-            )
-        end
         if not KnownModuleOpts[key] then
             logging.violate("module.unknown_opt", "createModule: unknown option '%s'", tostring(key))
         end

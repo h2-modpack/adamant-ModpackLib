@@ -3,7 +3,7 @@ local deps = ...
 local values = deps.values
 local planExecutors = deps.planExecutors
 
-local planService = {}
+local planApi = {}
 
 ---@class MutationPlan
 ---@field set fun(self: MutationPlan, tbl: table, key: any, value: any): MutationPlan
@@ -15,7 +15,7 @@ local planService = {}
 ---@field setElement fun(self: MutationPlan, tbl: table, key: any, oldVal: any, newVal: any, eq: fun(any, any): boolean?): MutationPlan
 
 ---@return function backup, function restore
-function planService.createBackup()
+function planApi.createBackup()
     local NIL = {}
     local savedValues = {}
 
@@ -52,8 +52,8 @@ function planService.createBackup()
 end
 
 ---@return MutationPlan
-function planService.createPlan()
-    local backup, restore = planService.createBackup()
+function planApi.createPlan()
+    local backup, restore = planApi.createBackup()
     local operations = {}
     local applied = false
     local plan = {}
@@ -252,12 +252,12 @@ local function getPlanExecutor(plan, action)
     return executor[action]
 end
 
-function planService.applyPlan(plan)
+function planApi.applyPlan(plan)
     return getPlanExecutor(plan, "apply")()
 end
 
-function planService.revertPlan(plan)
+function planApi.revertPlan(plan)
     return getPlanExecutor(plan, "revert")()
 end
 
-return planService
+return planApi

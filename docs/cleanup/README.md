@@ -27,9 +27,12 @@ documentation and should not be treated as an API contract.
 - [x] `runtimeOwned` naming residue now that public API is `status`.
 - [x] `host` versus `module` vocabulary residue in diagnostics, docs, and internal APIs.
   Audit: [2026-06-06-host-module.md](audits/2026-06-06-host-module.md).
-- [ ] old `service` terminology that is either real Lib internals or leftover author-facing wording.
-- [ ] stale `integration`, `poll`, and `provider` references.
-- [ ] `compat`, `legacy`, `deprecated`, `shim`, and `migration` references.
+- [x] old `service` terminology that is either real Lib internals or leftover author-facing wording.
+  Audit: [2026-06-07-service.md](audits/2026-06-07-service.md).
+- [x] stale `integration`, `poll`, and `provider` references.
+  Audit: [2026-06-07-integration-poll-provider.md](audits/2026-06-07-integration-poll-provider.md).
+- [x] `compat`, `legacy`, `deprecated`, `shim`, and `migration` references.
+  Audit: [2026-06-07-migration-residue.md](audits/2026-06-07-migration-residue.md).
 - [ ] broad context objects or adapter layers that survived the native API migration.
 - [ ] one-line helpers that only hide direct calls without adding policy.
 - [ ] docs that describe historical migration plans instead of current behavior.

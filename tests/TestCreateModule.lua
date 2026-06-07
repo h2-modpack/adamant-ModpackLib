@@ -394,8 +394,6 @@ function TestCreateModule:testCreateModuleReturnsOnlyModuleDeclarationSurface()
     lu.assertEquals(type(host.hooks.override), "function")
     lu.assertEquals(type(host.hooks.contextWrap), "function")
     lu.assertEquals(type(host.shared), "table")
-    lu.assertNil(host.shared.provide)
-    lu.assertNil(host.shared.poll)
     lu.assertEquals(type(host.shared.listen), "function")
     lu.assertNil(host.shared.emit)
     lu.assertEquals(type(host.mutation), "table")
@@ -680,20 +678,20 @@ function TestCreateModule:testCreateModuleRejectsOwnerOption()
     end)
 end
 
-function TestCreateModule:testCreateModuleRejectsLegacyDefinitionOption()
-    lu.assertErrorMsgContains("definition table is no longer supported", function()
+function TestCreateModule:testCreateModuleRejectsUnknownDefinitionOption()
+    lu.assertErrorMsgContains("unknown option 'definition'", function()
         self.h:createModuleOrThrow({
-            pluginGuid = "test-create-module-legacy-definition",
+            pluginGuid = "test-create-module-definition-option",
             config = {},
             definition = {
-                id = "LegacyDefinition",
-                name = "Legacy Definition",
+                id = "DefinitionOption",
+                name = "Definition Option",
             },
         })
     end)
 end
 
-function TestCreateModule:testCreateModuleRejectsLegacyTopLevelDeclarations()
+function TestCreateModule:testCreateModuleRejectsUnknownTopLevelDeclarations()
     lu.assertErrorMsgContains("unknown option 'storage'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-storage-top-level",

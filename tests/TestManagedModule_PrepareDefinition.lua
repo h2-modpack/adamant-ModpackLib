@@ -535,8 +535,8 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionTreatsStorageD
     lu.assertStrContains(self.h.warnings[1], "structural definition changed during hot reload")
 end
 
-function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsLegacyDataDefaultsArgument()
-    lu.assertErrorMsgContains("storage defaults on definition.storage nodes", function()
+function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsUnknownStructuralSurfaceOption()
+    lu.assertErrorMsgContains("unknown option 'modpack'", function()
         self.h.managedModule.prepareDefinition({}, { Count = 1 }, {
             modpack = "test-pack",
             id = "Example",
@@ -616,7 +616,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionFingerprintTra
         modpack = "test-pack",
         id = "Example",
         name = "Example",
-        tooltip = "old",
+        tooltip = "before",
         storage = {},
     })
 
