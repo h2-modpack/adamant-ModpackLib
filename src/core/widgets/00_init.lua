@@ -39,7 +39,6 @@ local uiDraw = import('core/widgets/ui_draw.lua', nil, {
     logging = deps.logging,
     storage = deps.storage,
     rom = deps.rom,
-    phaseGate = deps.phaseGate,
     controlsDraw = deps.controlsDraw,
 })
 

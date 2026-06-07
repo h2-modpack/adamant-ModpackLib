@@ -13,12 +13,10 @@ local refs = import('core/controls/refs.lua', nil, {
     logging = deps.logging,
     values = deps.values,
     storage = deps.storage,
-    phaseGate = deps.phaseGate,
 })
 
 local draw = import('core/controls/draw_controls.lua', nil, {
     logging = deps.logging,
-    phaseGate = deps.phaseGate,
     refs = refs,
 })
 

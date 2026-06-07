@@ -316,7 +316,7 @@ Outside that coordinated path, use a full reload.
 - keep `chalk`, `reload`, and raw config local to `main.lua`
 - recreate module declarations and activate the Lib-created live module in `init`
 - keep staged state behind the live module; draw callbacks receive restricted
-  `ui.draw`, `ui.data`, and `ui.actions` through the UI phase object
+  `ui.draw`, `ui.data`, and `ui.actions` through the UI callback object
 - register runtime hooks through `module.hooks.*` before activation
 - pass `pluginGuid` to `lib.createModule(...)`
 - call `module.activate()` after declarations

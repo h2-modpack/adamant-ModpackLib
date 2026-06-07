@@ -20,7 +20,6 @@ service.currentRun = {
 
 local dataCache = import('core/cache/adapters/data_cache.lua', nil, {
     logging = deps.logging,
-    phaseGate = deps.phaseGate,
     service = service,
 })
 service.data = dataCache

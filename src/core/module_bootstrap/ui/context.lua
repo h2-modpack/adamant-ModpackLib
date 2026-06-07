@@ -2,9 +2,8 @@ local deps = ...
 
 local uiDraw = deps.uiDraw
 local moduleState = deps.moduleState
-local phaseGate = deps.phaseGate
 
-local uiPhase = {}
+local uiContext = {}
 
 local function packResults(...)
     return {
@@ -13,7 +12,25 @@ local function packResults(...)
     }
 end
 
----@class UiPhaseObjects
+local function withTraceback(err)
+    if debug and type(debug.traceback) == "function" then
+        return debug.traceback(tostring(err), 2)
+    end
+    return tostring(err)
+end
+
+local function runCallback(callback, ...)
+    local args = { ... }
+    local results = packResults(xpcall(function()
+        return callback(table.unpack(args))
+    end, withTraceback))
+    if not results[1] then
+        error(results[2], 0)
+    end
+    return table.unpack(results, 2, results.n)
+end
+
+---@class UiCallbackObjects
 ---@field draw DrawContext
 ---@field state DrawState
 ---@field actions DrawActions
@@ -23,7 +40,7 @@ end
 ---    actions: DrawActions
 ---): any): any
 
----@class UiPhaseCreateOpts
+---@class UiCallbackCreateOpts
 ---@field definition ModuleDefinition
 ---@field stagedState StagedState
 ---@field shared table|nil
@@ -33,9 +50,9 @@ end
 ---@field status table|nil
 ---@field resetAll fun(opts: table|nil)|nil
 
----@param opts UiPhaseCreateOpts
----@return UiPhaseObjects
-function uiPhase.create(opts)
+---@param opts UiCallbackCreateOpts
+---@return UiCallbackObjects
+function uiContext.create(opts)
     local objects = {
         draw = uiDraw.get(),
         state = moduleState.uiState.create(opts.stagedState, opts.shared),
@@ -49,13 +66,12 @@ function uiPhase.create(opts)
         controls = opts.controls,
         status = opts.status,
         resetAll = function(resetOpts)
-            phaseGate.requireAnyDraw()
             return opts.resetAll(resetOpts)
         end,
     }
 
     function objects.run(callback)
-        local results = packResults(phaseGate.runDraw(function()
+        local results = packResults(runCallback(function()
             return callback(opts.host, objects.ui)
         end))
 
@@ -65,4 +81,4 @@ function uiPhase.create(opts)
     return objects
 end
 
-return uiPhase
+return uiContext

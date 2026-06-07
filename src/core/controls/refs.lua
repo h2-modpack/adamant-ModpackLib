@@ -3,7 +3,6 @@ local deps = ...
 local logging = deps.logging
 local values = deps.values
 local storage = deps.storage
-local phaseGate = deps.phaseGate
 
 local refs = {}
 local CONTROL_REF_MARKER = {}
@@ -12,13 +11,6 @@ local function requireSelf(context, self, expected)
     if self ~= expected then
         logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
     end
-end
-
-local function createGate(phase)
-    if phase == "draw" then
-        return phaseGate.requireAnyDraw
-    end
-    return phaseGate.requireRuntime
 end
 
 local function findMappedAlias(mapping, alias)
@@ -78,7 +70,7 @@ local function mapRowAlias(binding, alias, context)
     return internalAlias
 end
 
-local function wrapField(rawField, binding, gate, writable)
+local function wrapField(rawField, binding, writable)
     local field = {
         _kind = rawget(rawField, "_kind"),
     }
@@ -111,19 +103,16 @@ local function wrapField(rawField, binding, gate, writable)
     if writable then
         function field.write(self, value)
             requireSelf("control field write", self, field)
-            gate()
             return rawField:write(value)
         end
 
         function field.writeAlias(self, alias, value)
             requireSelf("control field writeAlias", self, field)
-            gate()
             return rawField:writeAlias(mapFieldAlias(binding, alias, "control field writeAlias"), value)
         end
 
         function field.reset(self)
             requireSelf("control field reset", self, field)
-            gate()
             return rawField:reset()
         end
     end
@@ -153,7 +142,7 @@ local function translateSnapshot(binding, snapshot)
     return mapped
 end
 
-local function wrapTable(rawTable, binding, gate, writable)
+local function wrapTable(rawTable, binding, writable)
     local handle = {}
     local fieldCache = {}
 
@@ -188,7 +177,7 @@ local function wrapTable(rawTable, binding, gate, writable)
         if rawField == nil then
             return nil
         end
-        local field = wrapField(rawField, binding.rowBindings and binding.rowBindings[rowAlias] or nil, gate, writable)
+        local field = wrapField(rawField, binding.rowBindings and binding.rowBindings[rowAlias] or nil, writable)
         rowFields[internalAlias] = field
         return field
     end
@@ -210,19 +199,16 @@ local function wrapTable(rawTable, binding, gate, writable)
     if writable and type(rawTable.write) == "function" then
         function handle.write(self, rowIndex, rowAlias, value)
             requireSelf("control table write", self, handle)
-            gate()
             return rawTable:write(rowIndex, mapRowAlias(binding, rowAlias, "control table write"), value)
         end
 
         function handle.reset(self, rowIndex, rowAlias)
             requireSelf("control table reset", self, handle)
-            gate()
             return rawTable:reset(rowIndex, mapRowAlias(binding, rowAlias, "control table reset"))
         end
 
         function handle.append(self, rowValues)
             requireSelf("control table append", self, handle)
-            gate()
             local changed = rawTable:append(translateRowValues(binding, rowValues))
             if changed then clearFieldCache() end
             return changed
@@ -230,7 +216,6 @@ local function wrapTable(rawTable, binding, gate, writable)
 
         function handle.insert(self, rowIndex, rowValues)
             requireSelf("control table insert", self, handle)
-            gate()
             local changed = rawTable:insert(rowIndex, translateRowValues(binding, rowValues))
             if changed then clearFieldCache() end
             return changed
@@ -238,7 +223,6 @@ local function wrapTable(rawTable, binding, gate, writable)
 
         function handle.remove(self, rowIndex)
             requireSelf("control table remove", self, handle)
-            gate()
             local changed = rawTable:remove(rowIndex)
             if changed then clearFieldCache() end
             return changed
@@ -246,7 +230,6 @@ local function wrapTable(rawTable, binding, gate, writable)
 
         function handle.clear(self)
             requireSelf("control table clear", self, handle)
-            gate()
             local changed = rawTable:clear()
             if changed then clearFieldCache() end
             return changed
@@ -256,8 +239,7 @@ local function wrapTable(rawTable, binding, gate, writable)
     return handle
 end
 
-local function createFieldSet(root, entry, phase, writable)
-    local gate = createGate(phase)
+local function createFieldSet(root, entry, surface, writable)
     local unavailable = {}
     local fields = setmetatable({}, {
         __index = function(_, key)
@@ -279,7 +261,7 @@ local function createFieldSet(root, entry, phase, writable)
                 tostring(entry.name), tostring(key))
         else
             local bindField = true
-            if phase == "runtime" and not schema._persist then
+            if surface == "runtime" and not schema._persist then
                 bindField = false
                 unavailable[key] = "runtime because it is UI-only transient storage"
             end
@@ -290,9 +272,9 @@ local function createFieldSet(root, entry, phase, writable)
                     logging.violate("controls.invalid_field", "control '%s': compiled field '%s' is missing",
                         tostring(entry.name), tostring(key))
                 elseif storage.field.is(raw) then
-                    fields[key] = wrapField(raw, binding, gate, writable)
+                    fields[key] = wrapField(raw, binding, writable)
                 else
-                    fields[key] = wrapTable(raw, binding, gate, writable)
+                    fields[key] = wrapTable(raw, binding, writable)
                 end
             end
         end
@@ -301,10 +283,10 @@ local function createFieldSet(root, entry, phase, writable)
     return fields
 end
 
-local function attachControlInternals(control, entry, phase)
+local function attachControlInternals(control, entry, surface)
     control[CONTROL_REF_MARKER] = {
         entry = entry,
-        phase = phase,
+        surface = surface,
     }
 
     if control.name == nil then
@@ -321,8 +303,8 @@ local function attachControlInternals(control, entry, phase)
     return control
 end
 
-local function createControl(entry, fields, factoryPhase)
-    local factory = factoryPhase == "draw" and entry.template.createUi or entry.template.createRuntime
+local function createControl(entry, fields, factorySurface)
+    local factory = factorySurface == "ui" and entry.template.createUi or entry.template.createRuntime
     local control
     if type(factory) == "function" then
         control = factory(fields, entry.instance)
@@ -333,7 +315,7 @@ local function createControl(entry, fields, factoryPhase)
         logging.violate("controls.invalid_template", "control '%s': template factory must return a table",
             tostring(entry.name))
     end
-    return attachControlInternals(control, entry, factoryPhase)
+    return attachControlInternals(control, entry, factorySurface)
 end
 
 local function resetBoundRoots(root, entry)
@@ -363,10 +345,10 @@ end
 
 local function createFacade(opts)
     local catalog = opts.catalog or {}
-    local phase = opts.phase
-    local factoryPhase = opts.factoryPhase or phase
+    local surface = opts.surface
+    local factorySurface = opts.factorySurface or surface
     local root = opts.root
-    local writable = opts.writable == true or phase == "draw"
+    local writable = opts.writable == true or surface == "ui"
     local controlCache = {}
     local facade = {}
 
@@ -374,14 +356,14 @@ local function createFacade(opts)
         local entry = catalog.instances and catalog.instances[name] or nil
         if entry == nil then
             logging.violate("controls.unknown_control", "%s.controls.get: unknown control '%s'",
-                phase == "draw" and "ui" or "runtime", tostring(name))
+                surface == "ui" and "ui" or "runtime", tostring(name))
         end
         local cached = controlCache[name]
         if cached ~= nil then
             return cached
         end
-        local fields = createFieldSet(root, entry, phase, writable)
-        local control = createControl(entry, fields, factoryPhase)
+        local fields = createFieldSet(root, entry, surface, writable)
+        local control = createControl(entry, fields, factorySurface)
         controlCache[name] = control
         return control
     end
@@ -394,9 +376,8 @@ local function createFacade(opts)
         return control:read(...)
     end
 
-    if phase == "draw" then
+    if surface == "ui" then
         function facade.reset(name)
-            phaseGate.requireAnyDraw()
             local entry = catalog.instances and catalog.instances[name] or nil
             if entry == nil then
                 logging.violate("controls.unknown_control", "ui.controls.reset: unknown control '%s'", tostring(name))
@@ -413,7 +394,7 @@ function refs.createRuntime(persistentState, catalog)
     return createFacade({
         root = persistentState,
         catalog = catalog,
-        phase = "runtime",
+        surface = "runtime",
     })
 end
 
@@ -421,7 +402,7 @@ function refs.createUi(stagedState, catalog)
     return createFacade({
         root = stagedState,
         catalog = catalog,
-        phase = "draw",
+        surface = "ui",
     })
 end
 
@@ -437,12 +418,12 @@ function refs.getEntry(value)
     return type(marker) == "table" and marker.entry or nil
 end
 
-function refs.getPhase(value)
+function refs.getSurface(value)
     if type(value) ~= "table" then
         return nil
     end
     local marker = rawget(value, CONTROL_REF_MARKER)
-    return type(marker) == "table" and marker.phase or nil
+    return type(marker) == "table" and marker.surface or nil
 end
 
 return refs

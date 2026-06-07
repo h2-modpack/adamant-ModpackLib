@@ -16,8 +16,8 @@ local makeMinRowsTableDefinition = helpers.makeMinRowsTableDefinition
 
 TestModuleState_StagedState = {}
 
-local function inDraw(harness, callback)
-    return harness.phaseGate.runDraw(callback)
+local function inDraw(_, callback)
+    return callback()
 end
 
 function TestModuleState_StagedState:setUp()
@@ -26,23 +26,6 @@ end
 
 function TestModuleState_StagedState:tearDown()
     self.harness = nil
-end
-
-function TestModuleState_StagedState:testStorageRefAdapterRejectsUnknownPhase()
-    local storageRefAdapter = self.harness.imports["core/module_state/storage_ref_adapter.lua"]
-
-    lu.assertErrorMsgContains("phase", function()
-        storageRefAdapter.create({
-            root = {
-                get = function()
-                    return nil
-                end,
-            },
-            phase = "commit",
-            source = "test.data.get",
-            writable = false,
-        })
-    end)
 end
 
 function TestModuleState_StagedState:testStagedStateStagesScalarAliases()

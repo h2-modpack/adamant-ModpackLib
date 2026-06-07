@@ -789,8 +789,8 @@ Supported retained overlay events:
 - `module.overlays.onInterval(name, seconds, function(host, runtime, overlay, event) ... end, opts)`
 - `module.overlays.afterHook(path, function(host, runtime, overlay, event) ... end)`
 
-`host` is the normal module utility projection. `runtime` is the runtime phase
-object. The retained overlay projection exposes named retained updates:
+`host` is the normal module utility projection. `runtime` is the runtime
+callback object. The retained overlay projection exposes named retained updates:
 
 - `overlay.setLine(name, values)`
 - `overlay.setTable(name, rows)`

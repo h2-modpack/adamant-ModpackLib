@@ -1,18 +1,9 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local service = deps.service
 
 local dataShared = {}
-
-local function requirePhase(phase)
-    if phase == "draw" then
-        phaseGate.requireAnyDraw()
-    else
-        phaseGate.requireRuntime()
-    end
-end
 
 local function requireMethod(ref, methodName, name, source)
     local method = ref[methodName]
@@ -23,27 +14,23 @@ local function requireMethod(ref, methodName, name, source)
     return method
 end
 
-local function wrapSetClearRef(phase, rawRef)
+local function wrapSetClearRef(rawRef)
     return {
         get = function()
-            requirePhase(phase)
             return rawRef:get()
         end,
         set = function(value)
-            requirePhase(phase)
             return rawRef:set(value)
         end,
         clear = function()
-            requirePhase(phase)
             return rawRef:clear()
         end,
     }
 end
 
-local function wrapReaderRef(phase, rawRef)
+local function wrapReaderRef(rawRef)
     return {
         get = function()
-            requirePhase(phase)
             return rawRef:get()
         end,
     }
@@ -52,14 +39,13 @@ end
 local function createSharedRef(opts, name)
     local rawRef = service.data.createDeclaredRef(opts.record, opts.host, name, opts.source)
     if rawRef.set then
-        return wrapSetClearRef(opts.phase, rawRef)
+        return wrapSetClearRef(rawRef)
     end
-    return wrapReaderRef(opts.phase, rawRef)
+    return wrapReaderRef(rawRef)
 end
 
 local function emitShared(opts, id, eventName, payload)
-    requirePhase(opts.phase)
-    if opts.phase == "draw" then
+    if opts.lane == "ui" then
         service.validateEmit(opts.source .. ".emit", id, eventName)
         return opts.actionBuffer.emitShared(id, eventName, payload)
     end

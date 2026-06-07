@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local storageRefAdapter = deps.storageRefAdapter
 
 local runtimeStatus = {}
@@ -34,7 +33,6 @@ function runtimeStatus.create(persistentState)
 
     local statusRefs = storageRefAdapter.create({
         root = createStatusRoot(persistentState, status),
-        phase = "runtime",
         source = "runtime.status.get",
         writable = true,
     })
@@ -50,7 +48,6 @@ function runtimeStatus.create(persistentState)
             return ref:read(...)
         end,
         write = function(alias, ...)
-            phaseGate.requireRuntime()
             storageRefAdapter.rejectPrivateAlias("runtime.status.write", alias)
             local ref = statusRefs.get(alias)
             if ref == nil then
@@ -66,7 +63,6 @@ function runtimeStatus.create(persistentState)
             return ref:write(...)
         end,
         reset = function(alias, ...)
-            phaseGate.requireRuntime()
             storageRefAdapter.rejectPrivateAlias("runtime.status.reset", alias)
             local ref = statusRefs.get(alias)
             if ref == nil then

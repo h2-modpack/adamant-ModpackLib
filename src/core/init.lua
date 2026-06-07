@@ -7,9 +7,6 @@ local runtimeRoot = AdamantModpackLib_Runtime
 local logging = import('core/logging/logging.lua', nil, {
     config = deps.config,
 })
-local phaseGate = import('core/module_bootstrap/ui/phase_gate.lua', nil, {
-    logging = logging,
-})
 
 local registry = import('core/lib_bootstrap/registry.lua', nil, {
     runtimeRoot = runtimeRoot,
@@ -42,20 +39,17 @@ local moduleState = import('core/module_state/00_init.lua', nil, {
     logging = logging,
     storage = storage,
     values = values,
-    phaseGate = phaseGate,
 })
 
 local cacheBundle = import('core/cache/00_init.lua', nil, {
     logging = logging,
     gameDeps = gameDeps,
-    phaseGate = phaseGate,
 })
 
 local controlsBundle = import('core/controls/00_init.lua', nil, {
     logging = logging,
     values = values,
     storage = storage,
-    phaseGate = phaseGate,
 })
 
 local statusDeclarations = import('core/status/declarations.lua', nil, {
@@ -81,7 +75,6 @@ local sharedBundle = import('core/shared/00_init.lua', nil, {
     sharedRegistry = registry.shared,
     moduleRegistry = moduleRegistry,
     values = values,
-    phaseGate = phaseGate,
 })
 local shared = sharedBundle.service
 
@@ -130,7 +123,6 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     storage = storage,
     actions = moduleState.actionBuffer,
     rom = externals.rom,
-    phaseGate = phaseGate,
     controlsDraw = controlsBundle.draw,
 })
 
@@ -161,7 +153,6 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     storage = storage,
     uiDraw = widgetsBundle.uiDraw,
     controls = controlsBundle,
-    phaseGate = phaseGate,
 })
 
 local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil, {

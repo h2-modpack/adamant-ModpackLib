@@ -35,8 +35,8 @@ local function UseImgui(h, imgui)
     end
 end
 
-local function InDraw(h, callback)
-    return h.phaseGate.runDraw(callback)
+local function InDraw(_, callback)
+    return callback()
 end
 
 local function DrawSurface(h, surface)

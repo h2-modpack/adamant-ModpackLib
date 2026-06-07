@@ -64,11 +64,11 @@ Keep runtime data adapters in:
 
 Do not reintroduce root string dispatchers or host-level cache helpers. If a
 new cache operation is needed, add it to the specific domain facade where the
-phase and ownership rules are obvious.
+ownership rules are obvious.
 
 ## Shared Data Boundary
 
-Shared data uses runtime/draw phase adapters, but its declaration and
+Shared data uses runtime/UI callback adapters, but its declaration and
 activation lifecycle belong to `core/shared`. Keep that boundary intact so
 cache remains module-local runtime scratch state and shared remains
 cross-module cooperation.

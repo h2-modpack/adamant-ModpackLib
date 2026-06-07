@@ -1,6 +1,5 @@
 local deps = ...
 
-local phaseGate = deps.phaseGate
 local actionRefs = deps.actionRefs
 
 local uiActions = {}
@@ -17,7 +16,7 @@ function uiActions.create(actionBuffer)
         if ref ~= nil then
             return ref
         end
-        ref = actionRefs.createGatedDrawActionRef(actionBuffer, actionKey, phaseGate)
+        ref = actionRefs.createDrawActionRef(actionBuffer, actionKey)
         refs[actionKey] = ref
         return ref
     end

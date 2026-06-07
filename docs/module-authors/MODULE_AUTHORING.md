@@ -92,8 +92,8 @@ end
 ```
 
 `ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback
-objects. Reads are phase-neutral, but staged writes, action staging, and other
-mutations remain draw-scoped.
+objects. Use them in the callback that receives them. Do not retain them for
+runtime hooks or later callbacks.
 
 Use [DRAW_LIFECYCLE.md](DRAW_LIFECYCLE.md) for the full draw/commit order and
 the runtime-vs-UI data boundary. Use [DATA_LANES.md](DATA_LANES.md) to decide

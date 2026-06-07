@@ -273,7 +273,7 @@ function TestControls:tearDown()
     self.h:restoreWarnings()
 end
 
-function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
+function TestControls:testScalarControlCompilesPrivateStorageAndCallbackRefs()
     local config = {}
     local capturedUiControl = nil
     local capturedRuntimeControl = nil
@@ -336,9 +336,6 @@ function TestControls:testScalarControlCompilesPrivateStorageAndPhaseRefs()
         mode = "Tartarus",
         min = 2,
     })
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        capturedUiControl:field("Mode"):write("Any")
-    end)
 end
 
 function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
@@ -376,7 +373,7 @@ function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
     lu.assertNil(config._A_B_C)
 end
 
-function TestControls:testControlsAreCachedPerPhase()
+function TestControls:testControlsAreCachedPerSurface()
     local uiFirst = nil
     local uiSecond = nil
     local module = createModule(self.h, {

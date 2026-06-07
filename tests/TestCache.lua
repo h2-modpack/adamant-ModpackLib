@@ -42,10 +42,10 @@ local function createCacheModule(harness, pluginGuid, opts)
     return host, nil
 end
 
-function TestCache:testDeclaredCacheSurfacesArePhaseGated()
+function TestCache:testDeclaredCacheIsStoreOnlyAndNotUiData()
+    self.harness.game.CurrentRun = {}
     local capturedState = nil
-    local host, store
-    host, store = createCacheModule(self.harness, "test-cache-declared-phase-gating", {
+    local host = createCacheModule(self.harness, "test-cache-declared-store-only", {
         cache = {
             RunScratch = {
                 domain = "currentRun",
@@ -58,17 +58,15 @@ function TestCache:testDeclaredCacheSurfacesArePhaseGated()
         drawTab = function(_, state)
             capturedState = state
             lu.assertNil(state.cache)
-            lu.assertErrorMsgContains("phase.invalid_runtime_access", function()
-                store.cache.currentRun.get("RunScratch")
-            end)
         end,
     })
 
-    local liveModule = activateAndEnableHost(self.harness, host, "test-cache-declared-phase-gating")
-    store = getLiveStore(self.harness, "test-cache-declared-phase-gating")
+    local liveModule = activateAndEnableHost(self.harness, host, "test-cache-declared-store-only")
+    local store = getLiveStore(self.harness, "test-cache-declared-store-only")
     liveModule.drawTab()
 
     lu.assertNotNil(capturedState)
+    lu.assertEquals(store.cache.currentRun.get("RunScratch"), {})
 end
 
 function TestCache:testDeclaredCurrentRunCacheCreatesNamespacedStateOnce()

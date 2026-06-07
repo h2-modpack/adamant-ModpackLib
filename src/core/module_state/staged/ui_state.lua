@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local storageRefAdapter = deps.storageRefAdapter
 
 local uiState = {}
@@ -36,7 +35,6 @@ end
 function uiState.create(stagedState, shared)
     local refs = storageRefAdapter.create({
         root = createDataRoot(stagedState),
-        phase = "draw",
         source = "ui.data.get",
         writable = true,
     })
@@ -53,7 +51,6 @@ function uiState.create(stagedState, shared)
             return ref:read(...)
         end,
         write = function(alias, ...)
-            phaseGate.requireAnyDraw()
             storageRefAdapter.rejectPrivateAlias("ui.data.write", alias)
             local ref = refs.get(alias)
             if ref == nil then

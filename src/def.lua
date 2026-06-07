@@ -93,7 +93,7 @@ local lib = {}
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
----Committed runtime state facade. Reads are phase-neutral; writes live under specific mutation lanes.
+---Committed runtime state facade. Reads are available wherever this facade is provided.
 ---@class AdamantModpackLib.Store
 ---@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return read-only committed setting storage object.
 ---@field cache AdamantModpackLib.StoreCache
@@ -127,7 +127,7 @@ local lib = {}
 ---@field isDirty fun(): boolean
 ---@field auditMismatches fun(): string[]
 
----Draw-phase staged UI state facade. Reads are phase-neutral; write methods remain draw-scoped.
+---Staged UI state facade provided to draw callbacks.
 ---@class AdamantModpackLib.DrawState
 ---@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field shared AdamantModpackLib.UiSharedData
@@ -156,12 +156,12 @@ local lib = {}
 
 ---@alias AdamantModpackLib.StatusDeclarationMap table<string, AdamantModpackLib.StatusNode>
 
----Draw-phase transient action surface. Reads are phase-neutral; staging remains draw-scoped.
+---Draw callback action surface for staging one-shot UI intent.
 ---@class AdamantModpackLib.DrawActions
 ---@field get fun(actionKey: string): AdamantModpackLib.DrawActionRef
 ---@field trigger fun(actionKey: string, value?: any) Stage a declared action. Omitted value stages `true`.
 
----Draw-phase action ref. Use colon syntax; mutation methods remain draw-scoped.
+---Draw callback action ref. Use colon syntax.
 ---@class AdamantModpackLib.DrawActionRef
 ---@field stage fun(self: AdamantModpackLib.DrawActionRef, value: any)
 ---@field read fun(self: AdamantModpackLib.DrawActionRef): any
@@ -447,7 +447,7 @@ local lib = {}
 ---@field shortName? string Short display name.
 ---@field tooltip? string UI tooltip.
 
----Draw-phase immediate UI surface. `widgets` and `nav` methods require an active draw callback; `imgui` is the raw environment ImGui table.
+---Immediate UI surface provided to draw callbacks; `imgui` is the raw environment ImGui table.
 ---@class AdamantModpackLib.DrawContext
 ---@field imgui table Raw ImGui backend table for custom layout and controls.
 ---@field widgets AdamantModpackLib.DrawWidgetsApi
@@ -744,7 +744,7 @@ local lib = {}
 ---@class AdamantModpackLib.UiSuppressionToken
 ---@field release fun()
 
----Draw-phase widget helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
+---Widget helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawWidgetsApi
 ---@field separator fun()
 ---@field text fun(text: any, opts?: AdamantModpackLib.TextOpts)
@@ -765,7 +765,7 @@ local lib = {}
 ---@field checkbox fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.CheckboxOpts): boolean
 ---@field packedCheckboxList fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedCheckboxListOpts): boolean
 
----Draw-phase navigation helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
+---Navigation helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawNavApi
 ---@field verticalTabs fun(opts?: AdamantModpackLib.VerticalTabsOpts): string|number?
 

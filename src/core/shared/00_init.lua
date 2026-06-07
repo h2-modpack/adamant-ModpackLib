@@ -57,7 +57,6 @@ end
 
 local dataAdapter = import('core/shared/adapters/data_shared.lua', nil, {
     logging = deps.logging,
-    phaseGate = deps.phaseGate,
     service = service,
 })
 

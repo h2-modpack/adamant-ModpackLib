@@ -28,7 +28,6 @@ end
 function store.create(persistentState, cache, shared)
     local refs = storageRefAdapter.create({
         root = createDataRoot(persistentState),
-        phase = "runtime",
         source = "runtime.data.get",
         writable = false,
     })

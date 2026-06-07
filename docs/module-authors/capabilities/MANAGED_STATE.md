@@ -5,7 +5,7 @@ state, draw actions, and hash/profile participation.
 
 ## Surfaces
 
-| Surface | Use it for | Phase |
+| Surface | Use it for | Callback scope |
 | --- | --- | --- |
 | `runtime.data` | committed setting reads | runtime callbacks |
 | `runtime.status` | read/write runtime-authored status | runtime callbacks |

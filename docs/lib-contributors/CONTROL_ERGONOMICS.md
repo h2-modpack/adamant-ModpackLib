@@ -191,7 +191,7 @@ The useful mental model:
 ```text
 control template = managed module-side class
 control declaration = one object instance definition
-ui.controls.get(...) / runtime.controls.get(...) = phase-specific object ref
+ui.controls.get(...) / runtime.controls.get(...) = callback-surface object ref
 private storage = object fields hidden behind the control interface
 ```
 
@@ -203,8 +203,8 @@ the module lifecycle.
 ## Template Contract
 
 A control template is a module-owned class definition. It describes how one
-control instance maps to private storage and how phase-specific object
-refs are constructed.
+control instance maps to private storage and how UI/runtime object refs are
+constructed.
 
 Common template entry points:
 
@@ -217,7 +217,7 @@ Common template entry points:
   named views.
 
 The template owns the methods exposed on returned refs. Lib only requires
-enough common shape to compile, cache, build phase-specific refs, and draw refs.
+enough common shape to compile, cache, build UI/runtime refs, and draw refs.
 
 Generated field keys are compiled to private `_` storage aliases. Author-facing
 `ui.data` and `runtime.data` reject those aliases; control internals access
@@ -277,7 +277,7 @@ Controls must not allocate on every draw call.
 
 Requirements:
 
-- `ui.controls.get(name)` caches refs per module UI phase object.
+- `ui.controls.get(name)` caches refs per module UI callback object.
 - `runtime.controls.get(name)` caches refs per module runtime object.
 - control refs cache generated field refs.
 - `ui.draw.control(...)` does not build option tables internally.

@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local storage = deps.storage
 
 local storageRefAdapter = {}
@@ -9,26 +8,6 @@ local storageRefAdapter = {}
 local function requireMethodSelf(context, self, expected)
     if self ~= expected then
         logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
-    end
-end
-
-local function createGate(phase)
-    if phase == "draw" then
-        return function()
-            phaseGate.requireAnyDraw()
-        end
-    end
-
-    if phase ~= "runtime" then
-        logging.violate(
-            "storage_ref.invalid_phase",
-            "storageRefAdapter.create: phase must be 'draw' or 'runtime', got '%s'",
-            tostring(phase)
-        )
-    end
-
-    return function()
-        phaseGate.requireRuntime()
     end
 end
 
@@ -43,7 +22,7 @@ local function rejectPrivateAlias(context, alias)
     end
 end
 
-local function wrapField(rawField, contextSource, gate, isWritable)
+local function wrapField(rawField, contextSource, isWritable)
     local field = {
         _kind = rawget(rawField, "_kind"),
     }
@@ -85,20 +64,17 @@ local function wrapField(rawField, contextSource, gate, isWritable)
     if isWritable then
         function field.write(self, value)
             requireMethodSelf(writeContext, self, field)
-            gate()
             return rawField:write(value)
         end
 
         function field.writeAlias(self, alias, value)
             requireMethodSelf(writeAliasContext, self, field)
-            gate()
             rejectPrivateAlias(writeAliasContext, alias)
             return rawField:writeAlias(alias, value)
         end
 
         function field.reset(self)
             requireMethodSelf(resetContext, self, field)
-            gate()
             return rawField:reset()
         end
     end
@@ -106,7 +82,7 @@ local function wrapField(rawField, contextSource, gate, isWritable)
     return field
 end
 
-local function wrapTable(rawTable, contextSource, gate, isWritable)
+local function wrapTable(rawTable, contextSource, isWritable)
     local handle = {}
     local fields = {}
 
@@ -157,7 +133,7 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
             return nil
         end
 
-        local field = wrapField(rawField, contextSource .. ":get", gate, isWritable)
+        local field = wrapField(rawField, contextSource .. ":get", isWritable)
         rowFields[rowAlias] = field
         return field
     end
@@ -175,21 +151,18 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
     if isWritable and type(rawTable.write) == "function" then
         function handle.write(self, rowIndex, rowAlias, value)
             requireMethodSelf(writeContext, self, handle)
-            gate()
             rejectPrivateAlias(writeContext, rowAlias)
             return rawTable:write(rowIndex, rowAlias, value)
         end
 
         function handle.reset(self, rowIndex, rowAlias)
             requireMethodSelf(resetContext, self, handle)
-            gate()
             rejectPrivateAlias(resetContext, rowAlias)
             return rawTable:reset(rowIndex, rowAlias)
         end
 
         function handle.append(self, rowValues)
             requireMethodSelf(appendContext, self, handle)
-            gate()
             local changed = rawTable:append(rowValues)
             if changed then clearFieldCache() end
             return changed
@@ -197,7 +170,6 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
 
         function handle.insert(self, rowIndex, rowValues)
             requireMethodSelf(insertContext, self, handle)
-            gate()
             local changed = rawTable:insert(rowIndex, rowValues)
             if changed then clearFieldCache() end
             return changed
@@ -205,7 +177,6 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
 
         function handle.remove(self, rowIndex)
             requireMethodSelf(removeContext, self, handle)
-            gate()
             local changed = rawTable:remove(rowIndex)
             if changed then clearFieldCache() end
             return changed
@@ -213,7 +184,6 @@ local function wrapTable(rawTable, contextSource, gate, isWritable)
 
         function handle.clear(self)
             requireMethodSelf(clearContext, self, handle)
-            gate()
             local changed = rawTable:clear()
             if changed then clearFieldCache() end
             return changed
@@ -228,7 +198,6 @@ end
 function storageRefAdapter.create(opts)
     local root = opts.root
     local source = opts.source
-    local gate = createGate(opts.phase)
     local isWritable = opts.writable == true
     local refs = {}
 
@@ -248,9 +217,9 @@ function storageRefAdapter.create(opts)
 
             local ref
             if storage.field.is(raw) then
-                ref = wrapField(raw, source, gate, isWritable)
+                ref = wrapField(raw, source, isWritable)
             else
-                ref = wrapTable(raw, source .. "(...)", gate, isWritable)
+                ref = wrapTable(raw, source .. "(...)", isWritable)
             end
             refs[alias] = ref
             return ref

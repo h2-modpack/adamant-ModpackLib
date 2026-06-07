@@ -135,8 +135,7 @@ status storage.
 ## Rules
 
 - Template and control names must be stable identifiers.
-- Control refs are shaped for the callback surface that created them. Reads are
-  phase-neutral; generated writable fields remain draw-scoped.
+- Control refs are shaped for the callback surface that created them.
 - Controls are not layout builders. The module still owns tab order, sections,
   catalogs, and screen composition.
 - Do not use controls for one-off leaf fields. `ui.draw.widgets.*` is simpler.

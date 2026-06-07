@@ -4,7 +4,6 @@ local logging = deps.logging
 local storageService = deps.storage
 local values = deps.values
 local chalk = deps.chalk
-local phaseGate = deps.phaseGate
 
 local moduleState = {}
 
@@ -26,7 +25,6 @@ local actionBufferModule = import('core/module_state/actions/action_buffer.lua',
 moduleState.actionBuffer = actionBufferModule
 
 local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, {
-    phaseGate = phaseGate,
     actionRefs = actionBufferModule,
 })
 moduleState.uiActions = uiActionsModule
@@ -39,13 +37,11 @@ local stagedStateModule = import('core/module_state/staged/staged_state.lua', ni
 
 local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', nil, {
     logging = logging,
-    phaseGate = phaseGate,
     storage = storageService,
 })
 
 local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
     logging = logging,
-    phaseGate = phaseGate,
     storageRefAdapter = storageRefAdapter,
 })
 moduleState.uiState = uiStateModule
@@ -57,7 +53,6 @@ local storeModule = import('core/module_state/persistent/store.lua', nil, {
 
 local runtimeStatusModule = import('core/status/adapters/runtime_status.lua', nil, {
     logging = logging,
-    phaseGate = phaseGate,
     storageRefAdapter = storageRefAdapter,
 })
 

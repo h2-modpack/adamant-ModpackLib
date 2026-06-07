@@ -40,7 +40,7 @@ A module is built from four pieces:
 - `ui.lua`: owns immediate-mode draw functions.
 - `logic.lua`: owns hooks, mutations, and runtime behavior.
 
-The important phase rule:
+The important callback-scope rule:
 
 - draw code uses `ui.data`, `ui.draw`, `ui.actions`, and optional `ui.controls`
 - runtime code uses the `runtime` callback argument
@@ -139,8 +139,8 @@ end
 ```
 
 `ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback
-objects. Reads are phase-neutral, but staged writes, action staging, and other
-mutations remain draw-scoped.
+objects. Use them in the callback that receives them. Do not retain them for
+runtime hooks or later callbacks.
 
 ## Runtime Logic
 

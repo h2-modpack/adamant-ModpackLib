@@ -17,11 +17,9 @@ local managedModule = {
     prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
 local INTERNAL_RESET_STATUS_ACTION = "_ResetStatus"
-local phaseGate = deps.phaseGate
-local uiPhaseModule = import('core/module_bootstrap/ui/phase.lua', nil, {
+local uiContextModule = import('core/module_bootstrap/ui/context.lua', nil, {
     uiDraw = uiDraw,
     moduleState = moduleState,
-    phaseGate = phaseGate,
 })
 local moduleLifecycle = import('core/module_bootstrap/managed_module_lifecycle.lua', nil, {
     logging = logging,
@@ -481,7 +479,7 @@ function managedModule.create(opts)
     }), sharedData.create({
         host = module,
         record = record,
-        phase = "runtime",
+        lane = "runtime",
         source = "store.shared",
     }))
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
@@ -489,13 +487,13 @@ function managedModule.create(opts)
     record.store = store
     record.runtime = runtimeContext
 
-    local uiPhase = uiPhaseModule.create({
+    local uiContext = uiContextModule.create({
         definition = def,
         stagedState = stagedState,
         shared = sharedData.create({
             host = module,
             record = record,
-            phase = "draw",
+            lane = "ui",
             source = "state.shared",
             actionBuffer = actionBuffer,
         }),
@@ -509,13 +507,13 @@ function managedModule.create(opts)
     })
 
     local function runDrawLifecycle(drawCallback)
-        uiPhase.run(drawCallback)
+        uiContext.run(drawCallback)
         return module.commitIfDirty()
     end
 
     function module.drawTab()
         requireActivated("drawTab")
-        return uiPhase.run(drawTab)
+        return uiContext.run(drawTab)
     end
 
     function module.drawTabAndCommit()
@@ -526,7 +524,7 @@ function managedModule.create(opts)
     if type(drawQuickContent) == "function" then
         function module.drawQuickContent()
             requireActivated("drawQuickContent")
-            return uiPhase.run(drawQuickContent)
+            return uiContext.run(drawQuickContent)
         end
 
         function module.drawQuickContentAndCommit()

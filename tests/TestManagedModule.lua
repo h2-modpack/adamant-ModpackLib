@@ -281,7 +281,6 @@ function TestManagedModule:testSideEffectingManagedModuleMethodsRequireActivatio
 end
 
 function TestManagedModule:testManagedModuleResetAllResetsStagedAndStatusState()
-    local capturedUi = nil
     local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ResetHost",
         name = "Reset Host",
@@ -299,9 +298,7 @@ function TestManagedModule:testManagedModuleResetAllResetsStagedAndStatusState()
         definition = definition,
         persistentState = persistentState,
         stagedState = stagedState,
-        drawTab = function(_, _, _, ui)
-            capturedUi = ui
-        end,
+        drawTab = function() end,
     })
     local host = self.h.managedModule.getLiveModule("test-reset-host")
     persistentState.status.write("RuntimeFlag", true)
@@ -319,13 +316,9 @@ function TestManagedModule:testManagedModuleResetAllResetsStagedAndStatusState()
     lu.assertTrue(ok, tostring(err))
     lu.assertFalse(persistentState.status.read("RuntimeFlag"))
 
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        capturedUi.resetAll()
-    end)
 end
 
 function TestManagedModule:testUiResetAllQueuesModuleResetDuringCommit()
-    local capturedUi = nil
     local doReset = false
     local commitHadActions = nil
     local publicActionRan = false
@@ -382,7 +375,6 @@ function TestManagedModule:testUiResetAllQueuesModuleResetDuringCommit()
             commitHadActions = commit.actions.hasAny()
         end,
         drawTab = function(_, _, actions, ui)
-            capturedUi = ui
             if doReset then
                 actions.trigger("mark", true)
                 ui.shared.emit(sharedId, "changed", { value = 7 })
@@ -411,9 +403,6 @@ function TestManagedModule:testUiResetAllQueuesModuleResetDuringCommit()
     lu.assertFalse(publicActionRan)
     lu.assertNil(delivered)
 
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        capturedUi.resetAll()
-    end)
 end
 
 function TestManagedModule:testManagedModulePassesCallbackHostToCallbacks()
@@ -477,11 +466,11 @@ function TestManagedModule:testManagedModulePassesCallbackHostToCallbacks()
     lu.assertEquals(#self.h.warnings, warningCount + 2)
 end
 
-function TestManagedModule:testDrawPhaseClearsAfterDrawCallbackError()
+function TestManagedModule:testDrawCallbackErrorsDoNotPoisonLaterDraws()
     local secondDraws = 0
     local definition = self.h.managedModule.prepareDefinition({}, {
-        id = "DrawPhaseError",
-        name = "Draw Phase Error",
+        id = "DrawCallbackError",
+        name = "Draw Callback Error",
         storage = {},
     })
     local firstStore, firstStagedState = self.h:createModuleState({
@@ -493,7 +482,7 @@ function TestManagedModule:testDrawPhaseClearsAfterDrawCallbackError()
         DebugMode = false,
     }, definition)
 
-    local firstHost = createActivatedManagedModule(self.h, "test-draw-phase-error-first", {
+    local firstHost = createActivatedManagedModule(self.h, "test-draw-callback-error-first", {
         definition = definition,
         persistentState = firstStore,
         stagedState = firstStagedState,
@@ -501,7 +490,7 @@ function TestManagedModule:testDrawPhaseClearsAfterDrawCallbackError()
             error("draw boom")
         end,
     })
-    local secondHost = createActivatedManagedModule(self.h, "test-draw-phase-error-second", {
+    local secondHost = createActivatedManagedModule(self.h, "test-draw-callback-error-second", {
         definition = definition,
         persistentState = secondStore,
         stagedState = secondStagedState,
@@ -517,48 +506,6 @@ function TestManagedModule:testDrawPhaseClearsAfterDrawCallbackError()
     secondHost.drawTab()
 
     lu.assertEquals(secondDraws, 1)
-end
-
-function TestManagedModule:testNestedDrawEntryIsRejected()
-    local nestedDraws = 0
-    local definition = self.h.managedModule.prepareDefinition({}, {
-        id = "NestedDraw",
-        name = "Nested Draw",
-        storage = {},
-    })
-    local firstStore, firstStagedState = self.h:createModuleState({
-        Enabled = true,
-        DebugMode = false,
-    }, definition)
-    local secondStore, secondStagedState = self.h:createModuleState({
-        Enabled = true,
-        DebugMode = false,
-    }, definition)
-    local secondHost
-    local firstHost = createActivatedManagedModule(self.h, "test-nested-draw-first", {
-        definition = definition,
-        persistentState = firstStore,
-        stagedState = firstStagedState,
-        drawTab = function()
-            secondHost.drawTab()
-        end,
-    })
-    secondHost = createActivatedManagedModule(self.h, "test-nested-draw-second", {
-        definition = definition,
-        persistentState = secondStore,
-        stagedState = secondStagedState,
-        drawTab = function()
-            nestedDraws = nestedDraws + 1
-        end,
-    })
-
-    lu.assertErrorMsgContains("phase.nested_draw", function()
-        firstHost.drawTab()
-    end)
-
-    secondHost.drawTab()
-
-    lu.assertEquals(nestedDraws, 1)
 end
 
 function TestManagedModule:testDrawDoesNotExposeLogging()
@@ -588,14 +535,12 @@ function TestManagedModule:testDrawDoesNotExposeLogging()
     lu.assertNil(drawContext.logIf)
 end
 
-function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhase()
-    local actions = nil
-    local shared = nil
+function TestManagedModule:testDrawActionsStageAndReadIntent()
     local actionRef = nil
     local observed = nil
     local definition = self.h.managedModule.prepareDefinition({}, {
-        id = "DrawActionsPhase",
-        name = "Draw Actions Phase",
+        id = "DrawActionsIntent",
+        name = "Draw Actions Intent",
         storage = {},
         actions = {
             recording = function() end,
@@ -605,14 +550,12 @@ function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhas
         Enabled = true,
         DebugMode = false,
     }, definition)
-    createActivatedManagedModule(self.h, "test-draw-actions-phase", {
+    createActivatedManagedModule(self.h, "test-draw-actions-intent", {
         definition = definition,
         persistentState = store,
         stagedState = stagedState,
-        drawTab = function(_, _, drawActions, ui)
-            actions = drawActions
-            shared = ui.shared
-            actionRef = actions.get("recording")
+        drawTab = function(_, _, drawActions)
+            actionRef = drawActions.get("recording")
             actionRef:stage({ kind = "start" })
             observed = {
                 has = actionRef:has(),
@@ -620,26 +563,14 @@ function TestManagedModule:testDrawActionsOnlyGateMutationsOutsideOwningDrawPhas
             }
         end,
     })
-    local host = self.h.managedModule.getLiveModule("test-draw-actions-phase")
+    local host = self.h.managedModule.getLiveModule("test-draw-actions-intent")
 
     host.drawTab()
 
     lu.assertTrue(observed.has)
     lu.assertEquals(observed.value, { kind = "start" })
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actions.trigger("recording")
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        shared.emit("test.events", "changed", {})
-    end)
     lu.assertEquals(actionRef:read(), { kind = "start" })
     lu.assertTrue(actionRef:has())
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actionRef:stage({ kind = "again" })
-    end)
-    lu.assertErrorMsgContains("phase.invalid_ui_access", function()
-        actionRef:clear()
-    end)
 end
 
 function TestManagedModule:testDeclaredActionsExecuteDuringCommit()

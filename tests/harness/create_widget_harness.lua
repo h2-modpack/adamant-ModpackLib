@@ -131,7 +131,6 @@ local function createWidgetHarness(opts)
         widgets = base.widgets,
         nav = base.nav,
         uiDraw = base.uiDraw,
-        phaseGate = base.phaseGate,
         storage = base.storage,
         managedModule = base.managedModule,
         moduleState = base.moduleState,

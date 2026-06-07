@@ -232,7 +232,6 @@ local function createLibHarness(opts)
         plugin = plugin,
 
         logging = imports["core/logging/logging.lua"],
-        phaseGate = imports["core/module_bootstrap/ui/phase_gate.lua"],
         values = imports["core/helpers/values.lua"],
         gameDeps = externals.gameDeps or imports["core/game_deps/game_deps.lua"],
         cacheBundle = imports["core/cache/00_init.lua"],

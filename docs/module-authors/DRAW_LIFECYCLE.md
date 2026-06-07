@@ -18,7 +18,7 @@ local function drawTab(host, ui)
 end
 ```
 
-`host` is the callback-safe module host projection. Use it for small unphased
+`host` is the callback-safe module host projection. Use it for small general
 module operations such as logging and enabled-state checks.
 
 `ui` is the draw context:

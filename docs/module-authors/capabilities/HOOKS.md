@@ -81,8 +81,8 @@ end
 ```
 
 Do not read draw-state values inside hook callbacks. Draw state is staged UI state; hooks run against committed runtime behavior.
-Store access is runtime-phase access. It is valid in hook callbacks and normal
-runtime helper code, but not while any module draw callback is running.
+Runtime callbacks receive `runtime`; read committed module data through
+`runtime.data`.
 
 ## Context-Scoped Wraps
 

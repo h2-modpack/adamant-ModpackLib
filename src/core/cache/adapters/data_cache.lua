@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local phaseGate = deps.phaseGate
 local service = deps.service
 
 local dataCache = {}
@@ -33,11 +32,9 @@ end
 local function wrapGetClearRef(rawRef)
     return {
         get = function()
-            phaseGate.requireRuntime()
             return rawRef:get()
         end,
         clear = function()
-            phaseGate.requireRuntime()
             return rawRef:clear()
         end,
     }

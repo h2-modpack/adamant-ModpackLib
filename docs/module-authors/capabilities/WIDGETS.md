@@ -8,9 +8,8 @@ making modules thread `imgui` through widget calls. Navigation helpers use
 `ui.draw.nav` the same way.
 
 `ui.draw`, `ui.data`, `ui.actions`, and `ui.controls` are draw-callback objects.
-Use them from the active draw callback. Lib keeps read methods cheap and
-phase-neutral, but mutation methods such as staged writes and action staging
-remain draw-scoped. Do not cache draw objects for runtime use.
+Use them from the draw callback that receives them. Do not cache draw objects
+for runtime use.
 
 Use [../DRAW_LIFECYCLE.md](../DRAW_LIFECYCLE.md) for the full draw/commit
 order.

@@ -73,8 +73,8 @@ Overlay projections can update retained elements from:
 - `module.overlays.onInterval(name, seconds, function(host, runtime, overlay, event) ... end, opts)`
 - `module.overlays.afterHook(path, function(host, runtime, overlay, event) ... end)`
 
-`host` is the normal unphased module utility object. `runtime` is the runtime
-phase object, so read committed module data through `runtime.data`.
+`host` is the normal callback-safe module utility object. `runtime` is the runtime
+callback object, so read committed module data through `runtime.data`.
 
 The retained overlay projection exposes:
 

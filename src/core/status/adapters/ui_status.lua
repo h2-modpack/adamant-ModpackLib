@@ -28,7 +28,6 @@ end
 function uiStatus.create(stagedState)
     local statusRefs = storageRefAdapter.create({
         root = createStatusRoot(stagedState),
-        phase = "draw",
         source = "ui.status.get",
         writable = false,
     })

@@ -29,7 +29,6 @@ require('tests/TestCreateModule')
 require('tests/TestManagedModule_PrepareDefinition')
 require('tests/TestManagedModule_IsEnabled')
 require('tests/TestFallbackUi')
-require('tests/TestPhaseGate')
 require('tests/TestWidgets')
 require('tests/TestWidgets_Nav')
 

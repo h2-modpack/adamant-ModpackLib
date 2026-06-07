@@ -10,7 +10,7 @@ function drawControls.render(draw, control, viewName, ...)
     if entry == nil then
         logging.violate("controls.invalid_render_target", "ui.draw.control expects a control ref")
     end
-    if refs.getPhase(control) ~= "draw" then
+    if refs.getSurface(control) ~= "ui" then
         logging.violate("controls.invalid_render_target", "ui.draw.control expects a UI control ref")
     end
 

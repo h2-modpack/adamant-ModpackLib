@@ -29,8 +29,8 @@ This document assumes:
   `runtime.data.get(...)`
 - status values are written through `runtime.status` and read from UI through
   `ui.status`
-- draw-callback objects are shaped by variant type; read methods are
-  phase-neutral, while mutation methods remain scoped
+- draw-callback objects are shaped by variant type and should be used only from
+  the callback that receives them
 - debug toggles write persisted values through the host/framework flow
 - hash/profile import and config flush behavior belong to host/framework plumbing, not draw callbacks
 - framework/host own staged-state commit timing
@@ -154,7 +154,7 @@ Do not rebuild the same large option table multiple times in the same frame.
 - rebuilding unnecessary tables in hot loops
 - caching abstractions that only survive one frame
 - reintroducing retained/prepared UI layers for simple screens
-- splitting one draw flow into extra lifecycle phases without a real need
+- splitting one draw flow into extra lifecycle steps without a real need
 - calling `runtime.data.get(...):read()` from draw code instead of reading staged values through `ui.data.get(...)`
 - doing config writes directly from draw code instead of staging through `ui.data`
 - bypassing the host/framework flow for normal widget edits
