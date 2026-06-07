@@ -367,7 +367,7 @@ function TestHooks:testPublicHookApiIsNotExposed()
     lu.assertNil(self.public.hooks)
 end
 
-function TestHooks:testServiceSurfaceOnlyExposesHostInstallation()
+function TestHooks:testServiceSurfaceOnlyExposesModuleInstallation()
     local hooks = self.harness.hooks
 
     lu.assertEquals(type(hooks.installForModule), "function")

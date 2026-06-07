@@ -33,7 +33,8 @@ documentation and should not be treated as an API contract.
   Audit: [2026-06-07-integration-poll-provider.md](audits/2026-06-07-integration-poll-provider.md).
 - [x] `compat`, `legacy`, `deprecated`, `shim`, and `migration` references.
   Audit: [2026-06-07-migration-residue.md](audits/2026-06-07-migration-residue.md).
-- [ ] broad context objects or adapter layers that survived the native API migration.
+- [x] broad context objects or adapter layers that survived the native API migration.
+  Audit: [2026-06-07-context-adapters.md](audits/2026-06-07-context-adapters.md).
 - [ ] one-line helpers that only hide direct calls without adding policy.
 - [ ] docs that describe historical migration plans instead of current behavior.
 
