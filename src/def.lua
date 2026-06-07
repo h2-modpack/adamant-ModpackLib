@@ -266,7 +266,7 @@ local lib = {}
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
----@field onActivate fun(callback: fun(host: Host, runtime: RuntimeContext): nil): nil
+---@field onActivate fun(callback: fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext): nil): nil
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
 ---@field fallbackUi AuthorFallbackUi
 ---@field hooks AdamantModpackLib.ModuleHooks

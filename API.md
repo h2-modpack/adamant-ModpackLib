@@ -25,6 +25,7 @@ data/UI/runtime capabilities on that object, then call `module.activate()`.
 and optional `modpack`. Everything else is declared through namespaces before
 activation:
 - `module.data.define(...)`
+- `module.status.define(...)`
 - `module.actions.define(...)`
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
@@ -38,7 +39,7 @@ activation:
 - `module.overlays.*`
 - `module.fallbackUi.*`
 
-That host owns:
+That module owns:
 - `drawTab`
 - optional `drawQuickContent`
 - built-in module registry helpers for Framework and fallback UI
@@ -579,8 +580,8 @@ Options:
 Reload-stable wrappers around ModUtil path hooks.
 
 Modules declare hooks on the module object returned by
-`lib.createModule(...)`. Lib scopes those declarations to the host's
-module owner id, derived from `pluginGuid`.
+`lib.createModule(...)`. Lib scopes those declarations to the module owner id,
+derived from `pluginGuid`.
 
 ### `module.hooks.wrap(path, handler)`
 
