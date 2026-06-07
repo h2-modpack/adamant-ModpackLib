@@ -59,7 +59,7 @@ and add a dedicated audit note only if a future pass finds new issues.
 | 7 | Controls | Done | Controls compile config storage only; status/actions remain module-level coordination lanes. |
 | 8 | Widgets | Done | Hot draw-path helpers, option validation, and docs/API alignment were audited. Audit: [2026-06-07-widgets.md](audits/2026-06-07-widgets.md). |
 | 9 | Hooks | Done | Declaration/install boundaries, context wrapping, and ModUtil registry interactions were audited. Audit: [2026-06-07-hooks.md](audits/2026-06-07-hooks.md). |
-| 10 | Overlays | Pending | Audit retained overlay lifecycle, suppression, renderer boundaries, and docs. |
+| 10 | Overlays | Done | Retained overlay lifecycle, suppression, renderer boundaries, and docs were audited. Module overlay callbacks now receive the full managed runtime context. Audit: [2026-06-07-overlays.md](audits/2026-06-07-overlays.md). |
 | 11 | Mutations | Done | Plan generation, lifecycle sync, and framework/module integration points were audited. Audit: [2026-06-07-mutations.md](audits/2026-06-07-mutations.md). |
 | 12 | Fallback UI and framework runtime | Done | Framework/runtime docs were aligned with `ui.status`; fallback UI now balances ImGui `Begin`/`End` on module draw errors. Audit: [2026-06-07-fallback-framework-runtime.md](audits/2026-06-07-fallback-framework-runtime.md). |
 | 13 | Module bootstrap and activation | Pending | Audit last because it composes every lower subsystem. |

@@ -83,7 +83,6 @@ function moduleActivation.activateOrThrow(module)
     end
 
     local pluginGuid = module.getOwnerId()
-    local store = record.store
     local def = record.definition
 
     if record.activated == true then
@@ -119,7 +118,7 @@ function moduleActivation.activateOrThrow(module)
     local ok, err = pcall(function()
         addReceipt("shared", shared.installForModule(module), true)
         addReceipt("hooks", hooks.installForModule(module), true)
-        addReceipt("overlays", overlays.installForModule(module, store), true)
+        addReceipt("overlays", overlays.installForModule(module), true)
         addReceipt("mutation", mutation.syncForModule(module), false)
         if record.fallbackUiRequested == true then
             addReceipt("fallbackUi", fallbackUi.installForModule(module), true)

@@ -40,7 +40,7 @@ local function disposeReceipt(receipt)
     return receipt.dispose()
 end
 
-function moduleAdapter.installForModule(module, store)
+function moduleAdapter.installForModule(module)
     local record = requireModuleRecord(module, "overlays.installForModule")
     local ownerId = module.getOwnerId()
     if type(ownerId) ~= "string" or ownerId == "" then
@@ -58,7 +58,7 @@ function moduleAdapter.installForModule(module, store)
     local disposed = false
 
     local ok, err = pcall(function()
-        retained.refresh(stagingOwner, pendingOwnerId, record.host, store, function(registrar)
+        retained.refresh(stagingOwner, pendingOwnerId, record.host, record.runtime, function(registrar)
             declarations.replay(overlayDeclarations, registrar)
         end, { hidden = true })
         afterHookReceipt = createAfterHookReceipt(module, retained.getAfterHookPaths(stagingOwner))
@@ -90,7 +90,7 @@ function moduleAdapter.installForModule(module, store)
                 return false, clearErr
             end
             transaction.commit()
-            retained.promoteTableRegistry(stagingOwner, module, currentOwnerId, record.host, store)
+            retained.promoteTableRegistry(stagingOwner, module, currentOwnerId, record.host, record.runtime)
             committed = true
             return true, nil
         end,

@@ -6,7 +6,11 @@ local logging = deps.logging
 local overlayOrder = deps.order
 local rom = deps.rom
 
-local function createRuntimeContext(store)
+local function getRuntimeContext(registry)
+    if registry.runtime ~= nil then
+        return registry.runtime
+    end
+    local store = registry.store
     return {
         data = store,
         cache = store and store.cache or nil,
@@ -22,7 +26,7 @@ local function resolveVisibleValue(registry, visible)
     if registry.explicitOwner == true then
         return visible()
     end
-    return visible(registry.host, createRuntimeContext(registry.store))
+    return visible(registry.host, getRuntimeContext(registry))
 end
 
 local function copyArray(source)
@@ -288,6 +292,9 @@ local function snapshotRegistry(registry)
     return {
         ownerId = registry.ownerId,
         hidden = registry.hidden,
+        host = registry.host,
+        runtime = registry.runtime,
+        store = registry.store,
         refreshPass = registry.refreshPass,
         refreshing = registry.refreshing,
         elements = elements,
@@ -306,6 +313,9 @@ local function restoreRegistry(registry, snapshot)
 
     registry.ownerId = snapshot.ownerId
     registry.hidden = snapshot.hidden == true
+    registry.host = snapshot.host
+    registry.runtime = snapshot.runtime
+    registry.store = snapshot.store
     registry.refreshPass = snapshot.refreshPass
     registry.refreshing = snapshot.refreshing
     registry.events = {
@@ -481,7 +491,7 @@ local function beginTransaction(owner)
     }
 end
 
-local function refresh(owner, ownerId, host, store, register, opts)
+local function refresh(owner, ownerId, host, runtime, register, opts)
     if type(register) ~= "function" then
         logging.violate("overlays.invalid_registration", "overlay refresh: register must be a function")
     end
@@ -492,7 +502,8 @@ local function refresh(owner, ownerId, host, store, register, opts)
     end
     registry.hidden = opts and opts.hidden == true
     registry.host = host
-    registry.store = store
+    registry.runtime = runtime
+    registry.store = runtime and runtime.data or nil
     registry.refreshPass = registry.refreshPass + 1
     registry.refreshing = true
     registry.seenElements = {}
@@ -563,7 +574,7 @@ local function recreateElementSlots(registry)
     end
 end
 
-local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, store)
+local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, runtime)
     local registry = getRegistry(sourceOwner, false)
     if not registry then
         return
@@ -584,7 +595,8 @@ local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, sto
     end
     registry.hidden = false
     registry.host = host
-    registry.store = store
+    registry.runtime = runtime
+    registry.store = runtime and runtime.data or nil
     recreateElementSlots(registry)
 end
 

@@ -142,12 +142,14 @@ function TestOverlays_Retained:testModuleOverlayCallbacksReceiveStandardRuntimeS
                 ownerId = callbackHost.getOwnerId(),
                 hasLifecycleSetEnabled = type(callbackHost.setEnabled) == "function",
                 runtimeValue = runtime.data.read("Flag"),
+                statusValue = runtime.status.read("RuntimeFlag"),
                 commitValue = commit.reason,
             }
         end)
     end, {
         storage = {
             { type = "bool", alias = "Flag", default = false },
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false, persist = false },
         },
         config = {
             Enabled = true,
@@ -164,6 +166,7 @@ function TestOverlays_Retained:testModuleOverlayCallbacksReceiveStandardRuntimeS
         ownerId = host.getOwnerId(),
         hasLifecycleSetEnabled = false,
         runtimeValue = true,
+        statusValue = false,
         commitValue = "test",
     })
 end
@@ -362,7 +365,7 @@ end
 function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit()
     local pluginGuid = "test-retained-overlay-staging"
     local ownerId = pluginGuid
-    local host, _, store = self:createModuleWithOverlays(pluginGuid, function(overlays)
+    local host = self:createModuleWithOverlays(pluginGuid, function(overlays)
         overlays.createLine("candidate", {
             region = "middleRightStack",
             columns = {
@@ -373,7 +376,7 @@ function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit
     local pendingRowKey = "middleRightStack\0" .. ownerId .. ":pending:candidate"
     local currentRowKey = "middleRightStack\0" .. ownerId .. ":current:candidate"
 
-    local receipt = self.h.overlays.installForModule(host, store)
+    local receipt = self.h.overlays.installForModule(host)
 
     lu.assertNil(self.h.rendererState.stackRows[currentRowKey])
     lu.assertNotNil(self.h.rendererState.stackRows[pendingRowKey])
