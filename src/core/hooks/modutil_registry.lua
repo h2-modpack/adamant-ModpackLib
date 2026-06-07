@@ -71,7 +71,6 @@ end
 
 local function clearPendingState(state)
     state.pendingHandler = nil
-    state.pendingReplacement = nil
     state.pendingContext = nil
 end
 
@@ -93,46 +92,30 @@ local function applyWrapState(state)
     end
 end
 
-local function applyOverrideState(state)
-    local replacement = state.pendingReplacement
+local function createOverrideDispatcher(state)
+    return function(...)
+        local current = state.replacement
+        if type(current) ~= "function" then
+            logging.violate("hooks.inactive_override", "hooks.override: function replacement is inactive")
+        end
+        return current(...)
+    end
+end
+
+local function applyOverrideState(state, replacement)
+    if type(replacement) ~= "function" then
+        logging.violate("hooks.invalid_registration", "hooks.override: replacement must be a function")
+    end
 
     state.replacement = replacement
 
-    if type(replacement) == "function" then
-        if not state.registered then
-            local modutilPath = getModUtilPath()
-            modutilPath.Override(state.path, function(...)
-                local current = state.replacement
-                if type(current) ~= "function" then
-                    logging.violate("hooks.inactive_override", "hooks.override: function replacement is inactive")
-                end
-                return current(...)
-            end)
-            state.registered = true
-            state.usesDispatcher = true
-        elseif not state.usesDispatcher then
-            local modutilPath = getModUtilPath()
-            modutilPath.Restore(state.path)
-            modutilPath.Override(state.path, function(...)
-                local current = state.replacement
-                if type(current) ~= "function" then
-                    logging.violate("hooks.inactive_override", "hooks.override: function replacement is inactive")
-                end
-                return current(...)
-            end)
-            state.usesDispatcher = true
-        end
+    if state.registered then
         return
     end
 
-    if state.registered then
-        local modutilPath = getModUtilPath()
-        modutilPath.Restore(state.path)
-    end
     local modutilPath = getModUtilPath()
-    modutilPath.Override(state.path, replacement)
+    modutilPath.Override(state.path, createOverrideDispatcher(state))
     state.registered = true
-    state.usesDispatcher = false
 end
 
 local function applyContextWrapState(state)
@@ -162,8 +145,7 @@ end
 
 local function installOverride(owner, path, key, replacement)
     local state = getSlot(owner, "override", path, key)
-    state.pendingReplacement = replacement
-    applyOverrideState(state)
+    applyOverrideState(state, replacement)
     clearPendingState(state)
     return state
 end

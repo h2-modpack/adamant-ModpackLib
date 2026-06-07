@@ -58,7 +58,7 @@ and add a dedicated audit note only if a future pass finds new issues.
 | 6 | Cache and shared data/events | Done | Shared emit is variant-typed through `runtime.shared` and `ui.shared`; shared publication writes are documented as immediate publication writes. |
 | 7 | Controls | Done | Controls compile config storage only; status/actions remain module-level coordination lanes. |
 | 8 | Widgets | Done | Hot draw-path helpers, option validation, and docs/API alignment were audited. Audit: [2026-06-07-widgets.md](audits/2026-06-07-widgets.md). |
-| 9 | Hooks | Pending | Audit declaration/install boundaries, context wrapping, and ModUtil registry interactions. |
+| 9 | Hooks | Done | Declaration/install boundaries, context wrapping, and ModUtil registry interactions were audited. Audit: [2026-06-07-hooks.md](audits/2026-06-07-hooks.md). |
 | 10 | Overlays | Pending | Audit retained overlay lifecycle, suppression, renderer boundaries, and docs. |
 | 11 | Mutations | Pending | Audit plan generation, lifecycle sync, and framework/module integration points. |
 | 12 | Fallback UI and framework runtime | Pending | Audit module listing, profile controls, hashing facade, and framework-facing names. |
