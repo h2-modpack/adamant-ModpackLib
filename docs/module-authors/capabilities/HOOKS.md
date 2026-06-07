@@ -63,12 +63,13 @@ activation starts. Calling `module.hooks.*` after activation is an author error.
 
 - installing the stable ModUtil dispatcher
 - refreshing behavior on module reload
-- removing hook behavior omitted by a later host for the same module owner id,
-  derived from `pluginGuid`
+- removing hook behavior omitted by a later module instance for the same module
+  owner id, derived from `pluginGuid`
 - rolling back activation when hook setup fails
 
 Hook declarations should be complete and repeatable. A hot reload should create
-a fresh host and declare the complete current hook set before activation.
+a fresh module instance and declare the complete current hook set before
+activation.
 
 ## Runtime State
 

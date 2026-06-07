@@ -266,7 +266,7 @@ function TestHooks:testMissingRegisterHooksRefreshRemovesPreviousHooks()
     lu.assertEquals(self.env.AdamantHookTestMissingRegisterHooks("x"), "base:x")
 end
 
-function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
+function TestHooks:testRetiredHookModulePrunesDeadDispatcherOwnerEntries()
     local pluginGuid = "hook-test-prune-dispatcher"
     local ownerId = pluginGuid
     local path = "AdamantHookTestPruneDispatcher"
@@ -305,7 +305,7 @@ function TestHooks:testRetiredHookHostPrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(self.env[path]("x"), "second:base:x")
 end
 
-function TestHooks:testHostHookDeclarationsAreStoredOnModuleRegistry()
+function TestHooks:testModuleHookDeclarationsAreStoredOnModuleRegistry()
     local hookDeclarations = self.harness.hooksBundle.declarations.create()
     local host = self.managedModule.create({
         pluginGuid = "hook-test-state-declarations",
@@ -326,7 +326,7 @@ function TestHooks:testHostHookDeclarationsAreStoredOnModuleRegistry()
     lu.assertNotNil(record.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
 end
 
-function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
+function TestHooks:testRetiredOverrideModulePrunesEmptyDispatcherPath()
     local pluginGuid = "hook-test-prune-override-dispatcher"
     local path = "AdamantHookTestPruneOverrideDispatcher"
     self.env[path] = function()
@@ -348,7 +348,7 @@ function TestHooks:testRetiredOverrideHostPrunesEmptyDispatcherPath()
     lu.assertNil(self.hookRegistry.dispatchers.override[path])
 end
 
-function TestHooks:testHostHooksDeclareAgainstAuthorModule()
+function TestHooks:testModuleHooksDeclareAgainstAuthorModule()
     local pluginGuid = "hook-test-host-wrap"
     self.env.AdamantHookTestHostWrap = function(value)
         return "base:" .. value
@@ -413,7 +413,7 @@ function TestHooks:testSystemHooksDefineRemovesOmittedDeclarations()
     lu.assertEquals(self.env.AdamantHookTestSystemOmit("x"), "base:x")
 end
 
-function TestHooks:testHostHookDeclarationsRejectAfterActivation()
+function TestHooks:testModuleHookDeclarationsRejectAfterActivation()
     local authorModule = self.public.createModule({
         pluginGuid = "hook-test-declare-after-activation",
         config = {

@@ -43,7 +43,7 @@ lookup, plugin metadata, and the backing weak side table used by
 `lib_bootstrap/module_registry`.
 
 Capability backends use `ownerId`, not `pluginGuid`. `pluginGuid` belongs at
-the module bootstrap/runtime/host-adapter boundary. Once a capability call
+the module bootstrap/runtime/callback-host adapter boundary. Once a capability call
 crosses into stateless subsystem logic, the value is only a unique owner id.
 Module adapters derive `ownerId` from `host.getOwnerId()`; system adapters
 receive an explicit `ownerId` from the managed system scope.

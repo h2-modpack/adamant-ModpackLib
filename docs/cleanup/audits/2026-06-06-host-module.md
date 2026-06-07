@@ -217,3 +217,100 @@ Recommended order:
 - Whether noisy test suite/file names such as `TestModuleHost*` and
   `create_module_host_harness.lua` should be renamed now or left as historical
   test grouping names.
+
+## Follow-up Scan - 2026-06-07
+
+Commands were rerun after phase-gate removal and the status/controls cleanup.
+
+```powershell
+rg -n "\bhost\b|Host|host\." src
+rg -n "\bhost\b|Host|host\." docs API.md
+rg -n "\bhost\b|Host|host\." tests
+rg -n "host-owned|host/framework|Lib host|host id|later host|fresh host|host-adapter" docs API.md src tests
+rg -n "activeRuntime\.host|installFallbackRuntime\(|createRuntime\(host\)|---@field host table" src/core/fallback tests
+rg -n "createSimpleActivatedHost|getHostLifecycle|createMutationHost|activateMutationHost|createSharedHost|activateAndEnableHost|configureHost|SharedHost|Host Module|Host Mutation|OverlayHost|HostOverlay|HostHook" tests docs src
+```
+
+Current broad hit counts:
+
+```text
+src: 103
+docs/API.md: 196
+tests: 622
+```
+
+The broad counts are mostly intentional callback `host` vocabulary. Current
+actionable residue is narrower.
+
+### Production Rename
+
+Completed in the first follow-up cleanup patch:
+
+- `FallbackUiRuntime.host` -> `module`.
+- `createRuntime(host)` -> `createRuntime(module)`.
+- `activeRuntime.host` -> `activeRuntime.module`.
+- fallback UI harness `installFallbackRuntime(host)` ->
+  `installFallbackRuntime(module)`.
+
+This object was not the narrow callback `Host`; it was the managed module
+surface used by fallback UI for `setEnabled`, `setDebugMode`,
+`drawTabAndCommit`, `read`, `resync`, and metadata.
+
+### Production Comment/Diagnostics
+
+Completed in the first follow-up cleanup patch:
+
+- `src/core/module_state/staged/ui_state.lua`: "Host internals keep..." ->
+  "Module internals keep...".
+- `src/core/shared/data.lua`: duplicate declaration diagnostics say "this
+  module" instead of "this host".
+
+### Docs/API Wording
+
+Completed in the docs/test wording cleanup patch:
+
+- `host/framework flow` -> `module/framework flow`.
+- `host-owned semantic helpers` -> `module-owned semantic helpers`.
+- `Lib host` -> `live module`.
+- `later/fresh host` -> `later/fresh module instance`.
+- `host id` -> `owner id`.
+- `host-adapter boundary` -> `callback-host adapter boundary`.
+
+Callback shape docs still intentionally say `(host, ui)` and
+`(host, runtime)`.
+
+### Test Cleanup
+
+Completed in the docs/test wording cleanup patch:
+
+- `createSimpleActivatedHost(...)` -> `createSimpleActivatedManagedModule(...)`.
+- `getHostLifecycle(...)` -> `getManagedModuleLifecycle(...)`.
+- `createMutationHost(...)` / `activateMutationHost(...)` ->
+  `createMutationModule(...)` / `activateMutationModule(...)`.
+- `createSharedHost(...)`, `activateAndEnableHost(...)`, and `configureHost`
+  helpers now use module-oriented names.
+- stale test names such as `testHostOverlay...` and `testHostHook...` now use
+  module-oriented names.
+- fixture labels such as `OverlayHost`, `SharedHost`, and `Host Mutation Patch`
+  now use module wording.
+
+Local variables named `host` remain when they are callback hosts or broad test
+setup handles where renaming would add churn without clarifying a public or
+internal contact point.
+
+### Keep
+
+- `AdamantModpackLib.Host`.
+- callback parameters named `host`.
+- `record.host` in `managed_module.lua`, overlays, shared listeners, mutation
+  lifecycle, hooks, actions, and declaration callback adapters. These store the
+  callback-safe host projection.
+- `host.getOwnerId()` on the callback projection.
+- docs explaining `(host, ui)` and `(host, runtime)` callback shapes.
+
+### Suggested Next Patch Order
+
+1. Rename fallback UI runtime `host` field to `module`.
+2. Fix low-risk production comments/diagnostics.
+3. Clean public docs wording.
+4. Decide whether to clean tests now or leave them as historical scan noise.

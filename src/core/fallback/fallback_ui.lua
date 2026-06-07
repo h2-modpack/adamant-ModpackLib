@@ -11,7 +11,7 @@ local modutil = deps.modutil
 local SetupRunData = deps.gameDeps.runData.SetupRunData
 
 ---@class FallbackUiRuntime
----@field host table|nil
+---@field module table|nil
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
 ---@field handleGuiClosed fun()
@@ -145,9 +145,9 @@ local function isCoordinated(packId)
     return packId and coordinator.isRegistered(packId) or false
 end
 
-local function createRuntime(host)
+local function createRuntime(module)
     local function getMeta()
-        return host.getMeta() or {}
+        return module.getMeta() or {}
     end
 
     local showWindow = false
@@ -156,7 +156,7 @@ local function createRuntime(host)
     local uiSuppressionToken = nil
 
     local function markRunDataDirty()
-        if host.affectsRunData() then
+        if module.affectsRunData() then
             runDataDirty = true
         end
     end
@@ -213,8 +213,8 @@ local function createRuntime(host)
     end
 
     local function renderWindow()
-        local moduleId = host.getModuleId()
-        local packId = host.getPackId()
+        local moduleId = module.getModuleId()
+        local packId = module.getPackId()
         local meta = getMeta()
         if isCoordinated(packId) then
             return
@@ -230,10 +230,10 @@ local function createRuntime(host)
         seedWindowSize(imgui)
         local open, shouldDraw = imgui.Begin(title, showWindow)
         if shouldDraw then
-            local enabled = host.isEnabled()
+            local enabled = module.isEnabled()
             local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
             if enabledChanged then
-                local ok, err = host.setEnabled(enabledValue)
+                local ok, err = module.setEnabled(enabledValue)
                 if ok then
                     enabled = enabledValue == true
                     markRunDataDirty()
@@ -245,20 +245,20 @@ local function createRuntime(host)
                 end
             end
 
-            local debugValue, debugChanged = imgui.Checkbox("Debug Mode", host.read("DebugMode") == true)
+            local debugValue, debugChanged = imgui.Checkbox("Debug Mode", module.read("DebugMode") == true)
             if debugChanged then
-                host.setDebugMode(debugValue)
+                module.setDebugMode(debugValue)
             end
 
             if imgui.Button("Resync State") then
-                host.resync()
+                module.resync()
             end
 
             if enabled then
                 imgui.Separator()
                 imgui.Spacing()
-                local ok, err, committed = host.drawTabAndCommit()
-                if ok and committed and host.isEnabled() then
+                local ok, err, committed = module.drawTabAndCommit()
+                if ok and committed and module.isEnabled() then
                     markRunDataDirty()
                 elseif ok == false then
                     logging.violate(
@@ -277,7 +277,7 @@ local function createRuntime(host)
     end
 
     local function addMenuBar()
-        local packId = host.getPackId()
+        local packId = module.getPackId()
         local meta = getMeta()
         if isCoordinated(packId) then return end
         if rom.ImGui.BeginMenu(meta.name) then
@@ -289,7 +289,7 @@ local function createRuntime(host)
     end
 
     local activeRuntime = {
-        host = host,
+        module = module,
         renderWindow = renderWindow,
         addMenuBar = addMenuBar,
         handleGuiClosed = handleGuiClosed,

@@ -14,7 +14,7 @@ function helpers.createModuleState(harness, config, definition)
     return state.persistentState, state.stagedState
 end
 
-function helpers.getHostLifecycle(harness)
+function helpers.getManagedModuleLifecycle(harness)
     return assert(harness.imports["core/module_bootstrap/managed_module_lifecycle.lua"],
         "managed module lifecycle service missing")
 end

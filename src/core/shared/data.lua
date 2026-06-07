@@ -164,12 +164,12 @@ local function stageDataDeclaration(context, access, declarations, hostProvider,
     validateId(context, opts.id)
 
     if declarations.byName[name] then
-        logging.violate("shared.invalid_args", "%s name '%s' is already declared by this host", context, name)
+        logging.violate("shared.invalid_args", "%s name '%s' is already declared by this module", context, name)
     end
 
     if access == "owner" then
         if declarations.ownerIds[opts.id] then
-            logging.violate("shared.invalid_args", "%s id '%s' is already owned by this host", context, opts.id)
+            logging.violate("shared.invalid_args", "%s id '%s' is already owned by this module", context, opts.id)
         end
         if opts.fallback ~= nil then
             logging.violate("shared.invalid_args", "%s fallback is only valid for reader declarations", context)

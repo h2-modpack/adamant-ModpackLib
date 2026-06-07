@@ -41,15 +41,15 @@ function TestMutation_DefinitionLifecycle:makeStore(enabled)
     }))
 end
 
-function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
+function TestMutation_DefinitionLifecycle:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
     pluginGuid = pluginGuid or ("test-" .. tostring(def and def.id or "mutation"))
-    local host = {
+    local module = {
         getOwnerId = function()
             return pluginGuid
         end,
     }
-    callbackHost = callbackHost or host
-    self.harness.moduleRegistry.setRecord(host, {
+    callbackHost = callbackHost or module
+    self.harness.moduleRegistry.setRecord(module, {
         pluginGuid = pluginGuid,
         definition = def,
         mutationBundle = mutationBundle,
@@ -59,33 +59,33 @@ function TestMutation_DefinitionLifecycle:createMutationHost(pluginGuid, def, mu
         },
         callbackHost = callbackHost,
     })
-    return host
+    return module
 end
 
 function TestMutation_DefinitionLifecycle:applyMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.applyForModule(host)
+    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.mutation.applyForModule(module)
 end
 
 function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.revertForModule(host)
+    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.mutation.revertForModule(module)
 end
 
 function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, callbackHost, store, stagedState,
         pluginGuid, actions)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.commitStagedState(host, def, mutationBundle, commitNotifier, store, stagedState, actions, nil, nil)
+    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.managedModuleLifecycle.commitStagedState(module, def, mutationBundle, commitNotifier, store, stagedState, actions, nil, nil)
 end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, stagedState, enabled, pluginGuid)
-    local host = self:createMutationHost(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.setEnabled(host, def, mutationBundle, nil, store, stagedState, nil, nil, nil, nil, enabled)
+    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.managedModuleLifecycle.setEnabled(module, def, mutationBundle, nil, store, stagedState, nil, nil, nil, nil, enabled)
 end
 
-function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, definition, config, patchCallback)
+function TestMutation_DefinitionLifecycle:activateMutationModule(pluginGuid, definition, config, patchCallback)
     local store, stagedState = createModuleState(self.harness, config, definition)
-    local host = self.managedModule.create({
+    local module = self.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
         persistentState = store,
@@ -97,7 +97,7 @@ function TestMutation_DefinitionLifecycle:activateMutationHost(pluginGuid, defin
         } or nil,
         drawTab = function() end,
     })
-    local ok, err = host.activate()
+    local ok, err = module.activate()
     return ok, err, store
 end
 
@@ -508,14 +508,14 @@ function TestMutation_DefinitionLifecycle:testActivationSyncRevertsStablePatchWh
         plan:set(target, "Value", 7)
     end
 
-    local ok, err = self:activateMutationHost(pluginGuid, def, {
+    local ok, err = self:activateMutationModule(pluginGuid, def, {
         Enabled = true,
         DebugMode = false,
     }, patch)
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(target.Value, 7)
 
-    ok, err = self:activateMutationHost(pluginGuid, def, {
+    ok, err = self:activateMutationModule(pluginGuid, def, {
         Enabled = false,
         DebugMode = false,
     }, patch)
@@ -625,7 +625,7 @@ function TestMutation_DefinitionLifecycle:testActivationSyncDisabledDoesNotBuild
         storage = {},
     })
 
-    local ok, err = self:activateMutationHost(pluginGuid, def, {
+    local ok, err = self:activateMutationModule(pluginGuid, def, {
         Enabled = false,
         DebugMode = false,
     }, function()

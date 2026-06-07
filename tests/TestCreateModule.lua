@@ -602,7 +602,7 @@ function TestCreateModule:testModuleMutationPatchDeclaresActivationMutation()
             Enabled = true,
         },
         id = "ModuleMutationPatch",
-        name = "Host Mutation Patch",
+        name = "Module Mutation Patch",
         drawTab = function() end,
     })
 
@@ -627,7 +627,7 @@ function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()
         pluginGuid = "test-create-module-module-mutation-after-activation",
         config = {},
         id = "ModuleMutationAfterActivation",
-        name = "Host Mutation After Activation",
+        name = "Module Mutation After Activation",
         drawTab = function() end,
     })
     host.activate()

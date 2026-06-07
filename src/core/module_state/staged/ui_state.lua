@@ -28,7 +28,7 @@ local function createDataRoot(stagedState)
 end
 
 --- Narrows full staged state to the module UI surface.
---- Host internals keep the private commit/reload/snapshot methods.
+--- Module internals keep the private commit/reload/snapshot methods.
 ---@param stagedState StagedState
 ---@param shared table|nil
 ---@return DrawState

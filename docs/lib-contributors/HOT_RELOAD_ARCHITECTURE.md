@@ -53,7 +53,7 @@ Expected to persist across reloads:
   buckets
 - Framework pack registry and stable GUI callbacks
 - module-owned ROM GUI callbacks attached through `module.fallbackUi.attachGuiOnce(...)`
-  and backed by Lib fallback UI bridges keyed by host id
+  and backed by Lib fallback UI bridges keyed by owner id
 
 Modules pass `pluginGuid` as their stable lifecycle identity. The live module
 for that plugin is the structural hot-reload baseline and the owner for managed
@@ -174,7 +174,7 @@ Framework reload is an infrastructure path, not the fast module-authoring path.
 Rebuilding a pack is allowed to recreate Framework UI state from scratch. The
 mod window may close, the selected tab may reset, and transient profile/import
 feedback may be lost. Persist only correctness-critical state across Framework
-reloads. Module behavior state refreshes through Lib hosts.
+reloads. Module behavior state refreshes through live modules.
 
 A Framework file reload does not, by itself, rebuild an existing pack object.
 The coordinator must call `Framework.createPack(...)` again, either from its reload
@@ -291,7 +291,7 @@ Best-effort.
 
 The coordinator registry, live-module registry, and coordinator rebuild callback
 are designed to converge back to the latest live surfaces after the relevant
-modules rebuild their hosts. Active mutation runtime is not a Lib reload
+modules rebuild their live modules. Active mutation runtime is not a Lib reload
 persistence guarantee.
 
 ### Structural edits

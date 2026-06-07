@@ -12,12 +12,12 @@ local MARKER_TEXT = "Modded"
 local fallbackHud = {}
 
 local function isRuntimeUncoordinated(activeRuntime)
-    local host = activeRuntime and activeRuntime.host
-    if type(host) ~= "table" or type(host.getPackId) ~= "function" then
+    local module = activeRuntime and activeRuntime.module
+    if type(module) ~= "table" or type(module.getPackId) ~= "function" then
         return false
     end
 
-    local packId = host.getPackId()
+    local packId = module.getPackId()
     return not (packId and coordinator.isRegistered(packId))
 end
 

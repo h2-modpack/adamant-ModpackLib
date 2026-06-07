@@ -4,7 +4,7 @@ local helpers = require('tests/harness/module_state_helpers')
 local createLibHarness = helpers.createLibHarness
 local prepareDefinition = helpers.prepareDefinition
 local createModuleState = helpers.createModuleState
-local getHostLifecycle = helpers.getHostLifecycle
+local getManagedModuleLifecycle = helpers.getManagedModuleLifecycle
 local withLoggingPolicy = helpers.withLoggingPolicy
 local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
@@ -79,7 +79,7 @@ function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
     local _, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     config.Packed = 5
-    local mismatches = getHostLifecycle(self.harness).resyncStagedState({ name = "PackedStagedState" }, stagedState)
+    local mismatches = getManagedModuleLifecycle(self.harness).resyncStagedState({ name = "PackedStagedState" }, stagedState)
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })

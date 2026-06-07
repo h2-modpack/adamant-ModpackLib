@@ -25,7 +25,7 @@ documentation and should not be treated as an API contract.
 ## Initial Cleanup Checklist
 
 - [x] `runtimeOwned` naming residue now that public API is `status`.
-- [ ] `host` versus `module` vocabulary residue in diagnostics, docs, and internal APIs.
+- [x] `host` versus `module` vocabulary residue in diagnostics, docs, and internal APIs.
   Audit: [2026-06-06-host-module.md](audits/2026-06-06-host-module.md).
 - [ ] old `service` terminology that is either real Lib internals or leftover author-facing wording.
 - [ ] stale `integration`, `poll`, and `provider` references.

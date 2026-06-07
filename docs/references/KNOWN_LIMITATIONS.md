@@ -91,7 +91,7 @@ What this means in practice:
 - `rom.gui.add_imgui(...)` and `rom.gui.add_to_menu_bar(...)` must run from the module's own callsite
 - Lib can swap the runtime behind the bridge after `module.activate()`
 - Lib cannot fully fold ROM GUI callback attachment into managed module activation
-- fallback UI runtime cleanup is host-owned after activation, but the original ROM callback attachment is not an activation receipt
+- fallback UI runtime cleanup is module-owned after activation, but the original ROM callback attachment is not an activation receipt
 
 Why this exists:
 
@@ -133,7 +133,7 @@ Lib provides clean state funnels for module authors:
 - prepared definitions for structural contract
 - managed storage for persisted state
 - transient draw state for UI/runtime staging
-- host methods for behavior
+- host callback methods for behavior
 
 But private module `internal` tables remain module-owned implementation detail. Lib does not enforce what authors store there.
 

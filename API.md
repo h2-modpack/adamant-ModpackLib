@@ -361,16 +361,16 @@ The runtime status surface provides:
 - `runtime.status.write(alias, ...)`
 - `runtime.status.reset(alias, ...)`
 
-Persisted writes happen through host-owned semantic helpers or staged-state flushes:
+Persisted writes happen through module-owned semantic helpers or staged-state flushes:
 
 ```lua
 host.setEnabled(enabled)
 host.setDebugMode(enabled)
 ```
 
-Normal modules should let `createModule(...)` and the host own enabled/debug
+Normal modules should let `createModule(...)` and the module own enabled/debug
 transitions. Ordinary draw-code edits stay staged and commit through the
-host/framework flow.
+module/framework flow.
 
 `Enabled` and `DebugMode` are ordinary prepared storage aliases injected by Lib.
 Do not declare them in module storage or module `config.lua`.
@@ -391,8 +391,8 @@ Rules:
 - status declares through `module.status.define(...)` and writes through `runtime.status`
 - draw code reads status through `ui.status`
 - status cannot participate in hashes
-- enabled toggles should write through the host/framework flow
-- debug toggles should write through the host/framework flow
+- enabled toggles should write through the module/framework flow
+- debug toggles should write through the module/framework flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
 - transient aliases are read from `ui.data` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
@@ -505,7 +505,7 @@ Framework plumbing methods:
 - `stagedState._captureDirtyConfigSnapshot()`
 - `stagedState._restoreConfigSnapshot(snapshot)`
 
-When a module is rendered through a Lib host, draw callbacks receive a
+When a module is rendered through a live module, draw callbacks receive a
 restricted author-facing `ui.data` view with:
 - `get(alias)`
 - `read(alias, ...)`
@@ -668,8 +668,8 @@ module.activate()
 ```
 
 When `module.activate()` runs, activation installs the declarations currently
-recorded on `module.hooks` and deactivates hooks omitted by a later host for the
-same module owner id.
+recorded on `module.hooks` and deactivates hooks omitted by a later module
+instance for the same module owner id.
 
 ## `module.overlays` And `frameworkRuntime.overlays`
 

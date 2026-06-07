@@ -170,11 +170,11 @@ local function createFallbackUiHarness(opts)
         return self.registry.fallback.runtimes[pluginGuid]
     end
 
-    function h:installFallbackRuntime(host)
-        local receipt = self.fallbackUi.installForModule(host)
+    function h:installFallbackRuntime(module)
+        local receipt = self.fallbackUi.installForModule(module)
         local ok, err = receipt.commit()
         assert(ok, tostring(err))
-        return self:getFallbackUiRuntime(host.getOwnerId())
+        return self:getFallbackUiRuntime(module.getOwnerId())
     end
 
     function h:getFallbackMarkerRow()

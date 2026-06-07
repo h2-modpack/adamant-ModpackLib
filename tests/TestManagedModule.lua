@@ -82,7 +82,7 @@ local function createActivatedManagedModule(h, pluginGuid, opts)
     return host, host, store
 end
 
-local function createSimpleActivatedHost(h, pluginGuid, id)
+local function createSimpleActivatedManagedModule(h, pluginGuid, id)
     local definition = h.managedModule.prepareDefinition({}, {
         id = id or pluginGuid,
         name = id or pluginGuid,
@@ -233,7 +233,7 @@ function TestManagedModule:testPatchMutationReceivesCallbackHostAndRuntimeData()
     local patchStore = nil
     local definition = self.h.managedModule.prepareDefinition({}, {
         id = "PatchHostModule",
-        name = "Patch Host Module",
+        name = "Patch Module",
         storage = {},
     })
     local store, stagedState = self.h:createModuleState({
@@ -1252,7 +1252,7 @@ function TestManagedModule:testActivationFailureRestoresLiveModuleAndShared()
     })
 
     local ok, err = secondHost.activate()
-    local _, emitter = createSimpleActivatedHost(self.h, "test-activation-rollback-emitter", "ActivationRollbackEmitter")
+    local _, emitter = createSimpleActivatedManagedModule(self.h, "test-activation-rollback-emitter", "ActivationRollbackEmitter")
     emitShared(self.h, emitter, sharedId, "changed", { value = "previous" })
 
     lu.assertFalse(ok)
@@ -1312,7 +1312,7 @@ function TestManagedModule:testActivationFailureDropsNewStagedSharedListener()
     })
 
     local ok, err = host.activate()
-    local _, emitter = createSimpleActivatedHost(
+    local _, emitter = createSimpleActivatedManagedModule(
         self.h,
         "test-activation-new-shared-rollback-emitter",
         "ActivationNewSharedRollbackEmitter")
@@ -1487,7 +1487,7 @@ function TestManagedModule:testActivationRefreshRemovesOmittedShared()
         drawTab = function() end,
     })
 
-    local _, emitter = createSimpleActivatedHost(self.h, "test-activation-refresh-emitter", "ActivationRefreshEmitter")
+    local _, emitter = createSimpleActivatedManagedModule(self.h, "test-activation-refresh-emitter", "ActivationRefreshEmitter")
     local emitOk, firstCount = emitShared(self.h, emitter, sharedId, "changed", {})
     lu.assertTrue(emitOk)
     lu.assertEquals(firstCount, 1)

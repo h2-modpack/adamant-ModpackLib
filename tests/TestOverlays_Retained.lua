@@ -127,7 +127,7 @@ function TestOverlays_Retained:testRetainedTableCapsRowsAndHidesUnusedRows()
     lu.assertTrue(#alphas > 0)
 end
 
-function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeShape()
+function TestOverlays_Retained:testModuleOverlayCallbacksReceiveStandardRuntimeShape()
     local seen = nil
     local host, authorModule = self:createModuleWithOverlays("test.retained.standard-shape", function(overlays)
         overlays.createLine("line", {
@@ -168,7 +168,7 @@ function TestOverlays_Retained:testHostOverlayCallbacksReceiveStandardRuntimeSha
     })
 end
 
-function TestOverlays_Retained:testHostOverlayVisibilityReceivesStandardRuntimeShape()
+function TestOverlays_Retained:testModuleOverlayVisibilityReceivesStandardRuntimeShape()
     local lineSeen = nil
     local columnSeen = nil
     local host, authorModule = self:createModuleWithOverlays("test.retained.visibility-shape", function(overlays)
@@ -228,15 +228,15 @@ function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     end)
 end
 
-function TestOverlays_Retained:testHostOverlayDeclarationsRejectAfterActivation()
+function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivation()
     local authorModule = self.h.public.createModule({
         pluginGuid = "test.retained.after-activation",
         config = {
             Enabled = true,
             DebugMode = false,
         },
-        id = "OverlayHost",
-        name = "Overlay Host",
+        id = "OverlayModule",
+        name = "Overlay Module",
     })
     authorModule.overlays.createLine("line", {
         region = "middleRightStack",
@@ -258,7 +258,7 @@ function TestOverlays_Retained:testHostOverlayDeclarationsRejectAfterActivation(
     end)
 end
 
-function TestOverlays_Retained:testHostOverlayDeclarationsAreStoredOnModuleRegistry()
+function TestOverlays_Retained:testModuleOverlayDeclarationsAreStoredOnModuleRegistry()
     local host = self:createModuleWithOverlays("test.retained.state-declarations", function(overlays)
         overlays.createLine("line", {
             region = "middleRightStack",
