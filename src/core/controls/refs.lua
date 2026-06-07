@@ -301,8 +301,11 @@ local function createFieldSet(root, entry, phase, writable)
     return fields
 end
 
-local function attachControlInternals(control, entry)
-    control[CONTROL_REF_MARKER] = entry
+local function attachControlInternals(control, entry, phase)
+    control[CONTROL_REF_MARKER] = {
+        entry = entry,
+        phase = phase,
+    }
 
     if control.name == nil then
         control.name = function()
@@ -330,7 +333,7 @@ local function createControl(entry, fields, factoryPhase)
         logging.violate("controls.invalid_template", "control '%s': template factory must return a table",
             tostring(entry.name))
     end
-    return attachControlInternals(control, entry)
+    return attachControlInternals(control, entry, factoryPhase)
 end
 
 local function resetBoundRoots(root, entry)
@@ -430,7 +433,16 @@ function refs.getEntry(value)
     if type(value) ~= "table" then
         return nil
     end
-    return rawget(value, CONTROL_REF_MARKER)
+    local marker = rawget(value, CONTROL_REF_MARKER)
+    return type(marker) == "table" and marker.entry or nil
+end
+
+function refs.getPhase(value)
+    if type(value) ~= "table" then
+        return nil
+    end
+    local marker = rawget(value, CONTROL_REF_MARKER)
+    return type(marker) == "table" and marker.phase or nil
 end
 
 return refs

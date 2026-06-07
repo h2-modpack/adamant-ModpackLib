@@ -184,7 +184,7 @@ local lib = {}
 ---    draw: AdamantModpackLib.DrawContext,
 ---    control: AdamantModpackLib.ControlRef,
 ---    instance: table,
----    opts: table
+---    ...: any
 ---): any
 
 ---@class AdamantModpackLib.ControlTemplate

@@ -56,7 +56,7 @@ return {
     },
     ["controls.duplicate_name"] = {
         severity = "error",
-        description = "Control template, instance, field, and command names must be unique in their scope.",
+        description = "Control template, instance, and field names must be unique in their scope.",
     },
     ["controls.unknown_template"] = {
         severity = "error",

@@ -204,6 +204,10 @@ function compiler.compile(bucket)
                 logging.violate("controls.invalid_declaration", "control '%s': %s",
                     tostring(name), tostring(maybeErr or "prepare returned nil"))
             end
+            if type(preparedOrErr) ~= "table" then
+                logging.violate("controls.invalid_declaration", "control '%s': prepare must return a table, got %s",
+                    tostring(name), type(preparedOrErr))
+            end
             instance = preparedOrErr
             instance.name = instance.name or name
         end

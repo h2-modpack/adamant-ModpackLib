@@ -73,7 +73,7 @@ local priority = runtime.controls.read("Priority")
 Draw code uses:
 
 ```lua
-ui.draw.control(ui.controls.get("Priority"), { view = "compact" })
+ui.draw.control(ui.controls.get("Priority"), "compact")
 ```
 
 Control storage is private. Normal `ui.data` and `runtime.data` cannot access

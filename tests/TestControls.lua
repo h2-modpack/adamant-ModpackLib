@@ -571,6 +571,7 @@ end
 
 function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     local results = {}
+    local runtimeControl = nil
     local module = createModule(self.h, {
         pluginGuid = "test-controls-draw-views",
         config = {},
@@ -591,11 +592,17 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
             lu.assertErrorMsgContains("controls.unknown_view", function()
                 ui.draw.control(control, "missing")
             end)
+            lu.assertErrorMsgContains("controls.invalid_render_target", function()
+                ui.draw.control(runtimeControl)
+            end)
         end,
     })
 
     lu.assertTrue(module.activate())
-    self.h:liveModule("test-controls-draw-views").drawTab()
+    local liveModule = self.h:liveModule("test-controls-draw-views")
+    local record = self.h.managedModule.getRecord(liveModule)
+    runtimeControl = record.runtime.controls.get("Rewards")
+    liveModule.drawTab()
     lu.assertEquals(results, { "default", "compact:arg" })
 end
 
@@ -726,4 +733,31 @@ function TestControls:testInvalidDeclarationsFailAtContactPoints()
             BadControl = {},
         })
     end)
+
+    local badPrepareModule, err = self.h.public.createModule({
+        pluginGuid = "test-controls-bad-prepare",
+        config = {},
+        id = "ControlsBadPrepare",
+        name = "Controls Bad Prepare",
+    })
+    lu.assertNil(err)
+    badPrepareModule.controls.defineTemplates({
+        BadPrepare = {
+            prepare = function()
+                return true
+            end,
+            draw = function() end,
+        },
+    })
+    badPrepareModule.controls.define({
+        BadControl = {
+            template = "BadPrepare",
+        },
+    })
+    badPrepareModule.ui.tab(function() end)
+
+    local ok, activateErr = badPrepareModule.activate()
+    lu.assertFalse(ok)
+    lu.assertStrContains(activateErr, "controls.invalid_declaration")
+    lu.assertStrContains(activateErr, "prepare must return a table")
 end
