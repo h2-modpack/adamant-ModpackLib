@@ -280,6 +280,56 @@ function TestManagedModule:testSideEffectingManagedModuleMethodsRequireActivatio
     end)
 end
 
+function TestManagedModule:testOnActivateSeesReloadedConfigBackedRuntimeState()
+    local observed = nil
+    local definition = self.h.managedModule.prepareDefinition({}, {
+        id = "ActivateReloadHost",
+        name = "Activate Reload Host",
+        storage = {
+            { type = "int", alias = "TargetRuns", default = 3, min = 1, max = 10 },
+            { type = "string", alias = "Mode", default = "single", maxLen = 16 },
+            { type = "bool", alias = "RuntimeReady", mode = "runtime", default = false },
+        },
+    })
+    local config = {
+        Enabled = false,
+        TargetRuns = 3,
+        Mode = "single",
+        RuntimeReady = false,
+    }
+    local persistentState, stagedState = self.h:createModuleState(config, definition)
+
+    config.Enabled = true
+    config.TargetRuns = 6
+    config.Mode = "multi"
+    config.RuntimeReady = true
+
+    local host = self.h.managedModule.create({
+        pluginGuid = "test-on-activate-reloads-config",
+        definition = definition,
+        persistentState = persistentState,
+        stagedState = stagedState,
+        drawTab = function() end,
+        onActivate = function(callbackHost, runtime)
+            observed = {
+                enabled = callbackHost.isEnabled(),
+                targetRuns = runtime.data.read("TargetRuns"),
+                mode = runtime.data.read("Mode"),
+                ready = runtime.status.read("RuntimeReady"),
+            }
+        end,
+    })
+
+    local ok, err = host.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(observed, {
+        enabled = true,
+        targetRuns = 6,
+        mode = "multi",
+        ready = true,
+    })
+end
+
 function TestManagedModule:testManagedModuleResetAllResetsStagedAndStatusState()
     local definition = self.h.managedModule.prepareDefinition({}, {
         id = "ResetHost",

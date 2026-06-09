@@ -149,6 +149,10 @@ function moduleActivation.activateOrThrow(module)
         moduleRegistry.setPluginInfo(pluginGuid, createPluginInfo(pluginGuid, def))
         published = true
 
+        if type(record.persistentState._reloadFromConfig) == "function" then
+            record.persistentState._reloadFromConfig()
+        end
+
         if type(record.onActivate) == "function" then
             record.onActivate(record.host, record.runtime)
         end
