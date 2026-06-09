@@ -1107,7 +1107,7 @@ function TestManagedModule:testManagedModuleSyncsMutationBeforeCoordinatedRebuil
     local packId = "reload-pack"
     local rebuildReason = nil
 
-    self.h.coordinator.register(packId, { ModEnabled = true })
+    self.h.coordinator.register(packId, "Test Pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild(packId, function(reason)
         rebuildReason = reason
         return true
@@ -1174,7 +1174,7 @@ function TestManagedModule:testStructuralRebuildFailureRestoresPreviousLiveModul
     local pluginGuid = "reload-rollback-pack.ReloadHost"
     local target = { Value = "base" }
 
-    self.h.coordinator.register(packId, { ModEnabled = true })
+    self.h.coordinator.register(packId, "Test Pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild(packId, function()
         return false
     end)
@@ -1388,7 +1388,7 @@ function TestManagedModule:testRuntimeSyncFailureRestoresPreviousPatchMutation()
     local pluginGuid = "test-activation-runtime-rollback"
     local target = { Value = "base" }
 
-    self.h.coordinator.register(packId, { ModEnabled = true })
+    self.h.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
     local firstDefinition = self.h.managedModule.prepareDefinition({}, {
         modpack = packId,

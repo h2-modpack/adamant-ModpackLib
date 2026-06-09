@@ -252,6 +252,7 @@ function TestMainBoot.testMainCreatesFrameworkRuntimeFacade()
     lu.assertEquals(type(frameworkRuntime.coordinator.register), "function")
     lu.assertEquals(type(frameworkRuntime.coordinator.registerRebuild), "function")
     lu.assertEquals(type(frameworkRuntime.coordinator.isRegistered), "function")
+    lu.assertEquals(type(frameworkRuntime.coordinator.getDisplayName), "function")
     lu.assertEquals(type(frameworkRuntime.overlays), "table")
     lu.assertEquals(type(frameworkRuntime.overlays.order), "table")
     lu.assertEquals(type(frameworkRuntime.overlays.define), "function")
@@ -366,7 +367,7 @@ end
 function TestMainBoot.testMainDebugMenuHidesWhenCoordinatorIsRegistered()
     local h = createBootHarness()
     local beginMenuCalls = 0
-    h.coordinator.register("coordinated-pack", { ModEnabled = true })
+    h.coordinator.register("coordinated-pack", "Test Pack", { ModEnabled = true })
     h.rom.ImGui = {
         BeginMenu = function()
             beginMenuCalls = beginMenuCalls + 1

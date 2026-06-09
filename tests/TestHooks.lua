@@ -732,7 +732,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
     local packId = "hook-pack"
     local buildCalls = 0
     local target = { Value = "base" }
-    self.coordinator.register(packId, { ModEnabled = true })
+    self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
     local definition = self.managedModule.prepareDefinition({}, {
         modpack = packId,
@@ -765,7 +765,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local firstBuildCalls = 0
     local secondBuildCalls = 0
     local target = { Value = "base" }
-    self.coordinator.register(packId, { ModEnabled = true })
+    self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
     local store = createStore(true)
 

@@ -5,10 +5,12 @@ local coordinatorRegistry = deps.coordinatorRegistry
 
 -- Hot-reload-stable coordinator registries.
 coordinatorRegistry.configs = coordinatorRegistry.configs or {}
+coordinatorRegistry.displayNames = coordinatorRegistry.displayNames or {}
 coordinatorRegistry.rebuilds = coordinatorRegistry.rebuilds or {}
 
 local coordinator = {}
 local configs = coordinatorRegistry.configs
+local displayNames = coordinatorRegistry.displayNames
 local rebuilds = coordinatorRegistry.rebuilds
 
 function coordinator.isRegistered(packId)
@@ -23,11 +25,32 @@ function coordinator.getConfig(packId)
     return configs[packId]
 end
 
-function coordinator.register(packId, config)
+function coordinator.getDisplayName(packId)
+    return displayNames[packId]
+end
+
+function coordinator.register(packId, displayName, config)
     if type(packId) ~= "string" or packId == "" then
         logging.violate(
             "coordinator.invalid_registration",
             "coordinator.register: packId must be a non-empty string"
+        )
+    end
+    if config == nil then
+        if displayName ~= nil then
+            logging.violate(
+                "coordinator.invalid_registration",
+                "coordinator.register: displayName must be nil when clearing registration"
+            )
+        end
+        configs[packId] = nil
+        displayNames[packId] = nil
+        return
+    end
+    if type(displayName) ~= "string" or displayName == "" then
+        logging.violate(
+            "coordinator.invalid_registration",
+            "coordinator.register: displayName must be a non-empty string"
         )
     end
     if config ~= nil and type(config) ~= "table" then
@@ -43,6 +66,7 @@ function coordinator.register(packId, config)
         )
     end
     configs[packId] = config
+    displayNames[packId] = displayName
 end
 
 function coordinator.registerRebuild(packId, callback)

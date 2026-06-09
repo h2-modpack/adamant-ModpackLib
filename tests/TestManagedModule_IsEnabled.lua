@@ -31,21 +31,21 @@ function TestManagedModule_IsEnabled:testEnabledNoPackId()
 end
 
 function TestManagedModule_IsEnabled:testEnabledWithCoordinatorEnabled()
-    self.h.coordinator.register("test-pack", { ModEnabled = true })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
     lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
 end
 
 function TestManagedModule_IsEnabled:testDisabledWithCoordinatorEnabled()
-    self.h.coordinator.register("test-pack", { ModEnabled = true })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
     lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
 end
 
 function TestManagedModule_IsEnabled:testEnabledWithCoordinatorDisabled()
-    self.h.coordinator.register("test-pack", { ModEnabled = false })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = false })
     lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
 end
 
 function TestManagedModule_IsEnabled:testDisabledWithCoordinatorDisabled()
-    self.h.coordinator.register("test-pack", { ModEnabled = false })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = false })
     lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
 end

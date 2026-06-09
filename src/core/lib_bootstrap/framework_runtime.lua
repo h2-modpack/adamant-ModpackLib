@@ -42,14 +42,17 @@ function frameworkRuntime.create(frameworkPluginGuid, unexpectedPackId)
         },
         hashing = deps.hashing,
         coordinator = {
-            register = function(packId, config)
-                return deps.coordinator.register(packId, config)
+            register = function(packId, displayName, config)
+                return deps.coordinator.register(packId, displayName, config)
             end,
             registerRebuild = function(packId, callback)
                 return deps.coordinator.registerRebuild(packId, callback)
             end,
             isRegistered = function(packId)
                 return deps.coordinator.isRegistered(packId)
+            end,
+            getDisplayName = function(packId)
+                return deps.coordinator.getDisplayName(packId)
             end,
         },
         modules = {

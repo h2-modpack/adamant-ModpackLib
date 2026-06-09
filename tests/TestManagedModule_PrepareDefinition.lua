@@ -261,7 +261,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRequestsCoordinato
     local rebuildReason = nil
     local rebuildStorageAlias = nil
 
-    self.h.coordinator.register("test-pack", { ModEnabled = true })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild("test-pack", function(reason)
         rebuildReason = reason
         local liveModule = self.h.managedModule.getLiveModule("test-module")
@@ -309,7 +309,7 @@ end
 function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordinatedRebuildCallbackIsMissing()
     local owner = {}
 
-    self.h.coordinator.register("test-pack", { ModEnabled = true })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
 
     self.h.managedModule.prepareDefinition(owner, {
         modpack = "test-pack",
@@ -345,7 +345,7 @@ end
 function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
     local owner = {}
 
-    self.h.coordinator.register("test-pack", { ModEnabled = true })
+    self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild("test-pack", function()
         return false
     end)

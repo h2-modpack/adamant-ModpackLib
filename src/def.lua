@@ -500,6 +500,12 @@ local lib = {}
 ---@class AdamantModpackLib.CoordinatorConfig
 ---@field ModEnabled boolean
 
+---@class AdamantModpackLib.CoordinatorRuntime
+---@field register fun(packId: string, displayName: string?, config: AdamantModpackLib.CoordinatorConfig?)
+---@field registerRebuild fun(packId: string, callback: fun(reason: table): boolean?)
+---@field isRegistered fun(packId: string): boolean
+---@field getDisplayName fun(packId: string): string?
+
 ---@class AdamantModpackLib.MutationInfo
 ---@field hasPatch boolean
 

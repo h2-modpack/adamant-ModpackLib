@@ -94,6 +94,7 @@ local function makeImgui(opts)
         getCursorPosX = 0,
         setCursorPosX = {},
         checkboxLabels = {},
+        textDisabled = {},
         buttons = {},
     }
     local checkboxValues = opts.checkboxValues or {}
@@ -140,6 +141,9 @@ local function makeImgui(opts)
         end,
         SetCursorPosX = function(x)
             calls.setCursorPosX[#calls.setCursorPosX + 1] = x
+        end,
+        TextDisabled = function(label)
+            calls.textDisabled[#calls.textDisabled + 1] = label
         end,
         BeginMenu = function(label)
             calls.beginMenu = calls.beginMenu + 1
@@ -337,9 +341,9 @@ function TestFallbackUi:testFallbackRuntimeIsRetiredWithOwningHost()
     lu.assertNotEquals(self.h:getFallbackUiRuntime(pluginGuid), firstRuntime)
 end
 
-function TestFallbackUi:testSkipsFallbackUiLifecycleWhenCoordinated()
+function TestFallbackUi:testCoordinatedFallbackShowsBreadcrumbWithoutOpeningWindow()
     local host = makeHost({ modpack = "fallback-pack" })
-    self.h.coordinator.register("fallback-pack", { ModEnabled = true })
+    self.h.coordinator.register("fallback-pack", "Fallback Pack", { ModEnabled = true })
     local imgui, calls = makeImgui({ menuClicked = true })
     self.h.rom.ImGui = imgui
 
@@ -348,12 +352,14 @@ function TestFallbackUi:testSkipsFallbackUiLifecycleWhenCoordinated()
     runtime.renderWindow()
 
     lu.assertEquals(calls.beginMenu, 0)
+    lu.assertNil(calls.menuItem)
+    lu.assertEquals(calls.textDisabled, { "Settings are in Fallback Pack Modpack Menu" })
     lu.assertEquals(calls.begin, 0)
 end
 
 function TestFallbackUi:testFallbackMarkerHidesWhenOnlyFallbackRuntimeIsCoordinated()
     local host = makeHost({ modpack = "fallback-pack" })
-    self.h.coordinator.register("fallback-pack", { ModEnabled = true })
+    self.h.coordinator.register("fallback-pack", "Test Pack", { ModEnabled = true })
 
     self.h:installFallbackRuntime(host)
     local row = self.h:getFallbackMarkerRow()
@@ -376,7 +382,7 @@ end
 function TestFallbackUi:testFallbackMarkerShowsWhenAnyFallbackRuntimeIsUncoordinated()
     local coordinatedHost = makeHost({ modpack = "fallback-pack" })
     local uncoordinatedHost = makeHost({ pluginGuid = "other-plugin", modpack = "other-pack" })
-    self.h.coordinator.register("fallback-pack", { ModEnabled = true })
+    self.h.coordinator.register("fallback-pack", "Test Pack", { ModEnabled = true })
     self.h.coordinator.register("other-pack", nil)
 
     self.h:installFallbackRuntime(coordinatedHost)
@@ -402,9 +408,9 @@ function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     runtime.addMenuBar()
     runtime.renderWindow()
 
-    lu.assertEquals(calls.beginMenu, 1)
-    lu.assertEquals(calls.menuLabel, "Fallback UI Test")
-    lu.assertEquals(calls.menuItem, "Fallback UI Test")
+    lu.assertEquals(calls.beginMenu, 0)
+    lu.assertEquals(calls.endMenu, 0)
+    lu.assertEquals(calls.menuItem, "Show Mod Menu")
     lu.assertEquals(calls.setNextWindowSize, 1)
     lu.assertEquals(calls.title, "Fallback UI Test###FallbackUiTest")
     lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })

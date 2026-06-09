@@ -296,13 +296,13 @@ local function createRuntime(module)
 
     local function addMenuBar()
         local packId = module.getPackId()
-        local meta = getMeta()
-        if isCoordinated(packId) then return end
-        if rom.ImGui.BeginMenu(meta.name) then
-            if rom.ImGui.MenuItem(meta.name) then
-                setWindowOpen(not showWindow)
-            end
-            rom.ImGui.EndMenu()
+        if isCoordinated(packId) then
+            local displayName = coordinator.getDisplayName(packId) or packId
+            rom.ImGui.TextDisabled("Settings are in " .. displayName .. " Modpack Menu")
+            return
+        end
+        if rom.ImGui.MenuItem("Show Mod Menu") then
+            setWindowOpen(not showWindow)
         end
     end
 
