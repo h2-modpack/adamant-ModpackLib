@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [2.0.0] - 2026-06-09
+
 ### Changed
 
 - Storage declarations now use direct flat `alias` identifiers as the canonical managed storage backing keys.
@@ -143,6 +145,7 @@ Initial public release of the adamant Modpack Lib surface.
 - this release documents the current immediate-mode Lib contract
 - legacy declarative UI authoring is not part of the supported public surface for this release
 
-[unreleased]: https://github.com/h2-modpack/adamant-ModpackLib/compare/1.1.0...HEAD
+[unreleased]: https://github.com/h2-modpack/adamant-ModpackLib/compare/2.0.0...HEAD
+[2.0.0]: https://github.com/h2-modpack/adamant-ModpackLib/compare/1.1.0...2.0.0
 [1.1.0]: https://github.com/h2-modpack/adamant-ModpackLib/compare/1.0.0...1.1.0
 [1.0.0]: https://github.com/h2-modpack/adamant-ModpackLib/compare/39bee9364299ddbc4447ec92c0e33662dbb43ab5...1.0.0
