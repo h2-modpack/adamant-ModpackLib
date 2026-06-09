@@ -12,6 +12,7 @@ local SetupRunData = deps.gameDeps.runData.SetupRunData
 
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
+local RUNTIME_CONTROL_GAP = 16
 
 -- Hot-reload-stable fallback UI runtime. Bridges and GUI callbacks late-read
 -- this table so replacement managed modules can swap behavior without new handles.
@@ -139,6 +140,11 @@ local function isCoordinated(packId)
     return packId and coordinator.isRegistered(packId) or false
 end
 
+local function sameLineWithGap(imgui, gap)
+    imgui.SameLine()
+    imgui.SetCursorPosX(imgui.GetCursorPosX() + gap)
+end
+
 local function createRuntime(module)
     local function getMeta()
         return module.getMeta() or {}
@@ -245,16 +251,19 @@ local function createRuntime(module)
                     end
                 end
 
+                sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
                 local debugValue, debugChanged = imgui.Checkbox("Debug Mode", module.read("DebugMode") == true)
                 if debugChanged then
                     module.setDebugMode(debugValue)
                 end
 
+                sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
                 if imgui.Button("Resync State") then
                     module.resync()
                 end
 
                 if enabled then
+                    imgui.Spacing()
                     imgui.Separator()
                     imgui.Spacing()
                     local commitOk, commitErr, committed = module.drawTabAndCommit()

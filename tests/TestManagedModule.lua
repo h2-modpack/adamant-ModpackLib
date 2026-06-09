@@ -131,6 +131,9 @@ function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
         End = noop,
         Checkbox = function(_, current) return current, false end,
         Button = function() return false end,
+        SameLine = noop,
+        GetCursorPosX = function() return 0 end,
+        SetCursorPosX = noop,
         Separator = noop,
         Spacing = noop,
     }

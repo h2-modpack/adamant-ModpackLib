@@ -90,6 +90,9 @@ local function makeImgui(opts)
         endMenu = 0,
         separator = 0,
         spacing = 0,
+        sameLine = 0,
+        getCursorPosX = 0,
+        setCursorPosX = {},
         checkboxLabels = {},
         buttons = {},
     }
@@ -127,6 +130,16 @@ local function makeImgui(opts)
         end,
         Spacing = function()
             calls.spacing = calls.spacing + 1
+        end,
+        SameLine = function()
+            calls.sameLine = calls.sameLine + 1
+        end,
+        GetCursorPosX = function()
+            calls.getCursorPosX = calls.getCursorPosX + 1
+            return 100
+        end,
+        SetCursorPosX = function(x)
+            calls.setCursorPosX[#calls.setCursorPosX + 1] = x
         end,
         BeginMenu = function(label)
             calls.beginMenu = calls.beginMenu + 1
@@ -395,6 +408,9 @@ function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     lu.assertEquals(calls.setNextWindowSize, 1)
     lu.assertEquals(calls.title, "Fallback UI Test###FallbackUiTest")
     lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })
+    lu.assertEquals(calls.sameLine, 2)
+    lu.assertEquals(calls.getCursorPosX, 2)
+    lu.assertEquals(calls.setCursorPosX, { 116, 116 })
     lu.assertEquals(host.calls.resync, 1)
     lu.assertEquals(host.calls.drawTab, 1)
     lu.assertEquals(host.calls.commitIfDirty, 1)
