@@ -195,6 +195,16 @@ NormalizeTableValue = function(node, value)
     return rows
 end
 
+local function ForEachNormalizedTableCell(node, value, visitor)
+    local rows = NormalizeTableValue(node, value)
+    for rowIndex, row in ipairs(rows) do
+        for _, root in ipairs(GetRowRootNodes(node)) do
+            visitor(rowIndex, root, row[root.alias], row)
+        end
+    end
+    return rows
+end
+
 local function EncodeLengthPrefixed(value)
     value = tostring(value or "")
     return tostring(#value) .. ":" .. value
@@ -215,15 +225,14 @@ local function DecodeLengthPrefixed(str, pos)
 end
 
 local function SerializeTableValue(node, value)
-    local rows = NormalizeTableValue(node, value)
-    local parts = { tostring(#rows) .. ":" }
-    for _, row in ipairs(rows) do
-        for _, root in ipairs(GetRowRootNodes(node)) do
-            local storageType = StorageTypes[root.type]
-            local encoded = storageType.toHash(root, row[root.alias])
-            parts[#parts + 1] = EncodeLengthPrefixed(encoded)
-        end
-    end
+    local rows = nil
+    local parts = {}
+    rows = ForEachNormalizedTableCell(node, value, function(_, root, cellValue)
+        local storageType = StorageTypes[root.type]
+        local encoded = storageType.toHash(root, cellValue)
+        parts[#parts + 1] = EncodeLengthPrefixed(encoded)
+    end)
+    table.insert(parts, 1, tostring(#rows) .. ":")
     return table.concat(parts)
 end
 
@@ -580,6 +589,7 @@ return {
     PrepareTableNode = PrepareTableNode,
     NormalizeTableRow = NormalizeTableRow,
     NormalizeTableValue = NormalizeTableValue,
+    ForEachNormalizedTableCell = ForEachNormalizedTableCell,
     SerializeTableValue = SerializeTableValue,
     DeserializeTableValue = DeserializeTableValue,
     IsSerializedTableValue = IsSerializedTableValue,

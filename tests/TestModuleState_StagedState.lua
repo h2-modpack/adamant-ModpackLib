@@ -74,6 +74,22 @@ function TestModuleState_StagedState:testInternalReloadFromConfigRebuildsPackedC
     lu.assertEquals(stagedState.read("ModeBits"), 2)
 end
 
+function TestModuleState_StagedState:testInternalSyncFromCommittedDoesNotReloadExternalConfig()
+    local config = { Enabled = true, MaxGods = 5 }
+    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local enabledRoot = persistentState.getAliasSchema("Enabled")
+
+    config.Enabled = true
+    persistentState._replaceRoot(enabledRoot, false)
+
+    stagedState._syncFromCommitted()
+
+    lu.assertFalse(stagedState.read("Enabled"))
+    lu.assertEquals(stagedState.read("MaxGods"), 5)
+    lu.assertTrue(config.Enabled)
+    lu.assertFalse(stagedState.isDirty())
+end
+
 function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
     local config = { Packed = 0 }
     local _, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))

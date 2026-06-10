@@ -281,8 +281,26 @@ function managedModule.create(opts)
 
     function module.reloadFromConfig()
         requireActivated("reloadFromConfig")
+        if rawget(_G, "AdamantEnableToggleDebug") == true then
+            logging.printWithPrefix("[lib-debug] ",
+                "%s: reloadFromConfig begin enabled_committed=%s enabled_staged=%s debug_committed=%s debug_staged=%s",
+                tostring(def.name or def.id or pluginGuid),
+                tostring(persistentState.read("Enabled")),
+                tostring(stagedState.read("Enabled")),
+                tostring(persistentState.read("DebugMode")),
+                tostring(stagedState.read("DebugMode")))
+        end
         stagedState._reloadFromConfig()
         actionBuffer.clearAll()
+        if rawget(_G, "AdamantEnableToggleDebug") == true then
+            logging.printWithPrefix("[lib-debug] ",
+                "%s: reloadFromConfig end enabled_committed=%s enabled_staged=%s debug_committed=%s debug_staged=%s",
+                tostring(def.name or def.id or pluginGuid),
+                tostring(persistentState.read("Enabled")),
+                tostring(stagedState.read("Enabled")),
+                tostring(persistentState.read("DebugMode")),
+                tostring(stagedState.read("DebugMode")))
+        end
     end
 
     function module.resync()

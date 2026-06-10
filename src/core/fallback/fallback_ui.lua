@@ -154,6 +154,11 @@ local function createRuntime(module)
     local didSeedWindowSize = false
     local runDataDirty = false
     local uiSuppressionToken = nil
+    local controls = {
+        initialized = false,
+        enabled = false,
+        debug = false,
+    }
 
     local function markRunDataDirty()
         if module.affectsRunData() then
@@ -187,6 +192,18 @@ local function createRuntime(module)
         releaseOverlaySuppression()
     end
 
+    local function snapshotControls()
+        controls.enabled = module.isEnabled() == true
+        controls.debug = module.read("DebugMode") == true
+        controls.initialized = true
+    end
+
+    local function ensureControlsInitialized()
+        if not controls.initialized then
+            snapshotControls()
+        end
+    end
+
     local function setWindowOpen(open)
         open = open == true
         if showWindow == open then
@@ -195,6 +212,7 @@ local function createRuntime(module)
 
         if open then
             showWindow = true
+            ensureControlsInitialized()
             suppressOverlays()
             return
         end
@@ -231,17 +249,36 @@ local function createRuntime(module)
         local openState = showWindow
 
         local ok, err = xpcall(function()
+            ensureControlsInitialized()
             seedWindowSize(imgui)
             local shouldDraw
             openState, shouldDraw = imgui.Begin(title, showWindow)
             beganWindow = true
             if shouldDraw then
-                local enabled = module.isEnabled()
+                local enabled = controls.enabled
                 local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
                 if enabledChanged then
+                    if rawget(_G, "AdamantEnableToggleDebug") == true then
+                        logging.printWithPrefix("[lib-debug] ",
+                            "%s: fallback enabled checkbox changed target=%s control_before=%s module_before=%s",
+                            tostring(meta.name or moduleId or "module"),
+                            tostring(enabledValue == true),
+                            tostring(enabled),
+                            tostring(module.isEnabled() == true))
+                    end
                     local transitionOk, transitionErr = module.setEnabled(enabledValue)
+                    if rawget(_G, "AdamantEnableToggleDebug") == true then
+                        logging.printWithPrefix("[lib-debug] ",
+                            "%s: fallback enabled checkbox result ok=%s err=%s control_before_update=%s module_after=%s",
+                            tostring(meta.name or moduleId or "module"),
+                            tostring(transitionOk),
+                            tostring(transitionErr),
+                            tostring(controls.enabled),
+                            tostring(module.isEnabled() == true))
+                    end
                     if transitionOk then
-                        enabled = enabledValue == true
+                        controls.enabled = enabledValue == true
+                        enabled = controls.enabled
                         markRunDataDirty()
                     else
                         logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
@@ -252,14 +289,16 @@ local function createRuntime(module)
                 end
 
                 sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
-                local debugValue, debugChanged = imgui.Checkbox("Debug Mode", module.read("DebugMode") == true)
+                local debugValue, debugChanged = imgui.Checkbox("Debug Mode", controls.debug)
                 if debugChanged then
                     module.setDebugMode(debugValue)
+                    controls.debug = debugValue == true
                 end
 
                 sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
                 if imgui.Button("Resync State") then
                     module.resync()
+                    snapshotControls()
                 end
 
                 if enabled then

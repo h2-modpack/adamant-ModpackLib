@@ -147,7 +147,7 @@ function SelectionGroup.createUi(fields)
     end
 
     function control:readInternalRowAlias()
-        return fields.Rows:read(1, "_Rewards:Rows:Selection")
+        return fields.Rows:read(1, "_Rewards-Rows-Selection")
     end
 
     return control
@@ -310,7 +310,7 @@ function TestControls:testScalarControlCompilesPrivateStorageAndCallbackRefs()
                 capturedUiControl:field("Mode"):readAlias("Enabled")
             end)
             lu.assertErrorMsgContains("storage.private_alias", function()
-                ui.data.read("_PrioritySlot:Mode")
+                ui.data.read("_PrioritySlot-Mode")
             end)
         end,
     })
@@ -327,7 +327,7 @@ function TestControls:testScalarControlCompilesPrivateStorageAndCallbackRefs()
     checkRuntimeDuringDraw = true
     liveModule.drawTab()
     liveModule.flush()
-    lu.assertEquals(config["_PrioritySlot:Mode"], "Tartarus")
+    lu.assertEquals(config["_PrioritySlot-Mode"], "Tartarus")
     lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
         mode = "Tartarus",
         min = 2,
@@ -368,8 +368,8 @@ function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
     self.h:liveModule("test-controls-path-aliases").drawTab()
     self.h:liveModule("test-controls-path-aliases").flush()
 
-    lu.assertEquals(config["_A_B:C"], true)
-    lu.assertEquals(config["_A:B_C"], true)
+    lu.assertEquals(config["_A_B-C"], true)
+    lu.assertEquals(config["_A-B_C"], true)
     lu.assertNil(config._A_B_C)
 end
 
@@ -439,8 +439,8 @@ function TestControls:testRuntimeControlsSkipUiOnlyFields()
     liveModule.flush()
 
     lu.assertEquals(capturedUiControl:read(), 1)
-    lu.assertEquals(config["_Searchable:Value"], 1)
-    lu.assertNil(config["_Searchable:Filter"])
+    lu.assertEquals(config["_Searchable-Value"], 1)
+    lu.assertNil(config["_Searchable-Filter"])
 end
 
 function TestControls:testControlsRejectStatusStorage()
@@ -501,7 +501,7 @@ function TestControls:testControlSchemasExposeSemanticAliasesOnly()
             field:writeAlias("Alpha", true)
             lu.assertTrue(field:readAlias("Alpha"))
             lu.assertErrorMsgContains("controls.unknown_field_alias", function()
-                field:readAlias("_Flags:Value:Alpha")
+                field:readAlias("_Flags-Value-Alpha")
             end)
         end,
     })
@@ -640,7 +640,7 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
     local rewards = record.runtime.controls.get("Rewards")
     lu.assertEquals(rewards:count(), 2)
     lu.assertEquals(rewards:selectedMask(2), 5)
-    lu.assertEquals(config["_Rewards:Rows"][2]["_Rewards:Rows:Selection"], 5)
+    lu.assertEquals(config["_Rewards-Rows"][2]["_Rewards-Rows-Selection"], 5)
 end
 
 function TestControls:testUiControlsResetNamedAndAllBoundStorage()

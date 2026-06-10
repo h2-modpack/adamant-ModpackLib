@@ -11,6 +11,7 @@ local function makeHost(opts)
         setEnabled = {},
         setDebugMode = {},
         resync = 0,
+        reloadFromConfig = 0,
         drawTab = 0,
         commitIfDirty = 0,
     }
@@ -51,15 +52,28 @@ local function makeHost(opts)
             if opts.setEnabledFails then
                 return false, "enable boom"
             end
-            enabled = value == true
+            if opts.setEnabledDoesNotMutate ~= true then
+                enabled = value == true
+            end
             return true, nil
         end,
         setDebugMode = function(value)
             calls.setDebugMode[#calls.setDebugMode + 1] = value
-            debugMode = value == true
+            if opts.setDebugModeDoesNotMutate ~= true then
+                debugMode = value == true
+            end
         end,
         resync = function()
             calls.resync = calls.resync + 1
+        end,
+        reloadFromConfig = function()
+            calls.reloadFromConfig = calls.reloadFromConfig + 1
+            if opts.reloadEnabled ~= nil then
+                enabled = opts.reloadEnabled == true
+            end
+            if opts.reloadDebugMode ~= nil then
+                debugMode = opts.reloadDebugMode == true
+            end
         end,
         drawTab = function()
             calls.drawTab = calls.drawTab + 1
@@ -94,6 +108,7 @@ local function makeImgui(opts)
         getCursorPosX = 0,
         setCursorPosX = {},
         checkboxLabels = {},
+        checkboxCurrents = {},
         textDisabled = {},
         buttons = {},
     }
@@ -116,6 +131,7 @@ local function makeImgui(opts)
         end,
         Checkbox = function(label, current)
             calls.checkboxLabels[#calls.checkboxLabels + 1] = label
+            calls.checkboxCurrents[#calls.checkboxCurrents + 1] = current
             local nextValue = checkboxValues[label]
             if nextValue == nil then
                 return current, false
@@ -268,6 +284,86 @@ function TestFallbackUi:testEnablingFallbackRuntimeOpensModuleBodyInSameFrame()
     lu.assertEquals(host.calls.setEnabled, { true })
     lu.assertEquals(host.calls.drawTab, 1)
     lu.assertEquals(host.calls.commitIfDirty, 1)
+end
+
+function TestFallbackUi:testFallbackRuntimeSnapshotsControlsWithoutReloadingConfig()
+    local bridge = createBridge(self.h)
+    local host = makeHost({
+        modpack = "fallback-pack",
+        enabled = true,
+        debugMode = true,
+        reloadEnabled = false,
+        reloadDebugMode = false,
+    })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({ menuClicked = true })
+    self.h.rom.ImGui = imgui
+
+    self.h:installFallbackRuntime(host)
+    bridge.addMenuBar()
+    bridge.renderWindow()
+    bridge.renderWindow()
+
+    lu.assertEquals(host.calls.reloadFromConfig, 0)
+    lu.assertEquals(calls.checkboxCurrents, { true, true, true, true })
+    lu.assertEquals(host.calls.drawTab, 2)
+end
+
+function TestFallbackUi:testFallbackRuntimeStagesEnabledLocallyAfterToggle()
+    local bridge = createBridge(self.h)
+    local host = makeHost({
+        modpack = "fallback-pack",
+        enabled = false,
+        setEnabledDoesNotMutate = true,
+    })
+    self.h.coordinator.register("fallback-pack", nil)
+    local firstImgui = makeImgui({
+        menuClicked = true,
+        checkboxValues = {
+            Enabled = true,
+        },
+    })
+    self.h.rom.ImGui = firstImgui
+
+    self.h:installFallbackRuntime(host)
+    bridge.addMenuBar()
+    bridge.renderWindow()
+
+    local secondImgui, secondCalls = makeImgui()
+    self.h.rom.ImGui = secondImgui
+    bridge.renderWindow()
+
+    lu.assertEquals(host.calls.setEnabled, { true })
+    lu.assertEquals(secondCalls.checkboxCurrents, { true, false })
+    lu.assertEquals(host.calls.drawTab, 2)
+end
+
+function TestFallbackUi:testFallbackRuntimeStagesDebugLocallyAfterToggle()
+    local bridge = createBridge(self.h)
+    local host = makeHost({
+        modpack = "fallback-pack",
+        debugMode = false,
+        setDebugModeDoesNotMutate = true,
+    })
+    self.h.coordinator.register("fallback-pack", nil)
+    local firstImgui = makeImgui({
+        menuClicked = true,
+        checkboxValues = {
+            ["Debug Mode"] = true,
+        },
+    })
+    self.h.rom.ImGui = firstImgui
+
+    self.h:installFallbackRuntime(host)
+    bridge.addMenuBar()
+    bridge.renderWindow()
+
+    local secondImgui, secondCalls = makeImgui()
+    self.h.rom.ImGui = secondImgui
+    bridge.renderWindow()
+
+    lu.assertEquals(host.calls.setDebugMode, { true })
+    lu.assertEquals(secondCalls.checkboxCurrents, { true, true })
 end
 
 function TestFallbackUi:testBridgeDispatchesReplacementRuntime()

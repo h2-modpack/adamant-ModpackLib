@@ -718,6 +718,133 @@ function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledNoOpsWhenAlrea
     lu.assertFalse(store.read("Enabled"))
 end
 
+function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledCommitsWhenStagedMirrorIsStale()
+    local committed = true
+    local staged = false
+    local dirty = false
+    local reloads = 0
+    local committedSyncs = 0
+    local def = { id = "StaleEnabledMirror" }
+    local store = {
+        read = function(alias)
+            if alias == "Enabled" then
+                return committed
+            end
+            return nil
+        end,
+    }
+    local stagedState = {
+        write = function(alias, value)
+            if alias == "Enabled" then
+                if staged ~= value then
+                    dirty = true
+                end
+                staged = value
+            end
+        end,
+        isDirty = function()
+            return dirty
+        end,
+        _hasConfigChanges = function()
+            return dirty
+        end,
+        _captureDirtyConfigSnapshot = function()
+            return {}
+        end,
+        _flushToConfig = function()
+            if dirty then
+                committed = staged
+                dirty = false
+            end
+        end,
+        _reloadFromConfig = function()
+            reloads = reloads + 1
+            staged = committed
+            dirty = false
+        end,
+        _syncFromCommitted = function()
+            committedSyncs = committedSyncs + 1
+            staged = committed
+            dirty = false
+        end,
+    }
+
+    local ok, err = self:setEnabled(def, nil, nil, store, stagedState, false, "test-stale-enabled-mirror")
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNil(err)
+    lu.assertFalse(committed)
+    lu.assertFalse(staged)
+    lu.assertEquals(reloads, 0)
+    lu.assertEquals(committedSyncs, 1)
+end
+
+function TestMutation_DefinitionLifecycle:testSetDebugModeCommitsWhenStagedMirrorIsStale()
+    local committed = false
+    local staged = true
+    local dirty = false
+    local reloads = 0
+    local committedSyncs = 0
+    local def = { id = "StaleDebugMirror" }
+    local store = {
+        read = function(alias)
+            if alias == "DebugMode" then
+                return committed
+            end
+            if alias == "Enabled" then
+                return false
+            end
+            return nil
+        end,
+    }
+    local stagedState = {
+        write = function(alias, value)
+            if alias == "DebugMode" then
+                if staged ~= value then
+                    dirty = true
+                end
+                staged = value
+            end
+        end,
+        isDirty = function()
+            return dirty
+        end,
+        _hasConfigChanges = function()
+            return dirty
+        end,
+        _captureDirtyConfigSnapshot = function()
+            return {}
+        end,
+        _flushToConfig = function()
+            if dirty then
+                committed = staged
+                dirty = false
+            end
+        end,
+        _reloadFromConfig = function()
+            reloads = reloads + 1
+            staged = committed
+            dirty = false
+        end,
+        _syncFromCommitted = function()
+            committedSyncs = committedSyncs + 1
+            staged = committed
+            dirty = false
+        end,
+    }
+    local module = self:createMutationModule("test-stale-debug-mirror", def, nil, nil, store)
+
+    local ok, err = self.managedModuleLifecycle.setDebugMode(module, def, nil, nil, store, stagedState, nil, nil, nil,
+        nil, true)
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNil(err)
+    lu.assertTrue(committed)
+    lu.assertTrue(staged)
+    lu.assertEquals(reloads, 0)
+    lu.assertEquals(committedSyncs, 1)
+end
+
 function TestMutation_DefinitionLifecycle:testSetDefinitionEnabledAppliesFromRawEnabledState()
     local store, stagedState = self:makeStore(false)
     local target = { Value = "base" }

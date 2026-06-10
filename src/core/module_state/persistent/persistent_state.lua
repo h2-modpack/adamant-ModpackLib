@@ -19,21 +19,34 @@ local function create(storageConfig, storage)
     local statusFieldHandles = {}
     local readRootNode
 
-    local function readRaw(alias)
-        return storageConfig.readValue(alias)
+    local function readRaw(root)
+        return storageConfig.readValue(root._storageKey, root)
     end
 
-    local function writeRaw(alias, value)
-        storageConfig.writeValue(alias, value)
+    local function writeRaw(root, value)
+        storageConfig.writeValue(root._storageKey, value, root)
     end
 
     local function readNormalizedRoot(root)
-        local raw = readRaw(root._storageKey)
+        local raw = readRaw(root)
         local source = raw
         if source == nil then
             source = ClonePersistedValue(root.default)
         end
         return NormalizeStorageValue(root, source), raw
+    end
+
+    local function isHydratedValueCurrent(root, raw, normalized)
+        if values.deepEqual(raw, normalized) then
+            return true
+        end
+        if root.type ~= "table" or type(raw) ~= "table" or getmetatable(raw) == nil then
+            return false
+        end
+        if #raw ~= #normalized then
+            return false
+        end
+        return storageInternal.valuesEqual(root, raw, normalized)
     end
 
     local function usesCommittedRoot(root)
@@ -58,7 +71,7 @@ local function create(storageConfig, storage)
         end
         committedRoots[root.alias] = ClonePersistedValue(normalized)
         if root._persist then
-            writeRaw(root._storageKey, normalized)
+            writeRaw(root, normalized)
         end
         return true
     end
@@ -73,24 +86,56 @@ local function create(storageConfig, storage)
         return ClonePersistedValue(root.default)
     end
 
+    local function tableCount(value)
+        if type(value) ~= "table" then
+            return nil
+        end
+        return #value
+    end
+
+    local function debugTableHydration(root, phase, raw, normalized)
+        if rawget(_G, "AdamantEnableToggleDebug") ~= true or root.type ~= "table" then
+            return
+        end
+        print(string.format(
+            "[lib-debug] hydrate table phase=%s alias=%s storage_key=%s raw_nil=%s raw_count=%s normalized_count=%s default_rows=%s max_rows=%s",
+            tostring(phase),
+            tostring(root.alias),
+            tostring(root._storageKey),
+            tostring(raw == nil),
+            tostring(tableCount(raw)),
+            tostring(tableCount(normalized)),
+            tostring(root.defaultRows),
+            tostring(root.maxRows)))
+    end
+
     local function hydratePersistRoot(root)
         if not root._persist then
             return
         end
 
         local normalized, raw = readNormalizedRoot(root)
+        debugTableHydration(root, "initial_read", raw, normalized)
+        if raw == nil and storageConfig.ensureValue(root._storageKey, normalized, root) then
+            raw = readRaw(root)
+            if raw == nil then
+                debugTableHydration(root, "after_ensure_missing", raw, normalized)
+                replaceCommittedRoot(root, normalized)
+                return
+            end
+            normalized = NormalizeStorageValue(root, raw)
+            debugTableHydration(root, "after_ensure_read", raw, normalized)
+        end
+
         replaceCommittedRoot(root, normalized)
-        if raw ~= nil and values.deepEqual(raw, normalized) then
+        if raw ~= nil and isHydratedValueCurrent(root, raw, normalized) then
             return
         end
 
-        if raw == nil and storageConfig.ensureValue(root._storageKey, normalized) then
-            return
-        end
-        writeRaw(root._storageKey, normalized)
+        writeRaw(root, normalized)
     end
 
-    local function hydratePersistRoots()
+    local function hydratePersistRootsNow()
         for _, root in ipairs(persistRoots) do
             hydratePersistRoot(root)
         end
@@ -99,6 +144,14 @@ local function create(storageConfig, storage)
                 replaceCommittedRoot(root, root.default)
             end
         end
+    end
+
+    local function hydratePersistRoots()
+        if type(storageConfig.withSaveBatch) == "function" then
+            storageConfig.withSaveBatch(hydratePersistRootsNow)
+            return
+        end
+        hydratePersistRootsNow()
     end
 
     hydratePersistRoots()

@@ -10,7 +10,9 @@ local moduleState = {}
 local persistenceBackend = import('core/module_state/persistent/backend.lua', nil, {
     chalk = chalk,
 })
-local storageConfigAdapter = import('core/module_state/persistent/storage_config_adapter.lua')
+local storageConfigAdapter = import('core/module_state/persistent/storage_config_adapter.lua', nil, {
+    storage = storageApi,
+})
 
 local persistentStateModule = import('core/module_state/persistent/persistent_state.lua', nil, {
     logging = logging,
@@ -88,10 +90,19 @@ function moduleState.create(modConfig, definition)
 
     local storage = definition.storage
     local backend = persistenceBackend.create(modConfig)
-    local storageConfig = storageConfigAdapter.create(modConfig, backend)
+    local storageConfig = storageConfigAdapter.create(modConfig, backend, definition.name or definition.id)
     local persistentState = persistentStateModule.create(storageConfig, storage)
     local committedRoots = createCommittedRootAdapter(persistentState)
     local stagedState = stagedStateModule.createStagedState(storageConfig, storage, committedRoots)
+    if rawget(_G, "AdamantEnableToggleDebug") == true then
+        logging.printWithPrefix("[lib-debug] ",
+            "%s: moduleState.create hydrated enabled_committed=%s enabled_staged=%s debug_committed=%s debug_staged=%s",
+            tostring(definition.name or definition.id or "module"),
+            tostring(persistentState.read("Enabled")),
+            tostring(stagedState.read("Enabled")),
+            tostring(persistentState.read("DebugMode")),
+            tostring(stagedState.read("DebugMode")))
+    end
 
     return {
         persistentState = persistentState,

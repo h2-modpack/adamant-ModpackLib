@@ -76,6 +76,31 @@ function TestStorageValidation:testLibInternalStorageAllowsPrivateAliases()
     lu.assertNotNil(aliases._PrivateBit)
 end
 
+function TestStorageValidation:testLibInternalStorageUsesHyphenSeparatedPrivateAliases()
+    local definition = self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+        id = "InternalStorageDelimiter",
+        name = "Internal Storage Delimiter",
+        storage = {},
+    }, nil, {
+        { type = "bool", alias = "_Private-Flag", default = true, hash = false },
+    })
+
+    local aliases = self.storage.getAliases(definition.storage)
+    lu.assertNotNil(aliases["_Private-Flag"])
+end
+
+function TestStorageValidation:testLibInternalStorageRejectsColonSeparatedPrivateAliases()
+    lu.assertErrorMsgContains("internal alias '_Private:Flag' must start with '_'", function()
+        self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {
+            id = "InternalStorageColonDelimiter",
+            name = "Internal Storage Colon Delimiter",
+            storage = {},
+        }, nil, {
+            { type = "bool", alias = "_Private:Flag", default = true, hash = false },
+        })
+    end)
+end
+
 function TestStorageValidation:testLibInternalStorageRequiresPrivateAliases()
     lu.assertErrorMsgContains("internal alias 'PrivateFlag' must start with '_'", function()
         self.harness.moduleDefinition.prepareDefinitionWithInternalStorage({}, {

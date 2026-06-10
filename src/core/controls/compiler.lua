@@ -22,10 +22,12 @@ local function compareStrings(a, b)
     return a < b
 end
 
+local GeneratedPathSeparator = "-"
+
 local function generatedName(controlName, ...)
     local parts = { "_", controlName }
     for index = 1, select("#", ...) do
-        parts[#parts + 1] = ":"
+        parts[#parts + 1] = GeneratedPathSeparator
         parts[#parts + 1] = tostring(select(index, ...))
     end
     return table.concat(parts)
@@ -79,7 +81,7 @@ local function compileBitNodes(bits, controlName, parentKey, binding)
         local key = bit.key or bit.alias
         requireStableIdentifier("control packed bit key", key)
         if bit.mode == "runtime" then
-            rejectStatusField(controlName, parentKey .. ":" .. key)
+            rejectStatusField(controlName, parentKey .. GeneratedPathSeparator .. key)
         end
         local bitCopy = copyDescriptor(bit)
         bitCopy.alias = generatedName(controlName, parentKey, key)
@@ -109,7 +111,7 @@ local function compileRowNodes(row, controlName, parentKey, binding)
         local rowKey = rowNode.key or rowNode.alias
         requireStableIdentifier("control row field key", rowKey)
         if rowNode.mode == "runtime" then
-            rejectStatusField(controlName, parentKey .. ":" .. rowKey)
+            rejectStatusField(controlName, parentKey .. GeneratedPathSeparator .. rowKey)
         end
         local child = copyDescriptor(rowNode)
         child.alias = generatedName(controlName, parentKey, rowKey)
@@ -118,7 +120,7 @@ local function compileRowNodes(row, controlName, parentKey, binding)
             alias = child.alias,
             type = child.type,
         }
-        child.bits = compileBitNodes(child.bits, controlName, parentKey .. ":" .. rowKey, childBinding)
+        child.bits = compileBitNodes(child.bits, controlName, parentKey .. GeneratedPathSeparator .. rowKey, childBinding)
         binding.rowAliases[rowKey] = child.alias
         binding.rowBindings[rowKey] = childBinding
         compiled[#compiled + 1] = child

@@ -283,11 +283,12 @@ function TestManagedModule:testSideEffectingManagedModuleMethodsRequireActivatio
     end)
 end
 
-function TestManagedModule:testOnActivateSeesReloadedConfigBackedRuntimeState()
+function TestManagedModule:testOnActivateUsesPreparedRuntimeStateWithoutReloadingConfig()
     local observed = nil
+    local reloads = 0
     local definition = self.h.managedModule.prepareDefinition({}, {
-        id = "ActivateReloadHost",
-        name = "Activate Reload Host",
+        id = "ActivatePreparedHost",
+        name = "Activate Prepared Host",
         storage = {
             { type = "int", alias = "TargetRuns", default = 3, min = 1, max = 10 },
             { type = "string", alias = "Mode", default = "single", maxLen = 16 },
@@ -295,20 +296,23 @@ function TestManagedModule:testOnActivateSeesReloadedConfigBackedRuntimeState()
         },
     })
     local config = {
-        Enabled = false,
-        TargetRuns = 3,
-        Mode = "single",
-        RuntimeReady = false,
+        Enabled = true,
+        TargetRuns = 6,
+        Mode = "multi",
+        RuntimeReady = true,
     }
     local persistentState, stagedState = self.h:createModuleState(config, definition)
+    persistentState._reloadFromConfig = function()
+        reloads = reloads + 1
+    end
 
-    config.Enabled = true
-    config.TargetRuns = 6
-    config.Mode = "multi"
-    config.RuntimeReady = true
+    config.Enabled = false
+    config.TargetRuns = 3
+    config.Mode = "single"
+    config.RuntimeReady = false
 
     local host = self.h.managedModule.create({
-        pluginGuid = "test-on-activate-reloads-config",
+        pluginGuid = "test-on-activate-prepared-config",
         definition = definition,
         persistentState = persistentState,
         stagedState = stagedState,
@@ -325,6 +329,7 @@ function TestManagedModule:testOnActivateSeesReloadedConfigBackedRuntimeState()
 
     local ok, err = host.activate()
     lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(reloads, 0)
     lu.assertEquals(observed, {
         enabled = true,
         targetRuns = 6,

@@ -41,8 +41,9 @@ local BuiltInStorageAliases = {
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
 local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
+local InternalPathSeparator = "-"
 local InternalIdentifierDescription =
-    "must start with '_' and contain ':'-separated stable identifier segments"
+    "must start with '_' and contain '-'-separated stable identifier segments"
 
 
 local KnownStructuralSurfaceKeys = {
@@ -65,7 +66,7 @@ local function IsInternalIdentifier(value)
 
     local segmentStart = 1
     while true do
-        local separatorStart, separatorEnd = string.find(rest, ":", segmentStart, true)
+        local separatorStart, separatorEnd = string.find(rest, InternalPathSeparator, segmentStart, true)
         local segment = separatorStart ~= nil
             and string.sub(rest, segmentStart, separatorStart - 1)
             or string.sub(rest, segmentStart)

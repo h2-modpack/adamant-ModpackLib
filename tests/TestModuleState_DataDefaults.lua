@@ -22,21 +22,53 @@ local function makeStore(harness, definition, config)
     return state.persistentState, state.stagedState, config
 end
 
-local function makeChalkConfig(harness)
+local function makeChalkConfig(harness, opts)
+    opts = opts or {}
+    local entries = {}
     local raw = {
-        entries = {},
+        entries = entries,
+        bindAttempts = {},
         saved = 0,
     }
 
+    if opts.entriesAsNonTable == true then
+        raw.entries = function() end
+        debug.setmetatable(raw.entries, {
+            __pairs = function()
+                return pairs(entries)
+            end,
+        })
+    end
+
+    local function getMaterializedValue(section, key, defaultValue)
+        local valuesByPath = opts.materializedValuesByPath
+        if valuesByPath then
+            local value = valuesByPath[section .. "." .. key]
+            if value ~= nil then
+                return value
+            end
+        end
+        local valuesByKey = opts.materializedValues
+        if valuesByKey and valuesByKey[key] ~= nil then
+            return valuesByKey[key]
+        end
+        return defaultValue
+    end
+
     function raw:bind(section, key, defaultValue, description)
-        for descriptor in pairs(self.entries) do
+        self.bindAttempts[#self.bindAttempts + 1] = {
+            section = section,
+            key = key,
+            value = defaultValue,
+        }
+        for descriptor in pairs(entries) do
             if descriptor.section == section and descriptor.key == key then
                 error("duplicate config bind")
             end
         end
 
         local entry = {
-            value = defaultValue,
+            value = getMaterializedValue(section, key, defaultValue),
             description = description or "",
         }
         function entry.get(entrySelf)
@@ -46,7 +78,7 @@ local function makeChalkConfig(harness)
             entrySelf.value = value
         end
 
-        self.entries[{ section = section, key = key }] = entry
+        entries[{ section = section, key = key }] = entry
         return entry
     end
 
@@ -54,7 +86,13 @@ local function makeChalkConfig(harness)
         self.saved = self.saved + 1
     end
 
-    local wrapper = { __raw = raw }
+    local rawConfig = raw
+    if opts.rawAsNonTable == true then
+        rawConfig = function() end
+        debug.setmetatable(rawConfig, { __index = raw, __newindex = raw })
+    end
+
+    local wrapper = { __raw = rawConfig }
     local chalk = harness.chalk
     local previousOriginal = chalk.original
     chalk.original = function(config)
@@ -64,6 +102,14 @@ local function makeChalkConfig(harness)
     return wrapper, raw, function()
         chalk.original = previousOriginal
     end
+end
+
+local function collectRawValues(raw)
+    local valuesByPath = {}
+    for descriptor, entry in pairs(raw.entries) do
+        valuesByPath[descriptor.section .. "." .. descriptor.key] = entry:get()
+    end
+    return valuesByPath
 end
 
 function TestModuleState_DataDefaults:testUsesBoolStorageDefault()
@@ -111,6 +157,32 @@ function TestModuleState_DataDefaults:testLiveConfigValueOverridesDefault()
     lu.assertFalse(stagedState.read("MyFlag"))
 end
 
+function TestModuleState_DataDefaults:testChalkBackendReReadsMaterializedValueAfterEnsure()
+    local wrapper, raw, restore = makeChalkConfig(self.harness, {
+        materializedValues = {
+            MyFlag = true,
+        },
+    })
+    local definition = {
+        storage = {
+            { type = "bool", alias = "MyFlag", default = false },
+        },
+    }
+
+    local persistentState, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    lu.assertTrue(persistentState.read("MyFlag"))
+    lu.assertTrue(stagedState.read("MyFlag"))
+    local boundMyFlag = false
+    for _, attempt in ipairs(raw.bindAttempts) do
+        if attempt.key == "MyFlag" then
+            boundMyFlag = true
+        end
+    end
+    lu.assertTrue(boundMyFlag)
+end
+
 function TestModuleState_DataDefaults:testChalkBackendSavesStagedWrites()
     local wrapper, raw, restore = makeChalkConfig(self.harness)
     local definition = {
@@ -128,6 +200,285 @@ function TestModuleState_DataDefaults:testChalkBackendSavesStagedWrites()
 
     lu.assertTrue(raw.saved > initialSaveCount)
     restore()
+end
+
+function TestModuleState_DataDefaults:testChalkBackendAcceptsNonTableRawConfig()
+    local wrapper, raw, restore = makeChalkConfig(self.harness, { rawAsNonTable = true })
+    local definition = {
+        storage = {
+            { type = "bool", alias = "MyFlag", default = false },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    local initialSaveCount = raw.saved
+    stagedState.write("MyFlag", true)
+    stagedState._flushToConfig()
+    restore()
+
+    local valuesByPath = collectRawValues(raw)
+    lu.assertTrue(valuesByPath["config.MyFlag"])
+    lu.assertTrue(raw.saved > initialSaveCount)
+    lu.assertNil(wrapper.MyFlag)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendAcceptsNonTableEntries()
+    local wrapper, raw, restore = makeChalkConfig(self.harness, { entriesAsNonTable = true })
+    local definition = {
+        storage = {
+            { type = "bool", alias = "MyFlag", default = false },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    local initialSaveCount = raw.saved
+    stagedState.write("MyFlag", true)
+    stagedState._flushToConfig()
+    restore()
+
+    local valuesByPath = collectRawValues(raw)
+    lu.assertTrue(valuesByPath["config.MyFlag"])
+    lu.assertTrue(raw.saved > initialSaveCount)
+    lu.assertNil(wrapper.MyFlag)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendWritesTableDefaultsAsIndexedEntries()
+    local wrapper, raw, restore = makeChalkConfig(self.harness)
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    local rows = stagedState.table("Rows")
+    lu.assertTrue(rows:read(1, "Enabled"))
+    lu.assertEquals(rows:read(1, "Limit"), 2)
+    lu.assertNil(wrapper.Rows)
+
+    local valuesByPath = collectRawValues(raw)
+    lu.assertEquals(valuesByPath["config.Rows._RowCount"], 1)
+    lu.assertTrue(valuesByPath["config.Rows.1.Enabled"])
+    lu.assertEquals(valuesByPath["config.Rows.1.Limit"], 2)
+
+    for _, attempt in ipairs(raw.bindAttempts) do
+        lu.assertNotEquals(attempt.key, "Rows")
+    end
+end
+
+function TestModuleState_DataDefaults:testChalkBackendReadsTableRootsFromIndexedEntries()
+    local wrapper, raw, restore = makeChalkConfig(self.harness)
+    raw:bind("config.Rows.1", "Enabled", false, "")
+    raw:bind("config.Rows.1", "Limit", 4, "")
+
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    local rows = stagedState.table("Rows")
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertEquals(rows:read(1, "Limit"), 4)
+    lu.assertNil(wrapper.Rows)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendReadsTableRowsFromRowCountMetadata()
+    local wrapper, raw, restore = makeChalkConfig(self.harness, {
+        materializedValuesByPath = {
+            ["config.Rows._RowCount"] = 3,
+            ["config.Rows.1.Enabled"] = false,
+            ["config.Rows.1.Limit"] = 4,
+            ["config.Rows.2.Enabled"] = true,
+            ["config.Rows.2.Limit"] = 3,
+            ["config.Rows.3.Enabled"] = false,
+            ["config.Rows.3.Limit"] = 1,
+        },
+    })
+    raw:bind("config.Rows", "_RowCount", 3, "")
+
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                maxRows = 5,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    local rows = stagedState.table("Rows")
+    lu.assertEquals(rows:count(), 3)
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertEquals(rows:read(1, "Limit"), 4)
+    lu.assertTrue(rows:read(2, "Enabled"))
+    lu.assertEquals(rows:read(2, "Limit"), 3)
+    lu.assertFalse(rows:read(3, "Enabled"))
+    lu.assertEquals(rows:read(3, "Limit"), 1)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendFlushesTableRootsAsIndexedEntries()
+    local wrapper, raw, restore = makeChalkConfig(self.harness)
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    local initialSaveCount = raw.saved
+    stagedState.table("Rows"):write(1, "Limit", 4)
+    stagedState._flushToConfig()
+    restore()
+
+    local valuesByPath = collectRawValues(raw)
+    lu.assertTrue(raw.saved > initialSaveCount)
+    lu.assertEquals(valuesByPath["config.Rows._RowCount"], 1)
+    lu.assertTrue(valuesByPath["config.Rows.1.Enabled"])
+    lu.assertEquals(valuesByPath["config.Rows.1.Limit"], 4)
+    lu.assertNil(wrapper.Rows)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendBatchesHydrationSaves()
+    local wrapper, raw, restore = makeChalkConfig(self.harness)
+    local definition = {
+        storage = {
+            { type = "bool", alias = "MyFlag", default = true },
+            { type = "int", alias = "MyCount", default = 4, min = 0, max = 10 },
+            { type = "string", alias = "MyMode", default = "Auto" },
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    lu.assertTrue(stagedState.read("MyFlag"))
+    lu.assertEquals(stagedState.read("MyCount"), 4)
+    lu.assertEquals(stagedState.read("MyMode"), "Auto")
+    lu.assertTrue(stagedState.table("Rows"):read(1, "Enabled"))
+    lu.assertEquals(stagedState.table("Rows"):read(1, "Limit"), 2)
+    lu.assertEquals(raw.saved, 1)
+end
+
+function TestModuleState_DataDefaults:testHydrationDoesNotRewriteSemanticallyEqualTableConfig()
+    local writes = {}
+    local row = {}
+    setmetatable(row, {
+        __index = function(_, key)
+            if key == "Enabled" then
+                return true
+            elseif key == "Limit" then
+                return 2
+            end
+            return nil
+        end,
+        __pairs = function()
+            return pairs({
+                Enabled = true,
+                Limit = 2,
+            })
+        end,
+    })
+
+    local rows = {}
+    setmetatable(rows, {
+        __len = function()
+            return 1
+        end,
+        __index = function(_, key)
+            if key == 1 then
+                return row
+            end
+            return nil
+        end,
+        __pairs = function()
+            return pairs({ row })
+        end,
+    })
+
+    local config = {}
+    setmetatable(config, {
+        __index = function(_, key)
+            if key == "Rows" then
+                return rows
+            end
+            return nil
+        end,
+        __newindex = function(_, key, value)
+            writes[#writes + 1] = {
+                key = key,
+                value = value,
+            }
+        end,
+    })
+
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, config)
+
+    lu.assertTrue(stagedState.table("Rows"):read(1, "Enabled"))
+    lu.assertEquals(stagedState.table("Rows"):read(1, "Limit"), 2)
+    for _, write in ipairs(writes) do
+        lu.assertNotEquals(write.key, "Rows")
+    end
 end
 
 function TestModuleState_DataDefaults:testMissingStorageDefaultFails()
@@ -290,7 +641,7 @@ function TestModuleState_DataDefaults:testCreateStoreHydratesMissingChalkEntryFr
     lu.assertTrue(ok)
     lu.assertTrue(stagedState.read("MyFlag"))
     lu.assertEquals(stagedState.read("FixedValue"), 3)
-    lu.assertEquals(raw.saved, 5)
+    lu.assertEquals(raw.saved, 1)
 
     local valuesByPath = {}
     for descriptor, entry in pairs(raw.entries) do

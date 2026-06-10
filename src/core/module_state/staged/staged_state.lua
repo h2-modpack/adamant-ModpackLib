@@ -32,7 +32,7 @@ local function createStagedState(storageConfig, storage, committedRoots)
         if entry then
             return entry:get()
         end
-        return storageConfig.readValue(root._storageKey)
+        return storageConfig.readValue(root._storageKey, root)
     end
 
     local function readCommittedRoot(root)
@@ -74,7 +74,7 @@ local function createStagedState(storageConfig, storage, committedRoots)
         if not root._persist then
             return
         end
-        storageConfig.writeValue(root._storageKey, value)
+        storageConfig.writeValue(root._storageKey, value, root)
         replaceCommittedRoot(root, value)
     end
 
@@ -424,6 +424,10 @@ local function createStagedState(storageConfig, storage, committedRoots)
         resetAll = resetAll,
         _reloadFromConfig = function()
             reloadCommittedRoots()
+            copyConfigToStaging()
+            clearDirty()
+        end,
+        _syncFromCommitted = function()
             copyConfigToStaging()
             clearDirty()
         end,
