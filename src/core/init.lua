@@ -164,6 +164,19 @@ local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil,
     overlays = overlaysBundle.framework,
 })
 public.createFrameworkRuntime = frameworkRuntime.create
+local modpackServices = import('core/modpack/services.lua', nil, {
+    config = deps.config,
+    logging = logging,
+    hashing = hashingBundle.framework,
+    coordinator = coordinator,
+    managedModule = managedModule,
+    overlays = overlaysBundle.framework,
+})
+public.modpack = import('core/modpack/init.lua', nil, {
+    rom = externals.rom,
+    frameworkRuntime = modpackServices.create(),
+    packRegistry = registry.modpacks,
+})
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
     managedModule = managedModule,

@@ -499,6 +499,66 @@ local lib = {}
 ---@class AdamantModpackLib.CoordinatorConfig
 ---@field ModEnabled boolean
 
+---@class AdamantModpackLib.ModpackConfig
+---@field ModEnabled boolean Whether the coordinated modpack is enabled.
+---@field DebugMode boolean Whether debug warnings should be visible.
+---@field Profiles AdamantModpackLib.ModpackProfile[]
+
+---@class AdamantModpackLib.ModpackProfile
+---@field Name string
+---@field Hash string
+---@field Tooltip string
+
+---@class AdamantModpackLib.ModpackOpts
+---@field moduleOrder? string[] Ordered module ids to pin first in the sidebar.
+---@field drawPackQuickContent? fun(ctx: AdamantModpackLib.ModpackQuickContentContext) Coordinator-owned Quick Setup renderer.
+---@field hideHashMarker? boolean Suppress the HUD hash marker while keeping the coordinator UI active.
+
+---@class AdamantModpackLib.ModpackThemeColors
+---@field text AdamantModpackLib.Color
+---@field textDisabled AdamantModpackLib.Color
+---@field info AdamantModpackLib.Color
+---@field warning AdamantModpackLib.Color
+---@field success AdamantModpackLib.Color
+---@field error AdamantModpackLib.Color
+---@field mixed AdamantModpackLib.Color
+
+---@class AdamantModpackLib.ModpackTheme
+---@field colors AdamantModpackLib.ModpackThemeColors
+---@field ImGuiTreeNodeFlags table
+---@field PushTheme fun()
+---@field PopTheme fun()
+
+---@class AdamantModpackLib.ModpackQuickContentContext
+---@field ui table ImGui API table.
+---@field colors AdamantModpackLib.ModpackThemeColors
+---@field theme AdamantModpackLib.ModpackTheme
+---@field getModulesStatus fun(moduleIds: string[]): string, AdamantModpackLib.Color, boolean
+---@field setModulesEnabled fun(moduleIds: string[], enabled: boolean): boolean, string?
+
+---@class AdamantModpackLib.ModpackRuntime
+---@field moduleRegistry table Opaque modpack module registry runtime.
+---@field configHash table Opaque modpack config-hash runtime.
+---@field hud table Opaque modpack HUD runtime.
+---@field ui AdamantModpackLib.ModpackUiRuntime Opaque modpack UI runtime.
+
+---@class AdamantModpackLib.ModpackUiRuntime
+---@field renderWindow fun()
+---@field addMenuBar fun()
+---@field flushPending fun()
+---@field handleGuiClosed fun()
+---@field dispose fun()
+
+---@class AdamantModpackLib.ModpackGuiCallbacks
+---@field render fun() Main modpack window renderer for `rom.gui.add_imgui(...)`.
+---@field alwaysDraw fun() Always-draw callback for `rom.gui.add_always_draw_imgui(...)`.
+---@field menuBar fun() Menu-bar callback for `rom.gui.add_to_menu_bar(...)`.
+
+---@class AdamantModpackLib.ModpackApi
+---@field registerCoordinator fun(packId: string, displayName: string, config: AdamantModpackLib.ModpackConfig?, rebuildCallback?: fun(reason: table): boolean): boolean
+---@field createPack fun(packId: string, config: AdamantModpackLib.ModpackConfig, numProfiles: integer, defaultProfiles: table, opts?: AdamantModpackLib.ModpackOpts): boolean, AdamantModpackLib.ModpackRuntime?, string?
+---@field createGuiCallbacks fun(packId: string): AdamantModpackLib.ModpackGuiCallbacks
+
 ---@class AdamantModpackLib.CoordinatorRuntime
 ---@field register fun(packId: string, displayName: string?, config: AdamantModpackLib.CoordinatorConfig?)
 ---@field registerRebuild fun(packId: string, callback: fun(reason: table): boolean?)
@@ -783,6 +843,9 @@ local lib = {}
 ---@class AdamantModpackLib.ModuleState
 ---@field persistentState AdamantModpackLib.PersistentState
 ---@field stagedState AdamantModpackLib.StagedState
+
+---@type AdamantModpackLib.ModpackApi
+lib.modpack = {}
 
 ---@param opts AdamantModpackLib.ModuleCreateOpts
 ---@return AdamantModpackLib.AuthorModule? module

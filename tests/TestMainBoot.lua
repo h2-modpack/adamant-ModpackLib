@@ -208,6 +208,10 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertNil(h.public.tryCreateModule)
     lu.assertNil(h.public.createSystem)
     lu.assertEquals(type(h.public.createFrameworkRuntime), "function")
+    lu.assertEquals(type(h.public.modpack), "table")
+    lu.assertEquals(type(h.public.modpack.registerCoordinator), "function")
+    lu.assertEquals(type(h.public.modpack.createPack), "function")
+    lu.assertEquals(type(h.public.modpack.createGuiCallbacks), "function")
     lu.assertNil(h.public.getLiveModuleHost)
 
     lu.assertNil(h.public.coordinator)
@@ -227,8 +231,43 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertEquals(type(h.runtime.registry.overlays), "table")
     lu.assertEquals(type(h.runtime.registry.fallback), "table")
     lu.assertEquals(type(h.runtime.registry.coordinators), "table")
+    lu.assertEquals(type(h.runtime.registry.modpacks), "table")
+    lu.assertEquals(type(h.runtime.registry.modpacks.packs), "table")
+    lu.assertEquals(type(h.runtime.registry.modpacks.packList), "table")
     lu.assertNil(h.runtime.coordinator)
     lu.assertEquals(h.imports["core/init.lua"].coordinator, h.imports["core/coordinator/coordinator.lua"])
+end
+
+function TestMainBoot.testMainLoadsModpackSubsystem()
+    local h = createBootHarness()
+    local rebuildReason
+
+    lu.assertTrue(h.public.modpack.registerCoordinator("boot-pack", "Boot Pack", {
+        ModEnabled = true,
+    }, function(reason)
+        rebuildReason = reason
+        return true
+    end))
+
+    lu.assertTrue(h.coordinator.isRegistered("boot-pack"))
+    lu.assertEquals(h.coordinator.getDisplayName("boot-pack"), "Boot Pack")
+    lu.assertTrue(h.coordinator.requestRebuild("boot-pack", {
+        reason = "test",
+    }))
+    lu.assertEquals(rebuildReason, {
+        reason = "test",
+    })
+
+    local callbacks = h.public.modpack.createGuiCallbacks("boot-pack")
+    lu.assertEquals(type(callbacks.render), "function")
+    lu.assertEquals(type(callbacks.alwaysDraw), "function")
+    lu.assertEquals(type(callbacks.menuBar), "function")
+    lu.assertErrorMsgContains("modpack.services.diagnostics.setLibDebugEnabled", function()
+        h.imports["core/modpack/services.lua"].create().diagnostics.setLibDebugEnabled("true")
+    end)
+    callbacks.render()
+    callbacks.alwaysDraw()
+    callbacks.menuBar()
 end
 
 function TestMainBoot.testMainLoadsBeforeGlobalModUtilReady()

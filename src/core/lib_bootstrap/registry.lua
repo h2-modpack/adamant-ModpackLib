@@ -16,6 +16,7 @@ buckets.mutations = buckets.mutations or {}
 buckets.overlays = buckets.overlays or {}
 buckets.fallback = buckets.fallback or {}
 buckets.coordinators = buckets.coordinators or {}
+buckets.modpacks = buckets.modpacks or {}
 
 return {
     modules = buckets.modules,
@@ -25,4 +26,5 @@ return {
     overlays = buckets.overlays,
     fallback = buckets.fallback,
     coordinators = buckets.coordinators,
+    modpacks = buckets.modpacks,
 }
