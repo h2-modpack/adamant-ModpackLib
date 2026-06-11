@@ -129,8 +129,7 @@ local function createFallbackUiHarness(opts)
     end
 
     function h:createModuleState(config, definition)
-        local state = self.moduleState.create(config, definition)
-        return state.persistentState, state.stagedState
+        return self.harness:createModuleState(config, definition)
     end
 
     function h:createLibModule(pluginGuid, moduleOpts)

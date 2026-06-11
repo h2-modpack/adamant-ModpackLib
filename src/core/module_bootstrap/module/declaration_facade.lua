@@ -43,7 +43,7 @@ local function attachModuleUtilitySurface(module, opts, lifecycle)
         if activeModule then
             return activeModule.isEnabled()
         end
-        return opts.config and opts.config.Enabled == true
+        return false
     end
 
     function module.getOwnerId()
@@ -79,9 +79,7 @@ local function attachModuleUtilitySurface(module, opts, lifecycle)
         if activeModule then
             return activeModule.logIf(fmt, ...)
         end
-        if opts.config and opts.config.DebugMode == true then
-            logging.printWithPrefix("[" .. tostring(opts.id or opts.pluginGuid) .. "] ", fmt, ...)
-        end
+        return nil
     end
 end
 

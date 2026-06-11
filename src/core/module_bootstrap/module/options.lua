@@ -6,7 +6,6 @@ local options = {}
 
 local KnownModuleOpts = {
     pluginGuid = true,
-    config = true,
     modpack = true,
     id = true,
     name = true,
@@ -23,9 +22,6 @@ function options.validateKnown(opts)
 end
 
 function options.validateIdentity(opts)
-    if type(opts.config) ~= "table" then
-        logging.violate("module.invalid_create_opts", "createModule: config is required")
-    end
     if type(opts.pluginGuid) ~= "string" or opts.pluginGuid == "" then
         logging.violate("module.invalid_create_opts", "createModule: pluginGuid is required")
     end

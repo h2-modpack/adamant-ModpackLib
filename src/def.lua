@@ -441,7 +441,6 @@ local lib = {}
 
 ---@class AdamantModpackLib.ModuleCreateOpts
 ---@field pluginGuid string Plugin guid captured at module file load time.
----@field config table Module config table.
 ---@field modpack? string Module pack id used by Framework grouping.
 ---@field id string Stable module id.
 ---@field name string Display name.

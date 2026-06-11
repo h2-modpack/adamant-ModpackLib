@@ -98,8 +98,7 @@ local function makeStepperImgui(clickedLabel)
 end
 
 local function createModuleState(base, config, definition)
-    local state = base.moduleState.create(config, definition)
-    return state.persistentState, state.stagedState
+    return base:createModuleState(config, definition)
 end
 
 local function createPackedDefinition(base, fields)

@@ -79,8 +79,7 @@ local function createGameDeps(game)
 end
 
 local function createModuleState(base, config, definition)
-    local state = base.moduleState.create(config, definition)
-    return state.persistentState, state.stagedState
+    return base:createModuleState(config, definition)
 end
 
 local function createOverlayHarness(opts)

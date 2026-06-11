@@ -43,12 +43,19 @@ local function createManagedModuleHarness(harnessOpts)
     end
 
     function h:createModuleState(config, definition)
-        local state = self.moduleState.create(config, definition)
-        return state.persistentState, state.stagedState
+        return self.harness:createModuleState(config, definition)
     end
 
     function h:createModuleOrThrow(opts)
         return self.moduleBundle.createModuleOrThrow(opts)
+    end
+
+    function h:writeNativeConfig(pluginGuid, values)
+        return self.harness:writeNativeConfig(pluginGuid, values)
+    end
+
+    function h:readNativeConfig(pluginGuid)
+        return self.harness:readNativeConfig(pluginGuid)
     end
 
     local function adaptDrawCallback(callback)

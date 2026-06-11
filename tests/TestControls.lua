@@ -7,9 +7,11 @@ local createManagedModuleHarness = require("tests/harness/create_managed_module_
 TestControls = {}
 
 local function createModule(h, opts)
+    if opts.config ~= nil then
+        h:writeNativeConfig(opts.pluginGuid, opts.config)
+    end
     local module, err = h.public.createModule({
         pluginGuid = opts.pluginGuid,
-        config = opts.config or {},
         modpack = "controls-pack",
         id = opts.id,
         name = opts.name,
@@ -327,7 +329,6 @@ function TestControls:testScalarControlCompilesPrivateStorageAndCallbackRefs()
     checkRuntimeDuringDraw = true
     liveModule.drawTab()
     liveModule.flush()
-    lu.assertEquals(config["_PrioritySlot-Mode"], "Tartarus")
     lu.assertEquals(record.runtime.controls.read("PrioritySlot"), {
         mode = "Tartarus",
         min = 2,
@@ -368,9 +369,10 @@ function TestControls:testGeneratedPrivateAliasesUsePathSeparator()
     self.h:liveModule("test-controls-path-aliases").drawTab()
     self.h:liveModule("test-controls-path-aliases").flush()
 
-    lu.assertEquals(config["_A_B-C"], true)
-    lu.assertEquals(config["_A-B_C"], true)
-    lu.assertNil(config._A_B_C)
+    local saved = self.h:readNativeConfig("test-controls-path-aliases")
+    lu.assertStrContains(saved, "_A_B-C = true")
+    lu.assertStrContains(saved, "_A-B_C = true")
+    lu.assertNil(string.find(saved, "_A_B_C", 1, true))
 end
 
 function TestControls:testControlsAreCachedPerSurface()
@@ -378,7 +380,6 @@ function TestControls:testControlsAreCachedPerSurface()
     local uiSecond = nil
     local module = createModule(self.h, {
         pluginGuid = "test-controls-cached",
-        config = {},
         id = "ControlsCached",
         name = "Controls Cached",
         templates = {
@@ -439,14 +440,14 @@ function TestControls:testRuntimeControlsSkipUiOnlyFields()
     liveModule.flush()
 
     lu.assertEquals(capturedUiControl:read(), 1)
-    lu.assertEquals(config["_Searchable-Value"], 1)
-    lu.assertNil(config["_Searchable-Filter"])
+    local saved = self.h:readNativeConfig("test-controls-ui-only-field")
+    lu.assertStrContains(saved, "_Searchable-Value = 1")
+    lu.assertNil(string.find(saved, "_Searchable-Filter", 1, true))
 end
 
 function TestControls:testControlsRejectStatusStorage()
     local module = createModule(self.h, {
         pluginGuid = "test-controls-status-field",
-        config = {},
         id = "ControlsStatusField",
         name = "Controls Status Field",
         templates = {
@@ -481,7 +482,6 @@ end
 function TestControls:testControlSchemasExposeSemanticAliasesOnly()
     local module = createModule(self.h, {
         pluginGuid = "test-controls-semantic-schema",
-        config = {},
         id = "ControlsSemanticSchema",
         name = "Controls Semantic Schema",
         templates = {
@@ -513,7 +513,6 @@ end
 function TestControls:testNestedControlPackedSchemaAliasesStaySemanticForWidgets()
     local module = createModule(self.h, {
         pluginGuid = "test-controls-nested-semantic-schema",
-        config = {},
         id = "ControlsNestedSemanticSchema",
         name = "Controls Nested Semantic Schema",
         templates = {
@@ -571,7 +570,6 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
     local runtimeControl = nil
     local module = createModule(self.h, {
         pluginGuid = "test-controls-draw-views",
-        config = {},
         id = "ControlsDrawViews",
         name = "Controls Draw Views",
         templates = {
@@ -640,7 +638,6 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
     local rewards = record.runtime.controls.get("Rewards")
     lu.assertEquals(rewards:count(), 2)
     lu.assertEquals(rewards:selectedMask(2), 5)
-    lu.assertEquals(config["_Rewards-Rows"][2]["_Rewards-Rows-Selection"], 5)
 end
 
 function TestControls:testUiControlsResetNamedAndAllBoundStorage()
@@ -707,7 +704,6 @@ end
 function TestControls:testInvalidDeclarationsFailAtContactPoints()
     local module = self.h.public.createModule({
         pluginGuid = "test-controls-invalid",
-        config = {},
         id = "ControlsInvalid",
         name = "Controls Invalid",
     })
@@ -733,7 +729,6 @@ function TestControls:testInvalidDeclarationsFailAtContactPoints()
 
     local badPrepareModule, err = self.h.public.createModule({
         pluginGuid = "test-controls-bad-prepare",
-        config = {},
         id = "ControlsBadPrepare",
         name = "Controls Bad Prepare",
     })

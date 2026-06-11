@@ -353,10 +353,6 @@ return {
         severity = "error",
         description = "Store creation requires a prepared module definition.",
     },
-    ["store.invalid_config"] = {
-        severity = "error",
-        description = "Store creation requires a module config table for persisted backing values.",
-    },
     ["store.invalid_table_alias"] = {
         severity = "error",
         description = "Store table access requires a table root alias, not scalar or packed-bit aliases.",

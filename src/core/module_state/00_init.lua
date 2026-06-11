@@ -3,13 +3,11 @@ local deps = ...
 local logging = deps.logging
 local storageApi = deps.storage
 local values = deps.values
-local chalk = deps.chalk
 local rom = deps.rom
 
 local moduleState = {}
 
 local backendFactory = import('core/module_state/persistent/backend_factory.lua', nil, {
-    chalk = chalk,
     logging = logging,
     rom = rom,
 })
@@ -80,10 +78,7 @@ local function createCommittedRootAdapter(persistentState)
     }
 end
 
-function moduleState.create(modConfig, definition, opts)
-    if type(modConfig) ~= "table" then
-        logging.violate("store.invalid_config", "createModuleState expects config to be a table")
-    end
+function moduleState.create(definition, opts)
     if type(definition) ~= "table" or definition._preparedDefinition ~= true then
         logging.violate(
             "store.invalid_create_args",
@@ -91,9 +86,10 @@ function moduleState.create(modConfig, definition, opts)
         )
     end
 
+    opts = opts or {}
     local storage = definition.storage
-    local backend = backendFactory.create(modConfig, opts)
-    local storageConfig = storageConfigAdapter.create(modConfig, backend, definition.name or definition.id)
+    local backend = backendFactory.create(opts)
+    local storageConfig = storageConfigAdapter.create(backend, definition.name or definition.id)
     local persistentState = persistentStateModule.create(storageConfig, storage)
     local committedRoots = createCommittedRootAdapter(persistentState)
     local stagedState = stagedStateModule.createStagedState(storageConfig, storage, committedRoots)

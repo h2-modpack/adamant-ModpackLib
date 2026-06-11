@@ -4,8 +4,7 @@ local createLibHarness = require('tests/harness/create_lib_harness')
 TestMutation = {}
 
 local function createModuleState(harness, config, definition)
-    local state = harness.moduleState.create(config, definition)
-    return state.persistentState, state.stagedState
+    return harness:createModuleState(config, definition)
 end
 
 function TestMutation:setUp()

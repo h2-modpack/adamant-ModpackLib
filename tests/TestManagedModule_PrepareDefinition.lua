@@ -438,20 +438,6 @@ function TestManagedModule_PrepareDefinition:testCreateStoreRejectsRawDefinition
         end)
 end
 
-function TestManagedModule_PrepareDefinition:testCreateStoreRejectsNonTableConfig()
-    local definition = self.h.managedModule.prepareDefinition({}, {
-        id = "RejectNonTableConfig",
-        name = "Reject Non Table Config",
-        storage = {
-            { type = "bool", alias = "EnabledFlag", default = false },
-        },
-    })
-
-    lu.assertErrorMsgContains("store.invalid_config", function()
-        self.h:createModuleState(nil, definition)
-    end)
-end
-
 function TestManagedModule_PrepareDefinition:testManagedModuleRejectsRawDefinition()
     local prepared = self.h.managedModule.prepareDefinition({}, {
         id = "RejectRawDefinition",

@@ -11,9 +11,9 @@ local function createSharedAuthorModule(harness, pluginGuid, opts)
     if config.Enabled == nil then
         config.Enabled = true
     end
+    harness:writeNativeConfig(pluginGuid, config)
     local module = harness.public.createModule({
         pluginGuid = pluginGuid,
-        config = config,
         id = opts.id or "SharedModule",
         name = opts.name or "Shared Module",
     })
@@ -56,9 +56,11 @@ end
 
 local function createSharedModule(harness, pluginGuid, opts)
     opts = opts or {}
+    if opts.config ~= nil then
+        harness:writeNativeConfig(pluginGuid, opts.config)
+    end
     local module, err = harness.public.createModule({
         pluginGuid = pluginGuid,
-        config = opts.config or {},
         modpack = "test-pack",
         id = opts.id or ("Shared" .. tostring(pluginGuid):gsub("[^%w_]", "")),
         name = opts.name or pluginGuid,

@@ -1,6 +1,5 @@
 local deps = ...
 
-local chalk = deps.chalk
 local logging = deps.logging
 local rom = deps.rom
 
@@ -8,11 +7,6 @@ local backendFactory = {}
 
 local backendMetrics = import('core/module_state/persistent/backend_metrics.lua', nil, {
     logging = logging,
-})
-
-local chalkBackend = import('core/module_state/persistent/backend.lua', nil, {
-    chalk = chalk,
-    metrics = backendMetrics,
 })
 
 local nativeBackend = import('core/module_state/persistent/native_backend.lua', nil, {
@@ -40,18 +34,14 @@ local function resolveNativeConfigPath(pluginGuid)
     return nil
 end
 
-function backendFactory.create(modConfig, opts)
+function backendFactory.create(opts)
     opts = opts or {}
     local nativeConfigPath = type(opts.configPath) == "string" and opts.configPath ~= ""
         and opts.configPath
         or resolveNativeConfigPath(opts.pluginGuid)
-    local backend = nativeBackend.create({
+    return nativeBackend.create({
         path = nativeConfigPath,
     })
-    if backend then
-        return backend
-    end
-    return chalkBackend.create(modConfig)
 end
 
 return backendFactory

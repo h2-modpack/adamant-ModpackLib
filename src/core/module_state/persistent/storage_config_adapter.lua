@@ -13,8 +13,9 @@ local function getStorageKey(root)
     return type(root) == "table" and (root._storageKey or root.alias) or nil
 end
 
-function storageConfigAdapter.create(modConfig, backend, label)
+function storageConfigAdapter.create(backend, label)
     local adapter = {}
+    local fallbackConfig = {}
 
     local function beginBackendDiagnosticScope()
         if backend and type(backend.beginDiagnosticScope) == "function" then
@@ -30,6 +31,9 @@ function storageConfigAdapter.create(modConfig, backend, label)
     end
 
     function adapter.withSaveBatch(callback)
+        if backend and type(backend.reload) == "function" then
+            backend.reload()
+        end
         if backend and type(backend.beginSaveBatch) == "function"
             and type(backend.endSaveBatch) == "function" then
             local diagnosticScope = beginBackendDiagnosticScope()
@@ -43,6 +47,12 @@ function storageConfigAdapter.create(modConfig, backend, label)
             return
         end
         callback()
+    end
+
+    function adapter.reloadSource()
+        if backend and type(backend.reload) == "function" then
+            backend.reload()
+        end
     end
 
     local function writeBackendTable(root, value)
@@ -74,7 +84,14 @@ function storageConfigAdapter.create(modConfig, backend, label)
 
     function adapter.getEntry(alias)
         if backend then
-            return backend.getEntry(CONFIG_SECTION, alias)
+            local entry = backend.getEntry(CONFIG_SECTION, alias)
+            if entry then
+                return {
+                    get = function()
+                        return backend.read(CONFIG_SECTION, alias)
+                    end,
+                }
+            end
         end
         return nil
     end
@@ -89,8 +106,8 @@ function storageConfigAdapter.create(modConfig, backend, label)
                 return true
             end
         end
-        if modConfig[alias] == nil then
-            modConfig[alias] = value
+        if fallbackConfig[alias] == nil then
+            fallbackConfig[alias] = value
         end
         return true
     end
@@ -109,7 +126,7 @@ function storageConfigAdapter.create(modConfig, backend, label)
             raw = backendRaw
         end
         if raw == nil then
-            raw = modConfig[alias]
+            raw = fallbackConfig[alias]
         end
         return raw
     end
@@ -126,7 +143,7 @@ function storageConfigAdapter.create(modConfig, backend, label)
                 return true
             end
         end
-        modConfig[alias] = value
+        fallbackConfig[alias] = value
         return true
     end
 

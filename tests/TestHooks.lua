@@ -414,12 +414,12 @@ function TestHooks:testSystemHooksDefineRemovesOmittedDeclarations()
 end
 
 function TestHooks:testModuleHookDeclarationsRejectAfterActivation()
+    self.harness:writeNativeConfig("hook-test-declare-after-activation", {
+        Enabled = false,
+        DebugMode = false,
+    })
     local authorModule = self.public.createModule({
         pluginGuid = "hook-test-declare-after-activation",
-        config = {
-            Enabled = false,
-            DebugMode = false,
-        },
         id = "HookTest",
         name = "Hook Test",
     })
@@ -535,6 +535,10 @@ end
 function TestHooks:testContextWrapProvidesScopedWrapSurface()
     local observed = {}
     local capturedContext
+    self.harness:writeNativeConfig("hook-test-context-surface", {
+        Enabled = false,
+        DebugMode = false,
+    })
 
     self.env.AdamantHookTestInnerContext = function(value)
         table.insert(observed, "inner:" .. tostring(value))
@@ -547,10 +551,6 @@ function TestHooks:testContextWrapProvidesScopedWrapSurface()
 
     local authorModule = self.public.createModule({
         pluginGuid = "hook-test-context-surface",
-        config = {
-            Enabled = false,
-            DebugMode = false,
-        },
         id = "HookTest",
         name = "Hook Test",
     })

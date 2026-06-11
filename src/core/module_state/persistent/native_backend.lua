@@ -259,6 +259,11 @@ local function create(opts)
 
     loadFile()
 
+    function backend.reload()
+        sections = {}
+        loadFile()
+    end
+
     function backend.beginSaveBatch()
         saveBatchDepth = saveBatchDepth + 1
     end

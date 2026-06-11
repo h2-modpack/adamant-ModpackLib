@@ -444,6 +444,9 @@ local function createStagedState(storageConfig, storage, committedRoots)
             return dirty
         end,
         auditMismatches = function()
+            if type(storageConfig.reloadSource) == "function" then
+                storageConfig.reloadSource()
+            end
             local mismatches = {}
             for _, root in ipairs(stagedRootNodes) do
                 if not root._persist or root._mode == "runtime" then

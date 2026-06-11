@@ -76,6 +76,175 @@ local function createModUtilPlugin()
     }
 end
 
+local function formatConfigValue(value)
+    if type(value) == "boolean" then
+        return value and "true" or "false"
+    elseif type(value) == "number" then
+        return tostring(value)
+    end
+    value = tostring(value or "")
+    value = string.gsub(value, "\\", "\\\\")
+    value = string.gsub(value, '"', '\\"')
+    value = string.gsub(value, "\n", "\\n")
+    return '"' .. value .. '"'
+end
+
+local function combinePath(left, right)
+    if string.sub(left, -1) == "/" then
+        return left .. right
+    end
+    return left .. "/" .. right
+end
+
+local function configureNativeConfigRoot(rom, root)
+    os.execute('mkdir -p "' .. root .. '"')
+    rom.paths = rom.paths or {}
+    rom.path = rom.path or {}
+    rom.paths.config = function()
+        return root
+    end
+    rom.path.combine = combinePath
+end
+
+local function writeNativeConfig(root, pluginGuid, values)
+    local file = assert(io.open(combinePath(root, pluginGuid .. ".cfg"), "w"))
+    file:write("## Settings file was created by plugin adamant-ModpackLib test harness\n\n")
+    file:write("[config]\n\n")
+    for key, value in pairs(values or {}) do
+        if type(value) ~= "table" then
+            file:write(tostring(key), " = ", formatConfigValue(value), "\n")
+        end
+    end
+    for key, value in pairs(values or {}) do
+        if type(value) == "table" then
+            file:write("\n[config.", tostring(key), "]\n\n")
+            file:write("_RowCount = ", tostring(#value), "\n")
+            for rowIndex, row in ipairs(value) do
+                file:write("\n[config.", tostring(key), ".", tostring(rowIndex), "]\n\n")
+                for cellKey, cellValue in pairs(row or {}) do
+                    if type(cellValue) ~= "table" then
+                        file:write(tostring(cellKey), " = ", formatConfigValue(cellValue), "\n")
+                    end
+                end
+            end
+        end
+    end
+    file:close()
+end
+
+local function trim(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
+local function unescapeString(value)
+    value = string.gsub(value, "\\n", "\n")
+    value = string.gsub(value, '\\"', '"')
+    value = string.gsub(value, "\\\\", "\\")
+    return value
+end
+
+local function parseConfigValue(rawValue)
+    rawValue = trim(rawValue)
+    if rawValue == "" then
+        return ""
+    end
+
+    local first = string.sub(rawValue, 1, 1)
+    local last = string.sub(rawValue, -1)
+    if first == '"' and last == '"' and #rawValue >= 2 then
+        return unescapeString(string.sub(rawValue, 2, -2))
+    end
+
+    local lower = string.lower(rawValue)
+    if lower == "true" then
+        return true
+    elseif lower == "false" then
+        return false
+    end
+
+    local numberValue = tonumber(rawValue)
+    if numberValue ~= nil then
+        return numberValue
+    end
+
+    return rawValue
+end
+
+local function parseNativeConfig(path)
+    local result = {}
+    local file = io.open(path, "r")
+    if not file then
+        return result
+    end
+
+    local currentSection = "config"
+    for line in file:lines() do
+        local section = string.match(line, "^%s*%[([^%]]+)%]%s*$")
+        if section then
+            currentSection = trim(section)
+        elseif not string.match(line, "^%s*[#;]") then
+            local key, rawValue = string.match(line, "^%s*([^=]-)%s*=%s*(.-)%s*$")
+            key = key and trim(key) or nil
+            if key and key ~= "" then
+                local value = parseConfigValue(rawValue)
+                if currentSection == "config" then
+                    result[key] = value
+                else
+                    local tableKey, rowIndex = string.match(currentSection, "^config%.([^%.]+)%.(%d+)$")
+                    if tableKey and key ~= "_RowCount" then
+                        result[tableKey] = result[tableKey] or {}
+                        result[tableKey][tonumber(rowIndex)] = result[tableKey][tonumber(rowIndex)] or {}
+                        result[tableKey][tonumber(rowIndex)][key] = value
+                    end
+                end
+            end
+        end
+    end
+    file:close()
+
+    return result
+end
+
+local function installConfigProxy(config, path)
+    if type(config) ~= "table" then
+        return
+    end
+
+    local snapshot = deepCopy(config)
+    for key in pairs(config) do
+        config[key] = nil
+    end
+
+    local function readSnapshot()
+        return parseNativeConfig(path)
+    end
+
+    local function writeSnapshot(snapshotValue)
+        local dir, fileName = string.match(path, "^(.*)/([^/]+)$")
+        local pluginGuid = fileName and string.gsub(fileName, "%.cfg$", "") or "test-module"
+        writeNativeConfig(dir or ".", pluginGuid, snapshotValue)
+    end
+
+    setmetatable(config, {
+        __index = function(_, key)
+            return readSnapshot()[key]
+        end,
+        __newindex = function(_, key, value)
+            local current = readSnapshot()
+            current[key] = value
+            writeSnapshot(current)
+        end,
+        __pairs = function()
+            return pairs(readSnapshot())
+        end,
+        __len = function()
+            return #readSnapshot()
+        end,
+    })
+
+    writeSnapshot(snapshot)
+end
+
 local function createRom(config, opts)
     local rom = opts.rom or {
         mods = {},
@@ -173,6 +342,9 @@ local function createLibHarness(opts)
     local runtimeRoot = opts.runtime or {}
     local plugin = opts.plugin or { guid = "test-module" }
     local rom = createRom(config, opts)
+    local nativeConfigRoot = opts.nativeConfigRoot
+        or ("/tmp/adamant-modpacklib-tests-" .. tostring(os.clock()):gsub("[^%d]", ""))
+    configureNativeConfigRoot(rom, nativeConfigRoot)
     local modUtilRuntime = opts.modutil or opts.modUtilRuntime or createModUtil()
     rom.mods['SGG_Modding-ModUtil'].globals.ModUtil = modUtilRuntime
     local imports = {}
@@ -225,6 +397,7 @@ local function createLibHarness(opts)
         env = env,
         externals = externals,
         rom = rom,
+        nativeConfigRoot = nativeConfigRoot,
         game = rom.game,
         chalk = externals.chalk,
         modutil = env.ModUtil,
@@ -266,6 +439,34 @@ local function createLibHarness(opts)
         fallbackUi = imports["core/fallback/fallback_ui.lua"].service,
     }
     harness.externals.gameDeps = harness.gameDeps
+    function harness:writeNativeConfig(pluginGuid, values)
+        writeNativeConfig(self.nativeConfigRoot, pluginGuid, values)
+    end
+    function harness:readNativeConfig(pluginGuid)
+        local file = assert(io.open(combinePath(self.nativeConfigRoot, pluginGuid .. ".cfg"), "r"))
+        local contents = file:read("*a")
+        file:close()
+        return contents
+    end
+    function harness:createConfigFixture(config, pluginGuid)
+        config = config or {}
+        pluginGuid = pluginGuid or ("test-module-state-" .. tostring(os.clock()):gsub("[^%d]", ""))
+        local path = combinePath(self.nativeConfigRoot, pluginGuid .. ".cfg")
+        writeNativeConfig(self.nativeConfigRoot, pluginGuid, config)
+        installConfigProxy(config, path)
+        return path
+    end
+    function harness:createModuleState(config, definition, opts)
+        opts = opts or {}
+        local configPath = opts.configPath or self:createConfigFixture(config or {}, opts.pluginGuid)
+        local createOpts = {}
+        for key, value in pairs(opts) do
+            createOpts[key] = value
+        end
+        createOpts.configPath = configPath
+        local state = self.moduleState.create(definition, createOpts)
+        return state.persistentState, state.stagedState, configPath
+    end
     function harness.createSystem(ownerId)
         return harness.systemScope.create(ownerId, {
             hooks = harness.hooksBundle.system,

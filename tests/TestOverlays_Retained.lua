@@ -232,12 +232,12 @@ function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
 end
 
 function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivation()
+    self.h.harness:writeNativeConfig("test.retained.after-activation", {
+        Enabled = true,
+        DebugMode = false,
+    })
     local authorModule = self.h.public.createModule({
         pluginGuid = "test.retained.after-activation",
-        config = {
-            Enabled = true,
-            DebugMode = false,
-        },
         id = "OverlayModule",
         name = "Overlay Module",
     })

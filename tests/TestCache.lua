@@ -23,9 +23,11 @@ end
 
 local function createCacheModule(harness, pluginGuid, opts)
     opts = opts or {}
+    if opts.config ~= nil then
+        harness:writeNativeConfig(pluginGuid, opts.config)
+    end
     local module, err = harness.public.createModule({
         pluginGuid = pluginGuid,
-        config = opts.config or {},
         modpack = "test-pack",
         id = opts.id or ("Cache" .. tostring(pluginGuid):gsub("[^%w_]", "")),
         name = opts.name or pluginGuid,

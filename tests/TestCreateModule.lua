@@ -4,9 +4,11 @@ local createManagedModuleHarness = require("tests/harness/create_managed_module_
 TestCreateModule = {}
 
 local function createTestModule(h, opts)
+    if opts.config ~= nil then
+        h:writeNativeConfig(opts.pluginGuid, opts.config)
+    end
     local module, err = h.public.createModule({
         pluginGuid = opts.pluginGuid,
-        config = opts.config,
         modpack = opts.modpack,
         id = opts.id,
         name = opts.name,
@@ -229,7 +231,6 @@ function TestCreateModule:testDrawCallbacksReuseStableFacades()
     local calls = {}
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-stable-draw-objects",
-        config = {},
         modpack = "create-module-pack",
         id = "StableDrawObjects",
         name = "Stable Draw Objects",
@@ -318,7 +319,6 @@ function TestCreateModule:testPackedWidgetsUseDrawStateScopedAliases()
 
     self.h:liveModule("test-create-module-packed-widget-owner").flush()
     lu.assertEquals(store.read("Packed"), 1)
-    lu.assertEquals(config.Packed, 1)
 end
 
 function TestCreateModule:testDrawFacadeIsSharedAcrossHosts()
@@ -330,7 +330,6 @@ function TestCreateModule:testDrawFacadeIsSharedAcrossHosts()
     local secondCallbackHost = nil
     local firstHost = createTestModule(self.h, {
         pluginGuid = "test-create-module-shared-draw-a",
-        config = {},
         modpack = "create-module-pack",
         id = "SharedDrawA",
         name = "Shared Draw A",
@@ -343,7 +342,6 @@ function TestCreateModule:testDrawFacadeIsSharedAcrossHosts()
     })
     local secondHost = createTestModule(self.h, {
         pluginGuid = "test-create-module-shared-draw-b",
-        config = {},
         modpack = "create-module-pack",
         id = "SharedDrawB",
         name = "Shared Draw B",
@@ -374,7 +372,6 @@ end
 function TestCreateModule:testCreateModuleReturnsOnlyModuleDeclarationSurface()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-author-surface",
-        config = {},
         modpack = "create-module-pack",
         id = "AuthorSurface",
         name = "Author Surface",
@@ -423,9 +420,9 @@ function TestCreateModule:testCreateModuleSupportsDeclarativeModuleFacade()
     local capturedCommitRuntime = nil
     local capturedCommitHost = nil
     local capturedCommit = nil
+    self.h:writeNativeConfig("test-create-module-declarative-facade", config)
     local module, err = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-facade",
-        config = config,
         modpack = "create-module-pack",
         id = "DeclarativeFacade",
         name = "Declarative Facade",
@@ -477,7 +474,6 @@ function TestCreateModule:testCreateModuleSupportsDeclarativeModuleFacade()
     lu.assertTrue(liveModule.commitIfDirty())
     lu.assertEquals(capturedActionHost.getOwnerId(), "test-create-module-declarative-facade")
     lu.assertEquals(capturedActionRuntime.status.read("RuntimeFlag"), true)
-    lu.assertEquals(config.Flag, true)
     lu.assertEquals(capturedCommitRuntime.data.read("Flag"), true)
     lu.assertEquals(capturedCommitRuntime.status.read("RuntimeFlag"), true)
     lu.assertErrorMsgContains("status, not data storage", function()
@@ -489,11 +485,11 @@ end
 
 function TestCreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHostAndPayload()
     local received = nil
+    self.h:writeNativeConfig("test-create-module-declarative-listener", {
+        Enabled = true,
+    })
     local listener = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-listener",
-        config = {
-            Enabled = true,
-        },
         modpack = "create-module-pack",
         id = "DeclarativeListener",
         name = "Declarative Listener",
@@ -511,11 +507,11 @@ function TestCreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHost
     end)
     lu.assertTrue(listener.activate())
 
+    self.h:writeNativeConfig("test-create-module-declarative-emitter", {
+        Enabled = true,
+    })
     local emitter = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-emitter",
-        config = {
-            Enabled = true,
-        },
         modpack = "create-module-pack",
         id = "DeclarativeEmitter",
         name = "Declarative Emitter",
@@ -537,11 +533,11 @@ end
 
 function TestCreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArgs()
     local captured = nil
+    self.h:writeNativeConfig("test-create-module-declarative-hooks", {
+        Enabled = true,
+    })
     local module = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-hooks",
-        config = {
-            Enabled = true,
-        },
         modpack = "create-module-pack",
         id = "DeclarativeHooks",
         name = "Declarative Hooks",
@@ -576,7 +572,6 @@ end
 function TestCreateModule:testDeclarativeModuleActivationIsSingleUse()
     local module = self.h.public.createModule({
         pluginGuid = "test-create-module-declarative-single-activate",
-        config = {},
         modpack = "create-module-pack",
         id = "DeclarativeSingleActivate",
         name = "Declarative Single Activate",
@@ -623,7 +618,6 @@ end
 function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-module-mutation-after-activation",
-        config = {},
         id = "ModuleMutationAfterActivation",
         name = "Module Mutation After Activation",
         drawTab = function() end,
@@ -635,24 +629,23 @@ function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()
     end)
 end
 
-function TestCreateModule:testCreateModuleReturnsErrorAndLogsWarning()
+function TestCreateModule:testCreateModuleAllowsMissingConfig()
     local host, err = self.h.public.createModule({
-        pluginGuid = "test-try-create-module-invalid",
-        id = "TryCreateInvalid",
+        pluginGuid = "test-create-module-no-config",
+        id = "NoConfig",
+        name = "No Config",
     })
 
-    lu.assertNil(host)
-    lu.assertStrContains(err, "config is required")
-    lu.assertEquals(#self.h.warnings, 1)
-    lu.assertStrContains(self.h.warnings[1], "module.create_failed")
-    lu.assertStrContains(self.h.warnings[1], "config is required")
-    lu.assertNil(self.h:liveModule("test-try-create-module-invalid"))
+    lu.assertNotNil(host)
+    lu.assertNil(err)
+    lu.assertFalse(host.isEnabled())
+    lu.assertEquals(#self.h.warnings, 0)
+    lu.assertNil(self.h:liveModule("test-create-module-no-config"))
 end
 
 function TestCreateModule:testCreateModuleActivationIsSingleUse()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-single-activate",
-        config = {},
         modpack = "create-module-pack",
         id = "SingleActivate",
         name = "Single Activate",
@@ -671,7 +664,6 @@ function TestCreateModule:testCreateModuleRejectsOwnerOption()
         self.h:createModuleOrThrow({
             owner = {},
             pluginGuid = "test-create-module-hooks-no-owner",
-            config = {},
             id = "HooksNoOwner",
             name = "Hooks No Owner",
         })
@@ -682,7 +674,6 @@ function TestCreateModule:testCreateModuleRejectsUnknownDefinitionOption()
     lu.assertErrorMsgContains("unknown option 'definition'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-definition-option",
-            config = {},
             definition = {
                 id = "DefinitionOption",
                 name = "Definition Option",
@@ -695,7 +686,6 @@ function TestCreateModule:testCreateModuleRejectsUnknownTopLevelDeclarations()
     lu.assertErrorMsgContains("unknown option 'storage'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-storage-top-level",
-            config = {},
             id = "StorageTopLevel",
             name = "Storage Top Level",
             storage = {},
@@ -704,7 +694,6 @@ function TestCreateModule:testCreateModuleRejectsUnknownTopLevelDeclarations()
     lu.assertErrorMsgContains("unknown option 'drawTab'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-draw-tab-top-level",
-            config = {},
             id = "DrawTabTopLevel",
             name = "Draw Tab Top Level",
             drawTab = function() end,
@@ -715,7 +704,6 @@ end
 function TestCreateModule:testModuleDataDefineTreatsModeAsUnknownPublicField()
     local module = self.h:createModuleOrThrow({
         pluginGuid = "test-create-module-data-mode-unknown",
-        config = {},
         id = "DataModeUnknown",
         name = "Data Mode Unknown",
     })
@@ -746,7 +734,6 @@ function TestCreateModule:testModuleStatusDefineValidatesDeclarationShape()
         caseIndex = caseIndex + 1
         local module = self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-status-invalid-" .. tostring(caseIndex),
-            config = {},
             id = "StatusInvalid" .. tostring(caseIndex),
             name = "Status Invalid " .. tostring(caseIndex),
         })
@@ -786,7 +773,6 @@ function TestCreateModule:testCreateModuleTreatsManualMutationAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerManualMutation'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-manual-mutation-unknown",
-            config = {},
             id = "ManualMutationUnknown",
             name = "Manual Mutation Unknown",
             registerManualMutation = {
@@ -801,7 +787,6 @@ function TestCreateModule:testCreateModuleTreatsRegisterPatchMutationAsUnknownOp
     lu.assertErrorMsgContains("unknown option 'registerPatchMutation'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-patch-mutation-unknown",
-            config = {},
             id = "PatchMutationUnknown",
             name = "Patch Mutation Unknown",
             registerPatchMutation = function() end,
@@ -813,7 +798,6 @@ function TestCreateModule:testCreateModuleTreatsRegisterSharedAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerShared'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-shared-unknown",
-            config = {},
             id = "RegisterSharedUnknown",
             name = "Register Shared Unknown",
             registerShared = function() end,
@@ -825,7 +809,6 @@ function TestCreateModule:testCreateModuleTreatsRegisterHooksAsUnknownOption()
     lu.assertErrorMsgContains("unknown option 'registerHooks'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-hooks-unknown",
-            config = {},
             id = "RegisterHooksUnknown",
             name = "Register Hooks Unknown",
             registerHooks = function() end,
@@ -837,7 +820,6 @@ function TestCreateModule:testCreateModuleTreatsRegisterOverlaysAsUnknownOption(
     lu.assertErrorMsgContains("unknown option 'registerOverlays'", function()
         self.h:createModuleOrThrow({
             pluginGuid = "test-create-module-register-overlays-unknown",
-            config = {},
             id = "RegisterOverlaysUnknown",
             name = "Register Overlays Unknown",
             registerOverlays = function() end,
@@ -848,7 +830,6 @@ end
 function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceOnly()
     local stableHost = createTestModule(self.h, {
         pluginGuid = "test-create-module-quick-content-stable",
-        config = {},
         modpack = "create-module-pack",
         id = "QuickContentStable",
         name = "Quick Content Stable",
@@ -859,7 +840,6 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
 
     local stableReplacement = createTestModule(self.h, {
         pluginGuid = "test-create-module-quick-content-stable",
-        config = {},
         modpack = "create-module-pack",
         id = "QuickContentStable",
         name = "Quick Content Stable",
@@ -872,7 +852,6 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
 
     local addedHost = createTestModule(self.h, {
         pluginGuid = "test-create-module-quick-content-added",
-        config = {},
         modpack = "create-module-pack",
         id = "QuickContentAdded",
         name = "Quick Content Added",
@@ -882,7 +861,6 @@ function TestCreateModule:testCreateModuleFingerprintTracksQuickContentPresenceO
 
     local addedReplacement = createTestModule(self.h, {
         pluginGuid = "test-create-module-quick-content-added",
-        config = {},
         modpack = "create-module-pack",
         id = "QuickContentAdded",
         name = "Quick Content Added",
