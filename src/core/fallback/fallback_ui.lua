@@ -258,24 +258,7 @@ local function createRuntime(module)
                 local enabled = controls.enabled
                 local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
                 if enabledChanged then
-                    if rawget(_G, "AdamantEnableToggleDebug") == true then
-                        logging.printWithPrefix("[lib-debug] ",
-                            "%s: fallback enabled checkbox changed target=%s control_before=%s module_before=%s",
-                            tostring(meta.name or moduleId or "module"),
-                            tostring(enabledValue == true),
-                            tostring(enabled),
-                            tostring(module.isEnabled() == true))
-                    end
                     local transitionOk, transitionErr = module.setEnabled(enabledValue)
-                    if rawget(_G, "AdamantEnableToggleDebug") == true then
-                        logging.printWithPrefix("[lib-debug] ",
-                            "%s: fallback enabled checkbox result ok=%s err=%s control_before_update=%s module_after=%s",
-                            tostring(meta.name or moduleId or "module"),
-                            tostring(transitionOk),
-                            tostring(transitionErr),
-                            tostring(controls.enabled),
-                            tostring(module.isEnabled() == true))
-                    end
                     if transitionOk then
                         controls.enabled = enabledValue == true
                         enabled = controls.enabled

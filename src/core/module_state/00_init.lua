@@ -4,11 +4,14 @@ local logging = deps.logging
 local storageApi = deps.storage
 local values = deps.values
 local chalk = deps.chalk
+local rom = deps.rom
 
 local moduleState = {}
 
-local persistenceBackend = import('core/module_state/persistent/backend.lua', nil, {
+local backendFactory = import('core/module_state/persistent/backend_factory.lua', nil, {
     chalk = chalk,
+    logging = logging,
+    rom = rom,
 })
 local storageConfigAdapter = import('core/module_state/persistent/storage_config_adapter.lua', nil, {
     storage = storageApi,
@@ -77,7 +80,7 @@ local function createCommittedRootAdapter(persistentState)
     }
 end
 
-function moduleState.create(modConfig, definition)
+function moduleState.create(modConfig, definition, opts)
     if type(modConfig) ~= "table" then
         logging.violate("store.invalid_config", "createModuleState expects config to be a table")
     end
@@ -89,20 +92,11 @@ function moduleState.create(modConfig, definition)
     end
 
     local storage = definition.storage
-    local backend = persistenceBackend.create(modConfig)
+    local backend = backendFactory.create(modConfig, opts)
     local storageConfig = storageConfigAdapter.create(modConfig, backend, definition.name or definition.id)
     local persistentState = persistentStateModule.create(storageConfig, storage)
     local committedRoots = createCommittedRootAdapter(persistentState)
     local stagedState = stagedStateModule.createStagedState(storageConfig, storage, committedRoots)
-    if rawget(_G, "AdamantEnableToggleDebug") == true then
-        logging.printWithPrefix("[lib-debug] ",
-            "%s: moduleState.create hydrated enabled_committed=%s enabled_staged=%s debug_committed=%s debug_staged=%s",
-            tostring(definition.name or definition.id or "module"),
-            tostring(persistentState.read("Enabled")),
-            tostring(stagedState.read("Enabled")),
-            tostring(persistentState.read("DebugMode")),
-            tostring(stagedState.read("DebugMode")))
-    end
 
     return {
         persistentState = persistentState,

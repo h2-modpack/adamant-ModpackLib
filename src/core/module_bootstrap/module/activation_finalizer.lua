@@ -83,7 +83,9 @@ function activationFinalizer.activate(opts, declarations)
             storage = internalStorage,
             actions = internalActions,
         })
-    local state = moduleState.create(opts.config, definition)
+    local state = moduleState.create(opts.config, definition, {
+        pluginGuid = opts.pluginGuid,
+    })
     local module = managedModule.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,

@@ -8,38 +8,6 @@ local PACK_RESTORE_NONE = 0
 local PACK_RESTORE_DISABLED = 1
 local PACK_RESTORE_ENABLED = 2
 
-local function debugValue(value)
-    return tostring(value)
-end
-
-local function readPersistentAlias(persistentState, alias)
-    if persistentState and type(persistentState.read) == "function" then
-        return persistentState.read(alias)
-    end
-    return nil
-end
-
-local function readStagedAlias(stagedState, alias)
-    if stagedState and type(stagedState.read) == "function" then
-        return stagedState.read(alias)
-    end
-    return nil
-end
-
-local function isStagedDirty(stagedState)
-    if stagedState and type(stagedState.isDirty) == "function" then
-        return stagedState.isDirty()
-    end
-    return nil
-end
-
-local function debugLifecycle(def, fmt, ...)
-    if rawget(_G, "AdamantEnableToggleDebug") ~= true then
-        return
-    end
-    logging.printWithPrefix("[lib-debug] ", "%s: " .. fmt, tostring(def and (def.name or def.id) or "module"), ...)
-end
-
 local function makeCommitContext(actionSnapshot, hadConfigChanges)
     actionSnapshot = actionSnapshot or {}
     local commitActions = moduleState.createCommitActions(actionSnapshot)
@@ -207,14 +175,7 @@ end
 local function commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                  actionExecutor, sharedEventFlusher, internalActionExecutor)
     local hasPendingActions = actionBuffer and actionBuffer.hasAny()
-    debugLifecycle(def,
-        "commitStagedState enter enabled_committed=%s enabled_staged=%s dirty=%s actions=%s",
-        debugValue(readPersistentAlias(persistentState, "Enabled")),
-        debugValue(readStagedAlias(stagedState, "Enabled")),
-        debugValue(isStagedDirty(stagedState)),
-        debugValue(hasPendingActions == true))
     if not stagedState.isDirty() and not hasPendingActions then
-        debugLifecycle(def, "commitStagedState no-op")
         return true, nil
     end
 
@@ -224,14 +185,6 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, pe
     local hadConfigChanges, snapshot = flushDirtyConfig(stagedState)
 
     local nextEffective = isEnabled(persistentState)
-    debugLifecycle(def,
-        "commitStagedState flushed changed=%s previous_enabled=%s next_enabled=%s enabled_committed=%s enabled_staged=%s dirty=%s",
-        debugValue(hadConfigChanges),
-        debugValue(previousEffective),
-        debugValue(nextEffective),
-        debugValue(readPersistentAlias(persistentState, "Enabled")),
-        debugValue(readStagedAlias(stagedState, "Enabled")),
-        debugValue(isStagedDirty(stagedState)))
     local commitContext = makeCommitContext(actionSnapshot, hadConfigChanges)
     local shouldSyncMutation = mutation.affectsRunData(mutationBundle)
         and hadConfigChanges
@@ -263,39 +216,16 @@ end
 
 local function setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                           actionExecutor, sharedEventFlusher, internalActionExecutor, enabled)
-    debugLifecycle(def,
-        "setEnabled begin target=%s committed=%s staged=%s dirty=%s",
-        debugValue(enabled == true),
-        debugValue(readPersistentAlias(persistentState, "Enabled")),
-        debugValue(readStagedAlias(stagedState, "Enabled")),
-        debugValue(isStagedDirty(stagedState)))
     local previousEffective = stageLifecycleBoolean(persistentState, stagedState, "Enabled", enabled)
-    debugLifecycle(def,
-        "setEnabled staged target=%s previous=%s committed=%s staged=%s dirty=%s",
-        debugValue(enabled == true),
-        debugValue(previousEffective),
-        debugValue(readPersistentAlias(persistentState, "Enabled")),
-        debugValue(readStagedAlias(stagedState, "Enabled")),
-        debugValue(isStagedDirty(stagedState)))
     if not stagedState.isDirty() and not (actionBuffer and actionBuffer.hasAny()) then
         if previousEffective and enabled == true and mutation.affectsRunData(mutationBundle) then
             local ok, err = mutation.applyForModule(module)
-            debugLifecycle(def, "setEnabled reapply active mutation ok=%s err=%s committed=%s staged=%s",
-                debugValue(ok), debugValue(err), debugValue(readPersistentAlias(persistentState, "Enabled")),
-                debugValue(readStagedAlias(stagedState, "Enabled")))
             return ok, err
         end
-        debugLifecycle(def, "setEnabled no-op target=%s committed=%s staged=%s",
-            debugValue(enabled == true), debugValue(readPersistentAlias(persistentState, "Enabled")),
-            debugValue(readStagedAlias(stagedState, "Enabled")))
         return true, nil
     end
-    local ok, err = commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
+    return commitStagedState(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor)
-    debugLifecycle(def, "setEnabled end ok=%s err=%s committed=%s staged=%s dirty=%s",
-        debugValue(ok), debugValue(err), debugValue(readPersistentAlias(persistentState, "Enabled")),
-        debugValue(readStagedAlias(stagedState, "Enabled")), debugValue(isStagedDirty(stagedState)))
-    return ok, err
 end
 
 local function setDebugMode(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,

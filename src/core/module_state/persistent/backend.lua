@@ -1,8 +1,10 @@
 local deps = ...
 
 local chalk = deps.chalk
+local backendMetrics = deps.metrics
 local backendCache = setmetatable({}, { __mode = "k" })
 local TABLE_ROW_COUNT_KEY = "_RowCount"
+local SLOW_BIND_MS = 50
 
 local function readField(object, key)
     local ok, value = pcall(function()
@@ -35,10 +37,8 @@ local function callMethod(object, name, ...)
     return false, nil
 end
 
-local function shouldDebugAlias(section, key)
-    return rawget(_G, "AdamantEnableToggleDebug") == true
-        and section == "config"
-        and (key == "Enabled" or key == "DebugMode" or key == "AdamantFramework_PackRestoreSnapshot")
+local function nowMs()
+    return os.clock() * 1000
 end
 
 local function create(config)
@@ -66,6 +66,7 @@ local function create(config)
         return backend
     end
 
+    local metrics = backendMetrics.create("chalk")
     local entryIndex = {}
     for descriptor, entry in pairs(entries) do
         local section = descriptor.section
@@ -84,6 +85,7 @@ local function create(config)
     local saveBatchDepth = 0
     local savePending = false
     backend = {}
+    local requestSave
 
     local function makeCacheKey(section, key)
         return tostring(section) .. "\0" .. tostring(key)
@@ -117,8 +119,20 @@ local function create(config)
             return nil
         end
 
+        metrics.count("binds")
+        local bindStartedMs = nowMs()
         local bindOk, entry = callMethod(rawConfig, "bind", section, key, value, "")
+        local bindElapsedMs = nowMs() - bindStartedMs
+        metrics.count("bind_time_ms", bindElapsedMs)
+        if metrics.isEnabled() and bindElapsedMs >= SLOW_BIND_MS then
+            metrics.count("bind_slow")
+            metrics.diagnose("backend slow bind section=%s key=%s elapsed_ms=%.3f",
+                tostring(section),
+                tostring(key),
+                bindElapsedMs)
+        end
         if not bindOk or not entry then
+            metrics.count("bind_failures")
             return nil
         end
 
@@ -145,14 +159,53 @@ local function create(config)
     local function readRowCount(section, rootKey)
         local entry = backend.getEntry(getTableRootSection(section, rootKey), TABLE_ROW_COUNT_KEY)
         if not entry then
+            metrics.count("row_count_misses")
             return nil
         end
 
+        metrics.count("entry_gets")
+        local getOk, value = callMethod(entry, "get")
+        if not getOk then
+            metrics.count("row_count_misses")
+            return nil
+        end
+        local rowCount = normalizeRowCount(value)
+        if rowCount == nil then
+            metrics.count("row_count_misses")
+            return nil
+        end
+        metrics.count("row_count_hits")
+        return rowCount
+    end
+
+    local function readBoundRowCount(section, rootKey, defaultValue)
+        local rowCount = readRowCount(section, rootKey)
+        if rowCount ~= nil then
+            return rowCount
+        end
+
+        defaultValue = normalizeRowCount(defaultValue)
+        if defaultValue == nil then
+            return nil
+        end
+
+        local entry = bindEntry(getTableRootSection(section, rootKey), TABLE_ROW_COUNT_KEY, defaultValue)
+        if not entry then
+            return nil
+        end
+
+        requestSave()
+        metrics.count("entry_gets")
         local getOk, value = callMethod(entry, "get")
         if not getOk then
             return nil
         end
-        return normalizeRowCount(value)
+
+        rowCount = normalizeRowCount(value)
+        if rowCount ~= nil then
+            metrics.count("row_count_hits")
+        end
+        return rowCount
     end
 
     local function writeRowCount(section, rootKey, rowCount)
@@ -163,11 +216,16 @@ local function create(config)
 
         local entry = backend.getEntry(getTableRootSection(section, rootKey), TABLE_ROW_COUNT_KEY)
         if entry then
+            metrics.count("entry_gets")
             local getOk, current = callMethod(entry, "get")
             if getOk and normalizeRowCount(current) == rowCount then
                 return true, false
             end
+            metrics.count("entry_sets")
             local setOk = callMethod(entry, "set", rowCount)
+            if setOk then
+                metrics.count("table_cell_changes")
+            end
             return setOk, setOk
         end
 
@@ -176,10 +234,13 @@ local function create(config)
     end
 
     local function saveRawConfig()
+        local startedMs = nowMs()
+        metrics.count("saves")
         callMethod(rawConfig, "save")
+        metrics.count("save_time_ms", nowMs() - startedMs)
     end
 
-    local function requestSave()
+    requestSave = function()
         if saveBatchDepth > 0 then
             savePending = true
             return
@@ -205,9 +266,15 @@ local function create(config)
     end
 
     function backend.getEntry(section, key)
+        metrics.count("get_entries")
         local cacheKey = makeCacheKey(section, key)
         local cached = pathEntryCache[cacheKey]
         if cached ~= nil then
+            if cached then
+                metrics.count("get_entry_hits")
+            else
+                metrics.count("get_entry_misses")
+            end
             return cached or nil
         end
 
@@ -215,10 +282,12 @@ local function create(config)
         local entry = sectionEntries and sectionEntries[key] or nil
         if entry then
             pathEntryCache[cacheKey] = entry
+            metrics.count("get_entry_hits")
             return entry
         end
 
         pathEntryCache[cacheKey] = false
+        metrics.count("get_entry_misses")
         return nil
     end
 
@@ -242,42 +311,64 @@ local function create(config)
     end
 
     function backend.read(section, key)
+        metrics.count("reads")
         local entry = backend.getEntry(section, key)
         if entry then
+            metrics.count("entry_gets")
             local getOk, value = callMethod(entry, "get")
-            if shouldDebugAlias(section, key) then
-                print(string.format("[lib-debug] backend read section=%s key=%s entry=true get_ok=%s value=%s",
-                    tostring(section), tostring(key), tostring(getOk), tostring(value)))
-            end
             if getOk then
                 return value
             end
             return nil
         end
-        if shouldDebugAlias(section, key) then
-            print(string.format("[lib-debug] backend read section=%s key=%s entry=false value=nil",
-                tostring(section), tostring(key)))
+        return nil
+    end
+
+    function backend.readBound(section, key, value)
+        metrics.count("reads")
+        local entry = backend.getEntry(section, key)
+        if not entry then
+            if not isFlatValue(value) then
+                return nil
+            end
+            entry = bindEntry(section, key, value)
+            if not entry then
+                return nil
+            end
+            requestSave()
+        end
+
+        metrics.count("entry_gets")
+        local getOk, boundValue = callMethod(entry, "get")
+        if getOk then
+            return boundValue
         end
         return nil
     end
 
     function backend.write(section, key, value)
+        local startedMs = nowMs()
         if not isFlatValue(value) then
+            metrics.count("write_scalar_time_ms", nowMs() - startedMs)
             return false
         end
 
         local entry = backend.getEntry(section, key)
         if entry then
+            metrics.count("entry_sets")
             local setOk = callMethod(entry, "set", value)
             if setOk then
                 requestSave()
+                metrics.count("write_scalar_time_ms", nowMs() - startedMs)
                 return true
             end
         end
+        metrics.count("write_scalar_time_ms", nowMs() - startedMs)
         return false
     end
 
     function backend.readTable(section, node)
+        metrics.count("read_tables")
         if type(node) ~= "table" or node.type ~= "table" then
             return nil
         end
@@ -292,7 +383,7 @@ local function create(config)
             return nil
         end
 
-        local rowCount = readRowCount(section, rootKey)
+        local rowCount = readBoundRowCount(section, rootKey, node.defaultRows or 0)
         if rowCount ~= nil then
             local rows = {}
             for index = 1, rowCount do
@@ -303,8 +394,12 @@ local function create(config)
                     local entry = key and backend.getEntry(rowSection, key) or nil
                     if not entry then
                         entry = bindEntry(rowSection, key, root.default)
+                        if entry then
+                            requestSave()
+                        end
                     end
                     if entry then
+                        metrics.count("entry_gets")
                         local getOk, value = callMethod(entry, "get")
                         if getOk and value ~= nil then
                             row[root.alias] = value
@@ -313,13 +408,6 @@ local function create(config)
                 end
                 rows[index] = row
             end
-            if rawget(_G, "AdamantEnableToggleDebug") == true then
-                print(string.format(
-                    "[lib-debug] backend readTable root=%s found=true source=row_count row_count=%s row_roots=%s",
-                    tostring(rootKey),
-                    tostring(rowCount),
-                    tostring(#rowRoots)))
-            end
             return rows
         end
 
@@ -327,22 +415,22 @@ local function create(config)
         local rows = {}
         local maxRowIndex = 0
         local found = false
-        local matchedSections = 0
-        local matchedRows = 0
 
+        metrics.count("fallback_scans")
         for entrySection, sectionEntries in pairs(entryIndex) do
+            metrics.count("fallback_sections_scanned")
             if startsWith(entrySection, prefix) and type(sectionEntries) == "table" then
                 local rowText = string.sub(entrySection, #prefix + 1)
                 local rowIndex = tonumber(rowText)
                 if rowIndex ~= nil and rowIndex >= 1 and rowIndex == math.floor(rowIndex)
                     and string.find(rowText, "%.") == nil then
-                    matchedSections = matchedSections + 1
                     local row = rows[rowIndex] or {}
                     local rowFound = false
                     for _, root in ipairs(rowRoots) do
                         local key = root._storageKey or root.alias
                         local entry = key and sectionEntries[key] or nil
                         if entry then
+                            metrics.count("entry_gets")
                             local getOk, value = callMethod(entry, "get")
                             if getOk and value ~= nil then
                                 row[root.alias] = value
@@ -351,7 +439,6 @@ local function create(config)
                         end
                     end
                     if rowFound then
-                        matchedRows = matchedRows + 1
                         rows[rowIndex] = row
                         if rowIndex > maxRowIndex then
                             maxRowIndex = rowIndex
@@ -363,14 +450,6 @@ local function create(config)
         end
 
         if not found then
-            if rawget(_G, "AdamantEnableToggleDebug") == true then
-                print(string.format(
-                    "[lib-debug] backend readTable root=%s found=false matched_sections=%s matched_rows=%s row_roots=%s",
-                    tostring(rootKey),
-                    tostring(matchedSections),
-                    tostring(matchedRows),
-                    tostring(#rowRoots)))
-            end
             return nil
         end
 
@@ -381,29 +460,24 @@ local function create(config)
         if rowCountOk and rowCountChanged then
             requestSave()
         end
-        if rawget(_G, "AdamantEnableToggleDebug") == true then
-            print(string.format(
-                "[lib-debug] backend readTable root=%s found=true matched_sections=%s matched_rows=%s max_row_index=%s row_count=%s row_roots=%s",
-                tostring(rootKey),
-                tostring(matchedSections),
-                tostring(matchedRows),
-                tostring(maxRowIndex),
-                tostring(#rows),
-                tostring(#rowRoots)))
-        end
         return rows
     end
 
     function backend.writeTableCells(section, rootKey, cells, rowCount)
+        local startedMs = nowMs()
+        metrics.count("write_tables")
         if type(section) ~= "string" or section == "" or type(rootKey) ~= "string" or rootKey == ""
             or type(cells) ~= "table" or type(readField(rawConfig, "bind")) ~= "function" then
+            metrics.count("write_table_time_ms", nowMs() - startedMs)
             return false
         end
+        metrics.count("table_cells", #cells)
 
         local wanted = {}
         local changed = false
         local normalizedRowCount = normalizeRowCount(rowCount)
 
+        local rowCountStartedMs = nowMs()
         if normalizedRowCount == nil then
             normalizedRowCount = 0
             local prefix = getTableRootSection(section, rootKey) .. "."
@@ -421,16 +495,22 @@ local function create(config)
 
         local rowCountOk, rowCountChanged = writeRowCount(section, rootKey, normalizedRowCount)
         if not rowCountOk then
+            metrics.count("write_table_row_count_time_ms", nowMs() - rowCountStartedMs)
+            metrics.count("write_table_time_ms", nowMs() - startedMs)
             return false
         end
+        metrics.count("write_table_row_count_time_ms", nowMs() - rowCountStartedMs)
         changed = rowCountChanged
 
+        local cellsStartedMs = nowMs()
         for _, cell in ipairs(cells) do
             local cellSection = cell.section
             local key = cell.key
             local value = cell.value
             if type(cellSection) ~= "string" or cellSection == "" or type(key) ~= "string" or key == ""
                 or not isFlatValue(value) then
+                metrics.count("write_table_cells_time_ms", nowMs() - cellsStartedMs)
+                metrics.count("write_table_time_ms", nowMs() - startedMs)
                 return false
             end
 
@@ -439,50 +519,69 @@ local function create(config)
 
             local entry = backend.getEntry(cellSection, key)
             if entry then
+                metrics.count("entry_gets")
                 local getOk, current = callMethod(entry, "get")
                 if not getOk or current ~= value then
+                    metrics.count("entry_sets")
                     local setOk = callMethod(entry, "set", value)
                     if not setOk then
                         return false
                     end
+                    metrics.count("table_cell_changes")
                     changed = true
                 end
             else
                 entry = bindEntry(cellSection, key, value)
                 if not entry then
+                    metrics.count("write_table_cells_time_ms", nowMs() - cellsStartedMs)
+                    metrics.count("write_table_time_ms", nowMs() - startedMs)
                     return false
                 end
+                metrics.count("table_cell_changes")
                 changed = true
             end
         end
+        metrics.count("write_table_cells_time_ms", nowMs() - cellsStartedMs)
 
         local prefix = section .. "." .. rootKey .. "."
+        local pruneStartedMs = nowMs()
+        metrics.count("prune_scans")
         for entrySection, sectionEntries in pairs(entryIndex) do
             if startsWith(entrySection, prefix) and type(sectionEntries) == "table" then
+                metrics.count("prune_sections_scanned")
                 for key, entry in pairs(sectionEntries) do
+                    metrics.count("prune_entries_scanned")
                     if not (wanted[entrySection] and wanted[entrySection][key]) then
+                        metrics.count("entry_gets")
                         local getOk, current = callMethod(entry, "get")
                         if getOk and current ~= nil then
+                            metrics.count("entry_sets")
                             local setOk = callMethod(entry, "set", nil)
                             if not setOk then
+                                metrics.count("write_table_prune_time_ms", nowMs() - pruneStartedMs)
+                                metrics.count("write_table_time_ms", nowMs() - startedMs)
                                 return false
                             end
+                            metrics.count("table_cell_changes")
                             changed = true
                         end
                     end
                 end
             end
         end
+        metrics.count("write_table_prune_time_ms", nowMs() - pruneStartedMs)
 
         if changed then
             requestSave()
         end
+        metrics.count("write_table_time_ms", nowMs() - startedMs)
         return true
     end
 
     function backend.clear(section, key)
         local entry = backend.getEntry(section, key)
         if entry then
+            metrics.count("entry_sets")
             local setOk = callMethod(entry, "set", nil)
             if setOk then
                 requestSave()
@@ -490,6 +589,25 @@ local function create(config)
             end
         end
         return false
+    end
+
+    function backend.beginDiagnosticScope()
+        return metrics.beginScope()
+    end
+
+    function backend.printDiagnosticScope(label, phase, scope)
+        local sections = 0
+        local entriesCount = 0
+        for _, sectionEntries in pairs(entryIndex) do
+            sections = sections + 1
+            if type(sectionEntries) == "table" then
+                for _ in pairs(sectionEntries) do
+                    entriesCount = entriesCount + 1
+                end
+            end
+        end
+
+        metrics.printScope(label, phase, scope, entriesCount, sections)
     end
 
     backend.rawConfig = rawConfig

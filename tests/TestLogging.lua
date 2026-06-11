@@ -124,6 +124,33 @@ function TestLogging:testViolationDebugHonorsLibDebugMode()
     lu.assertEquals(self.lines, { "[lib] test.debug: visible" })
 end
 
+function TestLogging:testDiagnoseHonorsSubsystemFlag()
+    self.harness.logging.diagnose("configBackend", "hidden")
+    self.harness.config.Diagnostics = {
+        configBackend = true,
+    }
+    local printed = self.harness.logging.diagnose("configBackend", "visible %s", "summary")
+
+    lu.assertTrue(printed)
+    lu.assertEquals(self.lines, { "[lib-diagnostic:configBackend] visible summary" })
+end
+
+function TestLogging:testDiagnoseAllowsAllDiagnosticsFlag()
+    self.harness.config.Diagnostics = true
+
+    local printed = self.harness.logging.diagnose("storage", "visible")
+
+    lu.assertTrue(printed)
+    lu.assertEquals(self.lines, { "[lib-diagnostic:storage] visible" })
+end
+
+function TestLogging:testDiagnoseReturnsFalseWhenDisabled()
+    local printed = self.harness.logging.diagnose("configBackend", "hidden")
+
+    lu.assertFalse(printed)
+    lu.assertEquals(self.lines, {})
+end
+
 function TestLogging:testViolationIgnoreReturnsWithoutPrinting()
     WithLoggingPolicy({
         ["test.ignore"] = {

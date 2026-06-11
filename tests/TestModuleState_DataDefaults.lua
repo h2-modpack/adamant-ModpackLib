@@ -11,14 +11,14 @@ function TestModuleState_DataDefaults:tearDown()
     self.harness = nil
 end
 
-local function makeStore(harness, definition, config)
+local function makeStore(harness, definition, config, opts)
     config = config or {}
     definition.id = definition.id or "DataDefaults"
     definition.name = definition.name or "Data Defaults"
     if not (type(definition) == "table" and rawget(definition, "_preparedDefinition") == true) then
         definition = harness.managedModule.prepareDefinition({}, definition)
     end
-    local state = harness.moduleState.create(config, definition)
+    local state = harness.moduleState.create(config, definition, opts)
     return state.persistentState, state.stagedState, config
 end
 
@@ -28,6 +28,7 @@ local function makeChalkConfig(harness, opts)
     local raw = {
         entries = entries,
         bindAttempts = {},
+        config_file_path = opts.configPath,
         saved = 0,
     }
 
@@ -110,6 +111,14 @@ local function collectRawValues(raw)
         valuesByPath[descriptor.section .. "." .. descriptor.key] = entry:get()
     end
     return valuesByPath
+end
+
+local function writeTempConfig(contents)
+    local path = os.tmpname()
+    local file = assert(io.open(path, "w"))
+    file:write(contents)
+    file:close()
+    return path
 end
 
 function TestModuleState_DataDefaults:testUsesBoolStorageDefault()
@@ -344,6 +353,123 @@ function TestModuleState_DataDefaults:testChalkBackendReadsTableRowsFromRowCount
     lu.assertEquals(rows:read(2, "Limit"), 3)
     lu.assertFalse(rows:read(3, "Enabled"))
     lu.assertEquals(rows:read(3, "Limit"), 1)
+end
+
+function TestModuleState_DataDefaults:testChalkBackendBindsRowCountBeforeReadingTable()
+    local wrapper, raw, restore = makeChalkConfig(self.harness, {
+        materializedValuesByPath = {
+            ["config.Rows._RowCount"] = 3,
+            ["config.Rows.1.Enabled"] = false,
+            ["config.Rows.1.Limit"] = 4,
+            ["config.Rows.2.Enabled"] = true,
+            ["config.Rows.2.Limit"] = 3,
+            ["config.Rows.3.Enabled"] = false,
+            ["config.Rows.3.Limit"] = 1,
+        },
+    })
+
+    local definition = {
+        storage = {
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                maxRows = 5,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local _, stagedState = makeStore(self.harness, definition, wrapper)
+    restore()
+
+    local rows = stagedState.table("Rows")
+    lu.assertEquals(rows:count(), 3)
+    lu.assertFalse(rows:read(1, "Enabled"))
+    lu.assertEquals(rows:read(1, "Limit"), 4)
+    lu.assertTrue(rows:read(2, "Enabled"))
+    lu.assertEquals(rows:read(2, "Limit"), 3)
+    lu.assertFalse(rows:read(3, "Enabled"))
+    lu.assertEquals(rows:read(3, "Limit"), 1)
+
+    local boundRowCount = false
+    for _, attempt in ipairs(raw.bindAttempts) do
+        if attempt.section == "config.Rows" and attempt.key == "_RowCount" then
+            boundRowCount = true
+        end
+    end
+    lu.assertTrue(boundRowCount)
+end
+
+function TestModuleState_DataDefaults:testNativeBackendHydratesFlatConfigWithoutBinding()
+    local path = writeTempConfig([[
+## Settings file was created by plugin SGG_Modding-Chalk
+
+[config]
+Enabled = true
+DebugMode = false
+AdamantFramework_PackRestoreSnapshot = 0
+MyFlag = false
+MyCount = 8
+
+[config.Rows]
+_RowCount = 2
+
+[config.Rows.1]
+Enabled = false
+Limit = 4
+
+[config.Rows.2]
+Enabled = true
+Limit = 3
+]])
+    local definition = {
+        storage = {
+            { type = "bool", alias = "MyFlag", default = true },
+            { type = "int", alias = "MyCount", default = 1, min = 0, max = 10 },
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                maxRows = 5,
+                row = {
+                    { type = "bool", alias = "Enabled", default = true },
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    }
+
+    local previousOriginal = self.harness.chalk.original
+    self.harness.chalk.original = function()
+        error("native backend should not call Chalk")
+    end
+    local ok, _, stagedState = pcall(function()
+        return makeStore(self.harness, definition, {}, {
+            configPath = path,
+        })
+    end)
+    self.harness.chalk.original = previousOriginal
+    lu.assertTrue(ok)
+    lu.assertFalse(stagedState.read("MyFlag"))
+    lu.assertEquals(stagedState.read("MyCount"), 8)
+    lu.assertEquals(stagedState.table("Rows"):count(), 2)
+    lu.assertFalse(stagedState.table("Rows"):read(1, "Enabled"))
+    lu.assertEquals(stagedState.table("Rows"):read(1, "Limit"), 4)
+    lu.assertTrue(stagedState.table("Rows"):read(2, "Enabled"))
+    lu.assertEquals(stagedState.table("Rows"):read(2, "Limit"), 3)
+
+    stagedState.write("MyFlag", true)
+    stagedState._flushToConfig()
+
+    local file = assert(io.open(path, "r"))
+    local saved = file:read("*a")
+    file:close()
+    os.remove(path)
+    lu.assertStrContains(saved, "MyFlag = true")
 end
 
 function TestModuleState_DataDefaults:testChalkBackendFlushesTableRootsAsIndexedEntries()

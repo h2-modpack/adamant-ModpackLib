@@ -86,45 +86,19 @@ local function create(storageConfig, storage)
         return ClonePersistedValue(root.default)
     end
 
-    local function tableCount(value)
-        if type(value) ~= "table" then
-            return nil
-        end
-        return #value
-    end
-
-    local function debugTableHydration(root, phase, raw, normalized)
-        if rawget(_G, "AdamantEnableToggleDebug") ~= true or root.type ~= "table" then
-            return
-        end
-        print(string.format(
-            "[lib-debug] hydrate table phase=%s alias=%s storage_key=%s raw_nil=%s raw_count=%s normalized_count=%s default_rows=%s max_rows=%s",
-            tostring(phase),
-            tostring(root.alias),
-            tostring(root._storageKey),
-            tostring(raw == nil),
-            tostring(tableCount(raw)),
-            tostring(tableCount(normalized)),
-            tostring(root.defaultRows),
-            tostring(root.maxRows)))
-    end
-
     local function hydratePersistRoot(root)
         if not root._persist then
             return
         end
 
         local normalized, raw = readNormalizedRoot(root)
-        debugTableHydration(root, "initial_read", raw, normalized)
         if raw == nil and storageConfig.ensureValue(root._storageKey, normalized, root) then
             raw = readRaw(root)
             if raw == nil then
-                debugTableHydration(root, "after_ensure_missing", raw, normalized)
                 replaceCommittedRoot(root, normalized)
                 return
             end
             normalized = NormalizeStorageValue(root, raw)
-            debugTableHydration(root, "after_ensure_read", raw, normalized)
         end
 
         replaceCommittedRoot(root, normalized)

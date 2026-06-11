@@ -13,9 +13,6 @@ _PLUGIN = _PLUGIN
 local modutil = mods['SGG_Modding-ModUtil']
 local chalk = mods['SGG_Modding-Chalk']
 local libConfig = chalk.auto('config.lua')
-if not (type(arg) == "table" and tostring(arg[0] or ""):find("tests/")) then
-    AdamantEnableToggleDebug = true
-end
 
 local externals = {
     rom = rom,

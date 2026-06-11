@@ -26,6 +26,31 @@ function logging.printWithPrefixIf(enabled, prefix, fmt, ...)
     end
 end
 
+function logging.isDiagnosticEnabled(subsystem)
+    if type(subsystem) ~= "string" or subsystem == "" then
+        return false
+    end
+
+    local diagnostics = libConfig.Diagnostics
+    if diagnostics == true then
+        return true
+    end
+    return type(diagnostics) == "table" and diagnostics[subsystem] == true
+end
+
+function logging.diagnose(subsystem, fmt, ...)
+    assert(type(subsystem) == "string" and subsystem ~= "",
+        "logging.diagnose: subsystem must be a non-empty string")
+    assert(type(fmt) == "string", "logging.diagnose: fmt must be a string")
+
+    if not logging.isDiagnosticEnabled(subsystem) then
+        return false
+    end
+
+    logging.printWithPrefix("[lib-diagnostic:" .. subsystem .. "] ", fmt, ...)
+    return true
+end
+
 for id, entry in pairs(DefaultViolationPolicy) do
     violationPolicy[id] = {
         severity = entry.severity,

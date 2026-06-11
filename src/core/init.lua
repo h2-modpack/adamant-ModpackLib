@@ -37,6 +37,7 @@ local hashingBundle = import('core/hashing/hashing.lua', nil, {
 local moduleState = import('core/module_state/00_init.lua', nil, {
     chalk = externals.chalk,
     logging = logging,
+    rom = externals.rom,
     storage = storage,
     values = values,
 })
