@@ -1,0 +1,715 @@
+-- =============================================================================
+-- Test utilities: mock engine globals and load Lib modpack subsystem for testing
+-- =============================================================================
+
+public = {}
+_PLUGIN = { guid = "adamant-ModpackLib" }
+
+local function deepCopy(orig)
+    if type(orig) ~= "table" then return orig end
+    local copy = {}
+    for k, v in pairs(orig) do
+        copy[k] = deepCopy(v)
+    end
+    return copy
+end
+
+rom = {
+    mods = {},
+    game = {
+        DeepCopyTable = deepCopy,
+        SetupRunData = function() end,
+    },
+    ImGui = {},
+    ImGuiCond = {
+        FirstUseEver = 1,
+    },
+    ImGuiCol = {
+        Text = 1,
+        TextDisabled = 2,
+        WindowBg = 3,
+        ChildBg = 4,
+        Header = 5,
+        HeaderHovered = 6,
+        HeaderActive = 7,
+        Button = 8,
+        ButtonHovered = 9,
+        ButtonActive = 10,
+        FrameBg = 11,
+        FrameBgHovered = 12,
+        FrameBgActive = 13,
+        CheckMark = 14,
+        Tab = 15,
+        TabHovered = 16,
+        TabActive = 17,
+        Separator = 18,
+        Border = 19,
+        TitleBgActive = 20,
+    },
+    gui = {
+        add_to_menu_bar = function() end,
+        add_imgui = function() end,
+        add_always_draw_imgui = function() end,
+        is_open = function() return true end,
+    },
+}
+
+rom.mods['SGG_Modding-ENVY'] = {
+    auto = function() return {} end,
+}
+
+rom.mods['SGG_Modding-Chalk'] = {
+    auto = function() return { DebugMode = false } end,
+}
+
+rom.mods['SGG_Modding-ModUtil'] = {
+    once_loaded = {
+        game = function() end,
+    },
+    mod = {
+        Path = {
+            Wrap = function() end,
+        },
+    },
+}
+
+ImGuiComboFlags = {
+    NoPreview = 64,
+}
+
+ImGuiCol = rom.ImGuiCol
+
+ImGuiTreeNodeFlags = {
+    None = 0,
+    Selected = 1,
+    Framed = 2,
+    AllowOverlap = 4,
+    NoTreePushOnOpen = 8,
+    NoAutoOpenOnLog = 16,
+    DefaultOpen = 32,
+    OpenOnDoubleClick = 64,
+    OpenOnArrow = 128,
+    Leaf = 256,
+    Bullet = 512,
+    FramePadding = 1024,
+    SpanAvailWidth = 2048,
+    SpanFullWidth = 4096,
+    NavLeftJumpsBackHere = 8192,
+    CollapsingHeader = 26,
+}
+
+LibTestImports = {}
+LibTestImportOverrides = {}
+
+import = function(path, fenv, ...)
+    local override = LibTestImportOverrides[path]
+    if override ~= nil then
+        if type(override) == "function" then
+            return override(path, fenv, ...)
+        end
+        return override
+    end
+
+    local chunk = assert(loadfile("src/" .. path, "t", fenv or _ENV))
+    local result = chunk(...)
+    if result ~= nil then
+        LibTestImports[path] = result
+    end
+    return result
+end
+
+Warnings = {}
+
+dofile("src/main.lua")
+lib = public
+rom.mods['adamant-ModpackLib'] = lib
+public = lib.modpack
+ModpackPackRegistry = AdamantModpackLib_Runtime.registry.modpacks
+local defaultModpackRuntime = LibTestImports["core/modpack/services.lua"].create()
+
+function CaptureWarnings()
+    Warnings = {}
+    defaultModpackRuntime.diagnostics.setLibDebugEnabled(true)
+    _originalPrint = print
+    print = function(msg)
+        table.insert(Warnings, msg)
+    end
+end
+
+function RestoreWarnings()
+    defaultModpackRuntime.diagnostics.setLibDebugEnabled(false)
+    print = _originalPrint or print
+    Warnings = {}
+end
+
+function GetRuntimeLiveModules()
+    local runtimeRoot = assert(AdamantModpackLib_Runtime, "Lib runtime missing")
+    local registry = assert(runtimeRoot.registry, "Lib registry missing")
+    local modules = assert(registry.modules, "module registry missing")
+    return assert(modules.live, "runtime live modules missing")
+end
+
+function SetRuntimeLiveModule(pluginGuid, liveModule)
+    local liveModules = GetRuntimeLiveModules()
+    local previousLiveModule = liveModules[pluginGuid]
+    liveModules[pluginGuid] = liveModule
+    return previousLiveModule
+end
+
+LibStorage = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/storage/00_init.lua"], "LibStorage test service missing")[key]
+    end,
+    __newindex = function(_, key, value)
+        assert(LibTestImports["core/storage/00_init.lua"], "LibStorage test service missing")[key] = value
+    end,
+})
+LibModuleState = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/module_state/00_init.lua"], "LibModuleState test service missing")[key]
+    end,
+    __newindex = function(_, key, value)
+        assert(LibTestImports["core/module_state/00_init.lua"], "LibModuleState test service missing")[key] = value
+    end,
+})
+LibManagedModule = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key]
+    end,
+    __newindex = function(_, key, value)
+        assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key] = value
+    end,
+})
+local function GetLibOverlayService()
+    local bundle = assert(LibTestImports["core/overlays/00_init.lua"], "LibOverlays test bundle missing")
+    return assert(bundle.service, "LibOverlays test service missing")
+end
+
+local function GetLibOverlayState()
+    return assert(LibTestImports["core/overlays/registry.lua"], "LibOverlays test registry missing")
+end
+
+LibOverlays = setmetatable({}, {
+    __index = function(_, key)
+        local state = GetLibOverlayState()
+        if key == "uiSuppressors" or key == "nextUiSuppressorId" then
+            return state[key]
+        end
+        return GetLibOverlayService()[key]
+    end,
+    __newindex = function(_, key, value)
+        local state = GetLibOverlayState()
+        if key == "uiSuppressors" or key == "nextUiSuppressorId" then
+            state[key] = value
+            return
+        end
+        GetLibOverlayService()[key] = value
+    end,
+})
+
+local function formatConfigValue(value)
+    if type(value) == "boolean" then
+        return value and "true" or "false"
+    elseif type(value) == "number" then
+        return tostring(value)
+    end
+    value = tostring(value or "")
+    value = string.gsub(value, "\\", "\\\\")
+    value = string.gsub(value, '"', '\\"')
+    value = string.gsub(value, "\n", "\\n")
+    return '"' .. value .. '"'
+end
+
+local function writeConfigFile(path, values)
+    local file = assert(io.open(path, "w"))
+    file:write("## Settings file was created by plugin adamant-ModpackLib modpack test harness\n\n")
+    file:write("[config]\n\n")
+    for key, value in pairs(values or {}) do
+        if type(value) == "table" then
+            file:write(tostring(key), "._RowCount = ", tostring(#value), "\n")
+        else
+            file:write(tostring(key), " = ", formatConfigValue(value), "\n")
+        end
+    end
+    for key, value in pairs(values or {}) do
+        if type(value) == "table" then
+            for rowIndex, row in ipairs(value) do
+                file:write("\n[config.", tostring(key), ".", tostring(rowIndex), "]\n")
+                for childKey, childValue in pairs(row) do
+                    file:write(tostring(childKey), " = ", formatConfigValue(childValue), "\n")
+                end
+            end
+        end
+    end
+    file:close()
+end
+
+local function trim(value)
+    return tostring(value or ""):match("^%s*(.-)%s*$")
+end
+
+local function parseConfigValue(rawValue)
+    rawValue = trim(rawValue)
+    if rawValue == "" then
+        return ""
+    end
+    local first = string.sub(rawValue, 1, 1)
+    local last = string.sub(rawValue, -1)
+    if first == '"' and last == '"' and #rawValue >= 2 then
+        local value = string.sub(rawValue, 2, -2)
+        value = string.gsub(value, "\\n", "\n")
+        value = string.gsub(value, '\\"', '"')
+        value = string.gsub(value, "\\\\", "\\")
+        return value
+    end
+    local lower = string.lower(rawValue)
+    if lower == "true" then
+        return true
+    elseif lower == "false" then
+        return false
+    end
+    local numberValue = tonumber(rawValue)
+    if numberValue ~= nil then
+        return numberValue
+    end
+    return rawValue
+end
+
+local function readConfigFile(path)
+    local values = {}
+    local file = io.open(path, "r")
+    if not file then
+        return values
+    end
+    local currentSection = "config"
+    for line in file:lines() do
+        local section = string.match(line, "^%s*%[([^%]]+)%]%s*$")
+        if section then
+            currentSection = trim(section)
+        elseif not string.match(line, "^%s*[#;]") then
+            local key, rawValue = string.match(line, "^%s*([^=]-)%s*=%s*(.-)%s*$")
+            key = key and trim(key) or nil
+            if key and key ~= "" then
+                local tableRoot, rowIndex = string.match(currentSection, "^config%.([^%.]+)%.(%d+)$")
+                if tableRoot then
+                    values[tableRoot] = values[tableRoot] or {}
+                    rowIndex = tonumber(rowIndex)
+                    values[tableRoot][rowIndex] = values[tableRoot][rowIndex] or {}
+                    values[tableRoot][rowIndex][key] = parseConfigValue(rawValue)
+                elseif currentSection == "config" then
+                    local rowCountRoot = string.match(key, "^(.+)%.%_RowCount$")
+                    if rowCountRoot then
+                        values[rowCountRoot] = values[rowCountRoot] or {}
+                    else
+                        values[key] = parseConfigValue(rawValue)
+                    end
+                end
+            end
+        end
+    end
+    file:close()
+    return values
+end
+
+local function installConfigProxy(config, path)
+    if type(config) ~= "table" then
+        return
+    end
+    local snapshot = deepCopy(config)
+    for key in pairs(config) do
+        config[key] = nil
+    end
+    setmetatable(config, {
+        __index = function(_, key)
+            return readConfigFile(path)[key]
+        end,
+        __newindex = function(_, key, value)
+            local current = readConfigFile(path)
+            current[key] = value
+            writeConfigFile(path, current)
+        end,
+    })
+    writeConfigFile(path, snapshot)
+end
+
+function CreateModuleState(config, definition)
+    config = config or {}
+    local configPath = os.tmpname()
+    installConfigProxy(config, configPath)
+    local state = LibModuleState.create(definition, {
+        configPath = configPath,
+    })
+    return state.persistentState, state.stagedState
+end
+
+import = function(path, fenv, ...)
+    local chunk = assert(loadfile("src/" .. path, "t", fenv or _ENV))
+    return chunk(...)
+end
+
+ModpackTestApi = setmetatable({}, {
+    __index = function(_, key)
+        return public[key]
+    end,
+    __newindex = function(_, key, value)
+        rawset(public, key, value)
+    end,
+})
+
+local function makeModpackImportEnv(importOverrides)
+    local env = {}
+
+    local function importWithOverrides(path, fenv, ...)
+        local override = importOverrides and importOverrides[path] or nil
+        if override ~= nil then
+            return override
+        end
+
+        local chunk = assert(loadfile("src/" .. path, "t", fenv or env))
+        return chunk(...)
+    end
+
+    env.import = importWithOverrides
+    return setmetatable(env, {
+        __index = _ENV,
+    })
+end
+
+local function mapConstructorOverrides(constructors)
+    constructors = constructors or {}
+    local importOverrides = {}
+    local constructorPaths = {
+        createModuleRegistry = "core/modpack/modules/registry.lua",
+        createConfigHash = "core/modpack/hash/config_hash.lua",
+        createHud = "core/modpack/hud/runtime.lua",
+        createUI = "core/modpack/ui/window.lua",
+        createTheme = "core/modpack/ui/theme.lua",
+    }
+
+    for name, path in pairs(constructorPaths) do
+        if constructors[name] ~= nil then
+            importOverrides[path] = constructors[name]
+        end
+    end
+
+    return importOverrides
+end
+
+function CreateModpackHarness(opts)
+    opts = opts or {}
+    local harnessRom = opts.rom or rom
+    local harnessModpackRuntime = opts.modpackRuntime or defaultModpackRuntime
+    local env = makeModpackImportEnv(mapConstructorOverrides(opts.constructors))
+    local modpackCore = assert(loadfile("src/core/modpack/init.lua", "t", env))({
+        rom = harnessRom,
+        frameworkRuntime = harnessModpackRuntime,
+        packRegistry = ModpackPackRegistry,
+    })
+
+    return {
+        rom = harnessRom,
+        modpackRuntime = harnessModpackRuntime,
+        packRegistry = ModpackPackRegistry,
+        registerCoordinator = modpackCore.registerCoordinator,
+        createPack = modpackCore.createPack,
+        createPackOrThrow = modpackCore.createPackOrThrow,
+        createGuiCallbacks = modpackCore.createGuiCallbacks,
+    }
+end
+local logging = import("core/modpack/logging.lua")
+local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
+    rom = rom,
+    logging = logging,
+})
+local createTheme = import("core/modpack/ui/theme.lua", nil, {
+    rom = rom,
+})
+local hashCodec = import("core/modpack/hash/codec.lua")
+local createConfigHash = import("core/modpack/hash/config_hash.lua", nil, {
+    rom = rom,
+    hashCodec = hashCodec,
+    logging = logging,
+})
+local createHud = import("core/modpack/hud/runtime.lua")
+local createUI = import("core/modpack/ui/window.lua", nil, {
+    rom = rom,
+    logging = logging,
+})
+
+local function createDefaultModpackRuntime()
+    return {
+        diagnostics = defaultModpackRuntime.diagnostics,
+        hashing = defaultModpackRuntime.hashing,
+        modules = defaultModpackRuntime.modules,
+        overlays = {
+            order = {
+                framework = 0,
+                module = 1000,
+                debug = 2000,
+            },
+            define = function()
+                return true
+            end,
+        },
+        ui = {
+            suppressOverlays = function()
+                return {
+                    release = function() end,
+                }
+            end,
+            areOverlaysSuppressed = function()
+                return false
+            end,
+        },
+    }
+end
+
+local function createTestUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles,
+                            defaultProfiles, drawPackQuickContent, auditSavedProfiles, modpackRuntime)
+    return createUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles, defaultProfiles,
+        drawPackQuickContent, auditSavedProfiles, modpackRuntime or createDefaultModpackRuntime())
+end
+
+local function createTestHud(packId, packIndex, configHash, theme, config, hideHashMarker, modpackRuntime)
+    return createHud(packId, packIndex, configHash, theme, config, hideHashMarker,
+        modpackRuntime or createDefaultModpackRuntime())
+end
+
+rawset(ModpackTestApi, "createModuleRegistry", function(packId, testConfig, modpackRuntime)
+    return createModuleRegistry(packId, testConfig, modpackRuntime or createDefaultModpackRuntime())
+end)
+rawset(ModpackTestApi, "createTheme", createTheme)
+rawset(ModpackTestApi, "createConfigHash", function(moduleRegistry, testConfig, packId, hashing)
+    return createConfigHash(moduleRegistry, testConfig, packId, hashing or defaultModpackRuntime.hashing)
+end)
+rawset(ModpackTestApi, "createHud", createTestHud)
+rawset(ModpackTestApi, "createUI", createTestUI)
+rawset(ModpackTestApi, "logging", logging)
+rawset(ModpackTestApi, "createModpackRuntime", function()
+    return LibTestImports["core/modpack/services.lua"].create()
+end)
+rawset(ModpackTestApi, "createUIRuntime", function(ctx)
+    local runtimeCtx = {}
+    for key, value in pairs(ctx) do
+        runtimeCtx[key] = value
+    end
+    runtimeCtx.lib = runtimeCtx.lib or lib
+    runtimeCtx.rom = runtimeCtx.rom or rom
+    return import("core/modpack/ui/runtime.lua", nil, runtimeCtx)
+end)
+local profileTools = import("core/modpack/profiles/audit.lua", nil, {
+    hashCodec = hashCodec,
+    logging = logging,
+})
+rawset(ModpackTestApi, "normalizeProfiles", profileTools.normalizeProfiles)
+rawset(ModpackTestApi, "auditSavedProfiles", function(packId, profileSlots, moduleRegistry, hashing)
+    return profileTools.auditSavedProfiles(packId, profileSlots, moduleRegistry, hashing or defaultModpackRuntime.hashing)
+end)
+
+config = { ModEnabled = true, DebugMode = false }
+
+MockModuleRegistry = {}
+
+local function prepareDefinition(definition)
+    return LibManagedModule.prepareDefinition({}, definition)
+end
+
+local function makePersistedConfig(storage, overrides)
+    local persisted = {
+        Enabled = false,
+        DebugMode = false,
+    }
+    local transientAliases = {}
+    for _, root in ipairs(storage or {}) do
+        if root.persist == false then
+            transientAliases[root.alias] = true
+        else
+            persisted[root.alias] = overrides and overrides[root.alias] or root.default
+        end
+    end
+    if overrides then
+        for key, value in pairs(overrides) do
+            if persisted[key] == nil and not transientAliases[key] then
+                persisted[key] = value
+            end
+        end
+    end
+    return persisted
+end
+
+function MockModuleRegistry.create(moduleDefs)
+    moduleDefs = moduleDefs or {}
+
+    local moduleRegistry = {
+        modules = {},
+        modulesById = {},
+        modulesWithQuickContent = {},
+        tabOrder = {},
+        live = {},
+        snapshot = {},
+    }
+
+    local function addModule(def)
+        local persisted = makePersistedConfig(def.storage, def.values)
+        persisted.Enabled = def.enabled == true
+        persisted.DebugMode = def.debug == true
+
+        local definition = prepareDefinition({
+            id = def.id,
+            name = def.name or def.id,
+            modpack = def.modpack or "test-pack",
+            storage = def.storage or {},
+            shortName = def.shortName,
+            tooltip = def.tooltip,
+        })
+        local persistentState, stagedState = CreateModuleState(persisted, definition)
+        local pluginGuid = def.pluginGuid or ("adamant-" .. def.id)
+        local function adaptDraw(callback)
+            if type(callback) ~= "function" then
+                return callback
+            end
+            return function(callbackHost, ui)
+                return callback(ui.draw, ui.data, ui.actions, ui, callbackHost)
+            end
+        end
+        local function adaptPatch(callback)
+            if type(callback) ~= "function" then
+                return callback
+            end
+            return function(callbackHost, runtime, plan)
+                return callback(plan, callbackHost, runtime and runtime.data or nil, runtime)
+            end
+        end
+        local mutationBundle = {
+            patchMutation = nil,
+        }
+        if def.patchPlan ~= nil then
+            local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
+            mutations.lifecycle.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
+        end
+        local liveModule = LibManagedModule.create({
+            pluginGuid = pluginGuid,
+            definition = definition,
+            persistentState = persistentState,
+            stagedState = stagedState,
+            mutationBundle = mutationBundle,
+            drawTab = adaptDraw(def.DrawTab or function() end),
+            drawQuickContent = adaptDraw(def.DrawQuickContent),
+        })
+        liveModule.activate()
+        local module = {
+            pluginGuid = pluginGuid,
+            mod = {
+                definition = definition,
+                liveModule = liveModule,
+            },
+            definition = definition,
+            id = definition.id,
+            name = definition.name,
+            shortName = definition.shortName,
+            tooltip = definition.tooltip,
+            modpack = definition.modpack,
+            storage = definition.storage,
+        }
+
+        rom.mods[module.pluginGuid] = module.mod
+
+        table.insert(moduleRegistry.modules, module)
+        moduleRegistry.modulesById[module.id] = module
+
+        if type(liveModule.drawQuickContent) == "function" then
+            table.insert(moduleRegistry.modulesWithQuickContent, module)
+        end
+
+        module._tabLabel = definition.shortName or definition.name
+        table.insert(moduleRegistry.tabOrder, module)
+    end
+
+    for _, def in ipairs(moduleDefs) do
+        addModule(def)
+    end
+
+    function moduleRegistry.live.captureSnapshot()
+        local snapshot = {
+            liveModules = {},
+        }
+
+        for _, module in ipairs(moduleRegistry.modules) do
+            local liveModule = defaultModpackRuntime.modules.getLiveModule(module.pluginGuid)
+            snapshot.liveModules[module] = liveModule or false
+        end
+
+        return snapshot
+    end
+
+    function moduleRegistry.live.getLiveModule(entry)
+        return defaultModpackRuntime.modules.getLiveModule(entry.pluginGuid)
+    end
+
+    function moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        local liveModule = snapshot.liveModules[entry]
+        return liveModule or nil
+    end
+
+    function moduleRegistry.snapshot.isEntryEnabled(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.read("Enabled") == true
+    end
+
+    function moduleRegistry.snapshot.affectsRunData(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule ~= nil and liveModule.affectsRunData() == true
+    end
+
+    function moduleRegistry.snapshot.setEntryEnabled(entry, enabled, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.setEnabled(enabled)
+    end
+
+    function moduleRegistry.snapshot.suspendForPackDisable(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.suspendForPackDisable()
+    end
+
+    function moduleRegistry.snapshot.ensureSuspendedForPackDisable(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.ensureSuspendedForPackDisable()
+    end
+
+    function moduleRegistry.snapshot.restoreForPackEnable(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.restoreForPackEnable()
+    end
+
+    function moduleRegistry.snapshot.rollbackPackTransition(entry, receipt, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.rollbackPackTransition(receipt)
+    end
+
+    function moduleRegistry.snapshot.restorePackTransitionState(entry, receipt, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.restorePackTransitionState(receipt)
+    end
+
+    function moduleRegistry.snapshot.getStorageValue(module, alias, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(module, snapshot)
+        return liveModule.read(alias)
+    end
+
+    function moduleRegistry.snapshot.setStorageValue(module, alias, value, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(module, snapshot)
+        return liveModule.writeAndFlush(alias, value)
+    end
+
+    function moduleRegistry.snapshot.isDebugEnabled(entry, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        return liveModule.read("DebugMode") == true
+    end
+
+    function moduleRegistry.snapshot.setDebugEnabled(entry, value, snapshot)
+        local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
+        liveModule.setDebugMode(value)
+    end
+
+    return moduleRegistry
+end
