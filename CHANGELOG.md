@@ -4,6 +4,63 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.0.0] - 2026-06-12
+
+### Breaking Changes
+
+- lib: module.overlays.order.framework was replaced by module.overlays.order.system and module.overlays.order.modpack. (
+1d9ce5)
+- lib: lib.createFrameworkRuntime is no longer exported. (
+2b56eb)
+- modpack: Modpack profile hashes now emit _v=3. (
+ec3892)
+- lib: lib.createModule no longer accepts the config option. Module persistence is owned by the native backend and module-state creation takes backend options instead of a config table. (
+58a7e7)
+- lib: Generated internal storage/control config aliases now use (
+6d5853)
+- coordinator: coordinator registration now stores a display name for active packs. Clearing remains register(packId, nil). (
+4caba5)
+
+### Added
+
+- modpack: bump hash version (
+ec3892)
+- lib: add native modpack runtime (
+5e561c)
+- lib: add modpack subsystem (
+a59586)
+- lib: use native module config backend (
+58a7e7)
+- lib: add native config backend (
+e8d051)
+- coordinator: add pack display names (
+4caba5)
+
+### Fixed
+
+- lib: warn on volatile persistence (
+3efc58)
+- lib: stabilize config hydration (
+6d5853)
+
+### Changed
+
+- storage: rename modpack restore marker (
+895bbd)
+- lib: retire Framework remnants (
+1d9ce5)
+- lib: remove Framework runtime (
+2b56eb)
+
+### Documentation
+
+- lib: update modpack API docs (
+7c340d)
+- modpack: port coordinator guides (
+a0c0d1)
+- lib: define module test boundary (
+387fe5)
+
 ## [2.0.0] - 2026-06-09
 
 ### Changed
