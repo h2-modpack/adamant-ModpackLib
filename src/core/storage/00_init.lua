@@ -46,6 +46,8 @@ storage.getStagedRoots = schema.getStagedRoots
 storage.getAliases = schema.getAliases
 storage.valuesEqual = schema.valuesEqual
 storage.NormalizeStorageValue = schema.NormalizeStorageValue
+storage.toHash = schema.toHash
+storage.fromHash = schema.fromHash
 storage.isHashTokenValid = schema.isHashTokenValid
 storage.isPrivateAlias = schema.isPrivateAlias
 

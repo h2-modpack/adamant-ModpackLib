@@ -1,46 +1,46 @@
 local deps = ...
 
 local logging = deps.logging
-local coordinatorRegistry = deps.coordinatorRegistry
+local coordinationRegistry = deps.coordinationRegistry
 
--- Hot-reload-stable coordinator registries.
-coordinatorRegistry.configs = coordinatorRegistry.configs or {}
-coordinatorRegistry.displayNames = coordinatorRegistry.displayNames or {}
-coordinatorRegistry.rebuilds = coordinatorRegistry.rebuilds or {}
+-- Hot-reload-stable modpack coordination registries.
+coordinationRegistry.configs = coordinationRegistry.configs or {}
+coordinationRegistry.displayNames = coordinationRegistry.displayNames or {}
+coordinationRegistry.rebuilds = coordinationRegistry.rebuilds or {}
 
-local coordinator = {}
-local configs = coordinatorRegistry.configs
-local displayNames = coordinatorRegistry.displayNames
-local rebuilds = coordinatorRegistry.rebuilds
+local coordination = {}
+local configs = coordinationRegistry.configs
+local displayNames = coordinationRegistry.displayNames
+local rebuilds = coordinationRegistry.rebuilds
 
-function coordinator.isRegistered(packId)
+function coordination.isRegistered(packId)
     return configs[packId] ~= nil
 end
 
-function coordinator.hasRegistrations()
+function coordination.hasRegistrations()
     return next(configs) ~= nil
 end
 
-function coordinator.getConfig(packId)
+function coordination.getConfig(packId)
     return configs[packId]
 end
 
-function coordinator.getDisplayName(packId)
+function coordination.getDisplayName(packId)
     return displayNames[packId]
 end
 
-function coordinator.register(packId, displayName, config)
+function coordination.register(packId, displayName, config)
     if type(packId) ~= "string" or packId == "" then
         logging.violate(
             "coordinator.invalid_registration",
-            "coordinator.register: packId must be a non-empty string"
+            "modpack.coordination.register: packId must be a non-empty string"
         )
     end
     if config == nil then
         if displayName ~= nil then
             logging.violate(
                 "coordinator.invalid_registration",
-                "coordinator.register: displayName must be nil when clearing registration"
+                "modpack.coordination.register: displayName must be nil when clearing registration"
             )
         end
         configs[packId] = nil
@@ -50,26 +50,26 @@ function coordinator.register(packId, displayName, config)
     if type(displayName) ~= "string" or displayName == "" then
         logging.violate(
             "coordinator.invalid_registration",
-            "coordinator.register: displayName must be a non-empty string"
+            "modpack.coordination.register: displayName must be a non-empty string"
         )
     end
     if config ~= nil and type(config) ~= "table" then
         logging.violate(
             "coordinator.invalid_registration",
-            "coordinator.register: config must be a table when provided"
+            "modpack.coordination.register: config must be a table when provided"
         )
     end
     if config ~= nil and type(config.ModEnabled) ~= "boolean" then
         logging.violate(
             "coordinator.invalid_registration",
-            "coordinator.register: config.ModEnabled must be a boolean"
+            "modpack.coordination.register: config.ModEnabled must be a boolean"
         )
     end
     configs[packId] = config
     displayNames[packId] = displayName
 end
 
-function coordinator.registerRebuild(packId, callback)
+function coordination.registerRebuild(packId, callback)
     if callback == nil then
         rebuilds[packId] = nil
         return
@@ -78,13 +78,13 @@ function coordinator.registerRebuild(packId, callback)
     if type(callback) ~= "function" then
         logging.violate(
             "coordinator.invalid_rebuild_callback",
-            "coordinator.registerRebuild: callback must be a function when provided"
+            "modpack.coordination.registerRebuild: callback must be a function when provided"
         )
     end
     rebuilds[packId] = callback
 end
 
-function coordinator.requestRebuild(packId, reason)
+function coordination.requestRebuild(packId, reason)
     local callback = packId and rebuilds[packId] or nil
     if callback == nil then
         return false
@@ -93,4 +93,4 @@ function coordinator.requestRebuild(packId, reason)
     return callback(reason or {}) == true
 end
 
-return coordinator
+return coordination

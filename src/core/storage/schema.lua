@@ -373,6 +373,22 @@ function schema.NormalizeStorageValue(node, value)
     return value
 end
 
+function schema.toHash(node, value)
+    local storageType = node and node.type and StorageTypes[node.type] or nil
+    if not storageType then
+        return nil
+    end
+    return storageType.toHash(node, value)
+end
+
+function schema.fromHash(node, str)
+    local storageType = node and node.type and StorageTypes[node.type] or nil
+    if not storageType then
+        return nil
+    end
+    return storageType.fromHash(node, str)
+end
+
 function schema.isHashTokenValid(node, str)
     local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
     if storageType and storageType.isHashTokenValid ~= nil then

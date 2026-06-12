@@ -20,7 +20,7 @@ local IMGUI_TREE_NODE_FLAGS = _G.ImGuiTreeNodeFlags or {
     CollapsingHeader = 26,
 }
 
---- Create the shared theme styling used by the Framework UI and HUD.
+--- Create the shared theme styling used by the modpack UI and HUD.
 --- @return table theme Theme object exposing colors, ImGui flags, and push/pop helpers.
 local function createTheme()
     local ui                 = rom.ImGui

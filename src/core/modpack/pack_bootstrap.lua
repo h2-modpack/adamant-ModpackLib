@@ -1,13 +1,14 @@
 local deps = ...
 local rom = deps.rom
 local logging = deps.logging
+local libConfig = deps.libConfig
+local storage = deps.storage
+local coordination = deps.coordination
+local overlaySurface = deps.overlaySurface
+local getLiveModule = deps.getLiveModule
 local profileTools = deps.profileTools
 local constructors = deps.constructors
-local frameworkRuntime = deps.frameworkRuntime
 local packRegistry = deps.packRegistry
-
-packRegistry.packs = packRegistry.packs or {}
-packRegistry.packList = packRegistry.packList or {}
 
 local function disposePack(pack)
     local packUi = pack and pack.ui
@@ -24,25 +25,25 @@ end
 
 local function validateCreatePackArgs(packId, config, numProfiles, defaultProfiles, opts)
     assert(type(packId) == "string" and packId ~= "",
-        "Framework.createPack: packId must be a non-empty string")
-    assert(type(config) == "table", "Framework.createPack: config must be a table")
+        "modpack.createPack: packId must be a non-empty string")
+    assert(type(config) == "table", "modpack.createPack: config must be a table")
     assert(type(defaultProfiles) == "table",
-        "Framework.createPack: defaultProfiles must be a table")
+        "modpack.createPack: defaultProfiles must be a table")
     assert(opts == nil or type(opts) == "table",
-        "Framework.createPack: opts must be a table when provided")
+        "modpack.createPack: opts must be a table when provided")
     opts = opts or {}
     assert(opts.hideHashMarker == nil or type(opts.hideHashMarker) == "boolean",
-        "Framework.createPack: hideHashMarker must be a boolean when provided")
+        "modpack.createPack: hideHashMarker must be a boolean when provided")
     assert(opts.moduleOrder == nil or type(opts.moduleOrder) == "table",
-        "Framework.createPack: opts.moduleOrder must be a table when provided")
+        "modpack.createPack: opts.moduleOrder must be a table when provided")
     assert(opts.drawPackQuickContent == nil or type(opts.drawPackQuickContent) == "function",
-        "Framework.createPack: opts.drawPackQuickContent must be a function when provided")
+        "modpack.createPack: opts.drawPackQuickContent must be a function when provided")
     assert(type(config.ModEnabled) == "boolean",
-        "Framework.createPack: config.ModEnabled must be a boolean")
+        "modpack.createPack: config.ModEnabled must be a boolean")
     assert(type(config.DebugMode) == "boolean",
-        "Framework.createPack: config.DebugMode must be a boolean")
+        "modpack.createPack: config.DebugMode must be a boolean")
     assert(type(numProfiles) == "number" and numProfiles > 0 and math.floor(numProfiles) == numProfiles,
-        "Framework.createPack: numProfiles must be a positive integer")
+        "modpack.createPack: numProfiles must be a positive integer")
 
     profileTools.normalizeProfiles(config.Profiles, numProfiles)
     return opts
@@ -50,33 +51,33 @@ end
 
 local function validateRuntimePrerequisites()
     assert(rom and type(rom.ImGui) == "table",
-        "Framework.createPack: rom.ImGui is not ready; call Framework.createPack after game load")
+        "modpack.createPack: rom.ImGui is not ready; call modpack.createPack after game load")
     assert(rom.game and type(rom.game.SetupRunData) == "function",
-        "Framework.createPack: rom.game.SetupRunData is not ready; call Framework.createPack after game load")
+        "modpack.createPack: rom.game.SetupRunData is not ready; call modpack.createPack after game load")
 end
 
 local function validateCoordinatorArgs(packId, displayName, config, rebuildCallback)
     assert(type(packId) == "string" and packId ~= "",
-        "Framework.registerCoordinator: packId must be a non-empty string")
+        "modpack.registerCoordinator: packId must be a non-empty string")
     if config == nil then
         assert(displayName == nil,
-            "Framework.registerCoordinator: displayName must be nil when clearing registration")
+            "modpack.registerCoordinator: displayName must be nil when clearing registration")
     else
         assert(type(displayName) == "string" and displayName ~= "",
-            "Framework.registerCoordinator: displayName must be a non-empty string")
+            "modpack.registerCoordinator: displayName must be a non-empty string")
     end
     assert(config == nil or type(config) == "table",
-        "Framework.registerCoordinator: config must be a table when provided")
+        "modpack.registerCoordinator: config must be a table when provided")
     assert(config == nil or type(config.ModEnabled) == "boolean",
-        "Framework.registerCoordinator: config.ModEnabled must be a boolean")
+        "modpack.registerCoordinator: config.ModEnabled must be a boolean")
     assert(rebuildCallback == nil or type(rebuildCallback) == "function",
-        "Framework.registerCoordinator: rebuildCallback must be a function when provided")
+        "modpack.registerCoordinator: rebuildCallback must be a function when provided")
 end
 
 local function registerCoordinator(packId, displayName, config, rebuildCallback)
     validateCoordinatorArgs(packId, displayName, config, rebuildCallback)
-    frameworkRuntime.coordinator.register(packId, displayName, config)
-    frameworkRuntime.coordinator.registerRebuild(packId, rebuildCallback)
+    coordination.register(packId, displayName, config)
+    coordination.registerRebuild(packId, rebuildCallback)
     return true
 end
 
@@ -84,28 +85,28 @@ local function createPackOrThrow(packId, config, numProfiles, defaultProfiles, o
     opts = validateCreatePackArgs(packId, config, numProfiles, defaultProfiles, opts)
     validateRuntimePrerequisites()
 
-    assert(frameworkRuntime.coordinator.isRegistered(packId),
-        "Framework.createPack: coordinator must register before createPack; see Core/main.lua")
-    local windowTitle = frameworkRuntime.coordinator.getDisplayName(packId)
+    assert(coordination.isRegistered(packId),
+        "modpack.createPack: coordinator must register before createPack; see Core/main.lua")
+    local windowTitle = coordination.getDisplayName(packId)
     assert(type(windowTitle) == "string" and windowTitle ~= "",
-        "Framework.createPack: coordinator displayName is missing; register coordinator before createPack")
+        "modpack.createPack: coordinator displayName is missing; register coordinator before createPack")
 
     local existingPack = packRegistry.packs[packId]
     local packIndex = existingPack and existingPack._index or #packRegistry.packList + 1
 
-    local moduleRegistry = constructors.createModuleRegistry(packId, config, frameworkRuntime)
-    local configHash = constructors.createConfigHash(moduleRegistry, config, packId, frameworkRuntime.hashing)
+    local moduleRegistry = constructors.createModuleRegistry(packId, config, getLiveModule)
+    local configHash = constructors.createConfigHash(moduleRegistry, config, packId, storage)
     local theme = constructors.createTheme()
     local auditSavedProfiles = function(auditPackId, profileSlots, auditModuleRegistry)
-        return profileTools.auditSavedProfiles(auditPackId, profileSlots, auditModuleRegistry, frameworkRuntime.hashing)
+        return profileTools.auditSavedProfiles(auditPackId, profileSlots, auditModuleRegistry, storage)
     end
 
     moduleRegistry.refresh(opts.moduleOrder)
 
     local hud = constructors.createHud(packId, packIndex, configHash, theme, config,
-        opts.hideHashMarker == true, frameworkRuntime)
+        opts.hideHashMarker == true, overlaySurface)
     local ui = constructors.createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
-        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, frameworkRuntime)
+        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
 
     auditSavedProfiles(packId, config.Profiles, moduleRegistry)
 
@@ -149,14 +150,14 @@ local function createPack(packId, config, numProfiles, defaultProfiles, opts)
     end
 
     local err = tostring(pack)
-    local logPackId = type(packId) == "string" and packId ~= "" and packId or "framework"
-    logging.warn(logPackId, "Framework createPack failed; skipping pack: %s", err)
+    local logPackId = type(packId) == "string" and packId ~= "" and packId or "modpack"
+    logging.warn(logPackId, "modpack createPack failed; skipping pack: %s", err)
     return false, nil, err
 end
 
 local function createGuiCallbacks(packId)
     assert(type(packId) == "string" and packId ~= "",
-        "Framework.createGuiCallbacks: packId must be a non-empty string")
+        "modpack.createGuiCallbacks: packId must be a non-empty string")
 
     local wasGuiOpen = rom.gui.is_open() == true
 
@@ -199,6 +200,5 @@ end
 return {
     registerCoordinator = registerCoordinator,
     createPack = createPack,
-    createPackOrThrow = createPackOrThrow,
     createGuiCallbacks = createGuiCallbacks,
 }

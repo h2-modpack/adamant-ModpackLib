@@ -7,7 +7,7 @@ local function TextColored(ui, color, text)
 end
 
 local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles,
-                        defaultProfiles, drawPackQuickContent, auditSavedProfiles, frameworkRuntime)
+                        defaultProfiles, drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
     local ui = rom.ImGui
     local DEFAULT_WINDOW_WIDTH = 1280
     local DEFAULT_WINDOW_HEIGHT = 840
@@ -117,7 +117,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         moduleRegistry = moduleRegistry,
         staging = staging,
         runtime = runtime,
-        frameworkRuntime = frameworkRuntime,
+        libConfig = libConfig,
     })
 
     runtime.reconcilePackDisabledState()
@@ -220,7 +220,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
 
     local function suppressOverlays()
         if not uiSuppressionToken then
-            uiSuppressionToken = frameworkRuntime.ui.suppressOverlays()
+            uiSuppressionToken = overlaySurface.suppressForUi()
         end
     end
 

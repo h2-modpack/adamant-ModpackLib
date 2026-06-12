@@ -75,6 +75,13 @@ local framework = import('core/overlays/adapters/framework_overlays.lua', nil, {
     order = overlayOrder,
 })
 
+local modpack = import('core/overlays/adapters/modpack_overlays.lua', nil, {
+    logging = deps.logging,
+    suppression = suppression,
+    system = system,
+    order = overlayOrder,
+})
+
 -- Internal API: dispatch overlay projections after settings commit.
 function service.dispatchCommit(owner, commit)
     return retained.dispatchCommit(owner, commit)
@@ -95,5 +102,6 @@ return {
     declarations = declarations,
     system = system,
     framework = framework,
+    modpack = modpack,
     order = overlayOrder,
 }

@@ -5,14 +5,17 @@ local deps = ...
 local rom = deps.rom
 local logging = deps.logging
 
-local function createModuleRegistry(packId, config, frameworkRuntime)
+local function createModuleRegistry(packId, config, getLiveModuleForPlugin)
     local ModuleRegistry = {}
     local warnedMissingModules = {}
-    local modules = assert(frameworkRuntime and frameworkRuntime.modules,
-        "core/modpack/modules/registry: framework runtime modules are required")
+    assert(type(getLiveModuleForPlugin) == "function",
+        "core/modpack/modules/registry: getLiveModule is required")
 
     local function getLiveModule(pluginGuid)
-        return modules.getLiveModule(pluginGuid)
+        if type(pluginGuid) ~= "string" or pluginGuid == "" then
+            return nil
+        end
+        return getLiveModuleForPlugin(pluginGuid)
     end
 
     local function readStorage(liveModule)

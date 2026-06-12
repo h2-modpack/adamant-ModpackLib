@@ -23,6 +23,12 @@ local function readPackRestoreMarker(moduleRegistry, entry, snapshot)
     return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("AdamantFramework_PackRestoreSnapshot")
 end
 
+local function createPackOrFail(harness, ...)
+    local ok, pack, err = harness.createPack(...)
+    lu.assertTrue(ok, tostring(err))
+    return pack
+end
+
 function TestPackBootstrap:setUp()
     local overlays = LibOverlays
     self.previousUiSuppressors = overlays.uiSuppressors
@@ -135,33 +141,31 @@ function TestPackBootstrap:testCreateHudRegistersModpackHashOverlay()
     local registeredOpts = nil
     local refreshCalls = 0
 
-    local modpackRuntime = {
-        overlays = {
-            order = overlayOrder,
-            define = function(packId, scope, register)
-                registeredPack = packId
-                registeredScope = scope
-                local registrar = {
-                    createLine = function(name, spec)
-                        registeredLine = name
-                        registeredOpts = spec
-                    end,
-                    onCommit = function(callback)
-                        registeredOpts._commit = callback
-                    end,
-                }
-                register(registrar)
-                registeredOpts._commit({
-                    setLine = function(_, value)
-                        projectedValue = value
-                    end,
-                    refresh = function()
-                        refreshCalls = refreshCalls + 1
-                    end,
-                }, {})
-                return true
-            end,
-        },
+    local overlaySurface = {
+        order = overlayOrder,
+        define = function(packId, scope, register)
+            registeredPack = packId
+            registeredScope = scope
+            local registrar = {
+                createLine = function(name, spec)
+                    registeredLine = name
+                    registeredOpts = spec
+                end,
+                onCommit = function(callback)
+                    registeredOpts._commit = callback
+                end,
+            }
+            register(registrar)
+            registeredOpts._commit({
+                setLine = function(_, value)
+                    projectedValue = value
+                end,
+                refresh = function()
+                    refreshCalls = refreshCalls + 1
+                end,
+            }, {})
+            return true
+        end,
     }
 
     local theme = ModpackTestApi.createTheme()
@@ -175,7 +179,7 @@ function TestPackBootstrap:testCreateHudRegistersModpackHashOverlay()
         end,
     }
 
-    local hud = ModpackTestApi.createHud("test-pack", 1, hash, theme, config, false, modpackRuntime)
+    local hud = ModpackTestApi.createHud("test-pack", 1, hash, theme, config, false, overlaySurface)
     hud.install()
     hud.setModMarker(false)
 
@@ -195,25 +199,23 @@ function TestPackBootstrap:testCreateHudInstallClearsModpackHashOverlayWhenHidde
     local createLineCalls = 0
     local commitCalls = 0
 
-    local modpackRuntime = {
-        overlays = {
-            order = {
-                framework = 0,
-            },
-            define = function(packId, scope, register)
-                registeredPack = packId
-                registeredScope = scope
-                register({
-                    createLine = function()
-                        createLineCalls = createLineCalls + 1
-                    end,
-                    onCommit = function()
-                        commitCalls = commitCalls + 1
-                    end,
-                })
-                return true
-            end,
+    local overlaySurface = {
+        order = {
+            framework = 0,
         },
+        define = function(packId, scope, register)
+            registeredPack = packId
+            registeredScope = scope
+            register({
+                createLine = function()
+                    createLineCalls = createLineCalls + 1
+                end,
+                onCommit = function()
+                    commitCalls = commitCalls + 1
+                end,
+            })
+            return true
+        end,
     }
 
     local hud = ModpackTestApi.createHud("test-pack", 1, {
@@ -223,7 +225,7 @@ function TestPackBootstrap:testCreateHudInstallClearsModpackHashOverlayWhenHidde
         ApplyConfigHash = function()
             return true
         end,
-    }, ModpackTestApi.createTheme(), { ModEnabled = true }, true, modpackRuntime)
+    }, ModpackTestApi.createTheme(), { ModEnabled = true }, true, overlaySurface)
 
     hud.install()
 
@@ -366,7 +368,8 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
         end,
         },
     })
-    harness.createPackOrThrow(
+    createPackOrFail(
+        harness,
         "startup-pack",
         {
             ModEnabled = true,
@@ -480,7 +483,8 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         end,
         },
     })
-    harness.createPackOrThrow(
+    createPackOrFail(
+        harness,
         packId,
         {
             ModEnabled = true,
@@ -568,8 +572,8 @@ function TestPackBootstrap:testRepeatedInitReplacesPackStateAndKeepsStablePackIn
             { Name = "", Hash = "", Tooltip = "" },
         },
     }
-    firstPack = harness.createPackOrThrow(packId, config, 1, {})
-    secondPack = harness.createPackOrThrow(packId, config, 1, {})
+    firstPack = createPackOrFail(harness, packId, config, 1, {})
+    secondPack = createPackOrFail(harness, packId, config, 1, {})
 
     local packIdCount = 0
     for _, value in ipairs(packRegistry.packList) do
@@ -604,36 +608,30 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
     local suppressCalls = 0
     local releaseCalls = 0
     local flushCalls = 0
-    local modpackRuntime = ModpackTestApi.createModpackRuntime()
-    local hashing = modpackRuntime.hashing
 
     public.registerCoordinator(packId, "Test Pack", {
         ModEnabled = true,
     })
-    local testModpackRuntime = {
-        diagnostics = modpackRuntime.diagnostics,
-        coordinator = modpackRuntime.coordinator,
-        hashing = hashing,
-        modules = modpackRuntime.modules,
-        overlays = modpackRuntime.overlays,
-        ui = {
-            suppressOverlays = function()
-                suppressCalls = suppressCalls + 1
-                local released = false
-                return {
-                    release = function()
-                        if released then
-                            return
-                        end
-                        released = true
-                        releaseCalls = releaseCalls + 1
-                    end,
-                }
-            end,
-            areOverlaysSuppressed = function()
-                return suppressCalls > releaseCalls
-            end,
+    local testOverlaySurface = {
+        order = {
+            framework = 0,
         },
+        define = function()
+            return true
+        end,
+        suppressForUi = function()
+            suppressCalls = suppressCalls + 1
+            local released = false
+            return {
+                release = function()
+                    if released then
+                        return
+                    end
+                    released = true
+                    releaseCalls = releaseCalls + 1
+                end,
+            }
+        end,
     }
     rom.ImGui = {
         MenuItem = function()
@@ -642,7 +640,7 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
     }
 
     local harness = CreateModpackHarness({
-        modpackRuntime = testModpackRuntime,
+        overlaySurface = testOverlaySurface,
         constructors = {
             createModuleRegistry = function()
                 return {
@@ -710,9 +708,9 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
             { Name = "", Hash = "", Tooltip = "" },
         },
     }
-    local firstPack = harness.createPackOrThrow(packId, config, 1, {})
+    local firstPack = createPackOrFail(harness, packId, config, 1, {})
     firstPack.ui.addMenuBar()
-    local secondPack = harness.createPackOrThrow(packId, config, 1, {})
+    local secondPack = createPackOrFail(harness, packId, config, 1, {})
     local releaseCallsAfterReinit = releaseCalls
     local flushCallsAfterReinit = flushCalls
     firstPack.ui.addMenuBar()
@@ -737,6 +735,8 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
 end
 
 function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
+    CaptureWarnings()
+
     local packId = "failed-init-pack"
     local packRegistry = ModpackPackRegistry
     local hudInstallCalls = 0
@@ -795,9 +795,8 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
             { Name = "", Hash = "", Tooltip = "" },
         },
     }
-    lu.assertErrorMsgContains("ui construction boom", function()
-        harness.createPackOrThrow(packId, config, 1, {})
-    end)
+    local ok, pack, err = harness.createPack(packId, config, 1, {})
+    local warnings = Warnings
 
     local packIdCount = 0
     for _, value in ipairs(packRegistry.packList) do
@@ -809,10 +808,16 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
     packRegistry.packs[packId] = previousPack
     packRegistry.packList = previousPackList
     public.registerCoordinator(packId, nil)
+    RestoreWarnings()
 
+    lu.assertFalse(ok)
+    lu.assertNil(pack)
+    lu.assertStrContains(tostring(err), "ui construction boom")
     lu.assertEquals(packIdCount, 0)
     lu.assertEquals(packRegistry.packs[packId], previousPack)
     lu.assertEquals(hudInstallCalls, 0)
+    lu.assertEquals(#warnings, 1)
+    lu.assertStrContains(warnings[1], "[failed-init-pack] modpack createPack failed; skipping pack:")
 end
 
 function TestPackBootstrap:testTryInitReturnsPackOnSuccess()
@@ -965,7 +970,7 @@ function TestPackBootstrap:testTryInitReturnsErrorAndDoesNotRegisterPack()
     lu.assertEquals(packIdCount, 0)
     lu.assertEquals(packRegistry.packs[packId], previousPack)
     lu.assertEquals(#warnings, 1)
-    lu.assertStrContains(warnings[1], "[create-pack-fail-pack] Framework createPack failed; skipping pack:")
+    lu.assertStrContains(warnings[1], "[create-pack-fail-pack] modpack createPack failed; skipping pack:")
     lu.assertStrContains(warnings[1], "try init boom")
 end
 
@@ -1879,17 +1884,21 @@ function TestPackBootstrap:testGuiCloseReleasesOverlaySuppression()
         Profiles = {},
     }, "test-pack", "Test Window", 1, {
         { Name = "", Hash = "", Tooltip = "" },
-    }, nil, nil, {
-        ui = {
-            suppressOverlays = function()
-                suppressCalls = suppressCalls + 1
-                return {
-                    release = function()
-                        releaseCalls = releaseCalls + 1
-                    end,
-                }
-            end,
+    }, nil, nil, nil, {
+        order = {
+            framework = 0,
         },
+        define = function()
+            return true
+        end,
+        suppressForUi = function()
+            suppressCalls = suppressCalls + 1
+            return {
+                release = function()
+                    releaseCalls = releaseCalls + 1
+                end,
+            }
+        end,
     })
 
     ui.addMenuBar()

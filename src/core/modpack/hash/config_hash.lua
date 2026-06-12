@@ -3,7 +3,7 @@ local rom = deps.rom
 local hashCodec = deps.hashCodec
 local logging = deps.logging
 
-local function createConfigHash(moduleRegistry, config, packId, hashing)
+local function createConfigHash(moduleRegistry, config, packId, storage)
     local HASH_VERSION = 2
     local ConfigHash = {}
 
@@ -66,7 +66,7 @@ local function createConfigHash(moduleRegistry, config, packId, hashing)
 
     local function getRootStorage(entry)
         local roots = {}
-        for _, root in ipairs(hashing.getRoots(entry.storage)) do
+        for _, root in ipairs(storage.getRoots(entry.storage)) do
             if root.alias ~= "Enabled" then
                 roots[#roots + 1] = root
             end
@@ -176,7 +176,7 @@ local function createConfigHash(moduleRegistry, config, packId, hashing)
     end
 
     local function encodeValue(root, value, entryLabel)
-        local encoded = hashing.toHash(root, value)
+        local encoded = storage.toHash(root, value)
         assert(encoded ~= nil, string.format(
             "GetConfigHash: expected hashable prepared %s '%s'",
             entryLabel,
@@ -186,7 +186,7 @@ local function createConfigHash(moduleRegistry, config, packId, hashing)
     end
 
     local function decodeValue(root, str, entryLabel)
-        if hashing.isHashTokenValid(root, str) == false then
+        if storage.isHashTokenValid(root, str) == false then
             return nil, string.format(
                 "invalid %s '%s' hash value '%s'",
                 entryLabel,
@@ -195,7 +195,7 @@ local function createConfigHash(moduleRegistry, config, packId, hashing)
             )
         end
 
-        local decoded = hashing.fromHash(root, str)
+        local decoded = storage.fromHash(root, str)
         assert(decoded ~= nil, string.format(
             "ApplyConfigHash: expected hashable prepared %s '%s'",
             entryLabel,
@@ -230,7 +230,7 @@ local function createConfigHash(moduleRegistry, config, packId, hashing)
 
             for _, root in ipairs(getRootStorage(entry)) do
                 local current = readPersisted(entry, root.alias, snapshot)
-                if not hashing.valuesEqual(root, current, root.default) then
+                if not storage.valuesEqual(root, current, root.default) then
                     local encoded = encodeValue(root, current, "storage root")
                     if encoded ~= nil then
                         kv[entry.id .. "." .. root.alias] = encoded

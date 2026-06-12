@@ -35,7 +35,12 @@ function logging.isDiagnosticEnabled(subsystem)
     if diagnostics == true then
         return true
     end
-    return type(diagnostics) == "table" and diagnostics[subsystem] == true
+    if type(diagnostics) ~= "table" then
+        return false
+    end
+
+    local diagnostic = diagnostics[subsystem]
+    return diagnostic == true or (type(diagnostic) == "table" and diagnostic.enabled == true)
 end
 
 function logging.diagnose(subsystem, fmt, ...)

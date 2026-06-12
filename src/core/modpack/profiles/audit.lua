@@ -4,13 +4,13 @@ local logging = deps.logging
 local profiles = {}
 
 function profiles.normalizeProfiles(profileSlots, numProfiles)
-    assert(type(profileSlots) == "table", "Framework.createPack: config.Profiles must be a table")
+    assert(type(profileSlots) == "table", "modpack.createPack: config.Profiles must be a table")
 
     for i = 1, numProfiles do
         local profile = profileSlots[i]
         assert(type(profile) == "table",
             string.format(
-                "Framework.createPack: config.Profiles[%d] is missing; ensure config.lua declares all %d profile entries",
+                "modpack.createPack: config.Profiles[%d] is missing; ensure config.lua declares all %d profile entries",
                 i, numProfiles))
         profile.Name = profile.Name ~= nil and tostring(profile.Name) or ""
         profile.Hash = profile.Hash ~= nil and tostring(profile.Hash) or ""
@@ -22,14 +22,14 @@ end
 --- Warns when a profile contains a field key for a known module that
 --- no longer exists, indicating a likely rename. Namespaces absent from the module registry
 --- are skipped silently because "not installed" and "renamed" are indistinguishable.
-function profiles.auditSavedProfiles(packId, profileSlots, moduleRegistry, hashing)
+function profiles.auditSavedProfiles(packId, profileSlots, moduleRegistry, storage)
     local knownModules = {}
     local issueCount = 0
 
     for _, entry in ipairs(moduleRegistry.modules) do
         local fields = {}
         if entry.storage then
-            for _, root in ipairs(hashing.getRoots(entry.storage)) do
+            for _, root in ipairs(storage.getRoots(entry.storage)) do
                 if root.alias ~= "Enabled" then
                     fields[tostring(root.alias)] = true
                 end

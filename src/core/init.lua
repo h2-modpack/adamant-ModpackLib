@@ -57,9 +57,9 @@ local statusDeclarations = import('core/status/declarations.lua', nil, {
     values = values,
 })
 
-local coordinator = import('core/coordinator/coordinator.lua', nil, {
+local modpackCoordination = import('core/modpack/coordination.lua', nil, {
     logging = logging,
-    coordinatorRegistry = registry.coordinators,
+    coordinationRegistry = registry.coordinators,
 })
 
 local definition = import('core/module_bootstrap/definition.lua', nil, {
@@ -67,7 +67,7 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
     logging = logging,
     storage = storage,
     values = values,
-    coordinator = coordinator,
+    coordinator = modpackCoordination,
     moduleRegistry = moduleRegistry,
 })
 local sharedBundle = import('core/shared/00_init.lua', nil, {
@@ -113,7 +113,7 @@ local mutationBundle = import('core/mutations/00_init.lua', nil, {
     logging = logging,
     values = values,
     moduleRegistry = moduleRegistry,
-    coordinator = coordinator,
+    coordinator = modpackCoordination,
     mutationRegistry = registry.mutations,
 })
 local mutation = mutationBundle.service
@@ -132,7 +132,7 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
     modutil = externals.modutil,
     logging = logging,
     moduleRegistry = moduleRegistry,
-    coordinator = coordinator,
+    coordination = modpackCoordination,
     overlays = overlays,
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
@@ -149,7 +149,7 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     overlays = overlays,
     mutation = mutation,
     fallbackUi = fallbackUiBundle.service,
-    coordinator = coordinator,
+    coordinator = modpackCoordination,
     storage = storage,
     uiDraw = widgetsBundle.uiDraw,
     controls = controlsBundle,
@@ -159,22 +159,18 @@ local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil,
     config = deps.config,
     logging = logging,
     hashing = hashingBundle.framework,
-    coordinator = coordinator,
+    coordinator = modpackCoordination,
     managedModule = managedModule,
     overlays = overlaysBundle.framework,
 })
 public.createFrameworkRuntime = frameworkRuntime.create
-local modpackServices = import('core/modpack/services.lua', nil, {
-    config = deps.config,
-    logging = logging,
-    hashing = hashingBundle.framework,
-    coordinator = coordinator,
-    managedModule = managedModule,
-    overlays = overlaysBundle.framework,
-})
 public.modpack = import('core/modpack/init.lua', nil, {
     rom = externals.rom,
-    frameworkRuntime = modpackServices.create(),
+    libConfig = deps.config,
+    storage = storage,
+    coordination = modpackCoordination,
+    overlaySurface = overlaysBundle.modpack.create(),
+    getLiveModule = managedModule.getLiveModule,
     packRegistry = registry.modpacks,
 })
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
@@ -196,5 +192,5 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
 public.createModule = moduleBundle.public.createModule
 
 return {
-    coordinator = coordinator,
+    modpackCoordination = modpackCoordination,
 }

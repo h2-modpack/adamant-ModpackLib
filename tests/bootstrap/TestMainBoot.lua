@@ -61,7 +61,15 @@ end
 local function createBootHarness(opts)
     opts = opts or {}
     local public = {}
-    local config = { DebugMode = false }
+    local config = {
+        DebugMode = false,
+        Diagnostics = {
+            configBackend = {
+                label = "Config Backend Diagnostics",
+                enabled = false,
+            },
+        },
+    }
     local imports = {}
     local menuCallbacks = {}
     local imguiCallbacks = {}
@@ -187,7 +195,7 @@ local function createBootHarness(opts)
         public = public,
         config = config,
         imports = imports,
-        coordinator = imports["core/coordinator/coordinator.lua"],
+        coordinator = imports["core/modpack/coordination.lua"],
         rom = rom,
         runtime = env.AdamantModpackLib_Runtime,
         menuCallbacks = menuCallbacks,
@@ -235,7 +243,7 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertEquals(type(h.runtime.registry.modpacks.packs), "table")
     lu.assertEquals(type(h.runtime.registry.modpacks.packList), "table")
     lu.assertNil(h.runtime.coordinator)
-    lu.assertEquals(h.imports["core/init.lua"].coordinator, h.imports["core/coordinator/coordinator.lua"])
+    lu.assertEquals(h.imports["core/init.lua"].modpackCoordination, h.imports["core/modpack/coordination.lua"])
 end
 
 function TestMainBoot.testMainLoadsModpackSubsystem()
@@ -262,9 +270,6 @@ function TestMainBoot.testMainLoadsModpackSubsystem()
     lu.assertEquals(type(callbacks.render), "function")
     lu.assertEquals(type(callbacks.alwaysDraw), "function")
     lu.assertEquals(type(callbacks.menuBar), "function")
-    lu.assertErrorMsgContains("modpack.services.diagnostics.setLibDebugEnabled", function()
-        h.imports["core/modpack/services.lua"].create().diagnostics.setLibDebugEnabled("true")
-    end)
     callbacks.render()
     callbacks.alwaysDraw()
     callbacks.menuBar()
@@ -292,6 +297,10 @@ function TestMainBoot.testMainCreatesFrameworkRuntimeFacade()
     lu.assertEquals(type(frameworkRuntime.coordinator.registerRebuild), "function")
     lu.assertEquals(type(frameworkRuntime.coordinator.isRegistered), "function")
     lu.assertEquals(type(frameworkRuntime.coordinator.getDisplayName), "function")
+    frameworkRuntime.coordinator.register("framework-pack", "Framework Pack", { ModEnabled = true })
+    lu.assertTrue(frameworkRuntime.coordinator.isRegistered("framework-pack"))
+    lu.assertEquals(frameworkRuntime.coordinator.getDisplayName("framework-pack"), "Framework Pack")
+    frameworkRuntime.coordinator.register("framework-pack", nil)
     lu.assertEquals(type(frameworkRuntime.overlays), "table")
     lu.assertEquals(type(frameworkRuntime.overlays.order), "table")
     lu.assertEquals(type(frameworkRuntime.overlays.define), "function")
@@ -367,6 +376,7 @@ function TestMainBoot.testMainDebugMenuTogglesLibConfig()
     local h = createBootHarness()
     local calls = {
         endMenu = 0,
+        checkboxes = {},
     }
     h.rom.ImGui = {
         BeginMenu = function(label)
@@ -374,17 +384,11 @@ function TestMainBoot.testMainDebugMenuTogglesLibConfig()
             return true
         end,
         Checkbox = function(label, current)
-            calls.checkbox = {
+            calls.checkboxes[#calls.checkboxes + 1] = {
                 label = label,
                 current = current,
             }
             return true, true
-        end,
-        IsItemHovered = function()
-            return true
-        end,
-        SetTooltip = function(text)
-            calls.tooltip = text
         end,
         EndMenu = function()
             calls.endMenu = calls.endMenu + 1
@@ -394,13 +398,17 @@ function TestMainBoot.testMainDebugMenuTogglesLibConfig()
     h.menuCallbacks[1]()
 
     lu.assertEquals(calls.beginMenu, "adamant-lib")
-    lu.assertEquals(calls.checkbox, {
-        label = "Lib Debug",
+    lu.assertEquals(calls.checkboxes[1], {
+        label = "Lib Policy Debug",
+        current = false,
+    })
+    lu.assertEquals(calls.checkboxes[2], {
+        label = "Config Backend Diagnostics",
         current = false,
     })
     lu.assertEquals(calls.endMenu, 1)
-    lu.assertStrContains(calls.tooltip, "Print lib-internal diagnostic warnings")
     lu.assertTrue(h.config.DebugMode)
+    lu.assertTrue(h.config.Diagnostics.configBackend.enabled)
 end
 
 function TestMainBoot.testMainDebugMenuHidesWhenCoordinatorIsRegistered()

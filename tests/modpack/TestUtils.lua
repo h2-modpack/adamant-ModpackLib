@@ -58,8 +58,18 @@ rom.mods['SGG_Modding-ENVY'] = {
     auto = function() return {} end,
 }
 
+LibConfig = {
+    DebugMode = false,
+    Diagnostics = {
+        configBackend = {
+            label = "Config Backend Diagnostics",
+            enabled = false,
+        },
+    },
+}
+
 rom.mods['SGG_Modding-Chalk'] = {
-    auto = function() return { DebugMode = false } end,
+    auto = function() return LibConfig end,
 }
 
 rom.mods['SGG_Modding-ModUtil'] = {
@@ -125,11 +135,10 @@ lib = public
 rom.mods['adamant-ModpackLib'] = lib
 public = lib.modpack
 ModpackPackRegistry = AdamantModpackLib_Runtime.registry.modpacks
-local defaultModpackRuntime = LibTestImports["core/modpack/services.lua"].create()
 
 function CaptureWarnings()
     Warnings = {}
-    defaultModpackRuntime.diagnostics.setLibDebugEnabled(true)
+    LibConfig.DebugMode = true
     _originalPrint = print
     print = function(msg)
         table.insert(Warnings, msg)
@@ -137,7 +146,7 @@ function CaptureWarnings()
 end
 
 function RestoreWarnings()
-    defaultModpackRuntime.diagnostics.setLibDebugEnabled(false)
+    LibConfig.DebugMode = false
     print = _originalPrint or print
     Warnings = {}
 end
@@ -398,21 +407,27 @@ end
 function CreateModpackHarness(opts)
     opts = opts or {}
     local harnessRom = opts.rom or rom
-    local harnessModpackRuntime = opts.modpackRuntime or defaultModpackRuntime
+    local harnessLibConfig = opts.libConfig or LibConfig
+    local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
+    local getLiveModule = opts.getLiveModule or LibManagedModule.getLiveModule
     local env = makeModpackImportEnv(mapConstructorOverrides(opts.constructors))
     local modpackCore = assert(loadfile("src/core/modpack/init.lua", "t", env))({
         rom = harnessRom,
-        frameworkRuntime = harnessModpackRuntime,
+        libConfig = harnessLibConfig,
+        storage = LibStorage,
+        coordination = LibTestImports["core/modpack/coordination.lua"],
+        overlaySurface = harnessOverlaySurface,
+        getLiveModule = getLiveModule,
         packRegistry = ModpackPackRegistry,
     })
 
     return {
         rom = harnessRom,
-        modpackRuntime = harnessModpackRuntime,
+        libConfig = harnessLibConfig,
+        overlaySurface = harnessOverlaySurface,
         packRegistry = ModpackPackRegistry,
         registerCoordinator = modpackCore.registerCoordinator,
         createPack = modpackCore.createPack,
-        createPackOrThrow = modpackCore.createPackOrThrow,
         createGuiCallbacks = modpackCore.createGuiCallbacks,
     }
 end
@@ -436,58 +451,50 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
 })
 
-local function createDefaultModpackRuntime()
+rawset(ModpackTestApi, "createOverlaySurface", function()
     return {
-        diagnostics = defaultModpackRuntime.diagnostics,
-        hashing = defaultModpackRuntime.hashing,
-        modules = defaultModpackRuntime.modules,
-        overlays = {
-            order = {
-                framework = 0,
-                module = 1000,
-                debug = 2000,
-            },
-            define = function()
-                return true
-            end,
+        order = {
+            framework = 0,
+            module = 1000,
+            debug = 2000,
         },
-        ui = {
-            suppressOverlays = function()
-                return {
-                    release = function() end,
-                }
-            end,
-            areOverlaysSuppressed = function()
-                return false
-            end,
-        },
+        define = function()
+            return true
+        end,
+        suppressForUi = function()
+            return {
+                release = function() end,
+            }
+        end,
+        isUiSuppressed = function()
+            return false
+        end,
     }
-end
+end)
 
 local function createTestUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles,
-                            defaultProfiles, drawPackQuickContent, auditSavedProfiles, modpackRuntime)
+                            defaultProfiles, drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
     return createUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles, defaultProfiles,
-        drawPackQuickContent, auditSavedProfiles, modpackRuntime or createDefaultModpackRuntime())
+        drawPackQuickContent, auditSavedProfiles, libConfig or LibConfig,
+        overlaySurface or ModpackTestApi.createOverlaySurface())
 end
 
-local function createTestHud(packId, packIndex, configHash, theme, config, hideHashMarker, modpackRuntime)
+local function createTestHud(packId, packIndex, configHash, theme, config, hideHashMarker, overlaySurface)
     return createHud(packId, packIndex, configHash, theme, config, hideHashMarker,
-        modpackRuntime or createDefaultModpackRuntime())
+        overlaySurface or ModpackTestApi.createOverlaySurface())
 end
 
-rawset(ModpackTestApi, "createModuleRegistry", function(packId, testConfig, modpackRuntime)
-    return createModuleRegistry(packId, testConfig, modpackRuntime or createDefaultModpackRuntime())
+rawset(ModpackTestApi, "createModuleRegistry", function(packId, testConfig, opts)
+    local getLiveModule = opts and opts.getLiveModule or LibManagedModule.getLiveModule
+    return createModuleRegistry(packId, testConfig, getLiveModule)
 end)
 rawset(ModpackTestApi, "createTheme", createTheme)
-rawset(ModpackTestApi, "createConfigHash", function(moduleRegistry, testConfig, packId, hashing)
-    return createConfigHash(moduleRegistry, testConfig, packId, hashing or defaultModpackRuntime.hashing)
+rawset(ModpackTestApi, "createConfigHash", function(moduleRegistry, testConfig, packId, storage)
+    return createConfigHash(moduleRegistry, testConfig, packId, storage or LibStorage)
 end)
 rawset(ModpackTestApi, "createHud", createTestHud)
 rawset(ModpackTestApi, "createUI", createTestUI)
 rawset(ModpackTestApi, "logging", logging)
-rawset(ModpackTestApi, "createModpackRuntime", function()
-    return LibTestImports["core/modpack/services.lua"].create()
-end)
 rawset(ModpackTestApi, "createUIRuntime", function(ctx)
     local runtimeCtx = {}
     for key, value in pairs(ctx) do
@@ -502,8 +509,8 @@ local profileTools = import("core/modpack/profiles/audit.lua", nil, {
     logging = logging,
 })
 rawset(ModpackTestApi, "normalizeProfiles", profileTools.normalizeProfiles)
-rawset(ModpackTestApi, "auditSavedProfiles", function(packId, profileSlots, moduleRegistry, hashing)
-    return profileTools.auditSavedProfiles(packId, profileSlots, moduleRegistry, hashing or defaultModpackRuntime.hashing)
+rawset(ModpackTestApi, "auditSavedProfiles", function(packId, profileSlots, moduleRegistry, storage)
+    return profileTools.auditSavedProfiles(packId, profileSlots, moduleRegistry, storage or LibStorage)
 end)
 
 config = { ModEnabled = true, DebugMode = false }
@@ -635,7 +642,7 @@ function MockModuleRegistry.create(moduleDefs)
         }
 
         for _, module in ipairs(moduleRegistry.modules) do
-            local liveModule = defaultModpackRuntime.modules.getLiveModule(module.pluginGuid)
+            local liveModule = LibManagedModule.getLiveModule(module.pluginGuid)
             snapshot.liveModules[module] = liveModule or false
         end
 
@@ -643,7 +650,7 @@ function MockModuleRegistry.create(moduleDefs)
     end
 
     function moduleRegistry.live.getLiveModule(entry)
-        return defaultModpackRuntime.modules.getLiveModule(entry.pluginGuid)
+        return LibManagedModule.getLiveModule(entry.pluginGuid)
     end
 
     function moduleRegistry.snapshot.getLiveModule(entry, snapshot)

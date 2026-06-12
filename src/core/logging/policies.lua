@@ -207,6 +207,10 @@ return {
         severity = "error",
         description = "Framework overlay declarations require a stable pack id.",
     },
+    ["modpack.overlays.invalid_pack"] = {
+        severity = "error",
+        description = "Modpack overlay declarations require a stable pack id.",
+    },
     ["framework_runtime.invalid_debug_mode"] = {
         severity = "error",
         description = "Framework runtime diagnostics require boolean Lib debug mode values.",
@@ -214,6 +218,10 @@ return {
     ["framework_runtime.invalid_overlay_scope"] = {
         severity = "error",
         description = "Framework runtime overlay declarations require a stable scoped name.",
+    },
+    ["modpack.overlays.invalid_scope"] = {
+        severity = "error",
+        description = "Modpack overlay declarations require a stable scoped name.",
     },
 
     ["fallback_ui.invalid_args"] = {

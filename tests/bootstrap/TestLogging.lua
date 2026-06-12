@@ -135,6 +135,20 @@ function TestLogging:testDiagnoseHonorsSubsystemFlag()
     lu.assertEquals(self.lines, { "[lib-diagnostic:configBackend] visible summary" })
 end
 
+function TestLogging:testDiagnoseHonorsSubsystemConfigEntry()
+    self.harness.config.Diagnostics = {
+        configBackend = {
+            label = "Config Backend Diagnostics",
+            enabled = true,
+        },
+    }
+
+    local printed = self.harness.logging.diagnose("configBackend", "visible")
+
+    lu.assertTrue(printed)
+    lu.assertEquals(self.lines, { "[lib-diagnostic:configBackend] visible" })
+end
+
 function TestLogging:testDiagnoseAllowsAllDiagnosticsFlag()
     self.harness.config.Diagnostics = true
 

@@ -417,7 +417,7 @@ local function createLibHarness(opts)
         systemScope = imports["core/lib_bootstrap/system_scope.lua"],
         moduleState = imports["core/module_state/00_init.lua"],
         uiActions = imports["core/module_state/actions/ui_actions.lua"],
-        coordinator = imports["core/coordinator/coordinator.lua"],
+        coordinator = imports["core/modpack/coordination.lua"],
         sharedBundle = imports["core/shared/00_init.lua"],
         shared = imports["core/shared/00_init.lua"].service,
         hooksBundle = imports["core/hooks/00_init.lua"],

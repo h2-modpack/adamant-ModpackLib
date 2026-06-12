@@ -1,7 +1,13 @@
 local deps = ...
 local rom = deps.rom
-local frameworkRuntime = deps.frameworkRuntime
-local packRegistry = deps.packRegistry
+local libConfig = deps.libConfig
+local storage = deps.storage
+local coordination = deps.coordination
+local overlaySurface = deps.overlaySurface
+local getLiveModule = deps.getLiveModule
+local packRegistry = import("core/modpack/registry.lua", nil, {
+    modpackRegistry = deps.packRegistry,
+})
 
 local logging = import "core/modpack/logging.lua"
 local hashCodec = import "core/modpack/hash/codec.lua"
@@ -38,8 +44,12 @@ local constructors = {
 return import("core/modpack/pack_bootstrap.lua", nil, {
     rom = rom,
     logging = logging,
+    libConfig = libConfig,
+    storage = storage,
+    coordination = coordination,
+    overlaySurface = overlaySurface,
+    getLiveModule = getLiveModule,
     profileTools = profileTools,
     constructors = constructors,
-    frameworkRuntime = frameworkRuntime,
     packRegistry = packRegistry,
 })

@@ -1,6 +1,6 @@
 local deps = ...
 
-local coordinator = deps.coordinator
+local coordination = deps.coordination
 local overlays = deps.overlays
 local createSystem = deps.createSystem
 local runtimes = deps.runtimes
@@ -18,7 +18,7 @@ local function isRuntimeUncoordinated(activeRuntime)
     end
 
     local packId = module.getPackId()
-    return not (packId and coordinator.isRegistered(packId))
+    return not (packId and coordination.isRegistered(packId))
 end
 
 local function shouldShowFallbackMarker()

@@ -1,6 +1,9 @@
 return {
     DebugMode = false,
     Diagnostics = {
-        configBackend = false,
+        configBackend = {
+            label = "Config Backend Diagnostics",
+            enabled = false,
+        },
     },
 }

@@ -2,7 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local moduleRegistry = deps.moduleRegistry
-local coordinator = deps.coordinator
+local coordination = deps.coordination
 local overlays = deps.overlays
 local createSystem = deps.createSystem
 local fallbackRegistry = deps.fallbackRegistry
@@ -27,7 +27,7 @@ local runtimes = fallbackRegistry.runtimes
 local fallbackUi = {}
 
 local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
-    coordinator = coordinator,
+    coordination = coordination,
     overlays = overlays,
     createSystem = createSystem,
     runtimes = runtimes,
@@ -137,7 +137,7 @@ function fallbackUi.attachGuiOnce(module, register)
 end
 
 local function isCoordinated(packId)
-    return packId and coordinator.isRegistered(packId) or false
+    return packId and coordination.isRegistered(packId) or false
 end
 
 local function sameLineWithGap(imgui, gap)
@@ -319,7 +319,7 @@ local function createRuntime(module)
     local function addMenuBar()
         local packId = module.getPackId()
         if isCoordinated(packId) then
-            local displayName = coordinator.getDisplayName(packId) or packId
+            local displayName = coordination.getDisplayName(packId) or packId
             rom.ImGui.TextDisabled("Settings are in " .. displayName .. " Modpack Menu")
             return
         end

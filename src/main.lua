@@ -28,12 +28,27 @@ local core = import('core/init.lua', nil, {
 
 -- Fallback framework debug toggle - hidden when Core/Framework registers coordinators.
 rom.gui.add_to_menu_bar(function()
-    if core.coordinator.hasRegistrations() then return end
+    if core.modpackCoordination.hasRegistrations() then return end
     if rom.ImGui.BeginMenu("adamant-lib") then
-        local val, chg = rom.ImGui.Checkbox("Lib Debug", libConfig.DebugMode == true)
+        local val, chg = rom.ImGui.Checkbox("Lib Policy Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
-        if rom.ImGui.IsItemHovered() then
-            rom.ImGui.SetTooltip("Print lib-internal diagnostic warnings. Structural schema errors always fail.")
+
+        local diagnostics = libConfig.Diagnostics
+        local diagnosticKeys = {}
+        for key, diagnostic in pairs(diagnostics) do
+            if type(diagnostic) == "table" then
+                diagnosticKeys[#diagnosticKeys + 1] = key
+            end
+        end
+        table.sort(diagnosticKeys)
+
+        for _, key in ipairs(diagnosticKeys) do
+            local diagnostic = diagnostics[key]
+            local diagVal, diagChg = rom.ImGui.Checkbox(
+                diagnostic.label,
+                diagnostic.enabled == true
+            )
+            if diagChg then diagnostic.enabled = diagVal end
         end
         rom.ImGui.EndMenu()
     end
