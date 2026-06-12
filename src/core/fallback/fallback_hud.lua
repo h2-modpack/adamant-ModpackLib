@@ -44,7 +44,7 @@ function fallbackHud.createMarker()
         overlay.createLine("marker", {
             componentName = "ModpackMark_FallbackUi",
             region = "middleRightStack",
-            order = 0,
+            order = system.overlays.order.system,
             visible = shouldShowFallbackMarker,
             minWidth = 80,
         })

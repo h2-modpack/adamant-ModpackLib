@@ -14,13 +14,11 @@ end
 function TestStorageValidation:setUp()
     self.harness = createLibHarness()
     self.storage = self.harness.storage
-    self.hashing = assert(self.harness.hashing, "hashing framework surface missing")
 end
 
 function TestStorageValidation:tearDown()
     self.harness = nil
     self.storage = nil
-    self.hashing = nil
 end
 
 function TestStorageValidation:testDuplicateAliasFails()
@@ -244,8 +242,8 @@ function TestStorageValidation:testStringMaxLenNormalizesStorageAndHashValues()
     local node = self.storage.getAliases(definition.storage).Name
 
     lu.assertEquals(self.storage.NormalizeStorageValue(node, "abcdef"), "abc")
-    lu.assertEquals(self.hashing.toHash(node, "abcdef"), "abc")
-    lu.assertEquals(self.hashing.fromHash(node, "abcdef"), "abc")
+    lu.assertEquals(self.storage.toHash(node, "abcdef"), "abc")
+    lu.assertEquals(self.storage.fromHash(node, "abcdef"), "abc")
 end
 
 function TestStorageValidation:testStringMaxLenNormalizesTableRows()

@@ -1,12 +1,12 @@
 # Module Bootup Lifecycle
 
-This note tracks cold-start module boot order for Lib and Framework. Use
+This note tracks cold-start module boot order for Lib modules and Lib modpacks. Use
 [HOT_RELOAD_ARCHITECTURE.md](HOT_RELOAD_ARCHITECTURE.md) for reload behavior and
 [../module-authors/DRAW_LIFECYCLE.md](../module-authors/DRAW_LIFECYCLE.md) for
 per-frame draw/commit behavior.
 
 The key invariant: normal startup hydrates persisted config once, when Lib
-constructs module state. Activation, fallback UI startup, and Framework initial
+constructs module state. Activation, fallback UI startup, and Lib modpack initial
 UI staging trust that prepared state.
 
 ## Shared Module Creation
@@ -61,29 +61,29 @@ state drift is detected, lifecycle code resyncs staged state from already
 committed roots and then stages the requested boolean. That repair must not
 re-read external config.
 
-## Coordinated Framework Boot
+## Coordinated Modpack Boot
 
-A coordinated module is the same live module plus a Framework pack that discovers
-it by pack id.
+A coordinated module is the same live module plus a Lib modpack that discovers it
+by pack id.
 
-1. The coordinator calls `Framework.registerCoordinator(packId, displayName,
+1. The coordinator calls `lib.modpack.registerCoordinator(packId, displayName,
    config, rebuildCallback)`.
 2. Each module runs the shared Lib module creation sequence and publishes a live
    module under its `pluginGuid`.
-3. The coordinator calls `Framework.createPack(...)`.
-4. Framework validates pack config and runtime prerequisites.
-5. Framework creates a module registry for the pack.
+3. The coordinator calls `lib.modpack.createPack(...)`.
+4. Lib validates pack config and runtime prerequisites.
+5. Lib creates a module registry for the pack.
 6. `moduleRegistry.refresh(...)` scans live modules and builds entries from live
    module metadata, storage, module id, pack id, and quick-content capability.
-7. Framework creates hash, HUD, theme, and UI runtime objects.
-8. Framework UI reconciles pack-disabled state.
-9. Framework initial UI staging captures a live-module snapshot and reads
+7. Lib creates hash, HUD, theme, and UI runtime objects.
+8. Modpack UI reconciles pack-disabled state.
+9. Modpack initial UI staging captures a live-module snapshot and reads
    enabled/debug state from that snapshot.
-10. Framework initial UI staging does not call `liveModule.reloadFromConfig()`.
-11. Framework audits saved profiles and installs HUD behavior.
-12. The pack is published in `FrameworkPackRegistry`.
+10. Modpack initial UI staging does not call `liveModule.reloadFromConfig()`.
+11. Lib audits saved profiles and installs HUD behavior.
+12. The pack is published in the Lib modpack registry.
 
-Framework is allowed to rebuild its own pack/UI objects on coordinator re-entry,
+Lib modpack is allowed to rebuild its own pack/UI objects on coordinator re-entry,
 but normal module activation remains the source of hydrated module state.
 
 ## Reload Boundaries
@@ -92,9 +92,9 @@ These paths intentionally re-read config after startup:
 
 - `module.reloadFromConfig()`: explicit live-module API for external config
   resync.
-- Framework hash/profile apply: writes staged values, flushes them, then reloads
+- Modpack hash/profile apply: writes staged values, flushes them, then reloads
   module state from config so UI mirrors the applied profile.
-- Framework runtime `resyncAllState()`: explicit user/runtime resync.
+- Modpack runtime `resyncAllState()`: explicit user/runtime resync.
 - Lib lifecycle mismatch resync: used after an internal staged/committed audit
   detects drift.
 
@@ -104,7 +104,7 @@ These paths should not re-read config during normal startup:
 - fallback UI install
 - fallback first window open
 - fallback first draw
-- Framework initial `createUI(...)` staging
+- Modpack initial `createUI(...)` staging
 - lifecycle enable/debug drift repair
 
 ## Startup Hydration Contract

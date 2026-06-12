@@ -130,7 +130,8 @@ end
 
 function TestPackBootstrap:testCreateHudRegistersModpackHashOverlay()
     local overlayOrder = {
-        framework = 0,
+        system = 0,
+        modpack = 100,
         module = 1000,
         debug = 2000,
     }
@@ -187,7 +188,7 @@ function TestPackBootstrap:testCreateHudRegistersModpackHashOverlay()
     lu.assertEquals(registeredScope, "hud")
     lu.assertEquals(registeredLine, "hash")
     lu.assertEquals(registeredOpts.region, "middleRightStack")
-    lu.assertEquals(registeredOpts.order, overlayOrder.framework + 1)
+    lu.assertEquals(registeredOpts.order, overlayOrder.modpack + 1)
     lu.assertEquals(projectedValue, "")
     lu.assertFalse(registeredOpts.visible())
     lu.assertEquals(refreshCalls, 2)
@@ -201,7 +202,8 @@ function TestPackBootstrap:testCreateHudInstallClearsModpackHashOverlayWhenHidde
 
     local overlaySurface = {
         order = {
-            framework = 0,
+            system = 0,
+            modpack = 100,
         },
         define = function(packId, scope, register)
             registeredPack = packId
@@ -614,7 +616,8 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
     })
     local testOverlaySurface = {
         order = {
-            framework = 0,
+            system = 0,
+            modpack = 100,
         },
         define = function()
             return true
@@ -1886,7 +1889,8 @@ function TestPackBootstrap:testGuiCloseReleasesOverlaySuppression()
         { Name = "", Hash = "", Tooltip = "" },
     }, nil, nil, nil, {
         order = {
-            framework = 0,
+            system = 0,
+            modpack = 100,
         },
         define = function()
             return true

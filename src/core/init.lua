@@ -30,10 +30,6 @@ local storage = import('core/storage/00_init.lua', nil, {
     values = values,
 })
 
-local hashingBundle = import('core/hashing/hashing.lua', nil, {
-    storage = storage,
-})
-
 local moduleState = import('core/module_state/00_init.lua', nil, {
     logging = logging,
     rom = externals.rom,

@@ -29,7 +29,7 @@ local function createHud(packId, packIndex, configHash, theme, config, hideHashM
             overlays.createLine("hash", {
                 componentName = componentName,
                 region = "middleRightStack",
-                order = overlaySurface.order.framework + packIndex,
+                order = overlaySurface.order.modpack + packIndex,
                 visible = function()
                     return config.ModEnabled == true and currentHash ~= ""
                 end,

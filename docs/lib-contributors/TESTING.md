@@ -10,7 +10,7 @@ Run the Lib suite from this package:
 
 ```bash
 cd adamant-ModpackLib
-lua52.exe tests/all.lua
+lua5.2 tests/all.lua
 ```
 
 Use targeted subsystem tests while iterating, then run the full suite before
@@ -21,11 +21,13 @@ finishing a Lib change.
 From the shell repo root, run:
 
 ```bash
-python ModpackTools/test_all.py
+ModpackTools/run ModpackTools/test_all.py
 ```
 
 This is the high-signal end-to-end validation path for the repo family. It runs
-Lib, Framework, module, and ModpackTools tests through the shared test harness.
+Lib, module, and ModpackTools tests through the shared test harness. The generic
+boot smoke exercises `lib.modpack` directly; it no longer requires a separate
+pack-host package.
 
 ## Module Test Boundary
 
@@ -50,10 +52,11 @@ Good module tests assert externalities owned by the module:
 - shared-data snapshot shape authored by the module;
 - data, control, UI, resolver, and pure logic behavior.
 
-Shell-level entrypoint smoke tests own real compatibility with the current
-Lib/Framework stack. They should boot the real module and make broad assertions
-such as module identity and callback registration, while detailed state-machine,
-persistence, activation, and rollback behavior stays covered by Lib tests.
+Shell-level entrypoint smoke tests own real compatibility with the current Lib
+author and modpack surfaces. They should boot the real module and make broad
+assertions such as module identity and callback registration, while detailed
+state-machine, persistence, activation, and rollback behavior stays covered by
+Lib tests.
 
 ## Diff Hygiene
 

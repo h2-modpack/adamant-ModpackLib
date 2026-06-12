@@ -70,7 +70,7 @@ Common surfaces:
 - `module.fallbackUi.attachGuiOnce(...)`
 - `module.activate()`
 
-Activation publishes the live module for Framework/fallback UI, installs declared
+Activation publishes the live module for Lib modpack/fallback UI, installs declared
 hooks/overlays/shared events, and syncs initial mutation state.
 
 ## Draw Callbacks

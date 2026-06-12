@@ -4,7 +4,8 @@ local service = {}
 
 -- Shared overlay order bands used by module and system retained overlays.
 local overlayOrder = {
-    framework = 0,
+    system = 0,
+    modpack = 100,
     module = 1000,
     debug = 2000,
 }

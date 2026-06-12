@@ -2,26 +2,26 @@
 
 This file documents current design constraints that are intentional or accepted for now.
 
-These are not hidden bugs. They are boundaries the current architecture chooses to live with until the underlying runtime, Framework surface, or project requirements change.
+These are not hidden bugs. They are boundaries the current architecture chooses to live with until the underlying runtime, Lib modpack surface, or project requirements change.
 
 ## Structural Rebuilds Are Immediate
 
-When a coordinated module changes its structural contract during hot reload, Lib requests a Framework rebuild as soon as the replacement host is published.
+When a coordinated module changes its structural contract during hot reload, Lib requests a modpack rebuild as soon as the replacement host is published.
 
 The module rebuild path is:
 
 - `lib.createModule(...)`
 - `module.activate()`
-- requested fallback UI when running outside Framework coordination
+- requested fallback UI when running outside Lib modpack coordination
 
-The Framework rebuild is correct, but it is not coalesced across a multi-module reload wave.
+The modpack rebuild is correct, but it is not coalesced across a multi-module reload wave.
 
 Example:
 
 - module A structurally reloads
-- Framework rebuilds
+- Lib modpack rebuilds
 - module B structurally reloads right after
-- Framework rebuilds again
+- Lib modpack rebuilds again
 
 Why this exists:
 
@@ -36,13 +36,13 @@ What would remove it:
 
 ## Infrastructure Hot Reload Is Best-Effort
 
-Author-facing module hot reload is the supported fast path. Lib and Framework hot reload are infrastructure development paths, with a full game process restart as the correctness boundary.
+Author-facing module hot reload is the supported fast path. Lib and Lib modpack hot reload are infrastructure development paths, with a full game process restart as the correctness boundary.
 
 What this means in practice:
 
 - existing managed modules may close over prior Lib implementation closures until the owning module reloads
 - active mutation runtime is durable across module reload, not arbitrary Lib implementation reload
-- a Framework file reload does not update an existing pack object until a coordinator rebuild calls `Framework.createPack(...)` again
+- a Lib file reload does not update an existing pack object until a coordinator rebuild calls `lib.modpack.createPack(...)` again
 - retained HUD layout changes may require HUD recreation or a game HUD refresh
 
 Why this exists:
@@ -55,7 +55,7 @@ What would remove it:
 
 - persistent Lib mutation runtime across Lib implementation reloads
 - managed-module methods routed through stable late-bound Lib dispatch
-- an explicit infrastructure reload protocol that forces module and Framework convergence
+- an explicit infrastructure reload protocol that forces module and Lib modpack convergence
 
 ## Module Activation Rollback Covers Managed Effects Only
 
@@ -74,7 +74,7 @@ Why this exists:
 - Lua modules cannot be physically sandboxed from game globals or platform APIs
 - ModUtil and ROM do not expose complete undo handles for every possible side effect
 - making every subsystem independently transactional would add more complexity than the supported module hot-reload path justifies
-- system overlays exist only for narrow Lib/Framework HUD lines and avoid exposing a broad owner-token escape hatch
+- system overlays exist only for narrow Lib/modpack HUD lines and avoid exposing a broad owner-token escape hatch
 
 What would remove it:
 
@@ -150,7 +150,7 @@ What this means in practice:
 
 What would remove it:
 
-- a more opinionated module-internal framework layer
+- a more opinionated module-internal abstraction layer
 - which is currently considered more complexity than the problem justifies
 
 ## No General Purpose Non-UI Per-Frame Lua Callback

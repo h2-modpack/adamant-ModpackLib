@@ -85,10 +85,10 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
             region = "middleRightStack",
             minWidth = 80,
         })
-        overlays.createLine("framework", {
-            componentName = "FrameworkOverlay",
+        overlays.createLine("system", {
+            componentName = "SystemOverlay",
             region = "middleRightStack",
-            order = system.overlays.order.framework + 1,
+            order = system.overlays.order.system + 1,
             minWidth = 80,
         })
         overlays.createLine("debug", {
@@ -99,13 +99,13 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
         })
         overlays.onCommit(function(overlay)
             overlay.setLine("module", "Module")
-            overlay.setLine("framework", "Framework")
+            overlay.setLine("system", "System")
             overlay.setLine("debug", "Debug")
             overlay.refreshRegion("middleRightStack")
         end)
     end)
 
-    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_FrameworkOverlay_text.Y, 200)
+    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_SystemOverlay_text.Y, 200)
     lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_ModuleOverlay_text.Y, 240)
     lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_DebugOverlay_text.Y, 280)
 end

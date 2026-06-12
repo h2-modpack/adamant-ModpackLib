@@ -84,7 +84,10 @@ local function overlayOrderBand(order)
     if order >= overlayOrder.module then
         return "module"
     end
-    return "framework"
+    if order >= overlayOrder.modpack then
+        return "modpack"
+    end
+    return "system"
 end
 
 local function sanitizeStackRowTextArgs(textArgs)

@@ -61,7 +61,8 @@ The shared managed region currently exposed to modules is:
 
 Order bands:
 
-- `module.overlays.order.framework`
+- `module.overlays.order.system`
+- `module.overlays.order.modpack`
 - `module.overlays.order.module`
 - `module.overlays.order.debug`
 
@@ -96,11 +97,11 @@ Overlay visibility has multiple gates:
 
 - Lib applies the global game-HUD gate.
 - Each overlay can provide its own `visible` boolean or callback.
-- Framework and fallback configuration UI suppress the entire overlay layer while open.
+- Lib modpack and fallback configuration UI suppress the entire overlay layer while open.
 
-Module code does not call suppression APIs directly. Framework and Lib
-fallback UI windows acquire and release suppression through their runtime
-facades while foreground configuration UI is open.
+Module code does not call suppression APIs directly. Lib modpack and fallback UI
+windows acquire and release suppression through their runtime facades while
+foreground configuration UI is open.
 
 ## Common Mistakes
 

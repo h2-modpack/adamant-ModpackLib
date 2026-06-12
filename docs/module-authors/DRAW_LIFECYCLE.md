@@ -39,10 +39,10 @@ and read controls through `runtime.controls`.
 
 ## One Draw Commit Cycle
 
-Framework owns the draw and commit timing. For a framework-rendered module, it
+Lib owns the draw and commit timing. For a modpack-rendered module, Lib modpack
 uses the live module's draw-and-commit lifecycle entry point. The normal cycle is:
 
-1. Framework calls the module draw callback.
+1. Lib modpack calls the module draw callback.
 2. Draw code renders immediate UI.
 3. Draw code stages storage edits through `ui.data`.
 4. Draw code stages runtime actions through `ui.actions.trigger(...)`.

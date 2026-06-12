@@ -6,13 +6,11 @@ TestHashing = {}
 function TestHashing:setUp()
     self.harness = createLibHarness()
     self.storage = self.harness.storage
-    self.hashing = assert(self.harness.hashing, "hashing framework surface missing")
 end
 
 function TestHashing:tearDown()
     self.harness = nil
     self.storage = nil
-    self.hashing = nil
 end
 
 local function prepareStorage(storageApi)
@@ -37,7 +35,7 @@ end
 
 function TestHashing:testRootsExcludeTransientNodesAndAliasesIncludePackedBits()
     local storage = prepareStorage(self.storage)
-    local roots = self.hashing.getRoots(storage)
+    local roots = self.storage.getRoots(storage)
     local aliases = self.storage.getAliases(storage)
 
     lu.assertEquals(#roots, 4)
@@ -52,16 +50,16 @@ function TestHashing:testHashCodecRoundTripsSupportedStorageTypes()
     local storage = prepareStorage(self.storage)
     local aliases = self.storage.getAliases(storage)
 
-    lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, true), "1")
-    lu.assertEquals(self.hashing.toHash(aliases.EnabledFlag, false), "0")
-    lu.assertTrue(self.hashing.fromHash(aliases.EnabledFlag, "1"))
-    lu.assertFalse(self.hashing.fromHash(aliases.EnabledFlag, "0"))
-    lu.assertEquals(self.hashing.toHash(aliases.Count, 6), "6")
-    lu.assertEquals(self.hashing.fromHash(aliases.Count, "99"), 7)
-    lu.assertEquals(self.hashing.toHash(aliases.Name, "Athena"), "Athena")
-    lu.assertEquals(self.hashing.fromHash(aliases.Name, "Apollo"), "Apollo")
-    lu.assertEquals(self.hashing.toHash({ type = "unknown" }, "x"), nil)
-    lu.assertEquals(self.hashing.fromHash({ type = "unknown" }, "x"), nil)
+    lu.assertEquals(self.storage.toHash(aliases.EnabledFlag, true), "1")
+    lu.assertEquals(self.storage.toHash(aliases.EnabledFlag, false), "0")
+    lu.assertTrue(self.storage.fromHash(aliases.EnabledFlag, "1"))
+    lu.assertFalse(self.storage.fromHash(aliases.EnabledFlag, "0"))
+    lu.assertEquals(self.storage.toHash(aliases.Count, 6), "6")
+    lu.assertEquals(self.storage.fromHash(aliases.Count, "99"), 7)
+    lu.assertEquals(self.storage.toHash(aliases.Name, "Athena"), "Athena")
+    lu.assertEquals(self.storage.fromHash(aliases.Name, "Apollo"), "Apollo")
+    lu.assertEquals(self.storage.toHash({ type = "unknown" }, "x"), nil)
+    lu.assertEquals(self.storage.fromHash({ type = "unknown" }, "x"), nil)
 end
 
 function TestHashing:testPackedAliasesResolveFromPreparedNode()

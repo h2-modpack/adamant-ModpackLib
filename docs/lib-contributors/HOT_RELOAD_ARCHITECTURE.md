@@ -324,6 +324,6 @@ Outside that coordinated path, use a full reload.
 - pass `pluginGuid` to `lib.createModule(...)`
 - call `module.activate()` after declarations
 - keep stable GUI callbacks outside `init`
-- late-read current framework or module state from those stable callbacks when a stale closure would matter
+- late-read current modpack or module state from those stable callbacks when a stale closure would matter
 - do not use raw ModUtil path wraps for repo-owned hot-reload-sensitive hook sites
 - keep persistent runtime registries stable across reloads; update their contents in place

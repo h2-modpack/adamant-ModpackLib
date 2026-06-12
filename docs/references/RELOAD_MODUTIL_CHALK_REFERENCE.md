@@ -253,7 +253,7 @@ Meaning:
 
 This is the normal gate for:
 - HUD/UI work
-- framework init that relies on game globals
+- modpack init that relies on game globals
 - mod bootstrap that should happen after core game script availability
 
 ### `once_loaded.save`
@@ -393,7 +393,7 @@ end)
 
 Why:
 - GUI registration itself should not stack on reload
-- the returned callbacks should late-bind to current module/framework state
+- the returned callbacks should late-bind to current module/modpack state
 - `init` can rebuild current state on every reload
 
 ## 3. Use `auto_multiple()` only when one file has several distinct reload lifecycles
@@ -425,7 +425,7 @@ Because after the milestone is already reached, `once_loaded.*` executes immedia
 Good pattern:
 - `config = chalk.auto(...)`
 - recreate the module through `lib.createModule(...)`
-- recreate module/framework derived state
+- recreate module/modpack derived state
 
 Recreate wrapper objects during reload so they point at the rebuilt module state.
 

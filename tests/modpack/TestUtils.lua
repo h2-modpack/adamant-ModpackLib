@@ -454,7 +454,8 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
 rawset(ModpackTestApi, "createOverlaySurface", function()
     return {
         order = {
-            framework = 0,
+            system = 0,
+            modpack = 100,
             module = 1000,
             debug = 2000,
         },

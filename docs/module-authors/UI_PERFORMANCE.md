@@ -31,9 +31,9 @@ This document assumes:
   `ui.status`
 - draw-callback objects are shaped by variant type and should be used only from
   the callback that receives them
-- debug toggles write persisted values through the module/framework flow
-- hash/profile import and config flush behavior belong to module/framework plumbing, not draw callbacks
-- Framework/live modules own staged-state commit timing
+- debug toggles write persisted values through the module/modpack flow
+- hash/profile import and config flush behavior belong to module/modpack plumbing, not draw callbacks
+- Lib modpack/live modules own staged-state commit timing
 - fallback UI registers ROM callbacks through `module.fallbackUi.attachGuiOnce(...)`
   and installs the active runtime during `module.activate()`
 
@@ -104,12 +104,12 @@ Use:
 When a draw helper reads the same value multiple times, cache the field handle
 inside that draw function and read through it.
 
-### 5. Let Module/Framework Own Commit Timing
+### 5. Let Module/Modpack Own Commit Timing
 
 Do not hand-roll flush logic inside draw code.
 
 Ownership:
-- framework-hosted modules commit after `drawTab` / `drawQuickContent`
+- modpack-hosted modules commit after `drawTab` / `drawQuickContent`
 - fallback UI modules should register GUI callbacks through
   `module.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 
@@ -157,7 +157,7 @@ Do not rebuild the same large option table multiple times in the same frame.
 - splitting one draw flow into extra lifecycle steps without a real need
 - calling `runtime.data.get(...):read()` from draw code instead of reading staged values through `ui.data.get(...)`
 - doing config writes directly from draw code instead of staging through `ui.data`
-- bypassing the module/framework flow for normal widget edits
+- bypassing the module/modpack flow for normal widget edits
 
 
 

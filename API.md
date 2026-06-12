@@ -736,7 +736,8 @@ Managed region:
 - `middleRightStack`: a right-anchored vertical stack used for pack markers and module status text.
 
 Order bands:
-- `module.overlays.order.framework`
+- `module.overlays.order.system`
+- `module.overlays.order.modpack`
 - `module.overlays.order.module`
 - `module.overlays.order.debug`
 

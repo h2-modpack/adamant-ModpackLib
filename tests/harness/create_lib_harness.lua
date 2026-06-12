@@ -409,8 +409,6 @@ local function createLibHarness(opts)
         gameDeps = externals.gameDeps or imports["core/game_deps/game_deps.lua"],
         cacheBundle = imports["core/cache/00_init.lua"],
         cache = imports["core/cache/00_init.lua"].service,
-        hashingBundle = imports["core/hashing/hashing.lua"],
-        hashing = imports["core/hashing/hashing.lua"].framework,
         storage = imports["core/storage/00_init.lua"],
         registry = imports["core/lib_bootstrap/registry.lua"],
         moduleRegistry = imports["core/lib_bootstrap/module_registry.lua"],
