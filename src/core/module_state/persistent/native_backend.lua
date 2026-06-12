@@ -1,6 +1,7 @@
 local deps = ...
 
 local backendMetrics = deps.metrics
+local logging = deps.logging
 local TABLE_ROW_COUNT_KEY = "_RowCount"
 
 local function nowMs()
@@ -221,6 +222,11 @@ local function create(opts)
         local file = io.open(path, "w")
         if not file then
             metrics.count("save_time_ms", nowMs() - startedMs)
+            logging.violate(
+                "persistent_backend.save_failed",
+                "failed to open native config for writing: %s; module settings may not persist",
+                tostring(path)
+            )
             return
         end
 

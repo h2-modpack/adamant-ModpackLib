@@ -255,6 +255,15 @@ return {
         description = "A staged state rollback could not fully reapply the previous mutation state.",
     },
 
+    ["persistent_backend.unavailable"] = {
+        severity = "warn",
+        description = "Module persistence fell back to volatile memory because no native config path was available.",
+    },
+    ["persistent_backend.save_failed"] = {
+        severity = "warn",
+        description = "Module persistence could not write the native config file.",
+    },
+
     ["overlays.invalid_registration"] = {
         severity = "error",
         description = "Overlay registration requires valid ids, draw functions, and column descriptors.",

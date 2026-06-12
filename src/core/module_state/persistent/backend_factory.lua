@@ -11,6 +11,7 @@ local backendMetrics = import('core/module_state/persistent/backend_metrics.lua'
 
 local nativeBackend = import('core/module_state/persistent/native_backend.lua', nil, {
     metrics = backendMetrics,
+    logging = logging,
 })
 
 local function resolveNativeConfigPath(pluginGuid)
@@ -39,6 +40,13 @@ function backendFactory.create(opts)
     local nativeConfigPath = type(opts.configPath) == "string" and opts.configPath ~= ""
         and opts.configPath
         or resolveNativeConfigPath(opts.pluginGuid)
+    if type(nativeConfigPath) ~= "string" or nativeConfigPath == "" then
+        logging.violate(
+            "persistent_backend.unavailable",
+            "native config path unavailable for %s; module settings will not persist",
+            tostring(opts.pluginGuid or "unknown plugin")
+        )
+    end
     return nativeBackend.create({
         path = nativeConfigPath,
     })

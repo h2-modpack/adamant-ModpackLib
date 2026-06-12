@@ -31,6 +31,20 @@ local function writeTempConfig(contents)
     return path
 end
 
+local function capturePrints(env, callback)
+    local lines = {}
+    local previousPrint = env.print
+    env.print = function(message)
+        lines[#lines + 1] = message
+    end
+    local ok, err = pcall(callback, lines)
+    env.print = previousPrint
+    if not ok then
+        error(err, 0)
+    end
+    return lines
+end
+
 function TestModuleState_DataDefaults:testUsesBoolStorageDefault()
     local definition = {
         storage = {
@@ -142,6 +156,47 @@ Limit = 3
     file:close()
     os.remove(path)
     lu.assertStrContains(saved, "MyFlag = true")
+end
+
+function TestModuleState_DataDefaults:testWarnsWhenNativeBackendPathCannotResolve()
+    local backendFactory = self.harness.import("core/module_state/persistent/backend_factory.lua", nil, {
+        logging = self.harness.logging,
+        rom = {},
+    })
+
+    local lines = capturePrints(self.harness.env, function()
+        local backend = backendFactory.create({
+            pluginGuid = "test-missing-native-path",
+        })
+        lu.assertNil(backend)
+    end)
+
+    lu.assertEquals(#lines, 1)
+    lu.assertStrContains(lines[1], "[lib] persistent_backend.unavailable:")
+    lu.assertStrContains(lines[1], "test-missing-native-path")
+    lu.assertStrContains(lines[1], "will not persist")
+end
+
+function TestModuleState_DataDefaults:testWarnsWhenNativeBackendCannotSave()
+    local backendMetrics = self.harness.import("core/module_state/persistent/backend_metrics.lua", nil, {
+        logging = self.harness.logging,
+    })
+    local nativeBackend = self.harness.import("core/module_state/persistent/native_backend.lua", nil, {
+        metrics = backendMetrics,
+        logging = self.harness.logging,
+    })
+    local backend = nativeBackend.create({
+        path = self.harness.nativeConfigRoot .. "/missing-parent/config.cfg",
+    })
+    lu.assertNotNil(backend)
+
+    local lines = capturePrints(self.harness.env, function()
+        lu.assertTrue(backend.write("config", "MyFlag", true))
+    end)
+
+    lu.assertEquals(#lines, 1)
+    lu.assertStrContains(lines[1], "[lib] persistent_backend.save_failed:")
+    lu.assertStrContains(lines[1], "may not persist")
 end
 
 function TestModuleState_DataDefaults:testHydrationDoesNotRewriteSemanticallyEqualTableConfig()
