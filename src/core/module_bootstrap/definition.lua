@@ -25,7 +25,7 @@ local BuiltInStorageNodes = {
     { type = "bool", alias = "DebugMode", default = false, hash = false },
     {
         type = "int",
-        alias = "AdamantFramework_PackRestoreSnapshot",
+        alias = "__Modpack_PackRestoreMarker",
         default = 0,
         min = 0,
         max = 2,
@@ -36,7 +36,7 @@ local BuiltInStorageNodes = {
 local BuiltInStorageAliases = {
     Enabled = true,
     DebugMode = true,
-    AdamantFramework_PackRestoreSnapshot = true,
+    __Modpack_PackRestoreMarker = true,
 }
 
 local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
@@ -363,6 +363,7 @@ local function GetStructuralFingerprint(definition, structuralSurface)
 end
 
 local function InjectBuiltInStorage(definition, label)
+    local systemNodes = {}
     if definition.storage == nil then
         definition.storage = {}
     end
@@ -382,8 +383,11 @@ local function InjectBuiltInStorage(definition, label)
     end
 
     for index = #BuiltInStorageNodes, 1, -1 do
-        table.insert(definition.storage, 1, values.deepCopy(BuiltInStorageNodes[index]))
+        local node = values.deepCopy(BuiltInStorageNodes[index])
+        systemNodes[node] = true
+        table.insert(definition.storage, 1, node)
     end
+    return systemNodes
 end
 
 local function collectInternalStorageNodes(nodes, internalNodes, prefix)
@@ -499,13 +503,14 @@ local function prepareDefinition(structuralState, definition, structuralSurface,
 
     local prepared = values.deepCopy(definition)
     local label = GetLabel(prepared)
-    InjectBuiltInStorage(prepared, label)
+    local systemNodes = InjectBuiltInStorage(prepared, label)
     local internalNodes = injectInternalStorage(prepared, internalStorage, label)
     local internalActionKeys = injectInternalActions(prepared, internalActions, label)
 
     ValidateDefinition(prepared, label, internalActionKeys)
     storage.validate(prepared.storage, label, {
         internalNodes = internalNodes,
+        systemNodes = systemNodes,
     })
 
     local fingerprint = GetStructuralFingerprint(prepared, structuralSurface)

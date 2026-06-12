@@ -42,7 +42,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionReturnsPrepare
     lu.assertEquals(prepared.name, "Example")
     lu.assertEquals(prepared.storage[1].alias, "Enabled")
     lu.assertEquals(prepared.storage[2].alias, "DebugMode")
-    lu.assertEquals(prepared.storage[3].alias, "AdamantFramework_PackRestoreSnapshot")
+    lu.assertEquals(prepared.storage[3].alias, "__Modpack_PackRestoreMarker")
     lu.assertEquals(prepared.storage[4].alias, "EnabledFlag")
     lu.assertTrue(prepared._preparedDefinition)
     lu.assertEquals(owner.requiresFullReload, nil)
@@ -91,7 +91,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionInjectsBuiltIn
     lu.assertEquals(prepared.storage[2].alias, "DebugMode")
     lu.assertFalse(prepared.storage[2].default)
     lu.assertFalse(prepared.storage[2].hash)
-    lu.assertEquals(prepared.storage[3].alias, "AdamantFramework_PackRestoreSnapshot")
+    lu.assertEquals(prepared.storage[3].alias, "__Modpack_PackRestoreMarker")
     lu.assertEquals(prepared.storage[3].default, 0)
     lu.assertEquals(prepared.storage[3].min, 0)
     lu.assertEquals(prepared.storage[3].max, 2)
@@ -110,13 +110,13 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsReserve
             },
         })
     end)
-    lu.assertErrorMsgContains("storage alias 'AdamantFramework_PackRestoreSnapshot' is reserved by Lib", function()
+    lu.assertErrorMsgContains("storage alias '__Modpack_PackRestoreMarker' is reserved by Lib", function()
         self.h.managedModule.prepareDefinition({}, {
             modpack = "test-pack",
             id = "Example",
             name = "Example",
             storage = {
-                { type = "int", alias = "AdamantFramework_PackRestoreSnapshot", default = 0, min = 0, max = 2 },
+                { type = "int", alias = "__Modpack_PackRestoreMarker", default = 0, min = 0, max = 2 },
             },
         })
     end)

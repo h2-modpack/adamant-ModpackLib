@@ -285,12 +285,12 @@ function TestModuleRegistry:testPackDisableSuspendsThroughModuleLifecycle()
     lu.assertTrue(ok, tostring(err))
 
     lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(entry, snapshot))
-    lu.assertEquals(exports.liveModule.read("AdamantFramework_PackRestoreSnapshot"), 2)
+    lu.assertEquals(exports.liveModule.read("__Modpack_PackRestoreMarker"), 2)
 
     ok, err = moduleRegistry.snapshot.rollbackPackTransition(entry, receipt, snapshot)
     lu.assertTrue(ok, tostring(err))
     lu.assertTrue(moduleRegistry.snapshot.isEntryEnabled(entry, snapshot))
-    lu.assertEquals(exports.liveModule.read("AdamantFramework_PackRestoreSnapshot"), 0)
+    lu.assertEquals(exports.liveModule.read("__Modpack_PackRestoreMarker"), 0)
 end
 
 function TestModuleRegistry:testMissingDrawTabIsRejectedByLibManagedModuleCreation()

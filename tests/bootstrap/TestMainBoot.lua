@@ -215,7 +215,6 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertEquals(type(h.public.createModule), "function")
     lu.assertNil(h.public.tryCreateModule)
     lu.assertNil(h.public.createSystem)
-    lu.assertNil(h.public.createFrameworkRuntime)
     lu.assertEquals(type(h.public.modpack), "table")
     lu.assertEquals(type(h.public.modpack.registerCoordinator), "function")
     lu.assertEquals(type(h.public.modpack.createPack), "function")
@@ -281,7 +280,6 @@ function TestMainBoot.testMainLoadsBeforeGlobalModUtilReady()
     })
 
     lu.assertEquals(type(h.public.createModule), "function")
-    lu.assertNil(h.public.createFrameworkRuntime)
 end
 
 function TestMainBoot.testMainUsesExpectedBootExternals()

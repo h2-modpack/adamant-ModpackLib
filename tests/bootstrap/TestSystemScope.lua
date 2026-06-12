@@ -12,10 +12,10 @@ function TestSystemScope:tearDown()
 end
 
 function TestSystemScope:testInternalSystemScopeReturnsManagedScope()
-    local system = self.h.createSystem("framework.fallbackHud")
+    local system = self.h.createSystem("modpack.fallbackHud")
 
     lu.assertEquals(type(system), "table")
-    lu.assertEquals(system.getOwnerId(), "framework.fallbackHud")
+    lu.assertEquals(system.getOwnerId(), "modpack.fallbackHud")
     lu.assertEquals(type(system.hooks.define), "function")
     lu.assertEquals(type(system.overlays.define), "function")
 end
@@ -31,8 +31,8 @@ function TestSystemScope:testInternalSystemScopeRejectsInvalidOwnerId()
 end
 
 function TestSystemScope:testSystemScopeIsSeparateFromModuleRegistry()
-    local system = self.h.createSystem("framework.scope")
+    local system = self.h.createSystem("modpack.scope")
 
     lu.assertNil(self.h.moduleRegistry.getRecord(system))
-    lu.assertEquals(system.getOwnerId(), "framework.scope")
+    lu.assertEquals(system.getOwnerId(), "modpack.scope")
 end

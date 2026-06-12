@@ -97,7 +97,7 @@ function TestModuleState_DataDefaults:testNativeBackendHydratesFlatConfigWithout
 [config]
 Enabled = true
 DebugMode = false
-AdamantFramework_PackRestoreSnapshot = 0
+__Modpack_PackRestoreMarker = 0
 MyFlag = false
 MyCount = 8
 

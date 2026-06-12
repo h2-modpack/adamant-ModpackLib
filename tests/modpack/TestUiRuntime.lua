@@ -3,7 +3,7 @@ local lu = require('luaunit')
 TestUiRuntime = {}
 
 local function readPackRestoreMarker(moduleRegistry, entry, snapshot)
-    return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("AdamantFramework_PackRestoreSnapshot")
+    return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("__Modpack_PackRestoreMarker")
 end
 
 function TestUiRuntime:testMasterToggleRollsBackTouchedRuntimeStateOnFailure()
@@ -49,7 +49,7 @@ function TestUiRuntime:testMasterToggleRollsBackTouchedRuntimeStateOnFailure()
             name = "Alpha",
             enabled = false,
             values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
+                __Modpack_PackRestoreMarker = 2,
             },
             storage = {},
             patchPlan = function(plan)
@@ -63,7 +63,7 @@ function TestUiRuntime:testMasterToggleRollsBackTouchedRuntimeStateOnFailure()
             name = "Bravo",
             enabled = false,
             values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
+                __Modpack_PackRestoreMarker = 2,
             },
             storage = {},
             patchPlan = function()
@@ -304,7 +304,7 @@ function TestUiRuntime:testPackEnableRestoresPersistedPackRestoreMarkers()
             name = "Alpha",
             enabled = false,
             values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
+                __Modpack_PackRestoreMarker = 2,
             },
             storage = {},
         },
@@ -314,7 +314,7 @@ function TestUiRuntime:testPackEnableRestoresPersistedPackRestoreMarkers()
             name = "Bravo",
             enabled = false,
             values = {
-                AdamantFramework_PackRestoreSnapshot = 1,
+                __Modpack_PackRestoreMarker = 1,
             },
             storage = {},
         },

@@ -11,7 +11,7 @@ local StorageTypes = storage.types
 local NormalizeInteger = storage.NormalizeInteger
 
 -- Storage schemas are prepared once by prepareDefinition, then treated as
--- runtime-stable metadata by store/staged-state/Framework consumers. Validation is
+-- runtime-stable metadata by store/staged-state/modpack consumers. Validation is
 -- fail-fast: the first structural contract violation stops preparation.
 --
 -- Supported root-axis combinations:
@@ -125,7 +125,16 @@ local function IsTrustedInternalAlias(node, opts)
     return type(node) == "table" and internalNodes ~= nil and internalNodes[node] == true
 end
 
+local function IsTrustedSystemAlias(node, opts)
+    local systemNodes = opts and opts.systemNodes or nil
+    return type(node) == "table" and systemNodes ~= nil and systemNodes[node] == true
+end
+
 local function ValidateAliasIdentifier(node, alias, prefix, opts)
+    if IsTrustedSystemAlias(node, opts) then
+        return
+    end
+
     if IsTrustedInternalAlias(node, opts) then
         if not IsInternalIdentifier(alias) then
             logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",

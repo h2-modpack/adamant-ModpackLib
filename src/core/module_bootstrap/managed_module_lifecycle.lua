@@ -3,7 +3,7 @@ local logging = deps.logging
 local mutation = deps.mutation
 local moduleState = deps.moduleState
 
-local PACK_RESTORE_SNAPSHOT_ALIAS = "AdamantFramework_PackRestoreSnapshot"
+local PACK_RESTORE_MARKER_ALIAS = "__Modpack_PackRestoreMarker"
 local PACK_RESTORE_NONE = 0
 local PACK_RESTORE_DISABLED = 1
 local PACK_RESTORE_ENABLED = 2
@@ -238,12 +238,12 @@ end
 local function makePackTransitionReceipt(persistentState)
     return {
         previousEnabled = persistentState.read("Enabled") == true,
-        previousMarker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS),
+        previousMarker = persistentState.read(PACK_RESTORE_MARKER_ALIAS),
     }
 end
 
 local function stagePackTransitionReceipt(stagedState, receipt)
-    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, receipt and receipt.previousMarker or PACK_RESTORE_NONE)
+    stagedState.write(PACK_RESTORE_MARKER_ALIAS, receipt and receipt.previousMarker or PACK_RESTORE_NONE)
     stagedState.write("Enabled", receipt and receipt.previousEnabled == true)
 end
 
@@ -251,7 +251,7 @@ local function suspendForPackDisable(module, def, mutationBundle, commitNotifier
                                      actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
     local marker = receipt.previousEnabled and PACK_RESTORE_ENABLED or PACK_RESTORE_DISABLED
-    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, marker)
+    stagedState.write(PACK_RESTORE_MARKER_ALIAS, marker)
     local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor, false)
     return ok, err, receipt
@@ -259,7 +259,7 @@ end
 
 local function ensureSuspendedForPackDisable(module, def, mutationBundle, commitNotifier, persistentState, stagedState,
                                              actionBuffer, actionExecutor, sharedEventFlusher, internalActionExecutor)
-    local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
+    local marker = persistentState.read(PACK_RESTORE_MARKER_ALIAS)
     if marker == PACK_RESTORE_NONE or marker == nil then
         return suspendForPackDisable(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
             actionExecutor, sharedEventFlusher, internalActionExecutor)
@@ -276,7 +276,7 @@ end
 local function restoreForPackEnable(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
                                     actionExecutor, sharedEventFlusher, internalActionExecutor)
     local receipt = makePackTransitionReceipt(persistentState)
-    local marker = persistentState.read(PACK_RESTORE_SNAPSHOT_ALIAS)
+    local marker = persistentState.read(PACK_RESTORE_MARKER_ALIAS)
     local target = receipt.previousEnabled
     if marker == PACK_RESTORE_ENABLED then
         target = true
@@ -284,7 +284,7 @@ local function restoreForPackEnable(module, def, mutationBundle, commitNotifier,
         target = false
     end
 
-    stagedState.write(PACK_RESTORE_SNAPSHOT_ALIAS, PACK_RESTORE_NONE)
+    stagedState.write(PACK_RESTORE_MARKER_ALIAS, PACK_RESTORE_NONE)
     local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, persistentState, stagedState, actionBuffer,
         actionExecutor, sharedEventFlusher, internalActionExecutor, target)
     return ok, err, receipt

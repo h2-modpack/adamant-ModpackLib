@@ -3,7 +3,7 @@ local lu = require('luaunit')
 TestUiWindow = {}
 
 local function readPackRestoreMarker(moduleRegistry, entry, snapshot)
-    return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("AdamantFramework_PackRestoreSnapshot")
+    return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("__Modpack_PackRestoreMarker")
 end
 
 function TestUiWindow:testCreateUIUsesPreparedSnapshotForStartupStaging()
