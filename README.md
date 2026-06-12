@@ -44,7 +44,7 @@ state for hooks, overlays, shared events, cache, mutation runtime, and
 structural reload tracking. Declare runtime hooks on `module.hooks.*` before activation.
 `module.activate()` registers the live module for coordinated discovery and installs requested fallback UI.
 Every module definition must declare a stable `id` and display `name`; `modpack`
-is optional and marks modules that participate in Framework coordination.
+is optional and marks modules that participate in Lib modpack coordination.
 
 ## Getting Started
 
@@ -57,10 +57,10 @@ Use the stack entrypoint that matches the job:
 - Create a new pack with
   [`ModpackBootstrap`](https://github.com/h2-modpack/ModpackBootstrap).
 - Add modules to an existing pack with
-  `python ModpackTools/new_module/create.py --package-id My_Module --title "My Module"`.
+  `ModpackTools/run ModpackTools/new_module/create.py --package-id My_Module --title "My Module"`.
 - Start standalone module code from
   [`ModpackModuleTemplate`](https://github.com/h2-modpack/ModpackModuleTemplate).
-- Validate a full shell workspace with `python ModpackTools/test_all.py`.
+- Validate a full shell workspace with `ModpackTools/run ModpackTools/test_all.py`.
 
 ## Docs
 
@@ -76,13 +76,21 @@ Module authors:
 - [API.md](API.md)
   Public namespaces, functions, and data contracts.
 
+Modpack authors:
+- [docs/modpack-authors/COORDINATOR_GUIDE.md](docs/modpack-authors/COORDINATOR_GUIDE.md)
+  Coordinator bootstrap, discovery, and GUI wiring through `lib.modpack`.
+- [docs/modpack-authors/QUICK_SETUP.md](docs/modpack-authors/QUICK_SETUP.md)
+  Coordinator and module Quick Setup rendering contract.
+- [docs/modpack-authors/HASH_PROFILE_ABI.md](docs/modpack-authors/HASH_PROFILE_ABI.md)
+  Hash/profile compatibility rules for shipped modules and profiles.
+
 Lib contributors:
 - [CONTRIBUTING.md](CONTRIBUTING.md)
   Contributor expectations for changing the public Lib contract.
 - [docs/lib-contributors/LIB_INTERNALS.md](docs/lib-contributors/LIB_INTERNALS.md)
   Internal composition, dependency flow, runtime anchors, and service-surface rules.
 - [docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md](docs/lib-contributors/HOT_RELOAD_ARCHITECTURE.md)
-  Stack hot-reload contract for Lib, Framework, coordinators, and coordinated modules.
+  Stack hot-reload contract for Lib, coordinators, and coordinated modules.
 - [docs/lib-contributors/TESTING.md](docs/lib-contributors/TESTING.md)
   Lib and repo-level validation workflow.
 
@@ -108,7 +116,7 @@ Reference and historical notes:
 
 Common top-level helpers:
 - `lib.createModule(...)`
-- `lib.createFrameworkRuntime(...)`
+- `lib.modpack.*`
 
 Most authors start with `lib.createModule(...)`. It returns `nil, err`
 instead of throwing when construction fails, so invalid modules can be logged

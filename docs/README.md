@@ -13,6 +13,15 @@ Choose the path that matches the work.
 
 Use this path when building a module or modpack feature on top of Lib.
 
+## Modpack Authors
+
+- [modpack-authors/COORDINATOR_GUIDE.md](modpack-authors/COORDINATOR_GUIDE.md)
+- [modpack-authors/QUICK_SETUP.md](modpack-authors/QUICK_SETUP.md)
+- [modpack-authors/HASH_PROFILE_ABI.md](modpack-authors/HASH_PROFILE_ABI.md)
+
+Use this path when building or maintaining a coordinator package that calls
+`lib.modpack`.
+
 ## Lib Contributors
 
 - [lib-contributors/LIB_INTERNALS.md](lib-contributors/LIB_INTERNALS.md)

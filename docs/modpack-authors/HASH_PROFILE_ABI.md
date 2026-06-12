@@ -1,0 +1,201 @@
+# Hash And Profile ABI
+
+This document defines the compatibility contract for Lib modpack hashing and
+profile storage.
+
+If a change alters:
+
+- how a module is identified
+- how a persisted storage field is keyed
+- how defaults are interpreted
+- how a value is serialized
+
+treat it as ABI work, not cleanup.
+
+## Scope
+
+Covered data:
+
+- shared hashes created by `lib.modpack`
+- coordinator profile slots stored in coordinator config
+- discovered coordinated modules
+
+For UI and live-module behavior, use [COORDINATOR_GUIDE.md](COORDINATOR_GUIDE.md).
+
+## Canonical Format
+
+Lib modpack encodes config state into a canonical key-value string:
+
+```text
+_v=3|ModuleId=1|ModuleId.alias=value
+```
+
+Properties:
+
+- `_v` is the hash format version and must be present
+- keys are sorted alphabetically before final serialization
+- only non-default values are encoded
+- unknown or malformed loose segments are ignored on decode when they do not
+  target a known setting
+- missing keys decode to current defaults
+- keys and values are token-escaped before joining with `=` and `|`
+
+`ModuleId=1` is the Lib-injected `Enabled` alias encoded as module enable
+state. Lib modpack does not also emit `ModuleId.Enabled`.
+
+The same string is used for:
+
+- portable sharing
+- local coordinator profile slots
+
+### Token Escaping
+
+The canonical string uses `=` between each key/value pair and `|` between
+entries. Literal reserved characters inside keys or values are escaped before
+serialization:
+
+| Raw character | Encoded token |
+| --- | --- |
+| `%` | `%25` |
+| `|` | `%7C` |
+| `=` | `%3D` |
+
+Encoding applies to token contents only. The envelope delimiters remain raw:
+
+```text
+ModuleId.Filter=Apollo%7CZeus%3DPoseidon%25Chaos
+```
+
+decodes to:
+
+```text
+ModuleId.Filter = Apollo|Zeus=Poseidon%Chaos
+```
+
+Always encode `%` before other reserved characters, and decode after splitting
+the canonical string into entries. This keeps persisted string storage values
+safe when they contain hash delimiters.
+
+## Frozen ABI Surface
+
+Treat the following as frozen after release unless you are doing deliberate
+compatibility work:
+
+- module `id`
+- module `name` for user-facing module identity
+- persisted storage root `alias`
+- storage `default`
+- storage type `toHash(...)`
+- storage type `fromHash(...)`
+
+These are the wire format.
+
+## Why Each One Matters
+
+### Module `id`
+
+Module enable state is encoded under the module id.
+
+Changing:
+
+```lua
+id = "OldName"
+```
+
+to:
+
+```lua
+id = "NewName"
+```
+
+moves the module into a new hash namespace.
+
+### Module `name`
+
+Lib requires every module to declare a display name. Lib modpack uses it for
+module UI labels when `shortName` is absent and for diagnostics. Changing it
+does not move hash keys, but it is still user-facing metadata and should be
+treated as intentional UI compatibility work.
+
+### Storage root `alias`
+
+Storage values are encoded under:
+
+```text
+ModuleId.alias=value
+```
+
+`alias` is the hash key.
+
+Lib also uses `alias` as the managed persistence key for ordinary storage roots.
+Aliases are direct flat storage identifiers.
+
+Only roots with `hash ~= false` participate in hash/profile serialization.
+
+Exception: Lib injects `Enabled` as normal prepared storage, but Lib modpack
+serializes it through the module-level `ModuleId=1` key so module enabled state
+keeps the historical hash format. Lib-injected `DebugMode` has `hash = false`.
+
+### `default`
+
+Lib modpack only encodes non-default values.
+
+Changing a default is a compatibility change even if the field name stays the
+same.
+
+### `toHash(...)` / `fromHash(...)`
+
+Field type serialization is part of the wire format.
+
+Changing:
+
+- accepted strings
+- normalization rules
+- numeric formatting
+- fallback behavior
+
+can change how existing hashes decode or what future hashes look like.
+
+Token escaping is also part of the wire envelope. Storage type codecs should
+return their logical token value; Lib modpack owns escaping delimiters in the
+outer key/value format.
+
+## Decode Behavior
+
+Lib modpack provides these decode guarantees:
+
+- exact hash format version check on decode
+- malformed loose segments are ignored
+- unknown module namespaces are ignored
+- unknown keys under known module namespaces are ignored during apply
+- missing keys fall back to defaults
+- invalid module enable tokens fail the import and roll back
+- invalid scalar/table storage tokens for known storage roots fail the import
+  and roll back
+- saved coordinator profiles are audited at `Modpack.createPack(...)` and warn
+  on unknown field keys inside known module namespaces
+
+Module authors own compatibility plans for:
+
+- renamed module ids
+- renamed aliases
+- changed defaults
+- changed encoding semantics
+
+## Shipped-Module Invariants
+
+Once a module is publicly shipped, the following are part of its ABI and should
+be treated as stable:
+
+- module `id` - identifies the module in hashes and profiles
+- persisted storage root `alias` names - identify values within a module's
+  namespace
+- storage defaults - consumed when a persisted value is absent
+
+Changing any of these is a compatibility event and requires an explicit
+compatibility plan.
+
+## Related Docs
+
+- [COORDINATOR_GUIDE.md](COORDINATOR_GUIDE.md)
+- [QUICK_SETUP.md](QUICK_SETUP.md)
