@@ -64,7 +64,7 @@ jobs:
           lua tests/all.lua
 
       - name: Prepare release files
-        run: python .modpacktools/github/prepare_package_release.py --tag '${{ inputs.tag }}' --allow-empty
+        run: python .modpacktools/github/prepare_package_release.py --tag '${{ inputs.tag }}' --allow-empty --release-notes-output .release-notes.md
 
       - name: Install Thunderstore CLI
         run: dotnet tool install -g tcli
@@ -95,7 +95,7 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add ${{ env.changelog }} ${{ env.thunderstore-config }}
-          git commit --message "Release ${{ inputs.tag }}"
+          git commit --message "chore(release): ${{ inputs.tag }}"
           git tag ${{ inputs.tag }} --annotate --message "Release ${{ inputs.tag }}"
           git push origin HEAD:${{ github.ref_name }} --tags
 
@@ -106,6 +106,7 @@ jobs:
             '${{ inputs.tag }}' \
             '${{ env.artifact-path }}' \
             --title '${{ inputs.tag }}' \
+            --notes-file '.release-notes.md' \
             --repo '${{ github.repository }}' \
             --target '${{ github.ref_name }}' \
             --verify-tag
