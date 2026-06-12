@@ -13,6 +13,7 @@ on:
 
 permissions:
   contents: write # required for pushing to the repository and creating releases
+  actions: read # required for checking CI status before release
 
 env:
   changelog: CHANGELOG.md
@@ -32,6 +33,26 @@ jobs:
             exit 1
           fi
 
+      - name: Verify CI passed for release commit
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+        run: |
+          ci_run=$(gh run list \
+            --repo "$REPO" \
+            --workflow "ci.yaml" \
+            --commit "$SHA" \
+            --status success \
+            --limit 1 \
+            --json databaseId \
+            --jq '.[0].databaseId')
+          if [ -z "$ci_run" ]; then
+            echo "::error title=CI has not passed::No successful ci.yaml run was found for $SHA. Push the commit and wait for CI before releasing."
+            exit 1
+          fi
+          echo "Found successful CI run $ci_run for $SHA."
+
       - name: Checkout files
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
@@ -44,24 +65,6 @@ jobs:
           repository: h2-modpack/ModpackTools
           path: .modpacktools
           ref: main
-
-      - name: Setup Lua
-        uses: leafo/gh-actions-lua@v10
-        with:
-          luaVersion: "5.2"
-
-      - name: Setup Luarocks
-        uses: leafo/gh-actions-luarocks@v4
-
-      - name: Install validation tools
-        run: |
-          luarocks install luacheck
-          luarocks install luaunit
-
-      - name: Validate package sources
-        run: |
-          luacheck src/
-          lua tests/all.lua
 
       - name: Prepare release files
         run: python .modpacktools/github/prepare_package_release.py --tag '${{ inputs.tag }}' --allow-empty --release-notes-output .release-notes.md
