@@ -4,7 +4,7 @@ local hashCodec = deps.hashCodec
 local logging = deps.logging
 
 local function createConfigHash(moduleRegistry, config, packId, storage)
-    local HASH_VERSION = 2
+    local HASH_VERSION = 3
     local ConfigHash = {}
 
     local function readPersisted(entry, key, snapshot)

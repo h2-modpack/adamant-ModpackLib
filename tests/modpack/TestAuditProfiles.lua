@@ -36,7 +36,7 @@ function TestAuditProfiles:testKnownStorageAliasesProduceNoWarnings()
     -- SpecialBiome is not a registered module; its hash keys are an unknown namespace and
     -- should be silently ignored (not installed vs. renamed are indistinguishable).
     ModpackTestApi.auditSavedProfiles("test-pack", {
-        { Name = "Known", Hash = "_v=2|GodPool=1|GodPool.EnabledFlag=1|SpecialBiome=1|SpecialBiome.Mode=Chaos", Tooltip = "" },
+        { Name = "Known", Hash = "_v=3|GodPool=1|GodPool.EnabledFlag=1|SpecialBiome=1|SpecialBiome.Mode=Chaos", Tooltip = "" },
     }, moduleRegistry)
 
     lu.assertEquals(#Warnings, 0)
@@ -53,7 +53,7 @@ function TestAuditProfiles:testUnknownKeyInKnownNamespaceWarns()
     })
 
     ModpackTestApi.auditSavedProfiles("test-pack", {
-        { Name = "Broken", Hash = "_v=2|GodPool.MissingField=1", Tooltip = "" },
+        { Name = "Broken", Hash = "_v=3|GodPool.MissingField=1", Tooltip = "" },
     }, moduleRegistry)
 
     lu.assertEquals(#Warnings, 1)
@@ -71,7 +71,7 @@ function TestAuditProfiles:testMalformedLooseSegmentsDoNotWarn()
     })
 
     ModpackTestApi.auditSavedProfiles("test-pack", {
-        { Name = "Loose", Hash = "_v=2|LooseSegment|GodPool.EnabledFlag=1", Tooltip = "" },
+        { Name = "Loose", Hash = "_v=3|LooseSegment|GodPool.EnabledFlag=1", Tooltip = "" },
     }, moduleRegistry)
 
     lu.assertEquals(#Warnings, 0)
@@ -88,7 +88,7 @@ function TestAuditProfiles:testBuiltInEnabledAliasWarnsBecauseDecoderUsesModuleK
     })
 
     ModpackTestApi.auditSavedProfiles("test-pack", {
-        { Name = "Stale", Hash = "_v=2|GodPool=1|GodPool.Enabled=1", Tooltip = "" },
+        { Name = "Stale", Hash = "_v=3|GodPool=1|GodPool.Enabled=1", Tooltip = "" },
     }, moduleRegistry)
 
     lu.assertEquals(#Warnings, 1)
@@ -106,7 +106,7 @@ function TestAuditProfiles:testUnknownNamespaceIsIgnored()
     })
 
     ModpackTestApi.auditSavedProfiles("test-pack", {
-        { Name = "Foreign", Hash = "_v=2|UnknownModule.Field=1", Tooltip = "" },
+        { Name = "Foreign", Hash = "_v=3|UnknownModule.Field=1", Tooltip = "" },
     }, moduleRegistry)
 
     lu.assertEquals(#Warnings, 0)

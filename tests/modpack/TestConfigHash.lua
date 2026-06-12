@@ -33,7 +33,7 @@ function TestConfigHashStorage:testAllDefaultsProduceVersionOnlyCanonical()
 
     local canonical = makeConfigHash(moduleRegistry).GetConfigHash()
 
-    lu.assertEquals(canonical, "_v=2")
+    lu.assertEquals(canonical, "_v=3")
 end
 
 function TestConfigHashStorage:testRegularAndSpecialStorageRoundTrip()
@@ -202,7 +202,7 @@ function TestConfigHashStorage:testApplyConfigHashRollsBackWhenEnableFails()
     local module = moduleRegistry.modulesById.GodPool
     local liveModule = moduleRegistry.live.getLiveModule(module)
 
-    local ok = configHash.ApplyConfigHash("_v=2|GodPool=1|GodPool.EnabledFlag=1")
+    local ok = configHash.ApplyConfigHash("_v=3|GodPool=1|GodPool.EnabledFlag=1")
 
     lu.assertFalse(ok)
     lu.assertFalse(liveModule.read("Enabled"))
@@ -244,7 +244,7 @@ function TestConfigHashStorage:testApplyConfigHashRollsBackWhenFlushFails()
     local godPoolLiveModule = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool)
     failApply = true
 
-    local ok = configHash.ApplyConfigHash("_v=2|BiomeControl.Mode=Chaos|GodPool=1|GodPool.EnabledFlag=1")
+    local ok = configHash.ApplyConfigHash("_v=3|BiomeControl.Mode=Chaos|GodPool=1|GodPool.EnabledFlag=1")
 
     lu.assertFalse(ok)
     lu.assertEquals(biomeLiveModule.read("Mode"), "Vanilla")
@@ -291,7 +291,7 @@ function TestConfigHashStorage:testApplyConfigHashRejectsInvalidModuleEnableToke
     local configHash = makeConfigHash(moduleRegistry)
     local liveModule = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool)
 
-    local ok = configHash.ApplyConfigHash("_v=2|GodPool=enabled|GodPool.EnabledFlag=1")
+    local ok = configHash.ApplyConfigHash("_v=3|GodPool=enabled|GodPool.EnabledFlag=1")
 
     lu.assertFalse(ok)
     lu.assertFalse(liveModule.read("Enabled"))
@@ -315,7 +315,7 @@ function TestConfigHashStorage:testApplyConfigHashRejectsInvalidScalarStorageTok
     local configHash = makeConfigHash(moduleRegistry)
     local liveModule = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool)
 
-    local ok = configHash.ApplyConfigHash("_v=2|GodPool.Count=not-a-number")
+    local ok = configHash.ApplyConfigHash("_v=3|GodPool.Count=not-a-number")
 
     lu.assertFalse(ok)
     lu.assertEquals(liveModule.read("Count"), 3)
@@ -347,7 +347,7 @@ function TestConfigHashStorage:testApplyConfigHashRejectsInvalidTableStorageToke
     local configHash = makeConfigHash(moduleRegistry)
     local liveModule = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool)
 
-    local ok = configHash.ApplyConfigHash("_v=2|GodPool.Rows=not-a-table")
+    local ok = configHash.ApplyConfigHash("_v=3|GodPool.Rows=not-a-table")
 
     lu.assertFalse(ok)
     lu.assertEquals(liveModule.read("Rows"), {})
@@ -374,7 +374,7 @@ function TestConfigHashStorage:testApplyConfigHashIgnoresMalformedLooseSegmentsA
     local liveModule = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool)
 
     local ok = configHash.ApplyConfigHash(
-        "_v=2|LooseSegment|GodPool=1|UnknownModule.Mode=Chaos|GodPool.MissingField=bad|GodPool.EnabledFlag=1"
+        "_v=3|LooseSegment|GodPool=1|UnknownModule.Mode=Chaos|GodPool.MissingField=bad|GodPool.EnabledFlag=1"
     )
 
     lu.assertTrue(ok)
