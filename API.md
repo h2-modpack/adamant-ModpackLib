@@ -4,7 +4,7 @@ This is the public Lib surface.
 
 Preferred usage uses top-level module authoring helpers plus namespaces for specialized APIs:
 - `lib.createModule(...)`
-- `lib.createFrameworkRuntime(...)`
+- `lib.modpack.*`
 - `module.fallbackUi.*`
 - `module.hooks.*`
 - `module.controls.*`
@@ -12,9 +12,8 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `module.shared.*`
 - `module.mutation.*`
 
-Framework-owned live-module discovery, hash/profile, overlay, UI suppression, and
-diagnostic controls are available from
-`lib.createFrameworkRuntime("adamant-ModpackFramework")`.
+Coordinator-owned discovery, hash/profile, HUD, and shared pack UI behavior are
+available from `lib.modpack`.
 
 ## Core Model
 
@@ -42,9 +41,55 @@ activation:
 That module owns:
 - `drawTab`
 - optional `drawQuickContent`
-- built-in module registry helpers for Framework and fallback UI
+- built-in module registry helpers for Lib modpack and fallback UI
 
 Module behavior is hosted through Lib's live module registry.
+
+## `lib.modpack`
+
+Coordinator-facing pack orchestration. Use this from coordinator packages, not
+from ordinary module code.
+
+```lua
+local lib = rom.mods["adamant-ModpackLib"]
+local Modpack = lib.modpack
+
+Modpack.registerCoordinator(PACK_ID, "My Modpack", config, rebuildModpack)
+
+local ok = Modpack.createPack(PACK_ID, config, #config.Profiles, defaultProfiles, {
+    moduleOrder = {
+        "ExampleModule",
+    },
+    drawPackQuickContent = drawPackQuickContent,
+})
+
+local callbacks = Modpack.createGuiCallbacks(PACK_ID)
+rom.gui.add_imgui(callbacks.render)
+rom.gui.add_always_draw_imgui(callbacks.alwaysDraw)
+rom.gui.add_to_menu_bar(callbacks.menuBar)
+```
+
+Surface:
+
+- `lib.modpack.registerCoordinator(packId, displayName, config, rebuildCallback?)`
+- `lib.modpack.createPack(packId, config, numProfiles, defaultProfiles, opts?)`
+- `lib.modpack.createGuiCallbacks(packId)`
+
+`config` must contain `ModEnabled`, `DebugMode`, and `Profiles` for
+`createPack(...)`. `registerCoordinator(...)` only needs `ModEnabled` because it
+also supports clearing registration with `nil` config.
+
+`opts` supports:
+
+- `moduleOrder`: ordered module ids pinned first in the sidebar
+- `drawPackQuickContent(ctx)`: coordinator-owned Quick Setup renderer
+- `hideHashMarker`: hides the HUD hash marker without disabling the pack UI
+
+`createPack(...)` returns `ok, pack, err`. It logs construction failures and
+returns `false, nil, err` instead of throwing to the coordinator.
+
+For the coordinator contract, Quick Setup, and hash/profile ABI, use
+[docs/modpack-authors/README.md](docs/modpack-authors/README.md).
 
 ## `module.controls`
 
@@ -371,11 +416,11 @@ host.setDebugMode(enabled)
 
 Normal modules should let `createModule(...)` and the module own enabled/debug
 transitions. Ordinary draw-code edits stay staged and commit through the
-module/framework flow.
+module host flow.
 
 `Enabled` and `DebugMode` are ordinary prepared storage aliases injected by Lib.
 Do not declare them in module storage or module `config.lua`.
-`Enabled` is the module behavior toggle. Framework serializes it through the
+`Enabled` is the module behavior toggle. Lib modpack serializes it through the
 module-level hash key. `DebugMode` is diagnostic-only and has `hash = false`.
 
 `runtime.data.read(alias, ...)` is syntax sugar for `runtime.data.get(alias):read(...)`.
@@ -392,8 +437,8 @@ Rules:
 - status declares through `module.status.define(...)` and writes through `runtime.status`
 - draw code reads status through `ui.status`
 - status cannot participate in hashes
-- enabled toggles should write through the module/framework flow
-- debug toggles should write through the module/framework flow
+- enabled toggles should write through the module host flow
+- debug toggles should write through the module host flow
 - profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
 - transient aliases are read from `ui.data` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
@@ -456,8 +501,8 @@ Table handles:
 - `runtime.status.write(alias, ...)` writes scalar roots, packed child aliases, or table cells
 - `runtime.status.reset(alias, ...)` resets scalar roots, packed child aliases, table roots, or table cells
 - `tableHandle:get(rowIndex, alias)` returns a row-cell `StorageField`
-- full internal stores expose `store.table(alias)` for framework plumbing
-- full internal staged-state objects expose `stagedState.table(alias)` for framework plumbing
+- full internal stores expose `store.table(alias)` for Lib plumbing
+- full internal staged-state objects expose `stagedState.table(alias)` for Lib plumbing
 - table handles are object methods; call them with colon syntax such as `tiers:read(rowIndex, alias)`
 - row aliases can address scalar row roots, packed row roots, or packed child aliases
 - `snapshot(rowIndex)` returns a copied row table
@@ -485,7 +530,7 @@ Reserved aliases:
 
 ### `stagedState`
 
-Managed staged UI state for the module. This is a Lib/Framework plumbing
+Managed staged UI state for the module. This is Lib-owned plumbing
 object; module draw callbacks receive the narrower `ui.data` adapter below.
 
 Internal surface:
@@ -500,7 +545,7 @@ Internal surface:
 - `stagedState.isDirty()`
 - `stagedState.auditMismatches()`
 
-Framework plumbing methods:
+Internal plumbing methods:
 - `stagedState._flushToConfig()`
 - `stagedState._reloadFromConfig()`
 - `stagedState._captureDirtyConfigSnapshot()`
@@ -561,9 +606,9 @@ Options:
 
 ### Live module `resetAll(opts?)`
 
-Framework/runtime orchestration can reset a live managed module directly through
-the live-module object returned by Lib's Framework runtime lookup. This is not
-part of the module-author facade returned by `lib.createModule(...)`.
+Modpack/runtime orchestration can reset a live managed module directly through
+the live-module object published by Lib activation. This is not part of the
+module-author facade returned by `lib.createModule(...)`.
 
 It resets changed UI-owned and status storage roots back to their defaults
 for the live module.
@@ -672,9 +717,9 @@ When `module.activate()` runs, activation installs the declarations currently
 recorded on `module.hooks` and deactivates hooks omitted by a later module
 instance for the same module owner id.
 
-## `module.overlays` And `frameworkRuntime.overlays`
+## `module.overlays`
 
-Module-scoped overlays and Framework-scoped retained HUD projections for shared overlay placement.
+Module-scoped retained HUD projections for shared overlay placement.
 
 Overlay visibility has two layers:
 - Lib applies a global game-HUD gate, currently based on `ShowingCombatUI`.
@@ -682,19 +727,18 @@ Overlay visibility has two layers:
 - Lib-hosted ImGui configuration windows acquire a UI suppression token while
   open. Any active token hides the entire overlay layer until released.
 
-When the global gate is closed, lib hides all retained overlay components even if their own `visible` callback returns true. Text callbacks may still be refreshed so the display is fresh when the game HUD returns.
+When the global gate is closed, Lib hides all retained overlay components even if their own `visible` callback returns true. Text callbacks may still be refreshed so the display is fresh when the game HUD returns.
 
-Framework and fallback module UIs use this gate so configuration UI and
+Lib modpack and fallback module UIs use this gate so configuration UI and
 gameplay overlays are mutually exclusive on screen.
 
 Managed region:
-- `middleRightStack`: a right-anchored vertical stack used for framework markers and module status text.
+- `middleRightStack`: a right-anchored vertical stack used for pack markers and module status text.
 
 Order bands:
 - `module.overlays.order.framework`
 - `module.overlays.order.module`
 - `module.overlays.order.debug`
-- `frameworkRuntime.overlays.order.*` exposes the same shared bands for Framework overlays.
 
 ### Module `module.overlays`
 
@@ -800,98 +844,13 @@ callback object. The retained overlay projection exposes named retained updates:
 - `overlay.refreshRegion(region)`
 - `overlay.refreshAll()`
 
-### `frameworkRuntime.overlays.define(packId, name, register)`
-
-Declares narrow retained HUD lines for one Framework-owned pack overlay scope.
-The `packId` and `name` are combined into a retained owner id, so one Framework
-runtime can own separate pack surfaces such as `hud` without sharing one
-retained overlay owner.
-The registrar supports `createLine(...)` and
-`onCommit(...)`; module-only projection events such as `onInterval(...)` and
-`afterHook(...)` are intentionally not exposed.
-
-```lua
-local frameworkRuntime = lib.createFrameworkRuntime("adamant-ModpackFramework")
-
-frameworkRuntime.overlays.define("pack", "hud", function(overlays)
-    overlays.createLine("hash", {
-        region = "middleRightStack",
-        order = frameworkRuntime.overlays.order.framework,
-        minWidth = 120,
-    })
-end)
-```
-
-Overlay UI suppression is not a public module-author API. Framework uses
-`lib.createFrameworkRuntime(...).ui`, and Lib fallback UI windows use the
-internal overlay service.
-
-## `frameworkRuntime.diagnostics`
-
-Framework-only diagnostics controls returned by
-`lib.createFrameworkRuntime("adamant-ModpackFramework")`.
-
-### `frameworkRuntime.diagnostics.isLibDebugEnabled()`
-
-Returns whether Lib internal diagnostic warnings are enabled.
-
-### `frameworkRuntime.diagnostics.setLibDebugEnabled(enabled)`
-
-Sets Lib internal diagnostic warnings. `enabled` must be a boolean.
-
-## `frameworkRuntime.coordinator`
-
-Framework-only coordinator registration helpers returned by
-`lib.createFrameworkRuntime("adamant-ModpackFramework")`.
-
-### `frameworkRuntime.coordinator.register(packId, config)`
-
-Registers coordinator config for a pack. `config` may be `nil` to clear the
-registration.
-
-### `frameworkRuntime.coordinator.registerRebuild(packId, callback)`
-
-Registers the Framework rebuild callback used when coordinated module structure
-changes. `callback` may be `nil` to clear the callback.
-
-### `frameworkRuntime.coordinator.isRegistered(packId)`
-
-Returns whether a pack id is registered.
-
-## `frameworkRuntime.hashing`
-
-Framework-only hash/profile serialization helpers returned by
-`lib.createFrameworkRuntime("adamant-ModpackFramework")`.
-
-### `frameworkRuntime.hashing.getRoots(storage)`
-
-Returns prepared root nodes that participate in hash/profile serialization.
-The returned nodes are read-only metadata owned by Lib storage preparation; callers must not mutate them.
-
-### `frameworkRuntime.hashing.valuesEqual(node, a, b)`
-
-Storage-aware equality helper for comparing persisted/hash values.
-
-### `frameworkRuntime.hashing.toHash(node, value)`
-
-Encodes one storage value for hash/profile serialization.
-
-### `frameworkRuntime.hashing.fromHash(node, str)`
-
-Decodes one storage value from hash/profile serialization.
-
-### `frameworkRuntime.hashing.isHashTokenValid(node, str)`
-
-Returns whether one serialized hash/profile token is syntactically valid for a prepared storage node.
-Use this at external hash/profile import boundaries before calling `fromHash(...)`.
-
-Enabled/debug transitions, activation-time mutation sync, and staged-state commit/resync are live-module responsibilities. Framework uses the live module surface (`module.setEnabled`, `module.setDebugMode`, `module.flush`, `module.resync`) instead of calling internals directly.
-Framework-owned pack suspension is also a live-module lifecycle responsibility; Framework uses `module.suspendForPackDisable`, `module.restoreForPackEnable`, and `module.rollbackPackTransition` so Lib can keep its internal restore marker private.
+Pack HUD overlays and overlay suppression are owned internally by Lib modpack.
+Overlay UI suppression is not a public module-author API.
 
 ## `module.fallbackUi`
 
 Fallback UI provides the module-owned ROM GUI callsites used when a module is
-not being coordinated by Framework.
+not being coordinated by Lib modpack.
 
 ### `module.fallbackUi.attachGuiOnce(register)`
 
@@ -918,20 +877,6 @@ Behavior:
   - `Debug Mode`
   - `Resync State`
 - then runs the live module's draw-and-commit lifecycle when the module is enabled
-
-## `frameworkRuntime.modules`
-
-Framework-only live module discovery returned by
-`lib.createFrameworkRuntime("adamant-ModpackFramework")`.
-
-### `frameworkRuntime.modules.getLiveModule(pluginGuid)`
-
-Returns the managed module registered by module activation, or `nil` when
-the plugin guid is invalid or no live module is registered.
-
-This is infrastructure API for Framework discovery. Normal module code should
-keep the module object returned by `lib.createModule(...)` and use runtime/UI
-callback arguments for data access.
 
 ## Draw Actions
 

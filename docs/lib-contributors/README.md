@@ -24,11 +24,11 @@ otherwise.
 Use these terms consistently in contributor docs and implementation notes:
 
 - `ManagedModule`: the full Lib object created by `managedModule.create(...)`. It is
-  the Framework/runtime surface for discovery, draw dispatch, staged writes,
+  the Lib runtime surface for discovery, draw dispatch, staged writes,
   commit, enable/disable, mutation apply/revert, activation, rollback, and live
   module publication.
 - `live module`: an activated `ManagedModule` published in Lib's live-module
-  registry and consumed by Framework or fallback UI.
+  registry and consumed by Lib modpack or fallback UI.
 - `AuthorModule`: the module-facing declaration facade returned by
   `lib.createModule(...)`. It exposes author-safe identity, metadata,
   declaration namespaces, activation, and logging.
@@ -37,7 +37,7 @@ Use these terms consistently in contributor docs and implementation notes:
   namespaces.
 - `lifecycle`: a responsibility of `ManagedModule`, not the canonical type name.
 
-Runtime identity uses `pluginGuid`. Pack id and module id are Lib/Framework
+Runtime identity uses `pluginGuid`. Pack id and module id are Lib modpack
 domain metadata used for coordination, profiles, hashes, labels, and debug
 translation. The low-level `lib_bootstrap/registry` service owns Lib's
 hot-reload-stable root buckets. The module bucket currently includes live-module
@@ -53,9 +53,9 @@ receive an explicit `ownerId` from the managed system scope.
 System scopes are Lib-created owner objects for first-party behavior that is
 not owned by a managed module. They close over explicit owner ids and do not own
 managed module records. System owner ids must be deliberately scoped, such as
-`adamant-lib.overlays.renderer` or `adamant-framework.<pack>.hud`, so they do
+`adamant-lib.overlays.renderer` or `adamant-lib.modpack.<pack>.hud`, so they do
 not collide with module plugin guids or with other system capabilities.
 
-Module author docs call the returned `AuthorModule` `module`. Framework and
-Lib contributor docs should say `ManagedModule` or `live module` when they mean
-the full runtime surface.
+Module author docs call the returned `AuthorModule` `module`. Contributor docs
+should say `ManagedModule` or `live module` when they mean the full runtime
+surface.

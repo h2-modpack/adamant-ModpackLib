@@ -1,7 +1,6 @@
 # Getting Started
 
-This guide is for first-time module authors using adamant ModpackLib and
-ModpackFramework.
+This guide is for first-time module authors using adamant ModpackLib.
 
 For exact API types, use [API.md](../../API.md). For the fuller contract, use
 [MODULE_AUTHORING.md](MODULE_AUTHORING.md). For the state ownership model, use
@@ -16,13 +15,12 @@ exists.
 
 For a new pack, use
 [`ModpackBootstrap`](https://github.com/h2-modpack/ModpackBootstrap). It creates
-the shell repo, coordinator package, shared Lib/Framework submodules, and
-`ModpackTools/`.
+the shell repo, coordinator package, shared Lib submodule, and `ModpackTools/`.
 
 For a new module in an existing pack, run this from the shell repo root:
 
 ```bash
-python ModpackTools/new_module/create.py --package-id My_Module --title "My Module"
+ModpackTools/run ModpackTools/new_module/create.py --package-id My_Module --title "My Module"
 ```
 
 That command scaffolds from
