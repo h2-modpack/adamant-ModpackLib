@@ -10,6 +10,10 @@ on:
       is-dry-run:
         description: "Dry-run (do not publish, only test build)"
         type: boolean
+      tools-ref:
+        description: "ModpackTools ref used by release scripts"
+        required: false
+        default: "release-tools-2026-06-12"
 
 permissions:
   contents: write # required for pushing to the repository and creating releases
@@ -64,7 +68,7 @@ jobs:
         with:
           repository: h2-modpack/ModpackTools
           path: .modpacktools
-          ref: main
+          ref: ${{ inputs['tools-ref'] }}
 
       - name: Prepare release files
         run: python .modpacktools/github/prepare_package_release.py --tag '${{ inputs.tag }}' --allow-empty --release-notes-output .release-notes.md
