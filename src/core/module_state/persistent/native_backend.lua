@@ -49,11 +49,6 @@ local function getTableRowRoots(node)
     return rawget(rowSchema, "_rootNodes") or {}
 end
 
-local function splitPath(path)
-    local section, key = string.match(path, "^(.*)%.([^%.]+)$")
-    return section, key
-end
-
 local function unescapeString(value)
     value = string.gsub(value, "\\n", "\n")
     value = string.gsub(value, '\\"', '"')

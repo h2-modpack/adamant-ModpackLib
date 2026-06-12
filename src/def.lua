@@ -519,9 +519,24 @@ local lib = {}
 ---@field alwaysDraw fun() Always-draw callback for `rom.gui.add_always_draw_imgui(...)`.
 ---@field menuBar fun() Menu-bar callback for `rom.gui.add_to_menu_bar(...)`.
 
+---@alias AdamantModpackLib.RegisterCoordinatorFn fun(
+---  packId: string,
+---  displayName: string,
+---  config: AdamantModpackLib.ModpackConfig?,
+---  rebuildCallback?: fun(reason: table): boolean
+---): boolean
+
+---@alias AdamantModpackLib.CreatePackFn fun(
+---  packId: string,
+---  config: AdamantModpackLib.ModpackConfig,
+---  numProfiles: integer,
+---  defaultProfiles: table,
+---  opts?: AdamantModpackLib.ModpackOpts
+---): boolean, AdamantModpackLib.ModpackRuntime?, string?
+
 ---@class AdamantModpackLib.ModpackApi
----@field registerCoordinator fun(packId: string, displayName: string, config: AdamantModpackLib.ModpackConfig?, rebuildCallback?: fun(reason: table): boolean): boolean
----@field createPack fun(packId: string, config: AdamantModpackLib.ModpackConfig, numProfiles: integer, defaultProfiles: table, opts?: AdamantModpackLib.ModpackOpts): boolean, AdamantModpackLib.ModpackRuntime?, string?
+---@field registerCoordinator AdamantModpackLib.RegisterCoordinatorFn
+---@field createPack AdamantModpackLib.CreatePackFn
 ---@field createGuiCallbacks fun(packId: string): AdamantModpackLib.ModpackGuiCallbacks
 
 ---@class AdamantModpackLib.CoordinatorRuntime

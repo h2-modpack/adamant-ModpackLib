@@ -225,9 +225,8 @@ local function DecodeLengthPrefixed(str, pos)
 end
 
 local function SerializeTableValue(node, value)
-    local rows = nil
     local parts = {}
-    rows = ForEachNormalizedTableCell(node, value, function(_, root, cellValue)
+    local rows = ForEachNormalizedTableCell(node, value, function(_, root, cellValue)
         local storageType = StorageTypes[root.type]
         local encoded = storageType.toHash(root, cellValue)
         parts[#parts + 1] = EncodeLengthPrefixed(encoded)
