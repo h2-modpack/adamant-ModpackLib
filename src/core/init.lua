@@ -155,15 +155,6 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     controls = controlsBundle,
 })
 
-local frameworkRuntime = import('core/lib_bootstrap/framework_runtime.lua', nil, {
-    config = deps.config,
-    logging = logging,
-    hashing = hashingBundle.framework,
-    coordinator = modpackCoordination,
-    managedModule = managedModule,
-    overlays = overlaysBundle.framework,
-})
-public.createFrameworkRuntime = frameworkRuntime.create
 public.modpack = import('core/modpack/init.lua', nil, {
     rom = externals.rom,
     libConfig = deps.config,

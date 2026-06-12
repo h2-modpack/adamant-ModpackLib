@@ -282,41 +282,6 @@ local lib = {}
 ---@field log fun(fmt: string, ...)
 ---@field logIf fun(fmt: string, ...)
 
----@class AdamantModpackLib.FrameworkRuntime
----@field diagnostics AdamantModpackLib.FrameworkDiagnosticsRuntime
----@field coordinator AdamantModpackLib.FrameworkCoordinatorRuntime
----@field hashing AdamantModpackLib.FrameworkHashingApi
----@field modules AdamantModpackLib.FrameworkModulesRuntime
----@field overlays AdamantModpackLib.FrameworkOverlaysRuntime
----@field ui AdamantModpackLib.FrameworkUiRuntime
-
----@class AdamantModpackLib.FrameworkDiagnosticsRuntime
----@field isLibDebugEnabled fun(): boolean
----@field setLibDebugEnabled fun(enabled: boolean)
-
----@class AdamantModpackLib.FrameworkCoordinatorRuntime
----@field register fun(packId: string, config: table?)
----@field registerRebuild fun(packId: string, callback: fun(reason: table)|nil)
----@field isRegistered fun(packId: string?): boolean
-
----@class AdamantModpackLib.FrameworkModulesRuntime
----@field getLiveModule fun(pluginGuid: string?): AdamantModpackLib.ManagedModule?
-
----@class AdamantModpackLib.FrameworkOverlaysRuntime
----@field order table<string, integer> Shared overlay order bands.
----@field define fun(packId: string, name: string, register: fun(overlays: AdamantModpackLib.SystemOverlayRegistrar)): boolean
-
----@class AdamantModpackLib.FrameworkHashingApi
----@field getRoots fun(storage: AdamantModpackLib.StorageSchema): AdamantModpackLib.StorageNode[]
----@field valuesEqual fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode?, a: any, b: any): boolean
----@field toHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, value: any): string?
----@field fromHash fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, str: string): any
----@field isHashTokenValid fun(node: AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode, str: string?): boolean
-
----@class AdamantModpackLib.FrameworkUiRuntime
----@field suppressOverlays fun(): AdamantModpackLib.UiSuppressionToken
----@field areOverlaysSuppressed fun(): boolean
-
 ---@class AdamantModpackLib.AuthorFallbackUi
 ---@field attachGuiOnce fun(register: fun(ui: AdamantModpackLib.FallbackUiBridge)): boolean
 
@@ -441,7 +406,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.ModuleCreateOpts
 ---@field pluginGuid string Plugin guid captured at module file load time.
----@field modpack? string Module pack id used by Framework grouping.
+---@field modpack? string Module pack id used by Lib modpack grouping.
 ---@field id string Stable module id.
 ---@field name string Display name.
 ---@field shortName? string Short display name.
@@ -851,11 +816,6 @@ lib.modpack = {}
 ---@return AdamantModpackLib.AuthorModule? module
 ---@return string? err
 function lib.createModule(opts)
-end
-
----@param frameworkPluginGuid string Must be `adamant-ModpackFramework`.
----@return AdamantModpackLib.FrameworkRuntime runtime
-function lib.createFrameworkRuntime(frameworkPluginGuid)
 end
 
 return lib

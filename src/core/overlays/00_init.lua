@@ -68,13 +68,6 @@ service.installForModule = moduleAdapter.installForModule
 service.suppressForUi = suppression.suppressForUi
 service.isUiSuppressed = suppression.isUiSuppressed
 
-local framework = import('core/overlays/adapters/framework_overlays.lua', nil, {
-    logging = deps.logging,
-    suppression = suppression,
-    system = system,
-    order = overlayOrder,
-})
-
 local modpack = import('core/overlays/adapters/modpack_overlays.lua', nil, {
     logging = deps.logging,
     suppression = suppression,
@@ -101,7 +94,6 @@ return {
     service = service,
     declarations = declarations,
     system = system,
-    framework = framework,
     modpack = modpack,
     order = overlayOrder,
 }

@@ -191,16 +191,3 @@ function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOver
     secondToken.release()
     lu.assertFalse(self.h.overlays.isUiSuppressed())
 end
-
-function TestOverlays:testFrameworkSuppressionFacadeSharesOverlaySuppressionState()
-    local framework = self.h.harness.overlaysBundle.framework
-
-    lu.assertFalse(framework.ui.areOverlaysSuppressed())
-    local token = framework.ui.suppressOverlays()
-    lu.assertTrue(self.h.overlays.isUiSuppressed())
-    lu.assertTrue(framework.ui.areOverlaysSuppressed())
-
-    token.release()
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
-    lu.assertFalse(framework.ui.areOverlaysSuppressed())
-end

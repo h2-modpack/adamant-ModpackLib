@@ -2,7 +2,8 @@
 
 This document describes the supported hot-reload model of the adamant stack.
 
-It covers how `adamant-ModpackLib`, `adamant-ModpackFramework`, coordinator shells, and coordinated modules stay coherent when files reload inside one live Hades II process.
+It covers how `adamant-ModpackLib`, coordinator shells, and coordinated modules
+stay coherent when files reload inside one live Hades II process.
 
 For the raw behavior of `SGG_Modding-ReLoad`, `SGG_Modding-ModUtil`, and `SGG_Modding-Chalk`, read [RELOAD_MODUTIL_CHALK_REFERENCE.md](../references/RELOAD_MODUTIL_CHALK_REFERENCE.md) first.
 
@@ -13,7 +14,7 @@ Accepted hot-reload boundaries are documented in
 
 - keep normal player sessions safe without requiring code edits
 - support module development with live module reloads
-- document Lib and Framework reloads as infrastructure development paths with a full restart as the correctness boundary
+- document Lib reloads as infrastructure development paths with a full restart as the correctness boundary
 - keep ownership of reload-sensitive responsibilities explicit
 
 ## Process Model
@@ -32,7 +33,7 @@ The stack relies on that persistence for stable runtime registries.
 The stack deliberately stores reload-sensitive state on `_G` tables:
 
 - `AdamantModpackLib_Runtime`
-- `FrameworkPackRegistry`
+-- `AdamantModpackLib_Runtime.registry.modpacks`
 
 These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
 
@@ -51,7 +52,7 @@ Expected to persist across reloads:
 - Lib shared event listeners, mutation owner slots, retained overlays, and
   fallback GUI bridges under their scoped `AdamantModpackLib_Runtime.registry`
   buckets
-- Framework pack registry and stable GUI callbacks
+- Lib modpack registry and stable GUI callbacks
 - module-owned ROM GUI callbacks attached through `module.fallbackUi.attachGuiOnce(...)`
   and backed by Lib fallback UI bridges keyed by owner id
 
@@ -71,8 +72,8 @@ The coordinator owns pack bootstrap and stable GUI callback registration.
 Coordinator responsibilities:
 - register stable `rom.gui` callbacks once behind `modutil.once_loaded.game(...)`
 - register coordinator metadata from `mods.on_all_mods_loaded(...)`
-- call `Framework.createPack(...)` from the reload body
-- late-read Framework factories so a Framework reload does not leave the coordinator holding stale closures
+- call `lib.modpack.createPack(...)` from the reload body or lazy pack creation path
+- late-read Lib modpack callbacks so a Lib reload does not leave the coordinator holding stale closures
 
 `mods.on_all_mods_loaded(...)` is intentional coordinator timing, not a generic
 readiness gate. ROM calls these callbacks after the full mod graph loads, and it
@@ -81,17 +82,17 @@ all-mods-loaded milestone. That gives the coordinator both properties the beacon
 needs: initial registration happens after coordinated modules have loaded, and
 later coordinator reloads refresh Lib's stored rebuild callback closure.
 
-### Framework
+### Lib Modpack
 
-Framework owns pack-level coordinator state:
+Lib modpack owns pack-level coordinator state:
 - discovery
 - hashing
 - HUD
 - coordinator UI
 
-Framework owns the current pack object for each `packId`.
-Coordinator code owns the pack creation parameters and re-calls `Framework.createPack(...)`
-when the coordinator/framework layer reloads or when Lib requests a coordinated
+Lib owns the current pack object for each `packId`.
+Coordinator code owns the pack creation parameters and re-calls `lib.modpack.createPack(...)`
+when the coordinator layer reloads or when Lib requests a coordinated
 structural rebuild.
 
 ### Lib
@@ -154,37 +155,37 @@ During module creation and activation:
 
 That means one coordinated module reload refreshes its live runtime behavior immediately without forcing a pack rebuild.
 
-## Framework Pack Refresh
+## Modpack Refresh
 
-Framework replaces the current pack object when the coordinator calls
-`Framework.createPack(...)` again for the same `packId`. The replacement keeps the
-pack's stable HUD/index slot while rebuilding discovery, HUD, hash, and UI state
-from the current live modules.
+Lib modpack replaces the current pack object when the coordinator calls
+`lib.modpack.createPack(...)` again for the same `packId`. The replacement keeps
+the pack's stable HUD/index slot while rebuilding discovery, HUD, hash, and UI
+state from the current live modules.
 
-The coordinator registers GUI callbacks once and those callback closures remain valid across
-reloads by late-reading the current Framework renderer/menu factories from
-`rom.mods`.
+The coordinator registers GUI callbacks once and those callback closures remain
+valid across reloads by reading the current pack runtime from Lib's hot-reload
+stable modpack registry.
 
 The invariant is:
 - stable callbacks survive reloads
-- the coordinator owns `Framework.createPack(...)` re-entry
+- the coordinator owns `lib.modpack.createPack(...)` re-entry
 - ordinary coordinated module behavior reloads do not require a pack rebuild
 
-Framework reload is an infrastructure path, not the fast module-authoring path.
-Rebuilding a pack is allowed to recreate Framework UI state from scratch. The
+Lib modpack reload is an infrastructure path, not the fast module-authoring path.
+Rebuilding a pack is allowed to recreate modpack UI state from scratch. The
 mod window may close, the selected tab may reset, and transient profile/import
-feedback may be lost. Persist only correctness-critical state across Framework
+feedback may be lost. Persist only correctness-critical state across Lib
 reloads. Module behavior state refreshes through live modules.
 
-A Framework file reload does not, by itself, rebuild an existing pack object.
-The coordinator must call `Framework.createPack(...)` again, either from its reload
-body or through a coordinated structural rebuild request.
+A Lib file reload does not, by itself, rebuild an existing pack object. The
+coordinator must call `lib.modpack.createPack(...)` again, either from its
+reload body or through a coordinated structural rebuild request.
 
 HUD marker text is safe to refresh in place. HUD marker layout is not: the game
 creates retained HUD components from `ScreenData.HUD.ComponentData`, so changing
-that table only affects future HUD construction. A Framework change that moves
-or restyles the marker structurally must recreate the HUD component or wait for a
-game HUD refresh.
+that table only affects future HUD construction. A Lib modpack change that
+moves or restyles the marker structurally must recreate the HUD component or
+wait for a game HUD refresh.
 
 ## Hook Model
 
@@ -256,7 +257,7 @@ Important consequences:
 - activation-time mutation sync uses coordinator state when present and module state otherwise
 
 Activation syncs live mutation state for both coordinated and fallback UI modules.
-Framework init and fallback UI activation do not run a separate startup mutation pass.
+Lib modpack init and fallback UI activation do not run a separate startup mutation pass.
 This keeps non-structural module reloads on the same managed module activation path as cold startup.
 
 ## Safety By Scenario
@@ -271,19 +272,21 @@ Players who are not editing files do not exercise the hot-reload path. The stack
 
 Supported.
 
-Module reload replaces the module's live runtime surface. Framework snapshots that module on the next UI/hash operation, and Lib immediately resyncs live mutation state if the module is already coordinated.
+Module reload replaces the module's live runtime surface. Lib modpack snapshots
+that module on the next UI/hash operation, and Lib immediately resyncs live
+mutation state if the module is already coordinated.
 
-### Developer doing Lib or Framework work
+### Developer doing Lib work
 
 Best-effort infrastructure development path.
 
-Persistent Lib registries survive Lib reload, and the coordinator late-reads Framework
-callbacks. Existing managed modules may still close over prior Lib implementation
-closures until the owning module reloads. The coordinator must re-call
-`Framework.createPack(...)` to rebuild Framework pack state after Framework changes.
-Use a full process restart as the correctness boundary for infrastructure
-changes that affect mutation internals, top-level registration, or retained HUD
-layout.
+Persistent Lib registries survive Lib reload, and the coordinator callbacks read
+current pack state from Lib's modpack registry. Existing managed modules may
+still close over prior Lib implementation closures until the owning module
+reloads. The coordinator must re-call `lib.modpack.createPack(...)` to rebuild
+pack state after Lib modpack changes. Use a full process restart as the
+correctness boundary for infrastructure changes that affect mutation internals,
+top-level registration, or retained HUD layout.
 
 ### Developer reloading Lib and modules in one session
 
@@ -308,7 +311,7 @@ Changes to:
 - module presence or discovery shape
 
 should be treated as structural coordination work. In coordinated packs, Lib
-can request a Framework rebuild after the replacement live module is created.
+can request a modpack rebuild after the replacement live module is created.
 Outside that coordinated path, use a full reload.
 
 ## Practical Rules

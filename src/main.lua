@@ -26,7 +26,7 @@ local core = import('core/init.lua', nil, {
     externals = externals,
 })
 
--- Fallback framework debug toggle - hidden when Core/Framework registers coordinators.
+-- Fallback Lib debug toggle - hidden when Lib modpack registers coordinators.
 rom.gui.add_to_menu_bar(function()
     if core.modpackCoordination.hasRegistrations() then return end
     if rom.ImGui.BeginMenu("adamant-lib") then

@@ -195,29 +195,9 @@ return {
         severity = "error",
         description = "System scopes require a stable owner id.",
     },
-    ["framework_runtime.invalid_framework_plugin"] = {
-        severity = "error",
-        description = "Framework runtime construction requires the Framework plugin guid.",
-    },
-    ["framework_runtime.unexpected_pack"] = {
-        severity = "error",
-        description = "Framework runtime construction is not pack-scoped; pack ids belong to overlay definitions.",
-    },
-    ["framework_runtime.invalid_pack"] = {
-        severity = "error",
-        description = "Framework overlay declarations require a stable pack id.",
-    },
     ["modpack.overlays.invalid_pack"] = {
         severity = "error",
         description = "Modpack overlay declarations require a stable pack id.",
-    },
-    ["framework_runtime.invalid_debug_mode"] = {
-        severity = "error",
-        description = "Framework runtime diagnostics require boolean Lib debug mode values.",
-    },
-    ["framework_runtime.invalid_overlay_scope"] = {
-        severity = "error",
-        description = "Framework runtime overlay declarations require a stable scoped name.",
     },
     ["modpack.overlays.invalid_scope"] = {
         severity = "error",

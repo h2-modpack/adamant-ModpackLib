@@ -6,7 +6,9 @@ It is written for two audiences:
 - humans maintaining the modpack
 - future agentic tools that should not have to rediscover these library semantics from plugin source
 
-For the hot-reload contract of `adamant-ModpackLib`, `adamant-ModpackFramework`, coordinator shells, and modules built on top of these libraries, see [HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md).
+For the hot-reload contract of `adamant-ModpackLib`, coordinator shells, and
+modules built on top of Lib, see
+[HOT_RELOAD_ARCHITECTURE.md](../lib-contributors/HOT_RELOAD_ARCHITECTURE.md).
 
 ## Scope
 
@@ -17,7 +19,8 @@ This document focuses on:
 - `ModUtil.LoadOnce`
 - `chalk.auto`
 
-It does not define the stack-specific hot-reload architecture for Lib, Framework, coordinators, or managed modules.
+It does not define the stack-specific hot-reload architecture for Lib,
+coordinators, or managed modules.
 
 It also calls out a few important things these libraries do **not** do:
 - ModUtil wrap registration does **not** deduplicate by callback or mod
