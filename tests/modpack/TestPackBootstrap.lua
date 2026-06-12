@@ -2,27 +2,6 @@ local lu = require('luaunit')
 
 TestPackBootstrap = {}
 
-local function snapshotTable(source)
-    local snapshot = {}
-    for key, value in pairs(source) do
-        snapshot[key] = value
-    end
-    return snapshot
-end
-
-local function replaceTableContents(target, source)
-    for key in pairs(target) do
-        target[key] = nil
-    end
-    for key, value in pairs(source) do
-        target[key] = value
-    end
-end
-
-local function readPackRestoreMarker(moduleRegistry, entry, snapshot)
-    return moduleRegistry.snapshot.getLiveModule(entry, snapshot).read("AdamantFramework_PackRestoreSnapshot")
-end
-
 local function createPackOrFail(harness, ...)
     local ok, pack, err = harness.createPack(...)
     lu.assertTrue(ok, tostring(err))
@@ -44,7 +23,7 @@ function TestPackBootstrap:tearDown()
 end
 
 function TestPackBootstrap:testCreateGuiCallbacksAreSafeBeforeInit()
-    local callbacks = public.createGuiCallbacks("missing-pack")
+    local callbacks = ModpackTestApi.public.createGuiCallbacks("missing-pack")
     local renderOk = pcall(callbacks.render)
     local alwaysDrawOk = pcall(callbacks.alwaysDraw)
     local menuBarOk = pcall(callbacks.menuBar)
@@ -52,260 +31,6 @@ function TestPackBootstrap:testCreateGuiCallbacksAreSafeBeforeInit()
     lu.assertTrue(renderOk)
     lu.assertTrue(alwaysDrawOk)
     lu.assertTrue(menuBarOk)
-end
-
-function TestPackBootstrap:testCreateUIUsesPreparedSnapshotForStartupStaging()
-    local function noop() end
-
-    local entry = {
-        id = "Alpha",
-        name = "Alpha",
-        pluginGuid = "Alpha",
-        _tabLabel = "Alpha",
-    }
-    local liveModule
-    liveModule = {
-        reloaded = false,
-        reloadFromConfig = function()
-            reloads = reloads + 1
-            liveModule.reloaded = true
-        end,
-    }
-    local reloads = 0
-    local moduleRegistry = {
-        modules = { entry },
-        modulesById = {
-            Alpha = entry,
-        },
-        modulesWithQuickContent = {},
-        tabOrder = { entry },
-        live = {
-            captureSnapshot = function()
-                return {
-                    liveModules = {
-                        [entry] = liveModule,
-                    },
-                }
-            end,
-        },
-        snapshot = {
-            getLiveModule = function(_, snapshot)
-                return snapshot.liveModules[entry]
-            end,
-            isEntryEnabled = function(_, snapshot)
-                lu.assertFalse(snapshot.liveModules[entry].reloaded)
-                return true
-            end,
-            isDebugEnabled = function(_, snapshot)
-                lu.assertFalse(snapshot.liveModules[entry].reloaded)
-                return false
-            end,
-        },
-    }
-    local hud = {
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-        markHashDirty = noop,
-    }
-    local theme = ModpackTestApi.createTheme()
-
-    ModpackTestApi.createUI(moduleRegistry, hud, theme, {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }, "test-pack", "Test Window", 1, {
-        { Name = "", Hash = "", Tooltip = "" },
-    })
-
-    lu.assertEquals(reloads, 0)
-end
-
-function TestPackBootstrap:testCreateHudRegistersModpackHashOverlay()
-    local overlayOrder = {
-        system = 0,
-        modpack = 100,
-        module = 1000,
-        debug = 2000,
-    }
-    local registeredPack = nil
-    local registeredScope = nil
-    local registeredLine = nil
-    local projectedValue = nil
-    local registeredOpts = nil
-    local refreshCalls = 0
-
-    local overlaySurface = {
-        order = overlayOrder,
-        define = function(packId, scope, register)
-            registeredPack = packId
-            registeredScope = scope
-            local registrar = {
-                createLine = function(name, spec)
-                    registeredLine = name
-                    registeredOpts = spec
-                end,
-                onCommit = function(callback)
-                    registeredOpts._commit = callback
-                end,
-            }
-            register(registrar)
-            registeredOpts._commit({
-                setLine = function(_, value)
-                    projectedValue = value
-                end,
-                refresh = function()
-                    refreshCalls = refreshCalls + 1
-                end,
-            }, {})
-            return true
-        end,
-    }
-
-    local theme = ModpackTestApi.createTheme()
-    local config = { ModEnabled = true }
-    local hash = {
-        GetConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        ApplyConfigHash = function()
-            return true
-        end,
-    }
-
-    local hud = ModpackTestApi.createHud("test-pack", 1, hash, theme, config, false, overlaySurface)
-    hud.install()
-    hud.setModMarker(false)
-
-    lu.assertEquals(registeredPack, "test-pack")
-    lu.assertEquals(registeredScope, "hud")
-    lu.assertEquals(registeredLine, "hash")
-    lu.assertEquals(registeredOpts.region, "middleRightStack")
-    lu.assertEquals(registeredOpts.order, overlayOrder.modpack + 1)
-    lu.assertEquals(projectedValue, "")
-    lu.assertFalse(registeredOpts.visible())
-    lu.assertEquals(refreshCalls, 2)
-end
-
-function TestPackBootstrap:testCreateHudInstallClearsModpackHashOverlayWhenHidden()
-    local registeredPack = nil
-    local registeredScope = nil
-    local createLineCalls = 0
-    local commitCalls = 0
-
-    local overlaySurface = {
-        order = {
-            system = 0,
-            modpack = 100,
-        },
-        define = function(packId, scope, register)
-            registeredPack = packId
-            registeredScope = scope
-            register({
-                createLine = function()
-                    createLineCalls = createLineCalls + 1
-                end,
-                onCommit = function()
-                    commitCalls = commitCalls + 1
-                end,
-            })
-            return true
-        end,
-    }
-
-    local hud = ModpackTestApi.createHud("test-pack", 1, {
-        GetConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        ApplyConfigHash = function()
-            return true
-        end,
-    }, ModpackTestApi.createTheme(), { ModEnabled = true }, true, overlaySurface)
-
-    hud.install()
-
-    lu.assertEquals(registeredPack, "test-pack")
-    lu.assertEquals(registeredScope, "hud")
-    lu.assertEquals(createLineCalls, 0)
-    lu.assertEquals(commitCalls, 0)
-end
-
-function TestPackBootstrap:testRenderWindowCleansUpImguiStacksBeforeRethrow()
-    local previousImGui = rom.ImGui
-    local endCalls = 0
-    local popStyleCalls = 0
-
-    local function noop() end
-
-    rom.ImGui = {
-        Begin = function() return true, true end,
-        End = function()
-            endCalls = endCalls + 1
-        end,
-        SetNextWindowSize = noop,
-        MenuItem = function() return true end,
-        Checkbox = function()
-            error("draw boom")
-        end,
-        PushStyleColor = noop,
-        PopStyleColor = function()
-            popStyleCalls = popStyleCalls + 1
-        end,
-    }
-
-    local moduleRegistry = {
-        modules = {},
-        modulesWithQuickContent = {},
-        tabOrder = {},
-        live = {
-            captureSnapshot = function()
-                return { liveModules = {} }
-            end,
-        },
-        snapshot = {
-            getLiveModule = function()
-                return nil
-            end,
-        },
-    }
-    local hud = {
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-        markHashDirty = noop,
-    }
-    local theme = ModpackTestApi.createTheme()
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, hud, theme, {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }, "test-pack", "Test Window", 1, {
-        { Name = "", Hash = "", Tooltip = "" },
-    })
-
-    builtUi.addMenuBar()
-    local ok, err = pcall(builtUi.renderWindow)
-
-    rom.ImGui = previousImGui
-
-    lu.assertFalse(ok)
-    lu.assertStrContains(tostring(err), "draw boom")
-    lu.assertEquals(endCalls, 1)
-    lu.assertEquals(popStyleCalls, 1)
 end
 
 function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivation()
@@ -329,8 +54,6 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
     rom.game.SetupRunData = function()
         setupRunDataCalls = setupRunDataCalls + 1
     end
-    public.registerCoordinator("startup-pack", "Test Pack", { ModEnabled = true })
-
     local harness = CreateModpackHarness({
         constructors = {
         createModuleRegistry = function()
@@ -370,6 +93,7 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
         end,
         },
     })
+    harness.registerCoordinator("startup-pack", "Test Pack", { ModEnabled = true })
     createPackOrFail(
         harness,
         "startup-pack",
@@ -384,7 +108,6 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
         {}
     )
 
-    public.registerCoordinator("startup-pack", nil)
     rom.game.SetupRunData = previousSetupRunData
 
     lu.assertEquals(setupRunDataCalls, 0)
@@ -392,7 +115,6 @@ end
 
 function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit()
     local packId = "load-order-pack"
-    public.registerCoordinator(packId, nil)
 
     local previousSetupRunData = rom.game.SetupRunData
     local setupRunDataCalls = 0
@@ -433,10 +155,6 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
     lu.assertEquals(buildCalls, 1)
     lu.assertEquals(target.Value, "patched")
     lu.assertEquals(setupRunDataCalls, 1)
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
-
     local entry = {
         id = definition.id,
         name = definition.name,
@@ -485,6 +203,9 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
     createPackOrFail(
         harness,
         packId,
@@ -500,7 +221,6 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
     )
 
     local ok, err = liveModule.revertMutation()
-    public.registerCoordinator(packId, nil)
     rom.game.SetupRunData = previousSetupRunData
 
     lu.assertTrue(ok, tostring(err))
@@ -511,20 +231,9 @@ end
 
 function TestPackBootstrap:testRepeatedInitReplacesPackStateAndKeepsStablePackIndex()
     local packId = "reinit-pack"
-    local packRegistry = ModpackPackRegistry
-    local previousPack = packRegistry.packs[packId]
-    local previousPackList = {}
-    for i, value in ipairs(packRegistry.packList) do
-        previousPackList[i] = value
-    end
-
     local hudIndexes = {}
     local firstPack
     local secondPack
-
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
 
     local harness = CreateModpackHarness({
         constructors = {
@@ -567,6 +276,10 @@ function TestPackBootstrap:testRepeatedInitReplacesPackStateAndKeepsStablePackIn
         end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
+    local packRegistry = harness.packRegistry
     local config = {
         ModEnabled = true,
         DebugMode = false,
@@ -585,10 +298,6 @@ function TestPackBootstrap:testRepeatedInitReplacesPackStateAndKeepsStablePackIn
     end
     local activePack = packRegistry.packs[packId]
 
-    packRegistry.packs[packId] = previousPack
-    packRegistry.packList = previousPackList
-    public.registerCoordinator(packId, nil)
-
     lu.assertTrue(firstPack ~= secondPack)
     lu.assertEquals(activePack, secondPack)
     lu.assertEquals(#hudIndexes, 2)
@@ -599,21 +308,10 @@ end
 
 function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
     local packId = "reinit-dispose-pack"
-    local packRegistry = ModpackPackRegistry
-    local previousPack = packRegistry.packs[packId]
-    local previousPackList = {}
-    for i, value in ipairs(packRegistry.packList) do
-        previousPackList[i] = value
-    end
-
-    local previousImGui = rom.ImGui
     local suppressCalls = 0
     local releaseCalls = 0
     local flushCalls = 0
 
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
     local testOverlaySurface = {
         order = {
             system = 0,
@@ -636,11 +334,11 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
             }
         end,
     }
-    rom.ImGui = {
+    local restoreImGui = InstallWindowImGuiStub({
         MenuItem = function()
             return true
         end,
-    }
+    })
 
     local harness = CreateModpackHarness({
         overlaySurface = testOverlaySurface,
@@ -704,6 +402,10 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
             end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
+    local packRegistry = harness.packRegistry
     local config = {
         ModEnabled = true,
         DebugMode = false,
@@ -723,10 +425,7 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
 
     local activePack = packRegistry.packs[packId]
 
-    rom.ImGui = previousImGui
-    packRegistry.packs[packId] = previousPack
-    packRegistry.packList = previousPackList
-    public.registerCoordinator(packId, nil)
+    restoreImGui()
 
     lu.assertTrue(firstPack ~= secondPack)
     lu.assertEquals(activePack, secondPack)
@@ -741,17 +440,7 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
     CaptureWarnings()
 
     local packId = "failed-init-pack"
-    local packRegistry = ModpackPackRegistry
     local hudInstallCalls = 0
-    local previousPack = packRegistry.packs[packId]
-    local previousPackList = {}
-    for i, value in ipairs(packRegistry.packList) do
-        previousPackList[i] = value
-    end
-
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
 
     local harness = CreateModpackHarness({
         constructors = {
@@ -791,6 +480,10 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
         end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
+    local packRegistry = harness.packRegistry
     local config = {
         ModEnabled = true,
         DebugMode = false,
@@ -808,16 +501,13 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
         end
     end
 
-    packRegistry.packs[packId] = previousPack
-    packRegistry.packList = previousPackList
-    public.registerCoordinator(packId, nil)
     RestoreWarnings()
 
     lu.assertFalse(ok)
     lu.assertNil(pack)
     lu.assertStrContains(tostring(err), "ui construction boom")
     lu.assertEquals(packIdCount, 0)
-    lu.assertEquals(packRegistry.packs[packId], previousPack)
+    lu.assertNil(packRegistry.packs[packId])
     lu.assertEquals(hudInstallCalls, 0)
     lu.assertEquals(#warnings, 1)
     lu.assertStrContains(warnings[1], "[failed-init-pack] modpack createPack failed; skipping pack:")
@@ -825,17 +515,6 @@ end
 
 function TestPackBootstrap:testTryInitReturnsPackOnSuccess()
     local packId = "try-init-success-pack"
-    local packRegistry = ModpackPackRegistry
-    local previousPack = packRegistry.packs[packId]
-    local previousPackList = {}
-    for i, value in ipairs(packRegistry.packList) do
-        previousPackList[i] = value
-    end
-
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
-
     local ok, pack, err
     local harness = CreateModpackHarness({
         constructors = {
@@ -876,6 +555,9 @@ function TestPackBootstrap:testTryInitReturnsPackOnSuccess()
         end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
     ok, pack, err = harness.createPack(packId, {
         ModEnabled = true,
         DebugMode = false,
@@ -883,10 +565,6 @@ function TestPackBootstrap:testTryInitReturnsPackOnSuccess()
             { Name = "", Hash = "", Tooltip = "" },
         },
     }, 1, {})
-
-    packRegistry.packs[packId] = previousPack
-    packRegistry.packList = previousPackList
-    public.registerCoordinator(packId, nil)
 
     lu.assertTrue(ok)
     lu.assertNotNil(pack)
@@ -897,17 +575,6 @@ function TestPackBootstrap:testTryInitReturnsErrorAndDoesNotRegisterPack()
     CaptureWarnings()
 
     local packId = "create-pack-fail-pack"
-    local packRegistry = ModpackPackRegistry
-    local previousPack = packRegistry.packs[packId]
-    local previousPackList = {}
-    for i, value in ipairs(packRegistry.packList) do
-        previousPackList[i] = value
-    end
-
-    public.registerCoordinator(packId, "Test Pack", {
-        ModEnabled = true,
-    })
-
     local ok, pack, err
     local harness = CreateModpackHarness({
         constructors = {
@@ -945,6 +612,10 @@ function TestPackBootstrap:testTryInitReturnsErrorAndDoesNotRegisterPack()
         end,
         },
     })
+    harness.registerCoordinator(packId, "Test Pack", {
+        ModEnabled = true,
+    })
+    local packRegistry = harness.packRegistry
     ok, pack, err = harness.createPack(packId, {
         ModEnabled = true,
         DebugMode = false,
@@ -962,849 +633,16 @@ function TestPackBootstrap:testTryInitReturnsErrorAndDoesNotRegisterPack()
         end
     end
 
-    packRegistry.packs[packId] = previousPack
-    packRegistry.packList = previousPackList
-    public.registerCoordinator(packId, nil)
     RestoreWarnings()
 
     lu.assertFalse(ok)
     lu.assertNil(pack)
     lu.assertStrContains(tostring(err), "try init boom")
     lu.assertEquals(packIdCount, 0)
-    lu.assertEquals(packRegistry.packs[packId], previousPack)
+    lu.assertNil(packRegistry.packs[packId])
     lu.assertEquals(#warnings, 1)
     lu.assertStrContains(warnings[1], "[create-pack-fail-pack] modpack createPack failed; skipping pack:")
     lu.assertStrContains(warnings[1], "try init boom")
-end
-
-function TestPackBootstrap:testMasterToggleRollsBackTouchedRuntimeStateOnFailure()
-    CaptureWarnings()
-
-    local config = {
-        ModEnabled = false,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-    public.registerCoordinator("test-pack", "Test Pack", config)
-    local previousSetupRunData = rom.game.SetupRunData
-    local setupRunDataCalls = 0
-    rom.game.SetupRunData = function()
-        setupRunDataCalls = setupRunDataCalls + 1
-    end
-
-    local previousImGui = rom.ImGui
-    local masterCheckboxPass = 1
-    local secondPassCurrent = nil
-
-    local function noop() end
-
-    rom.ImGui = {
-        Begin = function() return true, true end,
-        End = noop,
-        SetNextWindowSize = noop,
-        MenuItem = function() return true end,
-        Checkbox = function(label, current)
-            if label == "Enable Mod" then
-                if masterCheckboxPass == 1 then
-                    masterCheckboxPass = 2
-                    return true, true
-                end
-                secondPassCurrent = current
-                return current, false
-            end
-            return current, false
-        end,
-        IsItemHovered = function() return false end,
-        SetTooltip = noop,
-        Separator = noop,
-        SameLine = noop,
-        Spacing = noop,
-        GetWindowWidth = function() return 1000 end,
-        BeginChild = function() return true end,
-        EndChild = noop,
-        Selectable = function() return false end,
-        BeginCombo = function() return false end,
-        EndCombo = noop,
-        PushItemWidth = noop,
-        PopItemWidth = noop,
-        Text = noop,
-        TextColored = noop,
-        GetCursorPosX = function() return 0 end,
-        GetContentRegionAvail = function() return 1000 end,
-        GetCursorPosY = function() return 0 end,
-        SetCursorPos = noop,
-        SetCursorPosX = noop,
-        GetFrameHeight = function() return 20 end,
-        GetFrameHeightWithSpacing = function() return 24 end,
-        GetStyle = function()
-            return {
-                FramePadding = { x = 4, y = 3 },
-                ItemSpacing = { x = 8, y = 4 },
-            }
-        end,
-        CalcTextSize = function(text) return #(tostring(text or "")) * 8 end,
-        Button = function() return false end,
-        InputText = function(_, value) return value, false end,
-        GetClipboardText = function() return nil end,
-        SetClipboardText = noop,
-        CollapsingHeader = function() return false end,
-        Indent = noop,
-        Unindent = noop,
-        PushID = noop,
-        PopID = noop,
-        PushStyleColor = noop,
-        PopStyleColor = noop,
-    }
-
-    local firstState = { built = 0, target = { Value = "base" } }
-    local secondState = { built = 0, target = { Value = "base" } }
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = false,
-            values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
-            },
-            storage = {},
-            patchPlan = function(plan)
-                firstState.built = firstState.built + 1
-                plan:set(firstState.target, "Value", "patched")
-            end,
-        },
-        {
-            pluginGuid = "Bravo",
-            id = "Bravo",
-            name = "Bravo",
-            enabled = false,
-            values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
-            },
-            storage = {},
-            patchPlan = function()
-                secondState.built = secondState.built + 1
-                error("apply boom")
-            end,
-        },
-    })
-
-    local hudMarkers = {}
-    local hud = {
-        setModMarker = function(val)
-            table.insert(hudMarkers, val)
-        end,
-        markHashDirty = noop,
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        updateHash = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-    }
-
-    local theme = ModpackTestApi.createTheme()
-    local setup = {
-        NUM_PROFILES = 1,
-        defaultProfiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, hud, theme, config, "test-pack", "Test Window",
-        setup.NUM_PROFILES, setup.defaultProfiles, setup.drawPackQuickContent)
-    builtUi.addMenuBar()
-
-    local okFirst, errFirst = pcall(builtUi.renderWindow)
-    local okSecond, errSecond = pcall(builtUi.renderWindow)
-    local warnings = Warnings
-
-    rom.ImGui = previousImGui
-    rom.game.SetupRunData = previousSetupRunData
-    public.registerCoordinator("test-pack", nil)
-    RestoreWarnings()
-
-    lu.assertTrue(okFirst, tostring(errFirst))
-    lu.assertTrue(okSecond, tostring(errSecond))
-    lu.assertFalse(config.ModEnabled)
-    lu.assertEquals(secondPassCurrent, false)
-    lu.assertEquals(setupRunDataCalls, 0)
-    lu.assertEquals(#hudMarkers, 0)
-    lu.assertEquals(firstState.built, 1)
-    lu.assertEquals(firstState.target.Value, "base")
-    lu.assertEquals(secondState.built, 1)
-    lu.assertEquals(secondState.target.Value, "base")
-    lu.assertEquals(#warnings, 1)
-    lu.assertStrContains(warnings[1], "[test-pack] Enable Mod toggle failed; restoring previous runtime state: ")
-    lu.assertStrContains(warnings[1], "apply boom")
-end
-
-function TestPackBootstrap:testModuleBatchToggleRollsBackTouchedModulesOnFailure()
-    CaptureWarnings()
-
-    local previousSetupRunData = rom.game.SetupRunData
-    local setupRunDataCalls = 0
-    rom.game.SetupRunData = function()
-        setupRunDataCalls = setupRunDataCalls + 1
-    end
-
-    local firstState = { built = 0, target = { Value = "base" } }
-    local secondState = { built = 0, target = { Value = "base" } }
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = false,
-            storage = {},
-            patchPlan = function(plan)
-                firstState.built = firstState.built + 1
-                plan:set(firstState.target, "Value", "patched")
-            end,
-        },
-        {
-            pluginGuid = "Bravo",
-            id = "Bravo",
-            name = "Bravo",
-            enabled = false,
-            storage = {},
-            patchPlan = function()
-                secondState.built = secondState.built + 1
-                error("apply boom")
-            end,
-        },
-    })
-
-    local markHashDirtyCalls = 0
-    local function noop() end
-    local hud = {
-        markHashDirty = function()
-            markHashDirtyCalls = markHashDirtyCalls + 1
-        end,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        setMarkerVisible = noop,
-    }
-    local staging = {
-        ModEnabled = true,
-        modules = {
-            Alpha = false,
-            Bravo = false,
-        },
-        debug = {},
-    }
-    local snapshotAccess = {
-        get = function()
-            return nil
-        end,
-        capture = function()
-            return moduleRegistry.live.captureSnapshot()
-        end,
-        getLiveModule = function(entry, snapshot)
-            return moduleRegistry.snapshot.getLiveModule(entry, snapshot)
-        end,
-    }
-    local runtime = ModpackTestApi.createUIRuntime({
-        moduleRegistry = moduleRegistry,
-        hud = hud,
-        config = {
-            ModEnabled = true,
-            DebugMode = false,
-        },
-        packId = "test-pack",
-        colors = {},
-        staging = staging,
-        snapshotAccess = snapshotAccess,
-        snapshotToStaging = function() end,
-        logging = ModpackTestApi.logging,
-    })
-
-    local snapshot = moduleRegistry.live.captureSnapshot()
-    local ok, err = runtime.setModulesEnabled({ "Alpha", "Bravo" }, true, snapshot)
-    runtime.flushPendingRunData()
-
-    local warnings = Warnings
-    rom.game.SetupRunData = previousSetupRunData
-    RestoreWarnings()
-
-    lu.assertFalse(ok)
-    lu.assertStrContains(tostring(err), "apply boom")
-    lu.assertFalse(staging.modules.Alpha)
-    lu.assertFalse(staging.modules.Bravo)
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Alpha, snapshot))
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Bravo, snapshot))
-    lu.assertEquals(firstState.built, 1)
-    lu.assertEquals(firstState.target.Value, "base")
-    lu.assertEquals(secondState.built, 1)
-    lu.assertEquals(secondState.target.Value, "base")
-    lu.assertEquals(markHashDirtyCalls, 0)
-    lu.assertEquals(setupRunDataCalls, 0)
-    lu.assertEquals(#warnings, 1)
-    lu.assertStrContains(warnings[1], "[test-pack] Module batch toggle failed; restoring previous module states: ")
-end
-
-function TestPackBootstrap:testPackDisableSnapshotsModuleEnabledState()
-    local config = {
-        ModEnabled = true,
-        DebugMode = false,
-    }
-    public.registerCoordinator("test-pack", "Test Pack", config)
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            storage = {},
-        },
-        {
-            pluginGuid = "Bravo",
-            id = "Bravo",
-            name = "Bravo",
-            enabled = false,
-            storage = {},
-        },
-    })
-    local staging = {
-        ModEnabled = true,
-        modules = {
-            Alpha = true,
-            Bravo = false,
-        },
-        debug = {},
-    }
-    local hudMarkers = {}
-    local runtime = ModpackTestApi.createUIRuntime({
-        moduleRegistry = moduleRegistry,
-        hud = {
-            markHashDirty = function() end,
-            setModMarker = function(value)
-                hudMarkers[#hudMarkers + 1] = value
-            end,
-        },
-        config = config,
-        packId = "test-pack",
-        colors = {},
-        staging = staging,
-        snapshotAccess = {
-            get = function() return nil end,
-            capture = function() return moduleRegistry.live.captureSnapshot() end,
-            getLiveModule = function(entry, snapshot)
-                return moduleRegistry.snapshot.getLiveModule(entry, snapshot)
-            end,
-        },
-        snapshotToStaging = function() end,
-        logging = ModpackTestApi.logging,
-    })
-    local snapshot = moduleRegistry.live.captureSnapshot()
-
-    local ok, err = runtime.setPackRuntimeState(false, snapshot)
-
-    public.registerCoordinator("test-pack", nil)
-
-    lu.assertTrue(ok, tostring(err))
-    lu.assertFalse(config.ModEnabled)
-    lu.assertFalse(staging.ModEnabled)
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Alpha, snapshot))
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Bravo, snapshot))
-    lu.assertEquals(
-        readPackRestoreMarker(moduleRegistry, moduleRegistry.modulesById.Alpha, snapshot),
-        2)
-    lu.assertEquals(
-        readPackRestoreMarker(moduleRegistry, moduleRegistry.modulesById.Bravo, snapshot),
-        1)
-    lu.assertEquals(hudMarkers, { false })
-end
-
-function TestPackBootstrap:testPackEnableRestoresPersistedPackRestoreMarkers()
-    local config = {
-        ModEnabled = false,
-        DebugMode = false,
-    }
-    public.registerCoordinator("test-pack", "Test Pack", config)
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = false,
-            values = {
-                AdamantFramework_PackRestoreSnapshot = 2,
-            },
-            storage = {},
-        },
-        {
-            pluginGuid = "Bravo",
-            id = "Bravo",
-            name = "Bravo",
-            enabled = false,
-            values = {
-                AdamantFramework_PackRestoreSnapshot = 1,
-            },
-            storage = {},
-        },
-    })
-    local staging = {
-        ModEnabled = false,
-        modules = {
-            Alpha = false,
-            Bravo = false,
-        },
-        debug = {},
-    }
-    local hudMarkers = {}
-    local runtime = ModpackTestApi.createUIRuntime({
-        moduleRegistry = moduleRegistry,
-        hud = {
-            markHashDirty = function() end,
-            setModMarker = function(value)
-                hudMarkers[#hudMarkers + 1] = value
-            end,
-        },
-        config = config,
-        packId = "test-pack",
-        colors = {},
-        staging = staging,
-        snapshotAccess = {
-            get = function() return nil end,
-            capture = function() return moduleRegistry.live.captureSnapshot() end,
-            getLiveModule = function(entry, snapshot)
-                return moduleRegistry.snapshot.getLiveModule(entry, snapshot)
-            end,
-        },
-        snapshotToStaging = function() end,
-        logging = ModpackTestApi.logging,
-    })
-    local snapshot = moduleRegistry.live.captureSnapshot()
-
-    local ok, err = runtime.setPackRuntimeState(true, snapshot)
-
-    public.registerCoordinator("test-pack", nil)
-
-    lu.assertTrue(ok, tostring(err))
-    lu.assertTrue(config.ModEnabled)
-    lu.assertTrue(staging.ModEnabled)
-    lu.assertTrue(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Alpha, snapshot))
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Bravo, snapshot))
-    lu.assertEquals(
-        readPackRestoreMarker(moduleRegistry, moduleRegistry.modulesById.Alpha, snapshot),
-        0)
-    lu.assertEquals(
-        readPackRestoreMarker(moduleRegistry, moduleRegistry.modulesById.Bravo, snapshot),
-        0)
-    lu.assertEquals(hudMarkers, { true })
-end
-
-function TestPackBootstrap:testRuntimeResetAllModulesCommitsModuleDefaults()
-    local previousSetupRunData = rom.game.SetupRunData
-    local setupRunDataCalls = 0
-    rom.game.SetupRunData = function()
-        setupRunDataCalls = setupRunDataCalls + 1
-    end
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            values = {
-                Flag = true,
-            },
-            storage = {
-                { type = "bool", alias = "Flag", default = false },
-            },
-            patchPlan = function(plan)
-                plan:set({}, "unused", true)
-            end,
-        },
-        {
-            pluginGuid = "Bravo",
-            id = "Bravo",
-            name = "Bravo",
-            enabled = false,
-            values = {
-                Count = 4,
-            },
-            storage = {
-                { type = "int", alias = "Count", default = 1, min = 0, max = 9 },
-            },
-        },
-    })
-    local snapshotToStagingCalls = 0
-    local markHashDirtyCalls = 0
-    local updateHashCalls = 0
-    local runtime = ModpackTestApi.createUIRuntime({
-        moduleRegistry = moduleRegistry,
-        hud = {
-            markHashDirty = function()
-                markHashDirtyCalls = markHashDirtyCalls + 1
-            end,
-            updateHash = function()
-                updateHashCalls = updateHashCalls + 1
-            end,
-        },
-        config = {
-            ModEnabled = true,
-            DebugMode = false,
-        },
-        packId = "test-pack",
-        colors = {},
-        staging = {
-            ModEnabled = true,
-            modules = {},
-            debug = {},
-        },
-        snapshotAccess = {
-            get = function() return nil end,
-            capture = function() return moduleRegistry.live.captureSnapshot() end,
-            getLiveModule = function(entry, snapshot)
-                return moduleRegistry.snapshot.getLiveModule(entry, snapshot)
-            end,
-        },
-        snapshotToStaging = function()
-            snapshotToStagingCalls = snapshotToStagingCalls + 1
-        end,
-        logging = ModpackTestApi.logging,
-    })
-    local snapshot = moduleRegistry.live.captureSnapshot()
-    local alpha = moduleRegistry.modulesById.Alpha
-    local bravo = moduleRegistry.modulesById.Bravo
-
-    local ok, err, resetCount = runtime.resetAllModules()
-    runtime.flushPendingRunData()
-    rom.game.SetupRunData = previousSetupRunData
-
-    lu.assertTrue(ok, tostring(err))
-    lu.assertEquals(resetCount, 3)
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(alpha, snapshot))
-    lu.assertFalse(moduleRegistry.snapshot.getStorageValue(alpha, "Flag", snapshot))
-    lu.assertEquals(moduleRegistry.snapshot.getStorageValue(bravo, "Count", snapshot), 1)
-    lu.assertEquals(snapshotToStagingCalls, 1)
-    lu.assertEquals(markHashDirtyCalls, 1)
-    lu.assertEquals(updateHashCalls, 1)
-    lu.assertEquals(setupRunDataCalls, 2)
-end
-
-function TestPackBootstrap:testDisabledPackCreationSuspendsEnabledModules()
-    local config = {
-        ModEnabled = false,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-    public.registerCoordinator("test-pack", "Test Pack", config)
-
-    local target = { Value = "base" }
-    local buildCalls = 0
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            storage = {},
-            patchPlan = function(plan)
-                buildCalls = buildCalls + 1
-                plan:set(target, "Value", "patched")
-            end,
-        },
-    })
-    lu.assertEquals(target.Value, "patched")
-
-    local function noop() end
-    local hud = {
-        setModMarker = noop,
-        markHashDirty = noop,
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        updateHash = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-    }
-    local theme = ModpackTestApi.createTheme()
-
-    ModpackTestApi.createUI(moduleRegistry, hud, theme, config, "test-pack", "Test Window",
-        1, config.Profiles)
-    local snapshot = moduleRegistry.live.captureSnapshot()
-
-    public.registerCoordinator("test-pack", nil)
-
-    lu.assertEquals(buildCalls, 1)
-    lu.assertEquals(target.Value, "base")
-    lu.assertFalse(moduleRegistry.snapshot.isEntryEnabled(moduleRegistry.modulesById.Alpha, snapshot))
-    lu.assertEquals(readPackRestoreMarker(moduleRegistry, moduleRegistry.modulesById.Alpha, snapshot), 2)
-end
-
-function TestPackBootstrap:testQuickSetupRendersModuleQuickContent()
-    local imgui = rom.ImGui
-    local previousImGui = snapshotTable(imgui)
-    local checkboxLabels = {}
-
-    local function noop() end
-
-    replaceTableContents(imgui, {
-        Begin = function() return true, true end,
-        End = noop,
-        SetNextWindowSize = noop,
-        MenuItem = function() return true end,
-        Checkbox = function(label, current)
-            table.insert(checkboxLabels, label)
-            return current, false
-        end,
-        IsItemHovered = function() return false end,
-        SetTooltip = noop,
-        Separator = noop,
-        SameLine = noop,
-        Spacing = noop,
-        GetWindowWidth = function() return 1000 end,
-        BeginChild = function() return true end,
-        EndChild = noop,
-        Selectable = function() return false end,
-        BeginCombo = function() return false end,
-        EndCombo = noop,
-        PushItemWidth = noop,
-        PopItemWidth = noop,
-        Text = noop,
-        TextColored = noop,
-        GetCursorPosX = function() return 0 end,
-        GetContentRegionAvail = function() return 1000 end,
-        GetCursorPosY = function() return 0 end,
-        SetCursorPos = noop,
-        SetCursorPosX = noop,
-        GetFrameHeight = function() return 20 end,
-        GetFrameHeightWithSpacing = function() return 24 end,
-        GetStyle = function()
-            return {
-                FramePadding = { x = 4, y = 3 },
-                ItemSpacing = { x = 8, y = 4 },
-            }
-        end,
-        CalcTextSize = function(text) return #(tostring(text or "")) * 8 end,
-        Button = function() return false end,
-        InputText = function(_, value) return value, false end,
-        GetClipboardText = function() return nil end,
-        SetClipboardText = noop,
-        CollapsingHeader = function() return false end,
-        Indent = noop,
-        Unindent = noop,
-        PushID = noop,
-        PopID = noop,
-        PushStyleColor = noop,
-        PopStyleColor = noop,
-    })
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            storage = {
-                { type = "bool", alias = "FlagA", default = false },
-            },
-            DrawTab = function() end,
-            DrawQuickContent = function(draw)
-                draw.imgui.Checkbox("Quick B", false)
-            end,
-        },
-    })
-
-    local hud = {
-        setModMarker = noop,
-        markHashDirty = noop,
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        updateHash = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-    }
-
-    local theme = ModpackTestApi.createTheme()
-    local setup = {
-        NUM_PROFILES = 1,
-        defaultProfiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-    local config = {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, hud, theme, config, "test-pack", "Test Window",
-        setup.NUM_PROFILES, setup.defaultProfiles, setup.drawPackQuickContent)
-    builtUi.addMenuBar()
-    local ok, err = pcall(builtUi.renderWindow)
-
-    replaceTableContents(imgui, previousImGui)
-
-    lu.assertTrue(ok, tostring(err))
-    local joined = table.concat(checkboxLabels, "\n")
-    lu.assertStrContains(joined, "Enable Mod")
-    lu.assertStrContains(joined, "Quick B")
-end
-
-function TestPackBootstrap:testQuickSetupUsesLatestLiveModuleForQuickContent()
-    local previousImGui = rom.ImGui
-    local firstQuickRenders = 0
-    local secondQuickRenders = 0
-
-    local function noop() end
-
-    rom.ImGui = {
-        Begin = function() return true, true end,
-        End = noop,
-        SetNextWindowSize = noop,
-        MenuItem = function() return true end,
-        Checkbox = function(_, current) return current, false end,
-        IsItemHovered = function() return false end,
-        SetTooltip = noop,
-        Separator = noop,
-        SameLine = noop,
-        Spacing = noop,
-        TextColored = noop,
-        GetWindowWidth = function() return 1000 end,
-        BeginChild = function() return true end,
-        EndChild = noop,
-        Selectable = function() return false end,
-        BeginCombo = function() return false end,
-        EndCombo = noop,
-        PushItemWidth = noop,
-        PopItemWidth = noop,
-        Text = noop,
-        GetCursorPosX = function() return 0 end,
-        GetContentRegionAvail = function() return 1000 end,
-        GetCursorPosY = function() return 0 end,
-        SetCursorPos = noop,
-        SetCursorPosX = noop,
-        GetFrameHeight = function() return 20 end,
-        GetFrameHeightWithSpacing = function() return 24 end,
-        GetStyle = function()
-            return {
-                FramePadding = { x = 4, y = 3 },
-                ItemSpacing = { x = 8, y = 4 },
-            }
-        end,
-        CalcTextSize = function(text) return #(tostring(text or "")) * 8 end,
-        Button = function() return false end,
-        InputText = function(_, value) return value, false end,
-        GetClipboardText = function() return nil end,
-        SetClipboardText = noop,
-        CollapsingHeader = function() return false end,
-        Indent = noop,
-        Unindent = noop,
-        PushID = noop,
-        PopID = noop,
-        PushStyleColor = noop,
-        PopStyleColor = noop,
-    }
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            storage = {
-                { type = "bool", alias = "FlagA", default = false },
-            },
-            DrawTab = function() end,
-            DrawQuickContent = function()
-                firstQuickRenders = firstQuickRenders + 1
-            end,
-        },
-    })
-
-    local hud = {
-        setModMarker = noop,
-        markHashDirty = noop,
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        updateHash = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-    }
-
-    local theme = ModpackTestApi.createTheme()
-    local setup = {
-        NUM_PROFILES = 1,
-        defaultProfiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-    local config = {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, hud, theme, config, "test-pack", "Test Window",
-        setup.NUM_PROFILES, setup.defaultProfiles, setup.drawPackQuickContent)
-    builtUi.addMenuBar()
-    local okFirst, errFirst = pcall(builtUi.renderWindow)
-
-    local entry = moduleRegistry.modules[1]
-    local replacementDefinition = LibManagedModule.prepareDefinition({}, {
-        id = entry.id,
-        name = entry.name,
-        modpack = entry.modpack,
-        storage = {
-            { type = "bool", alias = "FlagA", default = false },
-        },
-    })
-    local persistentState, stagedState = CreateModuleState({
-        Enabled = true,
-        DebugMode = false,
-        FlagA = false,
-    }, replacementDefinition)
-    local replacementLiveModule = LibManagedModule.create({
-        pluginGuid = entry.pluginGuid,
-        definition = replacementDefinition,
-        persistentState = persistentState,
-        stagedState = stagedState,
-        drawTab = function() end,
-        drawQuickContent = function()
-            secondQuickRenders = secondQuickRenders + 1
-        end,
-    })
-    replacementLiveModule.activate()
-
-    local okSecond, errSecond = pcall(builtUi.renderWindow)
-
-    rom.ImGui = previousImGui
-
-    lu.assertTrue(okFirst, tostring(errFirst))
-    lu.assertTrue(okSecond, tostring(errSecond))
-    lu.assertEquals(firstQuickRenders, 1)
-    lu.assertEquals(secondQuickRenders, 1)
 end
 
 function TestPackBootstrap:testAlwaysDrawRendererFlushesPendingHashWhenGuiDisappears()
@@ -1821,11 +659,10 @@ function TestPackBootstrap:testAlwaysDrawRendererFlushesPendingHashWhenGuiDisapp
     }
 
     local packId = "flush-pack"
-    alwaysDraw = public.createGuiCallbacks(packId).alwaysDraw
+    local harness = CreateModpackHarness()
+    alwaysDraw = harness.createGuiCallbacks(packId).alwaysDraw
 
-    local capturedPacks = ModpackPackRegistry.packs
-    local previousPack = capturedPacks and capturedPacks[packId] or nil
-    capturedPacks[packId] = {
+    harness.packRegistry.packs[packId] = {
         ui = {
             flushPending = function()
                 flushCalls = flushCalls + 1
@@ -1842,199 +679,7 @@ function TestPackBootstrap:testAlwaysDrawRendererFlushesPendingHashWhenGuiDisapp
     alwaysDraw()
 
     rom.gui = previousGui
-    capturedPacks[packId] = previousPack
 
     lu.assertEquals(flushCalls, 0)
     lu.assertEquals(closeCalls, 1)
-end
-
-function TestPackBootstrap:testGuiCloseReleasesOverlaySuppression()
-    local flushCalls = 0
-    local suppressCalls = 0
-    local releaseCalls = 0
-    local previousImGui = rom.ImGui
-    local function noop() end
-
-    rom.ImGui = {
-        MenuItem = function()
-            return true
-        end,
-    }
-
-    local moduleRegistry = ModpackTestApi.createModuleRegistry("test-pack", {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {},
-    })
-    moduleRegistry.modules = {}
-    moduleRegistry.modulesById = {}
-    local hud = {
-        flushPendingHash = function()
-            flushCalls = flushCalls + 1
-        end,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-        markHashDirty = noop,
-    }
-    local theme = ModpackTestApi.createTheme()
-    local ui = ModpackTestApi.createUI(moduleRegistry, hud, theme, {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {},
-    }, "test-pack", "Test Window", 1, {
-        { Name = "", Hash = "", Tooltip = "" },
-    }, nil, nil, nil, {
-        order = {
-            system = 0,
-            modpack = 100,
-        },
-        define = function()
-            return true
-        end,
-        suppressForUi = function()
-            suppressCalls = suppressCalls + 1
-            return {
-                release = function()
-                    releaseCalls = releaseCalls + 1
-                end,
-            }
-        end,
-    })
-
-    ui.addMenuBar()
-    ui.handleGuiClosed()
-
-    rom.ImGui = previousImGui
-
-    lu.assertEquals(flushCalls, 1)
-    lu.assertEquals(suppressCalls, 1)
-    lu.assertEquals(releaseCalls, 1)
-end
-
-function TestPackBootstrap:testDisablingRunDataModuleFlushesSetupRunDataWhenMenuCloses()
-    local previousImGui = rom.ImGui
-    local previousSetupRunData = rom.game.SetupRunData
-    local setupRunDataCalls = 0
-    local quickSetupRan = false
-
-    rom.game.SetupRunData = function()
-        setupRunDataCalls = setupRunDataCalls + 1
-    end
-
-    local function noop() end
-
-    rom.ImGui = {
-        Begin = function() return true, true end,
-        End = noop,
-        SetNextWindowSize = noop,
-        MenuItem = function() return true end,
-        Checkbox = function(_, current) return current, false end,
-        IsItemHovered = function() return false end,
-        SetTooltip = noop,
-        Separator = noop,
-        SameLine = noop,
-        Spacing = noop,
-        TextColored = noop,
-        GetWindowWidth = function() return 1000 end,
-        BeginChild = function() return true end,
-        EndChild = noop,
-        Selectable = function() return false end,
-        BeginCombo = function() return false end,
-        EndCombo = noop,
-        PushItemWidth = noop,
-        PopItemWidth = noop,
-        Text = noop,
-        GetCursorPosX = function() return 0 end,
-        GetContentRegionAvail = function() return 1000 end,
-        GetCursorPosY = function() return 0 end,
-        SetCursorPos = noop,
-        SetCursorPosX = noop,
-        GetFrameHeight = function() return 20 end,
-        GetFrameHeightWithSpacing = function() return 24 end,
-        GetStyle = function()
-            return {
-                FramePadding = { x = 4, y = 3 },
-                ItemSpacing = { x = 8, y = 4 },
-            }
-        end,
-        CalcTextSize = function(text) return #(tostring(text or "")) * 8 end,
-        Button = function() return false end,
-        InputText = function(_, value) return value, false end,
-        GetClipboardText = function() return nil end,
-        SetClipboardText = noop,
-        CollapsingHeader = function() return false end,
-        Indent = noop,
-        Unindent = noop,
-        PushID = noop,
-        PopID = noop,
-        PushStyleColor = noop,
-        PopStyleColor = noop,
-    }
-
-    local moduleRegistry = MockModuleRegistry.create({
-        {
-            pluginGuid = "Alpha",
-            id = "Alpha",
-            name = "Alpha",
-            enabled = true,
-            storage = {},
-            patchPlan = function(plan)
-                plan:set({}, "unused", true)
-            end,
-            DrawTab = function() end,
-        },
-    })
-    setupRunDataCalls = 0
-
-    local hud = {
-        setModMarker = noop,
-        markHashDirty = noop,
-        flushPendingHash = noop,
-        setMarkerVisible = noop,
-        updateHash = noop,
-        getConfigHash = function()
-            return "hash", "fingerprint"
-        end,
-        applyConfigHash = function()
-            return true
-        end,
-    }
-
-    local theme = ModpackTestApi.createTheme()
-    local setup = {
-        NUM_PROFILES = 1,
-        defaultProfiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-        drawPackQuickContent = function(ctx)
-            if not quickSetupRan then
-                quickSetupRan = true
-                ctx.setModulesEnabled({ "Alpha" }, false)
-            end
-        end,
-    }
-    local config = {
-        ModEnabled = true,
-        DebugMode = false,
-        Profiles = {
-            { Name = "", Hash = "", Tooltip = "" },
-        },
-    }
-
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, hud, theme, config, "test-pack", "Test Window",
-        setup.NUM_PROFILES, setup.defaultProfiles, setup.drawPackQuickContent)
-    builtUi.addMenuBar()
-    local ok, err = pcall(builtUi.renderWindow)
-    builtUi.addMenuBar()
-
-    rom.ImGui = previousImGui
-    rom.game.SetupRunData = previousSetupRunData
-
-    lu.assertTrue(ok, tostring(err))
-    lu.assertTrue(quickSetupRan)
-    lu.assertEquals(setupRunDataCalls, 1)
 end

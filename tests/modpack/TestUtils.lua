@@ -4,6 +4,7 @@
 
 public = {}
 _PLUGIN = { guid = "adamant-ModpackLib" }
+local nativeConfigFixture = require("tests/harness/native_config_fixture")
 
 local function deepCopy(orig)
     if type(orig) ~= "table" then return orig end
@@ -133,8 +134,6 @@ Warnings = {}
 dofile("src/main.lua")
 lib = public
 rom.mods['adamant-ModpackLib'] = lib
-public = lib.modpack
-ModpackPackRegistry = AdamantModpackLib_Runtime.registry.modpacks
 
 function CaptureWarnings()
     Warnings = {}
@@ -216,139 +215,119 @@ LibOverlays = setmetatable({}, {
     end,
 })
 
-local function formatConfigValue(value)
-    if type(value) == "boolean" then
-        return value and "true" or "false"
-    elseif type(value) == "number" then
-        return tostring(value)
-    end
-    value = tostring(value or "")
-    value = string.gsub(value, "\\", "\\\\")
-    value = string.gsub(value, '"', '\\"')
-    value = string.gsub(value, "\n", "\\n")
-    return '"' .. value .. '"'
-end
-
-local function writeConfigFile(path, values)
-    local file = assert(io.open(path, "w"))
-    file:write("## Settings file was created by plugin adamant-ModpackLib modpack test harness\n\n")
-    file:write("[config]\n\n")
-    for key, value in pairs(values or {}) do
-        if type(value) == "table" then
-            file:write(tostring(key), "._RowCount = ", tostring(#value), "\n")
-        else
-            file:write(tostring(key), " = ", formatConfigValue(value), "\n")
-        end
-    end
-    for key, value in pairs(values or {}) do
-        if type(value) == "table" then
-            for rowIndex, row in ipairs(value) do
-                file:write("\n[config.", tostring(key), ".", tostring(rowIndex), "]\n")
-                for childKey, childValue in pairs(row) do
-                    file:write(tostring(childKey), " = ", formatConfigValue(childValue), "\n")
-                end
-            end
-        end
-    end
-    file:close()
-end
-
-local function trim(value)
-    return tostring(value or ""):match("^%s*(.-)%s*$")
-end
-
-local function parseConfigValue(rawValue)
-    rawValue = trim(rawValue)
-    if rawValue == "" then
-        return ""
-    end
-    local first = string.sub(rawValue, 1, 1)
-    local last = string.sub(rawValue, -1)
-    if first == '"' and last == '"' and #rawValue >= 2 then
-        local value = string.sub(rawValue, 2, -2)
-        value = string.gsub(value, "\\n", "\n")
-        value = string.gsub(value, '\\"', '"')
-        value = string.gsub(value, "\\\\", "\\")
-        return value
-    end
-    local lower = string.lower(rawValue)
-    if lower == "true" then
-        return true
-    elseif lower == "false" then
-        return false
-    end
-    local numberValue = tonumber(rawValue)
-    if numberValue ~= nil then
-        return numberValue
-    end
-    return rawValue
-end
-
-local function readConfigFile(path)
-    local values = {}
-    local file = io.open(path, "r")
-    if not file then
-        return values
-    end
-    local currentSection = "config"
-    for line in file:lines() do
-        local section = string.match(line, "^%s*%[([^%]]+)%]%s*$")
-        if section then
-            currentSection = trim(section)
-        elseif not string.match(line, "^%s*[#;]") then
-            local key, rawValue = string.match(line, "^%s*([^=]-)%s*=%s*(.-)%s*$")
-            key = key and trim(key) or nil
-            if key and key ~= "" then
-                local tableRoot, rowIndex = string.match(currentSection, "^config%.([^%.]+)%.(%d+)$")
-                if tableRoot then
-                    values[tableRoot] = values[tableRoot] or {}
-                    rowIndex = tonumber(rowIndex)
-                    values[tableRoot][rowIndex] = values[tableRoot][rowIndex] or {}
-                    values[tableRoot][rowIndex][key] = parseConfigValue(rawValue)
-                elseif currentSection == "config" then
-                    local rowCountRoot = string.match(key, "^(.+)%.%_RowCount$")
-                    if rowCountRoot then
-                        values[rowCountRoot] = values[rowCountRoot] or {}
-                    else
-                        values[key] = parseConfigValue(rawValue)
-                    end
-                end
-            end
-        end
-    end
-    file:close()
-    return values
-end
-
-local function installConfigProxy(config, path)
-    if type(config) ~= "table" then
-        return
-    end
-    local snapshot = deepCopy(config)
-    for key in pairs(config) do
-        config[key] = nil
-    end
-    setmetatable(config, {
-        __index = function(_, key)
-            return readConfigFile(path)[key]
-        end,
-        __newindex = function(_, key, value)
-            local current = readConfigFile(path)
-            current[key] = value
-            writeConfigFile(path, current)
-        end,
-    })
-    writeConfigFile(path, snapshot)
-end
+local nativeConfigRoot = "/tmp/adamant-modpacklib-modpack-tests-" .. tostring(os.clock()):gsub("[^%d]", "")
+nativeConfigFixture.configureRoot(rom, nativeConfigRoot)
 
 function CreateModuleState(config, definition)
     config = config or {}
-    local configPath = os.tmpname()
-    installConfigProxy(config, configPath)
+    local configPath = nativeConfigFixture.create(nativeConfigRoot, config)
     local state = LibModuleState.create(definition, {
         configPath = configPath,
     })
     return state.persistentState, state.stagedState
+end
+
+function InstallWindowImGuiStub(overrides)
+    overrides = overrides or {}
+    local previousImGui = rom.ImGui
+    local imgui = previousImGui or {}
+    local previousValues = {}
+    for key, value in pairs(imgui) do
+        previousValues[key] = value
+    end
+    local function noop() end
+    local stub = {
+        Begin = function() return true, true end,
+        End = noop,
+        SetNextWindowSize = noop,
+        MenuItem = function() return true end,
+        Checkbox = function(_, current) return current, false end,
+        IsItemHovered = function() return false end,
+        SetTooltip = noop,
+        Separator = noop,
+        SameLine = noop,
+        Spacing = noop,
+        GetWindowWidth = function() return 1000 end,
+        BeginChild = function() return true end,
+        EndChild = noop,
+        Selectable = function() return false end,
+        BeginCombo = function() return false end,
+        EndCombo = noop,
+        PushItemWidth = noop,
+        PopItemWidth = noop,
+        Text = noop,
+        TextColored = noop,
+        GetCursorPosX = function() return 0 end,
+        GetContentRegionAvail = function() return 1000 end,
+        GetCursorPosY = function() return 0 end,
+        SetCursorPos = noop,
+        SetCursorPosX = noop,
+        GetFrameHeight = function() return 20 end,
+        GetFrameHeightWithSpacing = function() return 24 end,
+        GetStyle = function()
+            return {
+                FramePadding = { x = 4, y = 3 },
+                ItemSpacing = { x = 8, y = 4 },
+            }
+        end,
+        CalcTextSize = function(text) return #(tostring(text or "")) * 8 end,
+        Button = function() return false end,
+        InputText = function(_, value) return value, false end,
+        GetClipboardText = function() return nil end,
+        SetClipboardText = noop,
+        CollapsingHeader = function() return false end,
+        Indent = noop,
+        Unindent = noop,
+        PushID = noop,
+        PopID = noop,
+        PushStyleColor = noop,
+        PopStyleColor = noop,
+    }
+
+    for key, value in pairs(overrides) do
+        stub[key] = value
+    end
+
+    for key in pairs(imgui) do
+        imgui[key] = nil
+    end
+    for key, value in pairs(stub) do
+        imgui[key] = value
+    end
+    rom.ImGui = imgui
+    return function()
+        for key in pairs(imgui) do
+            imgui[key] = nil
+        end
+        for key, value in pairs(previousValues) do
+            imgui[key] = value
+        end
+        rom.ImGui = previousImGui
+    end, imgui
+end
+
+function CreateModpackHudStub(overrides)
+    overrides = overrides or {}
+    local function noop() end
+    local hud = {
+        setModMarker = noop,
+        markHashDirty = noop,
+        flushPendingHash = noop,
+        setMarkerVisible = noop,
+        updateHash = noop,
+        getConfigHash = function()
+            return "hash", "fingerprint"
+        end,
+        applyConfigHash = function()
+            return true
+        end,
+    }
+
+    for key, value in pairs(overrides) do
+        hud[key] = value
+    end
+
+    return hud
 end
 
 import = function(path, fenv, ...)
@@ -356,14 +335,20 @@ import = function(path, fenv, ...)
     return chunk(...)
 end
 
-ModpackTestApi = setmetatable({}, {
+local modpackPublic = lib.modpack
+
+ModpackTestApi = setmetatable({
+    public = modpackPublic,
+}, {
     __index = function(_, key)
-        return public[key]
+        return modpackPublic[key]
     end,
     __newindex = function(_, key, value)
-        rawset(public, key, value)
+        rawset(modpackPublic, key, value)
     end,
 })
+
+local logging = import("core/modpack/logging.lua")
 
 local function makeModpackImportEnv(importOverrides)
     local env = {}
@@ -410,28 +395,34 @@ function CreateModpackHarness(opts)
     local harnessLibConfig = opts.libConfig or LibConfig
     local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
     local getLiveModule = opts.getLiveModule or LibManagedModule.getLiveModule
+    local harnessPackRegistry = opts.packRegistry or {}
+    local harnessCoordination = opts.coordination or import("core/modpack/coordination.lua", nil, {
+        logging = logging,
+        coordinationRegistry = opts.coordinationRegistry or {},
+    })
     local env = makeModpackImportEnv(mapConstructorOverrides(opts.constructors))
     local modpackCore = assert(loadfile("src/core/modpack/init.lua", "t", env))({
         rom = harnessRom,
         libConfig = harnessLibConfig,
         storage = LibStorage,
-        coordination = LibTestImports["core/modpack/coordination.lua"],
+        coordination = harnessCoordination,
         overlaySurface = harnessOverlaySurface,
         getLiveModule = getLiveModule,
-        packRegistry = ModpackPackRegistry,
+        packRegistry = harnessPackRegistry,
     })
 
     return {
         rom = harnessRom,
         libConfig = harnessLibConfig,
         overlaySurface = harnessOverlaySurface,
-        packRegistry = ModpackPackRegistry,
+        modpack = modpackCore,
+        coordination = harnessCoordination,
+        packRegistry = harnessPackRegistry,
         registerCoordinator = modpackCore.registerCoordinator,
         createPack = modpackCore.createPack,
         createGuiCallbacks = modpackCore.createGuiCallbacks,
     }
 end
-local logging = import("core/modpack/logging.lua")
 local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
     rom = rom,
     logging = logging,
