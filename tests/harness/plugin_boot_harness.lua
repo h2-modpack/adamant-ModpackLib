@@ -52,8 +52,10 @@ end
 
 local function assertPlugin(plugin, index)
     assert(type(plugin) == "table", "plugin entry " .. tostring(index) .. " must be a table")
-    assert(type(plugin.guid) == "string" and plugin.guid ~= "", "plugin entry " .. tostring(index) .. " guid is required")
-    assert(type(plugin.srcDir) == "string" and plugin.srcDir ~= "", "plugin entry " .. tostring(index) .. " srcDir is required")
+    assert(type(plugin.guid) == "string" and plugin.guid ~= "",
+        "plugin entry " .. tostring(index) .. " guid is required")
+    assert(type(plugin.srcDir) == "string" and plugin.srcDir ~= "",
+        "plugin entry " .. tostring(index) .. " srcDir is required")
 end
 
 local function runtimeRegistry(libEnv)
@@ -103,15 +105,23 @@ function Harness.boot(opts)
     env.lib = libEnv.public
     env.rom.mods[libGuid] = libEnv.public
 
-    local pluginEnvs = {}
-    local pluginsByGuid = {}
-    for index, plugin in ipairs(normalizePlugins(opts)) do
+    local boot = {
+        env = env,
+        lib = libEnv.public,
+        libEnv = libEnv,
+        callbacks = callbacks,
+        pluginEnvs = {},
+        pluginsByGuid = {},
+    }
+
+    function boot:loadPlugin(plugin)
+        local index = #self.pluginEnvs + 1
         assertPlugin(plugin, index)
         if type(plugin.configureEnv) == "function" then
-            plugin.configureEnv(env, callbacks)
+            plugin.configureEnv(self.env, self.callbacks)
         end
 
-        local pluginEnv = fakeEngine.loadPlugin(env, plugin.guid, plugin.srcDir, {
+        local pluginEnv = fakeEngine.loadPlugin(self.env, plugin.guid, plugin.srcDir, {
             public = plugin.public,
             imports = plugin.imports,
             importOverrides = plugin.importOverrides,
@@ -119,18 +129,10 @@ function Harness.boot(opts)
             plugin = plugin.plugin or { guid = plugin.guid },
             register = plugin.register ~= false,
         })
-        pluginEnvs[#pluginEnvs + 1] = pluginEnv
-        pluginsByGuid[plugin.guid] = pluginEnv
+        self.pluginEnvs[index] = pluginEnv
+        self.pluginsByGuid[plugin.guid] = pluginEnv
+        return pluginEnv
     end
-
-    local boot = {
-        env = env,
-        lib = libEnv.public,
-        libEnv = libEnv,
-        callbacks = callbacks,
-        pluginEnvs = pluginEnvs,
-        pluginsByGuid = pluginsByGuid,
-    }
 
     function boot:runAllModsLoaded()
         fakeEngine.runAllModsLoaded(self.callbacks)
@@ -153,6 +155,10 @@ function Harness.boot(opts)
         local modules = registry and registry.modules
         local liveModules = modules and modules.live
         return liveModules and liveModules[pluginGuid] or nil
+    end
+
+    for _, plugin in ipairs(normalizePlugins(opts)) do
+        boot:loadPlugin(plugin)
     end
 
     if opts.runAllModsLoaded == true then
