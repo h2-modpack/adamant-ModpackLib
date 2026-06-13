@@ -115,16 +115,23 @@ function ShellSmoke.buildManifest(opts)
     local mainPath = coordinator.path .. "/src/main.lua"
     local packId = parseLuaString(readFile(joinPath(rootDir, mainPath)), "PACK_ID", mainPath)
     local libDir = opts.libDir or "adamant-ModpackLib"
+    local modules = buildModules(rootDir, paths, packId, coordinator.package.namespace)
 
-    return {
+    local manifest = {
+        allowEmpty = true,
         libSrcDir = joinPath(rootDir, libDir .. "/src"),
         packId = packId,
-        modules = buildModules(rootDir, paths, packId, coordinator.package.namespace),
-        coordinator = {
+        modules = modules,
+    }
+
+    if #modules > 0 then
+        manifest.coordinator = {
             pluginGuid = coordinator.package.pluginGuid,
             srcDir = joinPath(rootDir, coordinator.path .. "/src"),
-        },
-    }
+        }
+    end
+
+    return manifest
 end
 
 function ShellSmoke.run(opts)

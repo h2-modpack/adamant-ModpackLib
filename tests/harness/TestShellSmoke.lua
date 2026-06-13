@@ -88,6 +88,24 @@ function TestShellSmoke.testBuildManifestDerivesRegisteredShellLayout()
     lu.assertEquals(manifest.modules[1].expectedModuleId, "First")
 end
 
+function TestShellSmoke.testBuildManifestAllowsEmptyShell()
+    local root = makeTempDir()
+    writeCoordinator(root)
+    writeGitmodules(root, {
+        "team-Pack_Modpack",
+    })
+
+    local manifest = shellSmoke.buildManifest({
+        rootDir = root,
+        libDir = "Lib",
+    })
+
+    lu.assertTrue(manifest.allowEmpty)
+    lu.assertEquals(manifest.packId, "test-pack")
+    lu.assertEquals(#manifest.modules, 0)
+    lu.assertNil(manifest.coordinator)
+end
+
 function TestShellSmoke.testBuildManifestRejectsModuleTeamMismatch()
     local root = makeTempDir()
     writeCoordinator(root)
