@@ -1,169 +1,5 @@
-local MAX_UINT32 = 4294967295
+local fakeEngine = require("tests/harness/fake_engine")
 local nativeConfigFixture = require("tests/harness/native_config_fixture")
-
-local function deepCopy(value)
-    if type(value) ~= "table" then
-        return value
-    end
-
-    local copy = {}
-    for key, child in pairs(value) do
-        copy[key] = deepCopy(child)
-    end
-    return copy
-end
-
-local function makeBitBinaryOp(predicate)
-    return function(a, b)
-        local result = 0
-        local bitValue = 1
-        a = a or 0
-        b = b or 0
-
-        while a > 0 or b > 0 do
-            local abit = a % 2
-            local bbit = b % 2
-            if predicate(abit, bbit) then
-                result = result + bitValue
-            end
-            a = math.floor(a / 2)
-            b = math.floor(b / 2)
-            bitValue = bitValue * 2
-        end
-
-        return result
-    end
-end
-
-local function ensureBit32(env)
-    env.bit32 = env.bit32 or bit32 or {
-        band = makeBitBinaryOp(function(a, b)
-            return a == 1 and b == 1
-        end),
-        bor = makeBitBinaryOp(function(a, b)
-            return a == 1 or b == 1
-        end),
-        bnot = function(a)
-            return MAX_UINT32 - (a or 0)
-        end,
-        lshift = function(a, n)
-            return ((a or 0) * (2 ^ (n or 0))) % (2 ^ 32)
-        end,
-        rshift = function(a, n)
-            return math.floor((a or 0) / (2 ^ (n or 0)))
-        end,
-    }
-end
-
-local function createModUtil()
-    return {
-        Path = {
-            Wrap = function() end,
-            Override = function() end,
-            Restore = function() end,
-            Context = {
-                Wrap = function() end,
-            },
-        },
-    }
-end
-
-local function createModUtilPlugin()
-    return {
-        globals = {},
-        once_loaded = {
-            game = function() end,
-        },
-    }
-end
-
-local function createRom(config, opts)
-    local rom = opts.rom or {
-        mods = {},
-        game = {
-            DeepCopyTable = deepCopy,
-            SetupRunData = function() end,
-        },
-        ImGui = {},
-        ImGuiCond = {
-            FirstUseEver = 1,
-        },
-        ImGuiCol = {
-            Text = 1,
-        },
-        gui = {
-            add_to_menu_bar = function() end,
-            add_imgui = function() end,
-            add_always_draw_imgui = function() end,
-            is_open = function()
-                return false
-            end,
-        },
-    }
-
-    rom.mods = rom.mods or {}
-    rom.game = rom.game or {}
-    rom.game.DeepCopyTable = rom.game.DeepCopyTable or deepCopy
-    rom.game.SetupRunData = rom.game.SetupRunData or function() end
-    rom.game.CurrentRun = opts.CurrentRun
-    rom.game.ScreenData = opts.ScreenData
-    rom.game.HUDScreen = opts.HUDScreen
-    rom.game.ShowingCombatUI = opts.ShowingCombatUI
-    rom.game.ModifyTextBox = opts.ModifyTextBox
-    rom.game.SetAlpha = opts.SetAlpha
-    rom.game.CreateComponentFromData = opts.CreateComponentFromData
-    rom.game.Destroy = opts.Destroy
-    rom.ImGui = rom.ImGui or {}
-    rom.ImGuiCond = rom.ImGuiCond or { FirstUseEver = 1 }
-    rom.ImGuiCol = rom.ImGuiCol or { Text = 1 }
-    rom.gui = rom.gui or {}
-    rom.gui.add_to_menu_bar = rom.gui.add_to_menu_bar or function() end
-    rom.gui.add_imgui = rom.gui.add_imgui or function() end
-    rom.gui.add_always_draw_imgui = rom.gui.add_always_draw_imgui or function() end
-    rom.gui.is_open = rom.gui.is_open or function()
-        return false
-    end
-
-    rom.mods['SGG_Modding-ENVY'] = rom.mods['SGG_Modding-ENVY'] or {
-        auto = function()
-            return {}
-        end,
-    }
-    rom.mods['SGG_Modding-Chalk'] = opts.chalk or rom.mods['SGG_Modding-Chalk'] or {
-        auto = function()
-            return config
-        end,
-        original = function(rawConfig)
-            return deepCopy(rawConfig)
-        end,
-    }
-    rom.mods['SGG_Modding-ModUtil'] = opts.modutilPlugin or rom.mods['SGG_Modding-ModUtil'] or createModUtilPlugin()
-    rom.mods['SGG_Modding-ModUtil'].globals = rom.mods['SGG_Modding-ModUtil'].globals or rom.game
-
-    return rom
-end
-
-local function buildHarnessImport(env, imports, importOverrides)
-    return function(path, fenv, ...)
-        local override = importOverrides[path]
-        local result
-        if override ~= nil then
-            if type(override) == "function" then
-                result = override(path, fenv, ...)
-            else
-                result = override
-            end
-        else
-            local chunk = assert(loadfile("src/" .. path, "t", fenv or env))
-            result = chunk(...)
-        end
-
-        if result ~= nil then
-            imports[path] = result
-        end
-        return result
-    end
-end
 
 local function createLibHarness(opts)
     opts = opts or {}
@@ -173,21 +9,22 @@ local function createLibHarness(opts)
 
     local runtimeRoot = opts.runtime or {}
     local plugin = opts.plugin or { guid = "test-module" }
-    local rom = createRom(config, opts)
     local nativeConfigRoot = opts.nativeConfigRoot
         or ("/tmp/adamant-modpacklib-tests-" .. tostring(os.clock()):gsub("[^%d]", ""))
-    nativeConfigFixture.configureRoot(rom, nativeConfigRoot)
-    local modUtilRuntime = opts.modutil or opts.modUtilRuntime or createModUtil()
-    rom.mods['SGG_Modding-ModUtil'].globals.ModUtil = modUtilRuntime
     local imports = {}
     local importOverrides = opts.importOverrides or {}
-
-    local env = setmetatable({
+    local callbacks = opts.callbacks or fakeEngine.createCallbacks()
+    local env = fakeEngine.createBaseEnv({
+        callbacks = callbacks,
         public = public,
-        rom = rom,
-        ModUtil = modUtilRuntime,
-        _PLUGIN = plugin,
-        AdamantModpackLib_Runtime = runtimeRoot,
+        config = config,
+        plugin = plugin,
+        runtimeRoot = runtimeRoot,
+        rom = opts.rom,
+        chalk = opts.chalk,
+        modutilPlugin = opts.modutilPlugin,
+        modUtilRuntime = opts.modutil or opts.modUtilRuntime,
+        CurrentRun = opts.CurrentRun,
         ScreenData = opts.ScreenData,
         HUDScreen = opts.HUDScreen,
         ShowingCombatUI = opts.ShowingCombatUI,
@@ -196,14 +33,14 @@ local function createLibHarness(opts)
         CreateComponentFromData = opts.CreateComponentFromData,
         Destroy = opts.Destroy,
         ImGuiComboFlags = opts.ImGuiComboFlags or { NoPreview = 64 },
-        ImGuiCol = opts.ImGuiCol or rom.ImGuiCol,
+        ImGuiCol = opts.ImGuiCol,
         ImGuiTreeNodeFlags = opts.ImGuiTreeNodeFlags or {},
-    }, {
-        __index = _G,
+        imports = imports,
+        importOverrides = importOverrides,
+        installImport = true,
     })
-    env._G = env
-    ensureBit32(env)
-    env.import = buildHarnessImport(env, imports, importOverrides)
+    local rom = env.rom
+    nativeConfigFixture.configureRoot(rom, nativeConfigRoot)
 
     local externals = {
         rom = rom,
@@ -278,14 +115,17 @@ local function createLibHarness(opts)
         file:close()
         return contents
     end
-    function harness:createConfigFixture(config, pluginGuid)
-        return nativeConfigFixture.create(self.nativeConfigRoot, config, pluginGuid)
+    function harness:createConfigFixture(configValues, pluginGuid)
+        return nativeConfigFixture.create(self.nativeConfigRoot, configValues, pluginGuid)
     end
-    function harness:createModuleState(config, definition, opts)
-        opts = opts or {}
-        local configPath = opts.configPath or self:createConfigFixture(config or {}, opts.pluginGuid)
+    function harness:createModuleState(configValues, definition, createStateOpts)
+        createStateOpts = createStateOpts or {}
+        local configPath = createStateOpts.configPath or self:createConfigFixture(
+            configValues or {},
+            createStateOpts.pluginGuid
+        )
         local createOpts = {}
-        for key, value in pairs(opts) do
+        for key, value in pairs(createStateOpts) do
             createOpts[key] = value
         end
         createOpts.configPath = configPath

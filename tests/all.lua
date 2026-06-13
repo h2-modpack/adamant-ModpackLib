@@ -8,6 +8,8 @@ require('tests/bootstrap/TestLogging')
 require('tests/bootstrap/TestValues')
 require('tests/bootstrap/TestGameDeps')
 require('tests/bootstrap/TestSystemScope')
+require('tests/harness/TestFakeEngine')
+require('tests/harness/TestPluginBootHarness')
 
 require('tests/storage/TestStorageValidation')
 require('tests/storage/TestHashing')

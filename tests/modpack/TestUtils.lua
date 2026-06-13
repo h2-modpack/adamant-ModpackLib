@@ -1,63 +1,16 @@
 -- =============================================================================
--- Test utilities: mock engine globals and load Lib modpack subsystem for testing
+-- Test utilities: load Lib and expose shared modpack test helpers.
 -- =============================================================================
+-- luacheck: globals LibConfig LibTestImports Warnings lib CaptureWarnings RestoreWarnings
+-- luacheck: globals GetRuntimeLiveModules SetRuntimeLiveModule LibStorage LibModuleState LibManagedModule LibOverlays
+-- luacheck: globals CreateModuleState InstallWindowImGuiStub CreateModpackHudStub import ModpackTestApi CreateModpackHarness
+-- luacheck: globals MockModuleRegistry _originalPrint print
 
-public = {}
-_PLUGIN = { guid = "adamant-ModpackLib" }
+local fakeEngine = require("tests/harness/fake_engine")
 local nativeConfigFixture = require("tests/harness/native_config_fixture")
 
-local function deepCopy(orig)
-    if type(orig) ~= "table" then return orig end
-    local copy = {}
-    for k, v in pairs(orig) do
-        copy[k] = deepCopy(v)
-    end
-    return copy
-end
-
-rom = {
-    mods = {},
-    game = {
-        DeepCopyTable = deepCopy,
-        SetupRunData = function() end,
-    },
-    ImGui = {},
-    ImGuiCond = {
-        FirstUseEver = 1,
-    },
-    ImGuiCol = {
-        Text = 1,
-        TextDisabled = 2,
-        WindowBg = 3,
-        ChildBg = 4,
-        Header = 5,
-        HeaderHovered = 6,
-        HeaderActive = 7,
-        Button = 8,
-        ButtonHovered = 9,
-        ButtonActive = 10,
-        FrameBg = 11,
-        FrameBgHovered = 12,
-        FrameBgActive = 13,
-        CheckMark = 14,
-        Tab = 15,
-        TabHovered = 16,
-        TabActive = 17,
-        Separator = 18,
-        Border = 19,
-        TitleBgActive = 20,
-    },
-    gui = {
-        add_to_menu_bar = function() end,
-        add_imgui = function() end,
-        add_always_draw_imgui = function() end,
-        is_open = function() return true end,
-    },
-}
-
-rom.mods['SGG_Modding-ENVY'] = {
-    auto = function() return {} end,
-}
+local libPublic = {}
+local libPlugin = { guid = "adamant-ModpackLib" }
 
 LibConfig = {
     DebugMode = false,
@@ -69,28 +22,7 @@ LibConfig = {
     },
 }
 
-rom.mods['SGG_Modding-Chalk'] = {
-    auto = function() return LibConfig end,
-}
-
-rom.mods['SGG_Modding-ModUtil'] = {
-    once_loaded = {
-        game = function() end,
-    },
-    mod = {
-        Path = {
-            Wrap = function() end,
-        },
-    },
-}
-
-ImGuiComboFlags = {
-    NoPreview = 64,
-}
-
-ImGuiCol = rom.ImGuiCol
-
-ImGuiTreeNodeFlags = {
+local TEST_IMGUI_TREE_NODE_FLAGS = {
     None = 0,
     Selected = 1,
     Framed = 2,
@@ -110,29 +42,26 @@ ImGuiTreeNodeFlags = {
 }
 
 LibTestImports = {}
-LibTestImportOverrides = {}
 
-import = function(path, fenv, ...)
-    local override = LibTestImportOverrides[path]
-    if override ~= nil then
-        if type(override) == "function" then
-            return override(path, fenv, ...)
-        end
-        return override
-    end
+local libEnv = fakeEngine.createBaseEnv({
+    public = libPublic,
+    plugin = libPlugin,
+    config = LibConfig,
+    imports = LibTestImports,
+    installImport = true,
+    ImGuiTreeNodeFlags = TEST_IMGUI_TREE_NODE_FLAGS,
+    chalkOriginal = function(rawConfig)
+        return rawConfig
+    end,
+})
+assert(loadfile("src/main.lua", "t", libEnv))()
 
-    local chunk = assert(loadfile("src/" .. path, "t", fenv or _ENV))
-    local result = chunk(...)
-    if result ~= nil then
-        LibTestImports[path] = result
-    end
-    return result
-end
+rom = libEnv.rom
+local libRuntimeRoot = libEnv.AdamantModpackLib_Runtime
 
 Warnings = {}
 
-dofile("src/main.lua")
-lib = public
+lib = libEnv.public
 rom.mods['adamant-ModpackLib'] = lib
 
 function CaptureWarnings()
@@ -151,8 +80,7 @@ function RestoreWarnings()
 end
 
 function GetRuntimeLiveModules()
-    local runtimeRoot = assert(AdamantModpackLib_Runtime, "Lib runtime missing")
-    local registry = assert(runtimeRoot.registry, "Lib registry missing")
+    local registry = assert(libRuntimeRoot.registry, "Lib registry missing")
     local modules = assert(registry.modules, "module registry missing")
     return assert(modules.live, "runtime live modules missing")
 end
@@ -330,10 +258,9 @@ function CreateModpackHudStub(overrides)
     return hud
 end
 
-import = function(path, fenv, ...)
-    local chunk = assert(loadfile("src/" .. path, "t", fenv or _ENV))
-    return chunk(...)
-end
+import = fakeEngine.buildImport(_ENV, {
+    srcDir = "src",
+})
 
 local modpackPublic = lib.modpack
 
@@ -351,22 +278,12 @@ ModpackTestApi = setmetatable({
 local logging = import("core/modpack/logging.lua")
 
 local function makeModpackImportEnv(importOverrides)
-    local env = {}
-
-    local function importWithOverrides(path, fenv, ...)
-        local override = importOverrides and importOverrides[path] or nil
-        if override ~= nil then
-            return override
-        end
-
-        local chunk = assert(loadfile("src/" .. path, "t", fenv or env))
-        return chunk(...)
-    end
-
-    env.import = importWithOverrides
-    return setmetatable(env, {
-        __index = _ENV,
+    local env = fakeEngine.addFallback({}, _ENV)
+    env.import = fakeEngine.buildImport(env, {
+        srcDir = "src",
+        importOverrides = importOverrides,
     })
+    return env
 end
 
 local function mapConstructorOverrides(constructors)
@@ -382,7 +299,9 @@ local function mapConstructorOverrides(constructors)
 
     for name, path in pairs(constructorPaths) do
         if constructors[name] ~= nil then
-            importOverrides[path] = constructors[name]
+            importOverrides[path] = function()
+                return constructors[name]
+            end
         end
     end
 
