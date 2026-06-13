@@ -107,6 +107,15 @@ local function buildModules(rootDir, paths, packId, team)
     return modules
 end
 
+local function hasRegisteredModulePaths(paths)
+    for _, repoPath in ipairs(paths) do
+        if repoPath:match("^Submodules/") then
+            return true
+        end
+    end
+    return false
+end
+
 function ShellSmoke.buildManifest(opts)
     opts = opts or {}
     local rootDir = opts.rootDir or "."
@@ -118,7 +127,7 @@ function ShellSmoke.buildManifest(opts)
     local modules = buildModules(rootDir, paths, packId, coordinator.package.namespace)
 
     local manifest = {
-        allowEmpty = true,
+        allowEmpty = not hasRegisteredModulePaths(paths),
         libSrcDir = joinPath(rootDir, libDir .. "/src"),
         packId = packId,
         modules = modules,
