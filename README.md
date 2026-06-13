@@ -60,7 +60,7 @@ Use the stack entrypoint that matches the job:
   `ModpackTools/run ModpackTools/new_module/create.py --package-id My_Module --title "My Module"`.
 - Start standalone module code from
   [`ModpackModuleTemplate`](https://github.com/h2-modpack/ModpackModuleTemplate).
-- Validate a full shell workspace with `ModpackTools/run ModpackTools/test_all.py`.
+- Validate a full shell workspace with `ModpackTools/run ModpackTools/local_test/all.py`.
 
 ## Docs
 

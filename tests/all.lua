@@ -11,6 +11,7 @@ require('tests/bootstrap/TestSystemScope')
 require('tests/harness/TestFakeEngine')
 require('tests/harness/TestPluginBootHarness')
 require('tests/harness/TestSmokeRunner')
+require('tests/harness/TestShellSmoke')
 
 require('tests/storage/TestStorageValidation')
 require('tests/storage/TestHashing')

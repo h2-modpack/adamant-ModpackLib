@@ -35,5 +35,5 @@ lua52.exe tests/all.lua
 For shell-repo validation, run:
 
 ```bash
-python ModpackTools/test_all.py
+ModpackTools/run ModpackTools/local_test/all.py
 ```

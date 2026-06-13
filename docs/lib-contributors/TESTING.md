@@ -21,13 +21,18 @@ finishing a Lib change.
 From the shell repo root, run:
 
 ```bash
-ModpackTools/run ModpackTools/test_all.py
+ModpackTools/run ModpackTools/local_test/all.py
 ```
 
-This is the high-signal end-to-end validation path for the repo family. It runs
-Lib, module, and ModpackTools tests through the shared test harness. The generic
-boot smoke exercises `lib.modpack` directly; it no longer requires a separate
-pack-host package.
+This is the high-signal local assembled-checkout validation path for the repo
+family. It runs the same shell smoke command as shell CI, then runs each
+registered repo's declared `tests/all.lua` or `tests/all.py` entrypoint when
+present.
+
+Shell repos keep `tests/smoke.lua` as a thin caller into
+`tests/harness/shell_smoke.lua`. The shared harness derives the smoke layout
+from `.gitmodules`, package metadata, and the coordinator `PACK_ID`, so shell
+repos do not duplicate module-roster discovery logic.
 
 ## Module Test Boundary
 
