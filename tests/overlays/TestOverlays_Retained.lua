@@ -230,6 +230,7 @@ function TestOverlays_Retained:testModuleOverlayProjectionOnlyExposesOwnedRefres
         overlays.onCommit(function(_, _, overlay)
             seen = {
                 refresh = type(overlay.refresh),
+                refreshOwned = type(overlay.refreshOwned),
                 refreshRegion = overlay.refreshRegion,
                 refreshAll = overlay.refreshAll,
             }
@@ -242,6 +243,7 @@ function TestOverlays_Retained:testModuleOverlayProjectionOnlyExposesOwnedRefres
 
     lu.assertEquals(seen, {
         refresh = "function",
+        refreshOwned = "function",
         refreshRegion = nil,
         refreshAll = nil,
     })
@@ -312,6 +314,120 @@ function TestOverlays_Retained:testModuleOwnedRefreshDoesNotEvaluateSiblingVisib
 
     failOnSiblingVisibility = true
     self.h.overlays.dispatchCommit(host, {})
+
+    lu.assertTrue(siblingRowVisibilityCalls > 0)
+    lu.assertTrue(siblingColumnVisibilityCalls > 0)
+end
+
+function TestOverlays_Retained:testModuleRefreshOwnedUpdatesAllOwnedElementsWithoutSiblingVisibility()
+    local modified = {}
+    self.h.game.modifyTextBox = function(args)
+        modified[#modified + 1] = args
+    end
+
+    local failOnSiblingVisibility = false
+    local siblingHost, siblingAuthorModule = self:createModuleWithOverlays("test.retained.refresh-owned-sibling", function(overlays)
+        overlays.createLine("sibling", {
+            region = "middleRightStack",
+            visible = function()
+                if failOnSiblingVisibility then
+                    error("sibling visibility should not be evaluated by refreshOwned")
+                end
+                return true
+            end,
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+    end)
+    local ok, err = siblingAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(siblingHost)
+
+    local host, authorModule = self:createModuleWithOverlays("test.retained.refresh-owned", function(overlays)
+        overlays.createLine("line", {
+            region = "middleRightStack",
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+        overlays.createTable("table", {
+            region = "middleRightStack",
+            maxRows = 2,
+            columns = {
+                { key = "label", minWidth = 40 },
+            },
+        })
+        overlays.onCommit(function(_, _, overlay)
+            overlay.setLine("line", "Line")
+            overlay.setTable("table", {
+                { key = "one", label = "Row" },
+            })
+            overlay.refreshOwned()
+        end)
+    end)
+    ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    failOnSiblingVisibility = true
+    self.h.overlays.dispatchCommit(host, {})
+
+    local text = {}
+    for _, call in ipairs(modified) do
+        text[call.Text] = true
+    end
+    lu.assertTrue(text.Line)
+    lu.assertTrue(text.Row)
+end
+
+function TestOverlays_Retained:testSystemOwnedRefreshDoesNotEvaluateSiblingVisibility()
+    local failOnSiblingVisibility = false
+    local siblingRowVisibilityCalls = 0
+    local siblingColumnVisibilityCalls = 0
+    local siblingHost, siblingAuthorModule = self:createModuleWithOverlays("test.retained.system-sibling", function(overlays)
+        overlays.createLine("sibling", {
+            region = "middleRightStack",
+            visible = function()
+                siblingRowVisibilityCalls = siblingRowVisibilityCalls + 1
+                if failOnSiblingVisibility then
+                    error("sibling row visibility should not be evaluated by system owned refresh")
+                end
+                return true
+            end,
+            columns = {
+                {
+                    key = "text",
+                    minWidth = 40,
+                    visible = function()
+                        siblingColumnVisibilityCalls = siblingColumnVisibilityCalls + 1
+                        if failOnSiblingVisibility then
+                            error("sibling column visibility should not be evaluated by system owned refresh")
+                        end
+                        return true
+                    end,
+                },
+            },
+        })
+    end)
+    local ok, err = siblingAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(siblingHost)
+
+    self.h.createSystem("test.retained.system-owned-refresh").overlays.define(function(overlays)
+        overlays.createLine("system", {
+            region = "middleRightStack",
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+        overlays.onCommit(function(overlay)
+            overlay.setLine("system", "updated")
+            overlay.refresh("system")
+        end)
+    end)
+
+    failOnSiblingVisibility = true
+    self.h.overlays.dispatchCommit("test.retained.system-owned-refresh", {})
 
     lu.assertTrue(siblingRowVisibilityCalls > 0)
     lu.assertTrue(siblingColumnVisibilityCalls > 0)

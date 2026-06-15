@@ -3,22 +3,40 @@ local deps = ...
 local getRegistry = deps.getRegistry
 local renderer = deps.renderer
 
-local function refreshHandle(registry, handle)
-    if registry.explicitOwner == true then
-        handle.refresh()
-        return
+local function clearTable(tableValue)
+    for key in pairs(tableValue) do
+        tableValue[key] = nil
     end
+end
+
+local function appendSlotHandles(slot, handles)
+    if slot.kind == "line" then
+        handles[#handles + 1] = slot.handle
+    elseif slot.kind == "table" then
+        for _, handle in ipairs(slot.handles) do
+            handles[#handles + 1] = handle
+        end
+    end
+end
+
+local function refreshHandle(handle)
     handle.refreshOwned()
 end
 
-local function refreshSlot(registry, slot)
+local function refreshSlot(slot)
     if slot.kind == "line" then
-        refreshHandle(registry, slot.handle)
+        refreshHandle(slot.handle)
     elseif slot.kind == "table" then
-        for _, handle in ipairs(slot.handles) do
-            refreshHandle(registry, handle)
-        end
+        renderer.refreshOwnedStackRowHandles(slot.handles)
     end
+end
+
+local function refreshRegistry(registry)
+    local handles = {}
+    for _, slot in pairs(registry.elements) do
+        appendSlotHandles(slot, handles)
+    end
+    renderer.refreshOwnedStackRowHandles(handles)
 end
 
 local function createOverlayProjection(registry)
@@ -38,8 +56,8 @@ local function createOverlayProjection(registry)
         if not (slot and slot.kind == "table") then
             return false
         end
-        slot.rows = {}
-        slot.rowIndexByKey = {}
+        clearTable(slot.rows)
+        clearTable(slot.rowIndexByKey)
         for index, row in ipairs(rows or {}) do
             if index > #slot.handles then
                 break
@@ -71,7 +89,12 @@ local function createOverlayProjection(registry)
         if not slot then
             return false
         end
-        refreshSlot(registry, slot)
+        refreshSlot(slot)
+        return true
+    end
+
+    function overlay.refreshOwned()
+        refreshRegistry(registry)
         return true
     end
 

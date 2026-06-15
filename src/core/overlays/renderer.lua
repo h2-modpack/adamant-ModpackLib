@@ -322,7 +322,12 @@ local function layoutRegion(regionName, opts)
             Y = y,
         }
         local layoutOpts = nil
-        if opts and opts.useCachedVisible == true and opts.recomputeEntry ~= entry then
+        local recomputeEntries = opts and opts.recomputeEntries or nil
+        if opts
+            and opts.useCachedVisible == true
+            and opts.recomputeEntry ~= entry
+            and not (recomputeEntries and recomputeEntries[entry] == true)
+        then
             layoutOpts = {
                 useCachedVisible = true,
             }
@@ -355,6 +360,50 @@ local function refreshOwnedStackRowEntry(entry)
     refreshStackRowEntry(entry, true, {
         useCachedVisible = true,
     })
+end
+
+local function refreshOwnedStackRowEntries(entries)
+    local regionNames = {}
+    local regions = {}
+    local recomputeEntries = {}
+    for _, entry in ipairs(entries or {}) do
+        if entry ~= nil then
+            entry.layoutVisible = isEntryVisible(entry)
+            recomputeEntries[entry] = true
+            if regions[entry.region] ~= true then
+                regions[entry.region] = true
+                regionNames[#regionNames + 1] = entry.region
+            end
+        end
+    end
+
+    for _, regionName in ipairs(regionNames) do
+        layoutRegion(regionName, {
+            recomputeEntries = recomputeEntries,
+            useCachedVisible = true,
+        })
+    end
+
+    for _, entry in ipairs(entries or {}) do
+        if entry ~= nil then
+            refreshStackRowEntry(entry, true, {
+                useCachedVisible = true,
+            })
+        end
+    end
+end
+
+local function refreshOwnedStackRowHandles(handles)
+    local entries = {}
+    local seenEntries = {}
+    for _, handle in ipairs(handles or {}) do
+        local entry = handle and handle.__stackRowEntry or nil
+        if entry ~= nil and seenEntries[entry] ~= true then
+            seenEntries[entry] = true
+            entries[#entries + 1] = entry
+        end
+    end
+    refreshOwnedStackRowEntries(entries)
 end
 
 local function unregisterStackRowEntry(region, key, unregisterComponents)
@@ -648,6 +697,7 @@ local function createStackRow(opts)
     refreshStackRowEntry(entry)
 
     return {
+        __stackRowEntry = entry,
         setColumnText = function(columnKey, text)
             for _, column in ipairs(columns) do
                 if column.key == columnKey then
@@ -690,6 +740,7 @@ return {
     refreshStackRows = refreshStackRows,
     refreshAll = refreshAll,
     refreshVisibility = refreshVisibility,
+    refreshOwnedStackRowHandles = refreshOwnedStackRowHandles,
     ensureGameHooks = ensureGameHooks,
     makeTextHandle = makeTextHandle,
     createTextElement = createTextElement,
