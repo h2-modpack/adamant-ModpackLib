@@ -4,6 +4,21 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0] - 2026-06-15
+
+### Added
+
+- lib: add dropdown value ranges (bbcfc7b)
+- lib: add center-lower overlay region (
+3bd542)
+
+### Fixed
+
+- lib: require modules when shell registers them (
+be3bbf)
+- lib: allow empty shell smoke (
+91f0a2)
+
 ## [3.0.0] - 2026-06-12
 
 ### Breaking Changes
