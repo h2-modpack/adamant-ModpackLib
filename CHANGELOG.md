@@ -4,6 +4,19 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.0] - 2026-06-15
+
+### Breaking Changes
+
+- overlays: Module retained overlay projections no longer expose refreshRegion or refreshAll. Modules must call refresh(name) for their own retained overlays. (
+72b113)
+
+### Added
+
+- overlays: batch owned retained refreshes (cfbbd4b)
+- overlays: scope module refresh to owned entries (
+72b113)
+
 ## [3.1.0] - 2026-06-15
 
 ### Added
