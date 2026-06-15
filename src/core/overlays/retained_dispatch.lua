@@ -3,6 +3,24 @@ local deps = ...
 local getRegistry = deps.getRegistry
 local renderer = deps.renderer
 
+local function refreshHandle(registry, handle)
+    if registry.explicitOwner == true then
+        handle.refresh()
+        return
+    end
+    handle.refreshOwned()
+end
+
+local function refreshSlot(registry, slot)
+    if slot.kind == "line" then
+        refreshHandle(registry, slot.handle)
+    elseif slot.kind == "table" then
+        for _, handle in ipairs(slot.handles) do
+            refreshHandle(registry, handle)
+        end
+    end
+end
+
 local function createOverlayProjection(registry)
     local overlay = {}
 
@@ -53,23 +71,19 @@ local function createOverlayProjection(registry)
         if not slot then
             return false
         end
-        if slot.kind == "line" then
-            slot.handle.refresh()
-        elseif slot.kind == "table" then
-            for _, handle in ipairs(slot.handles) do
-                handle.refresh()
-            end
-        end
+        refreshSlot(registry, slot)
         return true
     end
 
-    function overlay.refreshRegion(region)
-        renderer.refreshStackRows(region)
-    end
+    if registry.explicitOwner == true then
+        function overlay.refreshRegion(region)
+            renderer.refreshStackRows(region)
+        end
 
-    function overlay.refreshAll()
-        renderer.refreshStackRows()
-        renderer.refreshTextElements(true)
+        function overlay.refreshAll()
+            renderer.refreshStackRows()
+            renderer.refreshTextElements(true)
+        end
     end
 
     return overlay

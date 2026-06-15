@@ -85,12 +85,24 @@ local function resolveText(entry)
     return tostring(resolveValue(entry.text) or "")
 end
 
-local function isColumnVisible(rowVisible, column)
+local function resolveColumnVisible(rowVisible, column)
     if rowVisible == false then
         return false
     end
     local visible = resolveValue(column.visible)
     return visible ~= false
+end
+
+local function readColumnVisible(rowVisible, column, opts)
+    if rowVisible == false then
+        return false
+    end
+    if opts and opts.useCachedVisible == true and column.layoutVisible ~= nil then
+        return column.layoutVisible
+    end
+    local visible = resolveColumnVisible(rowVisible, column)
+    column.layoutVisible = visible
+    return visible
 end
 
 local function overlayOrderBand(order)
@@ -257,10 +269,19 @@ local function updateEntry(entry)
     updateVisibility(entry)
 end
 
-local function getRegionEntries(regionName)
+local function readLayoutVisible(entry, opts)
+    if opts and opts.useCachedVisible == true and entry.layoutVisible ~= nil then
+        return entry.layoutVisible
+    end
+    local visible = isEntryVisible(entry)
+    entry.layoutVisible = visible
+    return visible
+end
+
+local function getRegionEntries(regionName, opts)
     local entries = {}
     for _, entry in pairs(rendererState.stackRows) do
-        if entry.region == regionName and isEntryVisible(entry) then
+        if entry.region == regionName and readLayoutVisible(entry, opts) then
             entries[#entries + 1] = entry
         end
     end
@@ -273,13 +294,13 @@ local function getRegionEntries(regionName)
     return entries
 end
 
-local function layoutRegion(regionName)
+local function layoutRegion(regionName, opts)
     local region = REGIONS[regionName]
     if not region then
         return
     end
 
-    local entries = getRegionEntries(regionName)
+    local entries = getRegionEntries(regionName, opts)
     local y = resolveValue(region.Y)
     local x = resolveValue(region.X)
     local rightOffset = resolveValue(region.RightOffset)
@@ -300,23 +321,40 @@ local function layoutRegion(regionName)
             RightOffset = rightOffset,
             Y = y,
         }
+        local layoutOpts = nil
+        if opts and opts.useCachedVisible == true and opts.recomputeEntry ~= entry then
+            layoutOpts = {
+                useCachedVisible = true,
+            }
+        end
         entry.setLayout(layout, {
             FontSize = region.fontSize,
             Justification = region.justification,
             VerticalJustification = region.verticalJustification,
-        })
+        }, layoutOpts)
         y = y + (region.itemHeight or 24)
         previousBand = band
     end
 end
 
-local function refreshStackRowEntry(entry, layoutAlreadyRefreshed)
+local function refreshStackRowEntry(entry, layoutAlreadyRefreshed, opts)
     if layoutAlreadyRefreshed ~= true then
-        layoutRegion(entry.region)
+        layoutRegion(entry.region, opts)
     end
-    local visible = isEntryVisible(entry)
+    local visible = readLayoutVisible(entry, opts)
     entry.setVisible(visible)
     entry.refreshText(visible)
+end
+
+local function refreshOwnedStackRowEntry(entry)
+    entry.layoutVisible = isEntryVisible(entry)
+    layoutRegion(entry.region, {
+        recomputeEntry = entry,
+        useCachedVisible = true,
+    })
+    refreshStackRowEntry(entry, true, {
+        useCachedVisible = true,
+    })
 end
 
 local function unregisterStackRowEntry(region, key, unregisterComponents)
@@ -519,12 +557,12 @@ local function createStackRow(opts)
         order = tonumber(opts.order) or overlayOrder.module,
         visible = opts.visible,
         columns = columns,
-        setLayout = function(layout, textArgs)
+        setLayout = function(layout, textArgs, layoutOpts)
             if layout.Anchor == "center" then
                 local visibleColumns = {}
                 local totalWidth = 0
                 for _, column in ipairs(columns) do
-                    if isColumnVisible(true, column) then
+                    if readColumnVisible(true, column, layoutOpts) then
                         visibleColumns[#visibleColumns + 1] = column
                         totalWidth = totalWidth + column.minWidth
                     else
@@ -565,7 +603,7 @@ local function createStackRow(opts)
             local trailingWidth = 0
             for index = #columns, 1, -1 do
                 local column = columns[index]
-                if not isColumnVisible(true, column) then
+                if not readColumnVisible(true, column, layoutOpts) then
                     column.handle.setVisible(false)
                     goto continue
                 end
@@ -592,13 +630,13 @@ local function createStackRow(opts)
         end,
         setVisible = function(visible)
             for _, column in ipairs(columns) do
-                column.handle.setVisible(isColumnVisible(visible, column))
+                column.handle.setVisible(readColumnVisible(visible, column))
             end
         end,
         refreshText = function(visible)
             if not visible then return end
             for _, column in ipairs(columns) do
-                if isColumnVisible(true, column) then
+                if readColumnVisible(true, column) then
                     column.handle.setText(column.text)
                 end
             end
@@ -630,6 +668,9 @@ local function createStackRow(opts)
         end,
         refresh = function()
             refreshStackRowEntry(entry)
+        end,
+        refreshOwned = function()
+            refreshOwnedStackRowEntry(entry)
         end,
         refreshText = function()
             entry.refreshText(isEntryVisible(entry))

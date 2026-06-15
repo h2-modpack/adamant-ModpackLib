@@ -218,6 +218,105 @@ function TestOverlays_Retained:testModuleOverlayVisibilityReceivesStandardRuntim
     lu.assertEquals(columnSeen, lineSeen)
 end
 
+function TestOverlays_Retained:testModuleOverlayProjectionOnlyExposesOwnedRefresh()
+    local seen = nil
+    local host, authorModule = self:createModuleWithOverlays("test.retained.module-refresh-surface", function(overlays)
+        overlays.createLine("line", {
+            region = "middleRightStack",
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+        overlays.onCommit(function(_, _, overlay)
+            seen = {
+                refresh = type(overlay.refresh),
+                refreshRegion = overlay.refreshRegion,
+                refreshAll = overlay.refreshAll,
+            }
+        end)
+    end)
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    self.h.overlays.dispatchCommit(host, {})
+
+    lu.assertEquals(seen, {
+        refresh = "function",
+        refreshRegion = nil,
+        refreshAll = nil,
+    })
+end
+
+function TestOverlays_Retained:testModuleOwnedRefreshDoesNotEvaluateSiblingVisibility()
+    local failOnSiblingVisibility = false
+    local siblingRowVisibilityCalls = 0
+    local siblingColumnVisibilityCalls = 0
+    local rowSiblingHost, rowSiblingAuthorModule = self:createModuleWithOverlays("test.retained.sibling-row-visible", function(overlays)
+        overlays.createLine("rowSibling", {
+            region = "middleRightStack",
+            visible = function()
+                siblingRowVisibilityCalls = siblingRowVisibilityCalls + 1
+                if failOnSiblingVisibility then
+                    error("sibling row visibility should not be evaluated by owned refresh")
+                end
+                return true
+            end,
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+    end)
+    local ok, err = rowSiblingAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(rowSiblingHost)
+
+    local columnSiblingHost, columnSiblingAuthorModule = self:createModuleWithOverlays(
+        "test.retained.sibling-column-visible",
+        function(overlays)
+            overlays.createLine("columnSibling", {
+                region = "middleRightStack",
+                columns = {
+                    {
+                        key = "text",
+                        minWidth = 40,
+                        visible = function()
+                            siblingColumnVisibilityCalls = siblingColumnVisibilityCalls + 1
+                            if failOnSiblingVisibility then
+                                error("sibling column visibility should not be evaluated by owned refresh")
+                            end
+                            return true
+                        end,
+                    },
+                },
+            })
+        end
+    )
+    ok, err = columnSiblingAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(columnSiblingHost)
+
+    local host, authorModule = self:createModuleWithOverlays("test.retained.owned-refresh", function(overlays)
+        overlays.createLine("owned", {
+            region = "middleRightStack",
+            columns = {
+                { key = "text", minWidth = 40 },
+            },
+        })
+        overlays.onCommit(function(_, _, overlay)
+            overlay.setLine("owned", "updated")
+            overlay.refresh("owned")
+        end)
+    end)
+    ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    failOnSiblingVisibility = true
+    self.h.overlays.dispatchCommit(host, {})
+
+    lu.assertTrue(siblingRowVisibilityCalls > 0)
+    lu.assertTrue(siblingColumnVisibilityCalls > 0)
+end
+
 function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     lu.assertErrorMsgContains("maxRows must be a positive integer", function()
         self:createModuleWithOverlays("test.retained.table.invalid", function(overlays)
