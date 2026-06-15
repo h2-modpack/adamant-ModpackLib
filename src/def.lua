@@ -12,6 +12,15 @@ local lib = {}
 ---@alias AdamantModpackLib.PackedSelectionMode "singleEnabled"|"singleDisabled"
 ---@alias AdamantModpackLib.MutationShape "patch"
 
+---@class AdamantModpackLib.DropdownValueRange
+---@field min? number First generated integer value. Defaults to 0.
+---@field max? number Last generated integer value. Defaults to min.
+---@field step? number Positive integer step between generated values. Defaults to 1.
+---@field prepend? number|number[] Extra integer value(s) rendered before the generated range.
+---@field append? number|number[] Extra integer value(s) rendered after the generated range.
+---@field prefix? string Text prepended to generated range labels.
+---@field suffix? string Text appended to generated range labels.
+
 ---@class AdamantModpackLib.StorageNode
 ---@field type "bool"|"int"|"string"|"packedInt"|"table"
 ---@field alias string Public alias used by runtime/UI data and widget APIs as the managed storage key.
@@ -606,6 +615,7 @@ local lib = {}
 ---@field label? string
 ---@field tooltip? string
 ---@field values? AdamantModpackLib.ChoiceValue[]
+---@field valueRange? AdamantModpackLib.DropdownValueRange Integer choices generated when `values` is absent.
 ---@field default? AdamantModpackLib.ChoiceValue
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
 ---@field valueColors? AdamantModpackLib.ValueColorMap

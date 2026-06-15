@@ -88,6 +88,118 @@ function TestWidgets:testPlainDropdownUsesNativePreview()
     lu.assertEquals(state.cursorPositions[1], 80)
 end
 
+function TestWidgets:testDropdownBuildsIntegerValueRange()
+    local imgui, state = self.h.makeDropdownImgui()
+    local stagedState = self.h.createValueStagedState(0)
+    local selectableLabels = {}
+    imgui.BeginCombo = function(id, preview)
+        state.beginComboId = id
+        state.beginComboPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        selectableLabels[#selectableLabels + 1] = label
+        return false
+    end
+    imgui.EndCombo = function() end
+
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Delay"), {
+        valueRange = {
+            min = 0,
+            max = 10,
+            step = 5,
+            suffix = "s",
+        },
+        displayValues = {
+            [0] = "Off",
+        },
+    })
+
+    lu.assertEquals(state.beginComboPreview, "Off")
+    lu.assertEquals(selectableLabels, { "Off##1", "5s##2", "10s##3" })
+end
+
+function TestWidgets:testDropdownValueRangeSupportsPrependedValues()
+    local imgui, state = self.h.makeDropdownImgui()
+    local stagedState = self.h.createValueStagedState(1)
+    local selectableLabels = {}
+    imgui.BeginCombo = function(id, preview)
+        state.beginComboId = id
+        state.beginComboPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        selectableLabels[#selectableLabels + 1] = label
+        return false
+    end
+    imgui.EndCombo = function() end
+
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Recovery"), {
+        valueRange = {
+            min = 5,
+            max = 10,
+            step = 5,
+            prepend = { 1 },
+            suffix = "%",
+        },
+    })
+
+    lu.assertEquals(state.beginComboPreview, "1%")
+    lu.assertEquals(selectableLabels, { "1%##1", "5%##2", "10%##3" })
+end
+
+function TestWidgets:testDropdownExplicitValuesOverrideValueRange()
+    local imgui, state = self.h.makeDropdownImgui()
+    local stagedState = self.h.createValueStagedState(2)
+    local selectableLabels = {}
+    imgui.BeginCombo = function(id, preview)
+        state.beginComboId = id
+        state.beginComboPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        selectableLabels[#selectableLabels + 1] = label
+        return false
+    end
+    imgui.EndCombo = function() end
+
+    DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
+        values = { 2, 4 },
+        valueRange = {
+            min = 0,
+            max = 10,
+        },
+    })
+
+    lu.assertEquals(state.beginComboPreview, "2")
+    lu.assertEquals(selectableLabels, { "2##1", "4##2" })
+end
+
+function TestWidgets:testDropdownCachesGeneratedValueRange()
+    local suffixCount = 0
+    local suffix = setmetatable({}, {
+        __tostring = function()
+            suffixCount = suffixCount + 1
+            return "s"
+        end,
+    })
+    local opts = {
+        valueRange = {
+            min = 0,
+            max = 10,
+            step = 5,
+            suffix = suffix,
+        },
+    }
+    local stagedState = self.h.createValueStagedState(5)
+
+    DrawWidgets(self.h, self.h.makeDropdownImgui()).dropdown(Field(self.h, stagedState, "Delay"), opts)
+    lu.assertEquals(suffixCount, 1)
+
+    DrawWidgets(self.h, self.h.makeDropdownImgui()).dropdown(Field(self.h, stagedState, "Delay"), opts)
+    lu.assertEquals(suffixCount, 1)
+end
+
 function TestWidgets:testLabeledControlFallsBackToGapWhenLabelWidthIsTooSmall()
     local imgui, state = self.h.makeDropdownImgui()
     local stagedState = self.h.createValueStagedState(2)

@@ -4,6 +4,103 @@ local widgets = {}
 
 local COMBO_FLAG_NONE = imguiHelpers.ImGuiComboFlags.None
 local IMGUI_COL_TEXT = imguiHelpers.ImGuiCol.Text
+local RANGE_CACHE_BY_OPTS = setmetatable({}, { __mode = "k" })
+
+local function NormalizeInteger(value, fallback)
+    local number = tonumber(value)
+    if number == nil then
+        return fallback
+    end
+    return math.floor(number)
+end
+
+local function AddRangeValue(values, displayValues, seen, value, prefix, suffix)
+    local normalized = NormalizeInteger(value)
+    if normalized == nil or seen[normalized] then
+        return
+    end
+    seen[normalized] = true
+    values[#values + 1] = normalized
+    displayValues[normalized] = prefix .. tostring(normalized) .. suffix
+end
+
+local function AddRangeList(values, displayValues, seen, source, prefix, suffix)
+    if type(source) ~= "table" then
+        AddRangeValue(values, displayValues, seen, source, prefix, suffix)
+        return
+    end
+    for _, value in ipairs(source) do
+        AddRangeValue(values, displayValues, seen, value, prefix, suffix)
+    end
+end
+
+local function BuildRangeChoices(range)
+    local minValue = NormalizeInteger(range.min, 0)
+    local maxValue = NormalizeInteger(range.max, minValue)
+    local step = math.max(NormalizeInteger(range.step, 1), 1)
+    local prefix = tostring(range.prefix or "")
+    local suffix = tostring(range.suffix or "")
+    local values = {}
+    local displayValues = {}
+    local seen = {}
+
+    AddRangeList(values, displayValues, seen, range.prepend, prefix, suffix)
+    for value = minValue, maxValue, step do
+        AddRangeValue(values, displayValues, seen, value, prefix, suffix)
+    end
+    AddRangeList(values, displayValues, seen, range.append, prefix, suffix)
+
+    return values, displayValues
+end
+
+local function ResolveDropdownChoices(opts)
+    if type(opts.values) == "table" then
+        return opts.values, nil
+    end
+
+    local range = opts.valueRange
+    if type(range) ~= "table" then
+        return helpers.EMPTY_LIST, nil
+    end
+
+    local cached = RANGE_CACHE_BY_OPTS[opts]
+    if cached ~= nil
+        and cached.range == range
+        and cached.min == range.min
+        and cached.max == range.max
+        and cached.step == range.step
+        and cached.prepend == range.prepend
+        and cached.append == range.append
+        and cached.prefix == range.prefix
+        and cached.suffix == range.suffix then
+        return cached.values, cached.displayValues
+    end
+
+    local values, displayValues = BuildRangeChoices(range)
+    RANGE_CACHE_BY_OPTS[opts] = {
+        range = range,
+        min = range.min,
+        max = range.max,
+        step = range.step,
+        prepend = range.prepend,
+        append = range.append,
+        prefix = range.prefix,
+        suffix = range.suffix,
+        values = values,
+        displayValues = displayValues,
+    }
+    return values, displayValues
+end
+
+local function ChoiceDisplay(opts, rangeDisplayValues, value)
+    if opts.displayValues and opts.displayValues[value] ~= nil then
+        return tostring(opts.displayValues[value])
+    end
+    if rangeDisplayValues and rangeDisplayValues[value] ~= nil then
+        return tostring(rangeDisplayValues[value])
+    end
+    return tostring(value)
+end
 
 local function DrawComboPreviewText(imgui, previewText, previewColor)
     local drawList = imgui.GetWindowDrawList()
@@ -59,12 +156,12 @@ local function EndLabeledDropdownControl(imgui, opts, pushedWidth)
     helpers.ShowTooltip(imgui, opts.tooltip)
 end
 
-local function GetDropdownPreview(opts, values, current, valueColors)
+local function GetDropdownPreview(opts, values, rangeDisplayValues, current, valueColors)
     local previewText = ""
     local previewColor = nil
     for _, value in ipairs(values) do
         if helpers.IsChoiceVisible(opts, value) then
-            local label = helpers.ChoiceDisplay(opts, value)
+            local label = ChoiceDisplay(opts, rangeDisplayValues, value)
             local color = valueColors and valueColors[value] or nil
             if previewText == "" then
                 previewText = label
@@ -81,10 +178,10 @@ end
 function widgets.dropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
-    local current = helpers.NormalizeChoiceValue(opts, field:read())
-    local values = opts.values or helpers.EMPTY_LIST
+    local values, rangeDisplayValues = ResolveDropdownChoices(opts)
+    local current = helpers.NormalizeChoiceValue(opts, field:read(), values)
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
-    local previewText, previewColor = GetDropdownPreview(opts, values, current, valueColors)
+    local previewText, previewColor = GetDropdownPreview(opts, values, rangeDisplayValues, current, valueColors)
     local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
     local opened = imgui.BeginCombo(
         "##" .. tostring(controlId),
@@ -98,7 +195,7 @@ function widgets.dropdown(imgui, field, opts)
     if opened then
         for index, value in ipairs(values) do
             if helpers.IsChoiceVisible(opts, value) then
-                local label = helpers.ChoiceDisplay(opts, value)
+                local label = ChoiceDisplay(opts, rangeDisplayValues, value)
                 local color = valueColors and valueColors[value] or nil
                 local clicked = helpers.SelectableWithValueColor(
                     imgui,

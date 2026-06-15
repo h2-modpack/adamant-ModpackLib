@@ -60,8 +60,8 @@ local function NormalizeAgainstAllChoiceValues(node, value, values)
     return values[1]
 end
 
-function widgetHelpers.NormalizeChoiceValue(node, value)
-    local values = node.values
+function widgetHelpers.NormalizeChoiceValue(node, value, values)
+    values = values or node.values
     if type(values) ~= "table" or #values == 0 then
         return value ~= nil and value or node.default
     end
