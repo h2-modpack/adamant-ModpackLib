@@ -81,6 +81,8 @@ function Harness.boot(opts)
         ScreenData = opts.ScreenData,
         HUDScreen = opts.HUDScreen,
         ShowingCombatUI = opts.ShowingCombatUI,
+        ScreenCenterX = opts.ScreenCenterX,
+        ScreenHeight = opts.ScreenHeight,
         ModifyTextBox = opts.ModifyTextBox,
         SetAlpha = opts.SetAlpha,
         CreateComponentFromData = opts.CreateComponentFromData,

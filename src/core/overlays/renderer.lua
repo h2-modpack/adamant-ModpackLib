@@ -12,6 +12,7 @@ local refreshStackRows
 
 local REGIONS = {
     middleRightStack = {
+        anchor = "right",
         RightOffset = 10,
         Y = 200,
         itemHeight = 28,
@@ -20,6 +21,21 @@ local REGIONS = {
         justification = "Right",
         verticalJustification = "Top",
         fontSize = 18,
+    },
+    centerLowerStack = {
+        anchor = "center",
+        X = function()
+            return overlayGameDeps.ScreenCenterX() or 960
+        end,
+        Y = function()
+            return (overlayGameDeps.ScreenHeight() or 1080) * 0.60
+        end,
+        itemHeight = 32,
+        gap = 4,
+        groupGap = 12,
+        justification = "Center",
+        verticalJustification = "Center",
+        fontSize = 22,
     },
 }
 
@@ -112,6 +128,7 @@ end
 local function layoutSignature(layout)
     layout = layout or {}
     return table.concat({
+        tostring(layout.Anchor),
         tostring(layout.X),
         tostring(layout.Y),
         tostring(layout.RightOffset),
@@ -263,7 +280,9 @@ local function layoutRegion(regionName)
     end
 
     local entries = getRegionEntries(regionName)
-    local y = region.Y
+    local y = resolveValue(region.Y)
+    local x = resolveValue(region.X)
+    local rightOffset = resolveValue(region.RightOffset)
     local previousBand = nil
     for index, entry in ipairs(entries) do
         local band = overlayOrderBand(entry.order)
@@ -276,7 +295,9 @@ local function layoutRegion(regionName)
         end
 
         local layout = {
-            RightOffset = region.RightOffset,
+            Anchor = region.anchor or "right",
+            X = x,
+            RightOffset = rightOffset,
             Y = y,
         }
         entry.setLayout(layout, {
@@ -499,6 +520,48 @@ local function createStackRow(opts)
         visible = opts.visible,
         columns = columns,
         setLayout = function(layout, textArgs)
+            if layout.Anchor == "center" then
+                local visibleColumns = {}
+                local totalWidth = 0
+                for _, column in ipairs(columns) do
+                    if isColumnVisible(true, column) then
+                        visibleColumns[#visibleColumns + 1] = column
+                        totalWidth = totalWidth + column.minWidth
+                    else
+                        column.handle.setVisible(false)
+                    end
+                end
+                if #visibleColumns > 1 then
+                    totalWidth = totalWidth + (#visibleColumns - 1) * columnGap
+                end
+
+                local columnX = (layout.X or 0) - (totalWidth / 2)
+                for index, column in ipairs(visibleColumns) do
+                    local columnTextArgs = values.deepCopy(textArgs or {})
+                    local justification = column.justify or columnTextArgs.Justification
+                    if justification then
+                        columnTextArgs.Justification = justification
+                    end
+
+                    local textX = columnX
+                    if justification == "Right" then
+                        textX = textX + column.minWidth
+                    elseif justification == "Center" then
+                        textX = textX + (column.minWidth / 2)
+                    end
+                    column.handle.setLayout({
+                        X = textX,
+                        Y = layout.Y,
+                    }, columnTextArgs)
+
+                    columnX = columnX + column.minWidth
+                    if index < #visibleColumns then
+                        columnX = columnX + columnGap
+                    end
+                end
+                return
+            end
+
             local trailingWidth = 0
             for index = #columns, 1, -1 do
                 local column = columns[index]
@@ -511,14 +574,15 @@ local function createStackRow(opts)
                 if justification then
                     columnTextArgs.Justification = justification
                 end
+                local columnLayout = {
+                    Y = layout.Y,
+                }
                 local rightOffset = (layout.RightOffset or 0) + trailingWidth
                 if justification == "Left" then
                     rightOffset = rightOffset + column.minWidth
                 end
-                column.handle.setLayout({
-                    RightOffset = rightOffset,
-                    Y = layout.Y,
-                }, columnTextArgs)
+                columnLayout.RightOffset = rightOffset
+                column.handle.setLayout(columnLayout, columnTextArgs)
                 trailingWidth = trailingWidth + column.minWidth
                 if index > 1 then
                     trailingWidth = trailingWidth + columnGap

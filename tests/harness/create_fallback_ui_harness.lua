@@ -16,6 +16,8 @@ local function createGameState(opts)
             Components = {},
         },
         showingCombatUI = opts.ShowingCombatUI ~= false,
+        screenCenterX = opts.ScreenCenterX or 960,
+        screenHeight = opts.ScreenHeight or 1080,
         nextComponentId = opts.nextComponentId or 100,
         setupRunData = opts.SetupRunData or function() end,
         modifyTextBox = opts.ModifyTextBox or function() end,
@@ -55,6 +57,12 @@ local function createGameDeps(game)
             end,
             ShowingCombatUI = function()
                 return game.showingCombatUI
+            end,
+            ScreenCenterX = function()
+                return game.screenCenterX
+            end,
+            ScreenHeight = function()
+                return game.screenHeight
             end,
             ModifyTextBox = function(args)
                 return game.modifyTextBox(args)

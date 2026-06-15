@@ -110,6 +110,67 @@ function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
     lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_DebugOverlay_text.Y, 280)
 end
 
+function TestOverlays:testRetainedLineSupportsCenterLowerStackRegion()
+    self.h.game.screenCenterX = 800
+    self.h.game.screenHeight = 900
+
+    local system = self.h.createSystem("test.overlay.center.lower")
+    system.overlays.define(function(overlays)
+        overlays.createLine("message", {
+            componentName = "CenterOverlay",
+            region = "centerLowerStack",
+            minWidth = 180,
+            justify = "Center",
+            textArgs = {
+                Font = "P22UndergroundSCMedium",
+            },
+        })
+        overlays.createLine("columns", {
+            componentName = "CenterColumns",
+            region = "centerLowerStack",
+            order = system.overlays.order.module + 1,
+            columnGap = 10,
+            columns = {
+                {
+                    key = "label",
+                    minWidth = 100,
+                    justify = "Left",
+                },
+                {
+                    key = "value",
+                    minWidth = 50,
+                    justify = "Right",
+                },
+            },
+        })
+        overlays.onCommit(function(overlay)
+            overlay.setLine("message", "Penalty")
+            overlay.setLine("columns", {
+                label = "Penalty",
+                value = "30s",
+            })
+            overlay.refreshRegion("centerLowerStack")
+        end)
+    end)
+    self:dispatch("test.overlay.center.lower")
+
+    local message = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_CenterOverlay_text
+    local label = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_CenterColumns_label
+    local value = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_CenterColumns_value
+    lu.assertEquals(message.X, 800)
+    lu.assertNil(message.RightOffset)
+    lu.assertEquals(message.Y, 540)
+    lu.assertEquals(message.TextArgs.Justification, "Center")
+    lu.assertEquals(message.TextArgs.VerticalJustification, "Center")
+    lu.assertEquals(message.TextArgs.FontSize, 22)
+    lu.assertEquals(label.X, 720)
+    lu.assertEquals(value.X, 880)
+    lu.assertEquals(label.Y, 576)
+    lu.assertEquals(value.Y, 576)
+    lu.assertEquals(label.TextArgs.Justification, "Left")
+    lu.assertEquals(value.TextArgs.Justification, "Right")
+end
+
 function TestOverlays:testRetainedTableUsesStableColumnSpacing()
     local host = self:activateModuleWithOverlays("test.overlay.table", function(overlays)
         overlays.createTable("timer", {

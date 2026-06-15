@@ -70,6 +70,14 @@ local gameDeps = {
             return readOptionalGameGlobal("ShowingCombatUI", "boolean")
         end,
 
+        ScreenCenterX = function()
+            return readOptionalGameGlobal("ScreenCenterX", "number")
+        end,
+
+        ScreenHeight = function()
+            return readOptionalGameGlobal("ScreenHeight", "number")
+        end,
+
         ModifyTextBox = function(args)
             return callGameGlobalFunction("ModifyTextBox", args)
         end,

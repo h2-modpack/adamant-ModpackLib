@@ -698,6 +698,10 @@ local lib = {}
 ---| AdamantModpackLib.RetainedOverlayVisibleCallback
 ---| AdamantModpackLib.SystemRetainedOverlayVisibleCallback
 
+---@alias AdamantModpackLib.RetainedOverlayRegion
+---| "middleRightStack"
+---| "centerLowerStack"
+
 ---@class AdamantModpackLib.RetainedOverlayColumn
 ---@field key? string Stable column key used by retained values.
 ---@field componentName? string Explicit retained HUD component name for this column.
@@ -708,7 +712,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.RetainedLineSpec
 ---@field componentName? string Base retained HUD component name.
----@field region? string Stack region name. Defaults to `middleRightStack`.
+---@field region? AdamantModpackLib.RetainedOverlayRegion Stack region name. Defaults to `middleRightStack`.
 ---@field order? integer Sort key within the region.
 ---@field columnGap? number Reserved space between columns.
 ---@field columns? AdamantModpackLib.RetainedOverlayColumn[] Ordered columns, declared left-to-right.
@@ -719,7 +723,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.RetainedTableSpec
 ---@field componentName? string Base retained HUD component name.
----@field region? string Stack region name. Defaults to `middleRightStack`.
+---@field region? AdamantModpackLib.RetainedOverlayRegion Stack region name. Defaults to `middleRightStack`.
 ---@field order? integer Sort key for the first row within the region.
 ---@field maxRows integer Maximum retained rows to allocate.
 ---@field columnGap? number Reserved space between columns.
@@ -731,7 +735,7 @@ local lib = {}
 ---@field setTable fun(name: string, rows: table[]): boolean
 ---@field setCell fun(tableName: string, rowKey: any, columnKey: string, value: any): boolean
 ---@field refresh fun(name: string): boolean
----@field refreshRegion fun(region: string)
+---@field refreshRegion fun(region: AdamantModpackLib.RetainedOverlayRegion)
 ---@field refreshAll fun()
 
 ---@class AdamantModpackLib.OverlayHookEvent

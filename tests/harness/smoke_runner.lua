@@ -268,6 +268,8 @@ function SmokeRunner.assertCoordinatorBoots(layout)
     if bootOpts.ShowingCombatUI == nil then
         bootOpts.ShowingCombatUI = true
     end
+    bootOpts.ScreenCenterX = layout.ScreenCenterX or bootOpts.ScreenCenterX or 960
+    bootOpts.ScreenHeight = layout.ScreenHeight or bootOpts.ScreenHeight or 1080
     bootOpts.ModifyTextBox = layout.ModifyTextBox or bootOpts.ModifyTextBox or function() end
     bootOpts.SetAlpha = layout.SetAlpha or bootOpts.SetAlpha or function() end
     bootOpts.CreateComponentFromData = layout.CreateComponentFromData or bootOpts.CreateComponentFromData
