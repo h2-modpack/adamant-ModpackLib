@@ -745,6 +745,7 @@ local lib = {}
 ---@field setTable fun(name: string, rows: table[]): boolean
 ---@field setCell fun(tableName: string, rowKey: any, columnKey: string, value: any): boolean
 ---@field refresh fun(name: string): boolean
+---@field refreshOwned fun(): boolean
 
 ---@class AdamantModpackLib.SystemRetainedOverlayProjection: AdamantModpackLib.RetainedOverlayProjection
 ---@field refreshRegion fun(region: AdamantModpackLib.RetainedOverlayRegion)

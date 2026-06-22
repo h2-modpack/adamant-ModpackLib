@@ -842,8 +842,14 @@ callback object. The retained overlay projection exposes named retained updates:
 - `overlay.setTable(name, rows)`
 - `overlay.setCell(tableName, rowKey, columnKey, value)`
 - `overlay.refresh(name)`
-- `overlay.refreshRegion(region)`
-- `overlay.refreshAll()`
+- `overlay.refreshOwned()`
+
+`overlay.refresh(name)` refreshes one retained element owned by the module.
+`overlay.refreshOwned()` refreshes every retained element owned by the module.
+Modules should call one of these after changing retained values or when their
+own overlay visibility predicates may have changed. The owned refresh path does
+not re-evaluate sibling modules' visibility during layout; each module owns
+keeping its own retained projection fresh.
 
 Pack HUD overlays and overlay suppression are owned internally by Lib modpack.
 Overlay UI suppression is not a public module-author API.
