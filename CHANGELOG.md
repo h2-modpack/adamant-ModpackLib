@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.0.1] - 2026-06-22
+
+### Fixed
+
+- widgets: preserve hidden current choice previews (99e0bb1)
+
+### Documentation
+
+- overlays: clarify owned refresh contract (
+1d030c)
+
 ## [4.0.0] - 2026-06-15
 
 ### Breaking Changes
