@@ -26,7 +26,7 @@ end
 
 function widgets.radio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
-    local current = helpers.NormalizeChoiceValue(opts, field:read())
+    local current = field:read()
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
     local values = opts.values or helpers.EMPTY_LIST
     local radioId = field:controlId()

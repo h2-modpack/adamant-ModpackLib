@@ -31,65 +31,6 @@ function widgetHelpers.IsChoiceVisible(node, value)
     return type(node.visibleValues) ~= "table" or node.visibleValues[value] ~= false
 end
 
-local function FirstVisibleChoiceValue(node, values)
-    for _, candidate in ipairs(values) do
-        if widgetHelpers.IsChoiceVisible(node, candidate) then
-            return candidate
-        end
-    end
-    return nil
-end
-
-local function NormalizeAgainstAllChoiceValues(node, value, values)
-    if value ~= nil then
-        for _, candidate in ipairs(values) do
-            if candidate == value then
-                return candidate
-            end
-        end
-    end
-
-    if node.default ~= nil then
-        for _, candidate in ipairs(values) do
-            if candidate == node.default then
-                return candidate
-            end
-        end
-    end
-
-    return values[1]
-end
-
-function widgetHelpers.NormalizeChoiceValue(node, value, values)
-    values = values or node.values
-    if type(values) ~= "table" or #values == 0 then
-        return value ~= nil and value or node.default
-    end
-
-    local firstVisible = FirstVisibleChoiceValue(node, values)
-    if firstVisible == nil then
-        return NormalizeAgainstAllChoiceValues(node, value, values)
-    end
-
-    if value ~= nil then
-        for _, candidate in ipairs(values) do
-            if candidate == value and widgetHelpers.IsChoiceVisible(node, candidate) then
-                return candidate
-            end
-        end
-    end
-
-    if node.default ~= nil then
-        for _, candidate in ipairs(values) do
-            if candidate == node.default and widgetHelpers.IsChoiceVisible(node, candidate) then
-                return candidate
-            end
-        end
-    end
-
-    return firstVisible
-end
-
 function widgetHelpers.ChoiceDisplay(node, value)
     if node.displayValues and node.displayValues[value] ~= nil then
         return tostring(node.displayValues[value])

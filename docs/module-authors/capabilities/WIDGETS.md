@@ -242,7 +242,6 @@ Options:
 - `label`
 - `tooltip`
 - `values`
-- `default`
 - `displayValues`
 - `valueColors`
 - `visibleValues`
@@ -256,9 +255,9 @@ Behavior:
 - binds one storage field to one value from `values`
 - preview text comes from `displayValues[value]` when present, else `tostring(value)`
 - entries with `visibleValues[value] == false` are hidden; omitted values remain visible
-- if the staged value is invalid, it falls back to:
-  - a valid `default`
-  - else the first visible entry in `values`
+- hidden values remain stored until the user chooses a visible replacement
+- the closed preview shows the stored value, even when that value is hidden from
+  the opened option list
 
 Use when:
 - the widget owns a fixed explicit choice list
@@ -320,7 +319,6 @@ draw.widgets.packedDropdown(state.get("PackedForcedBoon"), {
 Options:
 - `label`
 - `values`
-- `default`
 - `displayValues`
 - `valueColors`
 - `visibleValues`

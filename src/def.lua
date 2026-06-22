@@ -616,7 +616,6 @@ local lib = {}
 ---@field tooltip? string
 ---@field values? AdamantModpackLib.ChoiceValue[]
 ---@field valueRange? AdamantModpackLib.DropdownValueRange Integer choices generated when `values` is absent.
----@field default? AdamantModpackLib.ChoiceValue
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
 ---@field valueColors? AdamantModpackLib.ValueColorMap
 ---@field visibleValues? AdamantModpackLib.ChoiceVisibilityMap
@@ -644,7 +643,6 @@ local lib = {}
 ---@class AdamantModpackLib.RadioOpts
 ---@field label? string
 ---@field values? AdamantModpackLib.ChoiceValue[]
----@field default? AdamantModpackLib.ChoiceValue
 ---@field displayValues? AdamantModpackLib.ChoiceDisplayValues
 ---@field valueColors? AdamantModpackLib.ValueColorMap
 ---@field visibleValues? AdamantModpackLib.ChoiceVisibilityMap

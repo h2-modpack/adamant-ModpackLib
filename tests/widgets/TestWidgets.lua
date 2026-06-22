@@ -544,13 +544,15 @@ function TestWidgets:testDropdownSkipsHiddenValues()
     local stagedState = self.h.createValueStagedState(2)
     local imgui, state = self.h.makeDropdownImgui()
     local selectableLabels = {}
+    local selectableSelected = {}
     imgui.BeginCombo = function(id, preview)
         state.beginComboId = id
         state.beginComboPreview = preview
         return true
     end
-    imgui.Selectable = function(label)
+    imgui.Selectable = function(label, selected)
         selectableLabels[#selectableLabels + 1] = label
+        selectableSelected[#selectableSelected + 1] = selected
         return label == "Three##3"
     end
     imgui.EndCombo = function() end
@@ -568,9 +570,43 @@ function TestWidgets:testDropdownSkipsHiddenValues()
     })
 
     lu.assertTrue(changed)
-    lu.assertEquals(state.beginComboPreview, "One")
+    lu.assertEquals(state.beginComboPreview, "Two")
     lu.assertEquals(selectableLabels, { "One##1", "Three##3" })
+    lu.assertEquals(selectableSelected, { false, false })
     lu.assertEquals(stagedState.read("Mode"), 3)
+end
+
+function TestWidgets:testDropdownDoesNotRewriteHiddenCurrentValue()
+    local stagedState = self.h.createValueStagedState(2)
+    local imgui, state = self.h.makeDropdownImgui()
+    local selectableLabels = {}
+    imgui.BeginCombo = function(id, preview)
+        state.beginComboId = id
+        state.beginComboPreview = preview
+        return true
+    end
+    imgui.Selectable = function(label)
+        selectableLabels[#selectableLabels + 1] = label
+        return false
+    end
+    imgui.EndCombo = function() end
+
+    local changed = DrawWidgets(self.h, imgui).dropdown(Field(self.h, stagedState, "Mode"), {
+        values = { 1, 2, 3 },
+        displayValues = {
+            [1] = "One",
+            [2] = "Two",
+            [3] = "Three",
+        },
+        visibleValues = {
+            [2] = false,
+        },
+    })
+
+    lu.assertFalse(changed)
+    lu.assertEquals(state.beginComboPreview, "Two")
+    lu.assertEquals(selectableLabels, { "One##1", "Three##3" })
+    lu.assertEquals(stagedState.read("Mode"), 2)
 end
 
 function TestWidgets:testStepperStagesDrawActionRef()
@@ -616,8 +652,10 @@ end
 function TestWidgets:testRadioSkipsHiddenValues()
     local imgui = self.h.makeDropdownImgui()
     local radioLabels = {}
-    imgui.RadioButton = function(label)
+    local radioSelected = {}
+    imgui.RadioButton = function(label, selected)
         radioLabels[#radioLabels + 1] = label
+        radioSelected[#radioSelected + 1] = selected
         return label == "Three##Mode_3"
     end
     local stagedState = self.h.createValueStagedState(2)
@@ -636,6 +674,7 @@ function TestWidgets:testRadioSkipsHiddenValues()
 
     lu.assertTrue(changed)
     lu.assertEquals(radioLabels, { "One##Mode_1", "Three##Mode_3" })
+    lu.assertEquals(radioSelected, { false, false })
     lu.assertEquals(stagedState.read("Mode"), 3)
 end
 

@@ -93,6 +93,9 @@ local function ResolveDropdownChoices(opts)
 end
 
 local function ChoiceDisplay(opts, rangeDisplayValues, value)
+    if value == nil then
+        return ""
+    end
     if opts.displayValues and opts.displayValues[value] ~= nil then
         return tostring(opts.displayValues[value])
     end
@@ -156,32 +159,17 @@ local function EndLabeledDropdownControl(imgui, opts, pushedWidth)
     helpers.ShowTooltip(imgui, opts.tooltip)
 end
 
-local function GetDropdownPreview(opts, values, rangeDisplayValues, current, valueColors)
-    local previewText = ""
-    local previewColor = nil
-    for _, value in ipairs(values) do
-        if helpers.IsChoiceVisible(opts, value) then
-            local label = ChoiceDisplay(opts, rangeDisplayValues, value)
-            local color = valueColors and valueColors[value] or nil
-            if previewText == "" then
-                previewText = label
-                previewColor = color
-            end
-            if value == current then
-                return label, color
-            end
-        end
-    end
-    return previewText, previewColor
+local function GetDropdownPreview(opts, rangeDisplayValues, current, valueColors)
+    return ChoiceDisplay(opts, rangeDisplayValues, current), valueColors and valueColors[current] or nil
 end
 
 function widgets.dropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local values, rangeDisplayValues = ResolveDropdownChoices(opts)
-    local current = helpers.NormalizeChoiceValue(opts, field:read(), values)
+    local current = field:read()
     local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
-    local previewText, previewColor = GetDropdownPreview(opts, values, rangeDisplayValues, current, valueColors)
+    local previewText, previewColor = GetDropdownPreview(opts, rangeDisplayValues, current, valueColors)
     local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
     local opened = imgui.BeginCombo(
         "##" .. tostring(controlId),
