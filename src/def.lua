@@ -131,7 +131,7 @@ local lib = {}
 ---@field reset fun(alias: string)
 ---@field _flushToConfig fun()
 ---@field _hasConfigChanges fun(): boolean
----@field _reloadFromConfig fun()
+---@field _reloadFromConfig fun(): AdamantModpackLib.ReloadReceipt
 ---@field _captureDirtyConfigSnapshot fun(): table[]
 ---@field _restoreConfigSnapshot fun(snapshot: table[]?)
 ---@field isDirty fun(): boolean
@@ -257,6 +257,23 @@ local lib = {}
 ---    runtime: AdamantModpackLib.RuntimeContext,
 ---    commit: AdamantModpackLib.CommitContext
 ---): nil
+---@alias AdamantModpackLib.ReloadReason "manual"|"frameworkSnapshot"|"hashReload"|"driftRepair"
+---@alias AdamantModpackLib.ReloadCallback fun(
+---    host: AdamantModpackLib.Host,
+---    runtime: AdamantModpackLib.RuntimeContext,
+---    reload: AdamantModpackLib.ReloadContext
+---): nil
+
+---@class AdamantModpackLib.ReloadContext
+---@field reason fun(): AdamantModpackLib.ReloadReason
+---@field hadCommittedChanges fun(): boolean
+---@field hadSettingChanges fun(): boolean
+---@field hadStatusChanges fun(): boolean
+
+---@class AdamantModpackLib.ReloadReceipt
+---@field hadCommittedChanges boolean
+---@field hadSettingChanges boolean
+---@field hadStatusChanges boolean
 ---@alias AdamantModpackLib.SharedListener fun(
 ---    host: AdamantModpackLib.Host,
 ---    runtime: AdamantModpackLib.RuntimeContext,
@@ -277,6 +294,7 @@ local lib = {}
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
 ---@field onActivate fun(callback: fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext): nil): nil
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
+---@field onReload fun(callback: AdamantModpackLib.ReloadCallback): nil
 ---@field fallbackUi AuthorFallbackUi
 ---@field hooks AdamantModpackLib.ModuleHooks
 ---@field shared AdamantModpackLib.AuthorShared
@@ -439,8 +457,8 @@ local lib = {}
 ---@field writeAndFlush fun(alias: string, value: any): boolean
 ---@field stage fun(alias: string, value: any): boolean
 ---@field flush fun(): boolean
----@field reloadFromConfig fun()
----@field resync fun(): string[]
+---@field reloadFromConfig fun(reason?: AdamantModpackLib.ReloadReason): AdamantModpackLib.ReloadContext
+---@field resync fun(): string[], AdamantModpackLib.ReloadContext?
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
 ---@field commitIfDirty fun(): boolean, string?, boolean
 ---@field isEnabled fun(): boolean

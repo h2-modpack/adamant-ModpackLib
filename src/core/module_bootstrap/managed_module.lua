@@ -17,6 +17,12 @@ local managedModule = {
     prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
 local INTERNAL_RESET_STATUS_ACTION = "_ResetStatus"
+local ReloadReasons = {
+    manual = true,
+    frameworkSnapshot = true,
+    hashReload = true,
+    driftRepair = true,
+}
 local uiContextModule = import('core/module_bootstrap/ui/context.lua', nil, {
     uiDraw = uiDraw,
     moduleState = moduleState,
@@ -79,6 +85,7 @@ local KnownModuleCreateOpts = {
     overlayDeclarations = true,
     onActivate = true,
     onCommit = true,
+    onReload = true,
     drawTab = true,
     drawQuickContent = true,
     controlCatalog = true,
@@ -105,7 +112,10 @@ local function validateLifecycleObservers(opts)
     if opts.onCommit ~= nil and type(opts.onCommit) ~= "function" then
         logging.violate("module.invalid_create_opts", "managedModule.create: onCommit must be a function")
     end
-    return opts.onCommit
+    if opts.onReload ~= nil and type(opts.onReload) ~= "function" then
+        logging.violate("module.invalid_create_opts", "managedModule.create: onReload must be a function")
+    end
+    return opts.onCommit, opts.onReload
 end
 
 local function createRuntimeContext(store, status)
@@ -148,7 +158,7 @@ function managedModule.create(opts)
         order = def._actionOrder,
     })
     local mutationBundle = opts.mutationBundle or createMutationBundle()
-    local commitObserver = validateLifecycleObservers(opts)
+    local commitObserver, reloadObserver = validateLifecycleObservers(opts)
     local store
     local runtimeContext
     local host
@@ -180,6 +190,52 @@ function managedModule.create(opts)
             error(overlayErr, 0)
         end
         return observerResult
+    end
+
+    local function reloadContext(reason, receipt)
+        receipt = receipt or {}
+        return {
+            reason = function()
+                return reason
+            end,
+            hadCommittedChanges = function()
+                return receipt.hadCommittedChanges == true
+            end,
+            hadSettingChanges = function()
+                return receipt.hadSettingChanges == true
+            end,
+            hadStatusChanges = function()
+                return receipt.hadStatusChanges == true
+            end,
+        }
+    end
+
+    local function notifyReload(reason, receipt)
+        local context = reloadContext(reason, receipt)
+        if reloadObserver == nil then
+            return context
+        end
+        local ok, result = pcall(reloadObserver, host, runtimeContext, context)
+        if not ok then
+            logging.violate("lifecycle.on_reload_failed", "%s: onReload failed: %s",
+                tostring(def.name or def.id or "module"), tostring(result))
+        elseif result == false then
+            logging.violate("lifecycle.on_reload_false", "%s: onReload returned false",
+                tostring(def.name or def.id or "module"))
+        end
+        return context
+    end
+
+    local function normalizeReloadReason(reason)
+        reason = reason or "manual"
+        if ReloadReasons[reason] ~= true then
+            logging.violate(
+                "lifecycle.invalid_reload_reason",
+                "module.reloadFromConfig: unknown reason '%s'",
+                tostring(reason)
+            )
+        end
+        return reason
     end
 
     local function executeActionsDuringCommit(actionSnapshot)
@@ -279,15 +335,21 @@ function managedModule.create(opts)
             actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit)
     end
 
-    function module.reloadFromConfig()
+    function module.reloadFromConfig(reason)
         requireActivated("reloadFromConfig")
-        stagedState._reloadFromConfig()
+        reason = normalizeReloadReason(reason)
+        local receipt = stagedState._reloadFromConfig()
         actionBuffer.clearAll()
+        return notifyReload(reason, receipt)
     end
 
     function module.resync()
         requireActivated("resync")
-        return moduleLifecycle.resyncStagedState(def, stagedState, actionBuffer)
+        local mismatches, receipt = moduleLifecycle.resyncStagedState(def, stagedState, actionBuffer)
+        if receipt ~= nil then
+            return mismatches, notifyReload("driftRepair", receipt)
+        end
+        return mismatches, nil
     end
 
     function module.resetAll(resetOpts)

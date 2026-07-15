@@ -128,6 +128,35 @@ local function create(storageConfig, storage)
         hydratePersistRootsNow()
     end
 
+    local function capturePersistedRoots()
+        local snapshot = {}
+        for _, root in ipairs(persistRoots) do
+            snapshot[root.alias] = ClonePersistedValue(readRootNode(root))
+        end
+        return snapshot
+    end
+
+    local function makeReloadReceipt(previous)
+        local hadCommittedChanges = false
+        local hadSettingChanges = false
+        local hadStatusChanges = false
+        for _, root in ipairs(persistRoots) do
+            if not storageInternal.valuesEqual(root, previous[root.alias], readRootNode(root)) then
+                hadCommittedChanges = true
+                if root._mode == "runtime" then
+                    hadStatusChanges = true
+                else
+                    hadSettingChanges = true
+                end
+            end
+        end
+        return {
+            hadCommittedChanges = hadCommittedChanges,
+            hadSettingChanges = hadSettingChanges,
+            hadStatusChanges = hadStatusChanges,
+        }
+    end
+
     hydratePersistRoots()
 
     function persistentState._replaceRoot(root, value)
@@ -135,7 +164,9 @@ local function create(storageConfig, storage)
     end
 
     function persistentState._reloadFromConfig()
+        local previous = capturePersistedRoots()
         hydratePersistRoots()
+        return makeReloadReceipt(previous)
     end
 
     function persistentState._readRoot(root)

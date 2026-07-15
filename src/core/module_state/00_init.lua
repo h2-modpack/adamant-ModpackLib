@@ -73,7 +73,7 @@ local function createCommittedRootAdapter(persistentState)
             persistentState._replaceRoot(root, value)
         end,
         reloadFromConfig = function()
-            persistentState._reloadFromConfig()
+            return persistentState._reloadFromConfig()
         end,
     }
 end

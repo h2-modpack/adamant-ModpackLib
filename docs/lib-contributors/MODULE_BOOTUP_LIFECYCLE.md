@@ -98,6 +98,13 @@ These paths intentionally re-read config after startup:
 - Lib lifecycle mismatch resync: used after an internal staged/committed audit
   detects drift.
 
+Successful public reloads notify the optional `module.onReload(host, runtime,
+reload)` observer after persistent and staged roots are rehydrated and pending
+actions are cleared. Reload does not invoke `module.onCommit(...)` or execute
+the commit pipeline. The reload receipt reports whether committed setting or
+persistent-status roots actually changed, allowing no-op framework/hash reloads
+to remain observable without forcing duplicate derived rebuilds.
+
 These paths should not re-read config during normal startup:
 
 - `managed_module_activation.activateOrThrow(...)`

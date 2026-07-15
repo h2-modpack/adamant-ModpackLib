@@ -33,6 +33,9 @@ local function createTestModule(h, opts)
     if opts.onCommit ~= nil then
         module.onCommit(opts.onCommit)
     end
+    if opts.onReload ~= nil then
+        module.onReload(opts.onReload)
+    end
     if opts.drawTab ~= nil then
         module.ui.tab(function(host, ui)
             return opts.drawTab(ui.draw, ui.data, ui.actions, ui, host)
@@ -225,6 +228,112 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorRowField:read(), 3)
     local liveRecord = self.h.managedModule.getRecord(liveModule)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
+end
+
+function TestCreateModule:testReloadObserverIsDistinctFromCommitLifecycle()
+    local reloads = {}
+    local commits = 0
+    local actions = 0
+    local module = createTestModule(self.h, {
+        pluginGuid = "test-create-module-reload-observer",
+        config = {
+            Enabled = true,
+            Flag = false,
+        },
+        modpack = "create-module-pack",
+        id = "ReloadObserver",
+        name = "Reload Observer",
+        storage = {
+            { type = "bool", alias = "Flag", default = false },
+        },
+        actions = {
+            touch = function()
+                actions = actions + 1
+            end,
+        },
+        onCommit = function()
+            commits = commits + 1
+        end,
+        onReload = function(host, runtime, reload)
+            reloads[#reloads + 1] = {
+                ownerId = host.getOwnerId(),
+                flag = runtime.data.read("Flag"),
+                reason = reload.reason(),
+                hadCommittedChanges = reload.hadCommittedChanges(),
+                hadSettingChanges = reload.hadSettingChanges(),
+                hadStatusChanges = reload.hadStatusChanges(),
+            }
+        end,
+        drawTab = function(_, _, uiActions)
+            uiActions.trigger("touch")
+        end,
+    })
+    lu.assertTrue(module.activate())
+    local live = self.h:liveModule("test-create-module-reload-observer")
+    live.drawTab()
+
+    self.h:writeNativeConfig("test-create-module-reload-observer", {
+        Enabled = true,
+        Flag = true,
+    })
+    local changed = live.reloadFromConfig("manual")
+
+    lu.assertEquals(commits, 0)
+    lu.assertEquals(actions, 0)
+    lu.assertEquals(reloads[1], {
+        ownerId = "test-create-module-reload-observer",
+        flag = true,
+        reason = "manual",
+        hadCommittedChanges = true,
+        hadSettingChanges = true,
+        hadStatusChanges = false,
+    })
+    lu.assertTrue(changed.hadCommittedChanges())
+
+    local unchanged = live.reloadFromConfig("frameworkSnapshot")
+    lu.assertEquals(#reloads, 2)
+    lu.assertEquals(reloads[2].reason, "frameworkSnapshot")
+    lu.assertFalse(reloads[2].hadCommittedChanges)
+    lu.assertFalse(unchanged.hadCommittedChanges())
+    lu.assertEquals(commits, 0)
+
+    lu.assertErrorMsgContains("unknown reason", function()
+        live.reloadFromConfig("unknown")
+    end)
+end
+
+function TestCreateModule:testDriftRepairReportsReloadWithoutCommit()
+    local observed = nil
+    local module = createTestModule(self.h, {
+        pluginGuid = "test-create-module-reload-drift",
+        config = {
+            Enabled = true,
+            Limit = 3,
+        },
+        modpack = "create-module-pack",
+        id = "ReloadDrift",
+        name = "Reload Drift",
+        storage = {
+            { type = "int", alias = "Limit", default = 3, min = 0, max = 10 },
+        },
+        onReload = function(_, runtime, reload)
+            observed = {
+                limit = runtime.data.read("Limit"),
+                reason = reload.reason(),
+                changed = reload.hadCommittedChanges(),
+            }
+        end,
+        drawTab = function() end,
+    })
+    lu.assertTrue(module.activate())
+    local live = self.h:liveModule("test-create-module-reload-drift")
+    live.stage("Limit", 7)
+
+    local mismatches, reload = live.resync()
+
+    lu.assertEquals(mismatches, { "Limit" })
+    lu.assertEquals(observed, { limit = 3, reason = "driftRepair", changed = false })
+    lu.assertFalse(reload.hadCommittedChanges())
 end
 
 function TestCreateModule:testDrawCallbacksReuseStableFacades()

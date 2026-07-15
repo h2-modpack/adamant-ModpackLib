@@ -52,7 +52,7 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
         for _, entry in ipairs(moduleRegistry.modules) do
             local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
             if liveModule then
-                liveModule.reloadFromConfig()
+                liveModule.reloadFromConfig("hashReload")
             end
         end
     end

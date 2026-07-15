@@ -23,6 +23,7 @@ local function createDeclarationState()
         actions = nil,
         onActivate = nil,
         onCommit = nil,
+        onReload = nil,
         drawTab = nil,
         drawQuickContent = nil,
         controlDeclarations = controlDeclarations.create(),

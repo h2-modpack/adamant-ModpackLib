@@ -50,7 +50,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         for _, entry in ipairs(moduleRegistry.modules) do
             local liveModule = snapshotAccess.getLiveModule(entry, snapshot)
             if liveModule and reloadModules then
-                liveModule.reloadFromConfig()
+                liveModule.reloadFromConfig("frameworkSnapshot")
             end
 
             staging.modules[entry.id] = moduleRegistry.snapshot.isEntryEnabled(entry, snapshot)

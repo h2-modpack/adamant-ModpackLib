@@ -63,6 +63,7 @@ Common surfaces:
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
 - `module.onCommit(...)`
+- `module.onReload(...)`
 - `module.hooks.*`
 - `module.shared.*`
 - `module.mutation.*`

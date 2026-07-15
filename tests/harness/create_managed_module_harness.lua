@@ -76,6 +76,15 @@ local function createManagedModuleHarness(harnessOpts)
         end
     end
 
+    local function adaptReloadCallback(callback)
+        if type(callback) ~= "function" then
+            return callback
+        end
+        return function(callbackHost, runtime, reload)
+            return callback(runtime, callbackHost, reload)
+        end
+    end
+
     local function adaptPatchMutation(callback)
         if type(callback) ~= "function" then
             return callback
@@ -96,6 +105,7 @@ local function createManagedModuleHarness(harnessOpts)
                 patchMutation = adaptPatchMutation(moduleOpts.patchMutation),
             },
             onCommit = adaptCommitCallback(moduleOpts.onCommit),
+            onReload = adaptReloadCallback(moduleOpts.onReload),
             drawTab = adaptDrawCallback(moduleOpts.drawTab),
             drawQuickContent = adaptDrawCallback(moduleOpts.drawQuickContent),
         })

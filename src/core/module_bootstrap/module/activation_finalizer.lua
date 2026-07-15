@@ -98,6 +98,7 @@ function activationFinalizer.activate(opts, declarations)
         overlayDeclarations = declarations.overlayDeclarations,
         onActivate = declarations.onActivate,
         onCommit = declarations.onCommit,
+        onReload = declarations.onReload,
         drawTab = declarations.drawTab,
         drawQuickContent = declarations.drawQuickContent,
         controlCatalog = compiledControls.catalog,

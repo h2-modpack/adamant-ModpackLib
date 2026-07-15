@@ -51,9 +51,13 @@ local function createStagedState(storageConfig, storage, committedRoots)
 
     local function reloadCommittedRoots()
         if committedRoots == nil then
-            return
+            return {
+                hadCommittedChanges = false,
+                hadSettingChanges = false,
+                hadStatusChanges = false,
+            }
         end
-        committedRoots.reloadFromConfig()
+        return committedRoots.reloadFromConfig()
     end
 
     local function readConfigValue(root)
@@ -423,9 +427,10 @@ local function createStagedState(storageConfig, storage, committedRoots)
         end,
         resetAll = resetAll,
         _reloadFromConfig = function()
-            reloadCommittedRoots()
+            local receipt = reloadCommittedRoots()
             copyConfigToStaging()
             clearDirty()
+            return receipt
         end,
         _syncFromCommitted = function()
             copyConfigToStaging()

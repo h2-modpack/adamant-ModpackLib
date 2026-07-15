@@ -48,8 +48,29 @@ function TestModuleState_PersistentState:testPersistentStateReadsCommittedSnapsh
     config.MaxGods = 8
     lu.assertEquals(persistentState.read("MaxGods"), 4)
 
-    stagedState._reloadFromConfig()
+    local receipt = stagedState._reloadFromConfig()
     lu.assertEquals(persistentState.read("MaxGods"), 8)
+    lu.assertTrue(receipt.hadCommittedChanges)
+    lu.assertTrue(receipt.hadSettingChanges)
+    lu.assertFalse(receipt.hadStatusChanges)
+
+    local unchanged = stagedState._reloadFromConfig()
+    lu.assertFalse(unchanged.hadCommittedChanges)
+    lu.assertFalse(unchanged.hadSettingChanges)
+    lu.assertFalse(unchanged.hadStatusChanges)
+end
+
+function TestModuleState_PersistentState:testReloadReceiptSeparatesPersistentStatusChanges()
+    local config = { RuntimeFlag = false, RuntimeCount = 1, RuntimePacked = 0 }
+    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+
+    config.RuntimeFlag = true
+    local receipt = persistentState._reloadFromConfig()
+
+    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
+    lu.assertTrue(receipt.hadCommittedChanges)
+    lu.assertFalse(receipt.hadSettingChanges)
+    lu.assertTrue(receipt.hadStatusChanges)
 end
 
 function TestModuleState_PersistentState:testRuntimeStorageWriteAndResetUpdatesCommittedSnapshot()

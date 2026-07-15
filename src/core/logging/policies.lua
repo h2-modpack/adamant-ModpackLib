@@ -226,6 +226,18 @@ return {
         severity = "warn",
         description = "A module onCommit callback returned false.",
     },
+    ["lifecycle.on_reload_failed"] = {
+        severity = "warn",
+        description = "A module onReload callback raised an error.",
+    },
+    ["lifecycle.on_reload_false"] = {
+        severity = "warn",
+        description = "A module onReload callback returned false.",
+    },
+    ["lifecycle.invalid_reload_reason"] = {
+        severity = "error",
+        description = "A configuration reload used an unknown lifecycle reason.",
+    },
     ["lifecycle.staged_state_drift_detected"] = {
         severity = "warn",
         description = "Staged UI state drifted from persisted config and was reloaded.",

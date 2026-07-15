@@ -218,6 +218,39 @@ end)
 - `commit.actions.hasAny()`
 - `commit.hadConfigChanges()`
 
+## Reload Observer
+
+Use `module.onReload(...)` when derived runtime, display, or shared projections
+must observe a successful configuration rehydration without treating it as a
+commit:
+
+```lua
+module.onReload(function(host, runtime, reload)
+    if reload.hadSettingChanges() then
+        -- Rebuild derived state from the rehydrated runtime.data surface.
+    end
+end)
+```
+
+The callback runs after committed persistent roots and staged state have been
+rehydrated and pending actions have been cleared. It does not run commit action
+handlers, internal actions, shared-event flushes, or `module.onCommit(...)`.
+
+`reload` exposes:
+
+- `reload.reason()` as one of `manual`, `frameworkSnapshot`, `hashReload`, or
+  `driftRepair`;
+- `reload.hadCommittedChanges()` for any changed persistent setting or status
+  root;
+- `reload.hadSettingChanges()` for changed setting roots;
+- `reload.hadStatusChanges()` for changed persistent status roots.
+
+The observer runs for every successful public reload, including no-op reloads.
+Use the change methods rather than the reason when deciding whether to rebuild.
+For example, hash application commits staged values before its follow-up reload,
+so that reload normally reports no committed changes and should not cause a
+second derived revision.
+
 ## Common Mistakes
 
 - Do not read transient aliases from `runtime.data`.

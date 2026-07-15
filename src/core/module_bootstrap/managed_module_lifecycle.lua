@@ -137,17 +137,18 @@ end
 
 local function resyncStagedState(def, stagedState, actionBuffer)
     local mismatches = stagedState.auditMismatches()
+    local reloadReceipt = nil
     if #mismatches > 0 then
         local name = def and (def.name or def.id) or "module"
         logging.violate("lifecycle.staged_state_drift_detected", "%s: staged state drift detected; reloading staged values for: %s",
             tostring(name),
             table.concat(mismatches, ", "))
-        stagedState._reloadFromConfig()
+        reloadReceipt = stagedState._reloadFromConfig()
         if actionBuffer then
             actionBuffer.clearAll()
         end
     end
-    return mismatches
+    return mismatches, reloadReceipt
 end
 
 local function stageLifecycleBoolean(persistentState, stagedState, alias, enabled)
