@@ -128,7 +128,7 @@ function Harness.boot(opts)
             imports = plugin.imports,
             importOverrides = plugin.importOverrides,
             mainPath = plugin.mainPath,
-            plugin = plugin.plugin or { guid = plugin.guid },
+            plugin = plugin.plugin or self.env.__plugin or { guid = plugin.guid },
             register = plugin.register ~= false,
         })
         self.pluginEnvs[index] = pluginEnv
