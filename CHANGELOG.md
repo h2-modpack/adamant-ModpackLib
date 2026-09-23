@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.1.1] - 2026-09-23
+
+### Fixed
+
+- overlays: use a dedicated victory modded stamp (
+e7d211)
+
 ## [4.1.0] - 2026-09-23
 
 ### Added
