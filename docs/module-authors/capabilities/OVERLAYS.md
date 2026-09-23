@@ -101,13 +101,21 @@ receive `draw`, `state`, or `actions`, and should not cache their
 
 Overlay visibility has multiple gates:
 
-- Lib applies the global game-HUD gate.
+- Lib follows game-HUD visibility by default (`hudVisibility = "follow"`).
+- A line or table may opt into `hudVisibility = "independent"` to remain visible
+  while the combat HUD is hidden. This does not bypass the gates below.
 - Each overlay can provide its own `visible` boolean or callback.
 - Lib modpack and fallback configuration UI suppress the entire overlay layer while open.
 
 Module code does not call suppression APIs directly. Lib modpack and fallback UI
 windows acquire and release suppression through their runtime facades while
 foreground configuration UI is open.
+
+Independent overlays use the same retained components, projection callbacks,
+ordering, and cleanup as ordinary overlays. HUD hiding preserves stack positions;
+it does not compact independent rows into the space of hidden HUD-following rows.
+Independence does not guarantee drawing above fullscreen menus or loading screens,
+or rendering when the native HUD component host does not exist.
 
 ## Common Mistakes
 

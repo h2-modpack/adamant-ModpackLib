@@ -737,6 +737,7 @@ local lib = {}
 ---@field textArgs? table Text style overrides.
 
 ---@class AdamantModpackLib.RetainedLineSpec
+---@field hudVisibility? "follow"|"independent" Default follow. Independent ignores combat HUD visibility, not own visibility or configuration UI suppression.
 ---@field componentName? string Base retained HUD component name.
 ---@field region? AdamantModpackLib.RetainedOverlayRegion Stack region name. Defaults to `middleRightStack`.
 ---@field order? integer Sort key within the region.
@@ -748,6 +749,7 @@ local lib = {}
 ---@field textArgs? table Text style overrides for one-column convenience lines.
 
 ---@class AdamantModpackLib.RetainedTableSpec
+---@field hudVisibility? "follow"|"independent" Default follow. Independent ignores combat HUD visibility, not own visibility or configuration UI suppression.
 ---@field componentName? string Base retained HUD component name.
 ---@field region? AdamantModpackLib.RetainedOverlayRegion Stack region name. Defaults to `middleRightStack`.
 ---@field order? integer Sort key for the first row within the region.

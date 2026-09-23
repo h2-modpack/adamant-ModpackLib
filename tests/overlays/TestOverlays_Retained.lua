@@ -32,6 +32,59 @@ function TestOverlays_Retained:createModuleWithOverlays(pluginGuid, declareOverl
     return self.h.createModuleWithOverlays(pluginGuid, declareOverlays, opts)
 end
 
+function TestOverlays_Retained:testIndependentLinesAndTablesRespectOwnVisibilityAndSuppression()
+    local alpha, visible = {}, true
+    self.h.game.setAlpha = function(args) alpha[args.Id] = args.Fraction end
+    local host, author = self:createModuleWithOverlays("test.independent", function(overlays)
+        overlays.createLine("ordinary", { componentName = "Ordinary", columns = { { key = "text" } } })
+        overlays.createLine("persistent", { componentName = "Persistent", hudVisibility = "independent",
+            visible = function() return visible end, columns = { { key = "text" } } })
+        overlays.createTable("table", { componentName = "PersistentTable", hudVisibility = "independent",
+            maxRows = 1, columns = { { key = "text" } } })
+        overlays.onCommit(function(_, _, overlay)
+            overlay.setLine("ordinary", { text = "ordinary" })
+            overlay.setLine("persistent", { text = "persistent" })
+            overlay.setTable("table", { { text = "row" } })
+            overlay.refreshOwned()
+        end)
+    end)
+    local ok, err = author.activate()
+    lu.assertTrue(ok, tostring(err))
+    local function opacity(name)
+        return alpha[self.h.game.hudScreen.Components["AdamantOverlay_" .. name .. "_text"].Id]
+    end
+    local y = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_Persistent_text.Y
+    self.h.game.showingCombatUI = false
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(opacity("Ordinary"), 0)
+    lu.assertEquals(opacity("Persistent"), 1)
+    lu.assertEquals(opacity("PersistentTable_1"), 1)
+    lu.assertEquals(self.h.game.screenData.HUD.ComponentData.AdamantOverlay_Persistent_text.Y, y)
+    local token = self.h.overlays.suppressForUi()
+    lu.assertEquals(opacity("Persistent"), 0)
+    lu.assertEquals(opacity("PersistentTable_1"), 0)
+    token.release()
+    lu.assertEquals(opacity("Persistent"), 1)
+    visible = false
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(opacity("Persistent"), 0)
+    self.h.game.hudScreen = { Components = {} }
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(opacity("PersistentTable_1"), 1)
+    self.h.game.showingCombatUI = true
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(opacity("Ordinary"), 1)
+    lu.assertEquals(opacity("Persistent"), 0)
+end
+
+function TestOverlays_Retained:testRejectsUnknownHudVisibilityPolicy()
+    lu.assertError(function()
+        self:createModuleWithOverlays("test.independent.invalid", function(overlays)
+            overlays.createLine("line", { hudVisibility = "always" })
+        end)
+    end)
+end
+
 function TestOverlays_Retained:testSystemOverlayLineProjectsThroughCommitContext()
     local modified = {}
     self.h.game.modifyTextBox = function(args)

@@ -721,13 +721,19 @@ instance for the same module owner id.
 
 Module-scoped retained HUD projections for shared overlay placement.
 
-Overlay visibility has two layers:
-- Lib applies a global game-HUD gate, currently based on `ShowingCombatUI`.
+Overlay visibility has three gates:
+- Lib follows `ShowingCombatUI` by default. A line or table can set
+  `hudVisibility = "independent"` to ignore this gate; omitted or `"follow"`
+  preserves existing behavior.
 - Each overlay can also provide its own `visible` boolean or callback.
 - Lib-hosted ImGui configuration windows acquire a UI suppression token while
   open. Any active token hides the entire overlay layer until released.
 
-When the global gate is closed, Lib hides all retained overlay components even if their own `visible` callback returns true. Text callbacks may still be refreshed so the display is fresh when the game HUD returns.
+HUD-independent overlays still respect their own visibility and configuration
+UI suppression. They share normal component ownership and cleanup, and retain
+their stack positions when HUD-following neighbors hide. This is not a guarantee
+of drawing above fullscreen menus or surviving absent native HUD components.
+Text callbacks may still refresh hidden overlays so they are fresh when shown.
 
 Lib modpack and fallback module UIs use this gate so configuration UI and
 gameplay overlays are mutually exclusive on screen.

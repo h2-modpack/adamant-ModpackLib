@@ -19,6 +19,9 @@ local function validateSpec(context, spec)
     if type(spec) ~= "table" then
         logging.violate("overlays.invalid_registration", "%s: spec must be a table", context)
     end
+    if spec.hudVisibility ~= nil and spec.hudVisibility ~= "follow" and spec.hudVisibility ~= "independent" then
+        logging.violate("overlays.invalid_registration", "%s: hudVisibility must be follow or independent", context)
+    end
 end
 
 local function validateCallback(context, callback)

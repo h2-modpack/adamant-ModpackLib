@@ -78,7 +78,8 @@ local function isGameHudVisible()
 end
 
 local function isVisible(entry)
-    return isGameHudVisible() and not isUiSuppressed() and isEntryVisible(entry)
+    return (entry.hudVisibility == "independent" or isGameHudVisible())
+        and not isUiSuppressed() and isEntryVisible(entry)
 end
 
 local function resolveText(entry)
@@ -533,6 +534,7 @@ local function createTextElement(opts)
         textArgs = opts.textArgs or {},
         text = opts.text or "",
         visible = opts.visible,
+        hudVisibility = opts.hudVisibility,
         displayedText = nil,
         deferHiddenComponentCreation = opts.deferHiddenComponentCreation == true,
         deferUntilLayout = opts.deferUntilLayout == true,
@@ -592,6 +594,7 @@ local function createStackRow(opts)
                 textArgs = sanitizeStackRowTextArgs(column.textArgs),
                 text = column.text,
                 visible = false,
+                hudVisibility = opts.hudVisibility,
                 deferInitialUpdate = true,
                 deferHiddenComponentCreation = true,
                 deferUntilLayout = true,

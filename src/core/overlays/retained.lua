@@ -55,6 +55,9 @@ local function validateSpec(apiName, spec)
     if type(spec) ~= "table" then
         logging.violate("overlays.invalid_registration", "retained overlays.%s: spec must be a table", apiName)
     end
+    if spec.hudVisibility ~= nil and spec.hudVisibility ~= "follow" and spec.hudVisibility ~= "independent" then
+        logging.violate("overlays.invalid_registration", "retained overlays.%s: hudVisibility must be follow or independent", apiName)
+    end
 end
 
 local function retainedHandleId(registry, name)
@@ -211,6 +214,7 @@ local function createLineSlot(registry, name, spec, existingValues)
         region = spec.region,
         order = spec.order,
         columnGap = spec.columnGap,
+        hudVisibility = spec.hudVisibility,
         visible = function()
             return isRegistryVisible(registry, spec.visible)
         end,
@@ -254,6 +258,7 @@ local function createTableSlot(registry, name, spec, existingRows, existingRowIn
             region = spec.region,
             order = (tonumber(spec.order) or overlayOrder.module) + rowIndex - 1,
             columnGap = spec.columnGap,
+            hudVisibility = spec.hudVisibility,
             visible = function()
                 return isRegistryVisible(registry, spec.visible) and slot.rows[rowIndex] ~= nil
             end,
