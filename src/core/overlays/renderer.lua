@@ -85,7 +85,7 @@ end
 
 local function isVisible(entry)
     return (entry.hudVisibility == "independent" or isGameHudVisible())
-        and (not isVictoryScreenOpen() or entry.isStamp == true)
+        and not isVictoryScreenOpen()
         and not isUiSuppressed() and isEntryVisible(entry)
 end
 
@@ -229,28 +229,56 @@ local function ensureComponent(entry)
         entry.componentId = component.Id
         entry.displayedText = nil
         entry.displayedVisible = nil
-        entry.drawGroup = "HUD_Overlay"
         entry.componentLayoutSignature = entry.componentLayoutSignature or layoutSignature(entry.layout)
-    end
-
-    if entry.isStamp then
-        local group = isVictoryScreenOpen() and VICTORY_STAMP_GROUP or "HUD_Overlay"
-        if entry.drawGroup ~= group then
-            if group == VICTORY_STAMP_GROUP then
-                overlayGameDeps.InsertGroupInFront({
-                    Name = VICTORY_STAMP_GROUP,
-                    DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
-                })
-            end
-            overlayGameDeps.ChangeDrawGroup(component.Id, group)
-            entry.drawGroup = group
-        end
     end
 
     return component
 end
 
+local function refreshVictoryStamp()
+    local eligible = false
+    if isVictoryScreenOpen() and not isUiSuppressed() then
+        for _, entry in pairs(rendererState.textElements) do
+            if entry.isStamp and isEntryVisible(entry) then
+                eligible = true
+                break
+            end
+        end
+    end
+    local entry = rendererState.victoryStamp
+    if not eligible then
+        if entry then
+            discardExistingComponent(entry)
+            local data = overlayGameDeps.ScreenData()
+            if data and data.HUD and data.HUD.ComponentData then
+                data.HUD.ComponentData[entry.componentName] = nil
+            end
+            rendererState.victoryStamp = nil
+        end
+        return
+    end
+    if not entry then
+        entry = {
+            componentName = "AdamantVictoryStamp",
+            layout = { Anchor = "right", RightOffset = 24, Y = 28, GroupName = VICTORY_STAMP_GROUP },
+            textArgs = {},
+        }
+        rendererState.victoryStamp = entry
+    end
+    local previousId = entry.componentId
+    local component = ensureComponent(entry)
+    if component and previousId ~= component.Id then
+        overlayGameDeps.InsertGroupInFront({
+            Name = VICTORY_STAMP_GROUP,
+            DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
+        })
+        overlayGameDeps.ModifyTextBox({ Id = component.Id, Text = "Modded" })
+        overlayGameDeps.SetAlpha({ Id = component.Id, Fraction = 1.0, Duration = 0.0 })
+    end
+end
+
 local function applyVisibility(entry, component, force)
+    refreshVictoryStamp()
     local nextVisible = isVisible(entry)
     if not force and nextVisible == entry.displayedVisible then
         return
@@ -466,6 +494,7 @@ end
 local function refreshAll()
     refreshStackRows()
     refreshTextElements(true)
+    refreshVictoryStamp()
 end
 
 local function refreshVisibility()

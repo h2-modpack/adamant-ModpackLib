@@ -26,7 +26,6 @@ local function createGameState(opts)
         },
         showingCombatUI = opts.ShowingCombatUI ~= false,
         activeScreens = {},
-        changeDrawGroup = function() end,
         insertGroupInFront = function() end,
         screenCenterX = opts.ScreenCenterX or 960,
         screenHeight = opts.ScreenHeight or 1080,
@@ -59,7 +58,6 @@ local function createGameDeps(game)
         },
         overlays = {
             ActiveScreens = function() return game.activeScreens end,
-            ChangeDrawGroup = function(id, group) return game.changeDrawGroup(id, group) end,
             InsertGroupInFront = function(args) return game.insertGroupInFront(args) end,
             ScreenData = function()
                 return game.screenData

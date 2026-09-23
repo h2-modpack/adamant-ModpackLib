@@ -736,10 +736,11 @@ of drawing above fullscreen menus or surviving absent native HUD components.
 Text callbacks may still refresh hidden overlays so they are fresh when shown.
 
 The built-in pack hash and fallback Modded markers use HUD-independent visibility.
-While the victory (RunClear) screen is open, all other Lib-managed overlays are
-hidden, including HUD-independent overlays. Only these stamps move above the
-victory screen; normal layering and visibility resume on close. Stamp settings
-and configuration-window suppression still apply.
+While the victory (RunClear) screen is open, all regular Lib-managed overlays are
+hidden, including hashes and HUD-independent overlays. A single top-right
+`Modded` label appears above the victory screen if any built-in stamp qualifies
+for display. Normal overlays resume on close. Stamp settings and
+configuration-window suppression still apply.
 
 Lib modpack and fallback module UIs use this gate so configuration UI and
 gameplay overlays are mutually exclusive on screen.
