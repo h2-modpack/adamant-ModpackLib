@@ -193,9 +193,10 @@ local function normalizeRetainedColumn(registry, column, index, textResolver)
     }
 end
 
-local function createLineSlot(registry, name, spec, existingValues)
+local function createLineSlot(registry, name, spec, existingValues, isStamp)
     local slot = {
         kind = "line",
+        isStamp = isStamp == true,
         name = name,
         refreshPass = registry.refreshPass,
         spec = spec,
@@ -215,6 +216,7 @@ local function createLineSlot(registry, name, spec, existingValues)
         order = spec.order,
         columnGap = spec.columnGap,
         hudVisibility = spec.hudVisibility,
+        isStamp = slot.isStamp,
         visible = function()
             return isRegistryVisible(registry, spec.visible)
         end,
@@ -277,6 +279,7 @@ local function snapshotSlot(slot)
             refreshPass = slot.refreshPass,
             spec = slot.spec,
             values = slot.values,
+            isStamp = slot.isStamp,
         }
     end
     return {
@@ -332,7 +335,7 @@ local function restoreRegistry(registry, snapshot)
 
     for name, slotSnapshot in pairs(snapshot.elements) do
         if slotSnapshot.kind == "line" then
-            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values)
+            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values, slotSnapshot.isStamp)
             slot.refreshPass = slotSnapshot.refreshPass
             registry.elements[name] = slot
         elseif slotSnapshot.kind == "table" then
@@ -361,7 +364,7 @@ local function ensureIntervalDriver()
     end
 end
 
-local function declareLine(registry, name, spec)
+local function declareLine(registry, name, spec, isStamp)
     validateName("createLine", name)
     validateSpec("createLine", spec)
     registry.seenElements[name] = true
@@ -372,7 +375,7 @@ local function declareLine(registry, name, spec)
         unregisterElement(previous)
     end
 
-    registry.elements[name] = createLineSlot(registry, name, spec, previousValues)
+    registry.elements[name] = createLineSlot(registry, name, spec, previousValues, isStamp)
 end
 
 local function declareTable(registry, name, spec)
@@ -449,6 +452,9 @@ end
 local function createDeclarationSurface(registry, opts)
     if opts and opts.system == true then
         return {
+            createStamp = function(name, spec)
+                return declareLine(registry, name, spec, true)
+            end,
             createLine = function(name, spec)
                 return declareLine(registry, name, spec)
             end,
@@ -562,7 +568,7 @@ local function recreateElementSlots(registry)
     registry.elements = {}
     for name, slotSnapshot in pairs(snapshots) do
         if slotSnapshot.kind == "line" then
-            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values)
+            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values, slotSnapshot.isStamp)
             slot.refreshPass = slotSnapshot.refreshPass
             registry.elements[name] = slot
         elseif slotSnapshot.kind == "table" then

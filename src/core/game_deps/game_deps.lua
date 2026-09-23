@@ -58,6 +58,17 @@ local gameDeps = {
     },
 
     overlays = {
+        ActiveScreens = function()
+            return readOptionalGameGlobal("ActiveScreens", "table")
+        end,
+
+        ChangeDrawGroup = function(id, group)
+            return callGameGlobalFunction("ChangeDrawGroup", id, group)
+        end,
+
+        InsertGroupInFront = function(args)
+            return callGameGlobalFunction("InsertGroupInFront", args)
+        end,
         ScreenData = function()
             return readOptionalGameGlobal("ScreenData", "table")
         end,

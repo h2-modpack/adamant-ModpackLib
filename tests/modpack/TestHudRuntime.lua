@@ -22,7 +22,7 @@ function TestHudRuntime:testCreateHudRegistersModpackHashOverlay()
             registeredPack = packId
             registeredScope = scope
             local registrar = {
-                createLine = function(name, spec)
+                createStamp = function(name, spec)
                     registeredLine = name
                     registeredOpts = spec
                 end,
@@ -62,6 +62,7 @@ function TestHudRuntime:testCreateHudRegistersModpackHashOverlay()
     lu.assertEquals(registeredScope, "hud")
     lu.assertEquals(registeredLine, "hash")
     lu.assertEquals(registeredOpts.region, "middleRightStack")
+    lu.assertEquals(registeredOpts.hudVisibility, "independent")
     lu.assertEquals(registeredOpts.order, overlayOrder.modpack + 1)
     lu.assertEquals(projectedValue, "")
     lu.assertFalse(registeredOpts.visible())
@@ -83,7 +84,7 @@ function TestHudRuntime:testCreateHudInstallClearsModpackHashOverlayWhenHidden()
             registeredPack = packId
             registeredScope = scope
             register({
-                createLine = function()
+                createStamp = function()
                     createLineCalls = createLineCalls + 1
                 end,
                 onCommit = function()

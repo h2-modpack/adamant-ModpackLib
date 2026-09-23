@@ -472,6 +472,15 @@ function TestFallbackUi:testFallbackMarkerShowsWhenFallbackRuntimeIsUncoordinate
     local row = self.h:getFallbackMarkerRow()
 
     lu.assertNotNil(row)
+    local markerElement
+    for _, element in pairs(self.h.rendererState.textElements) do
+        if element.componentName == "AdamantOverlay_ModpackMark_FallbackUi_text" then
+            markerElement = element
+        end
+    end
+    lu.assertNotNil(markerElement)
+    lu.assertEquals(markerElement.hudVisibility, "independent")
+    lu.assertTrue(markerElement.isStamp)
     lu.assertTrue(row.visible())
 end
 

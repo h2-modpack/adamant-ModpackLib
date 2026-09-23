@@ -41,7 +41,8 @@ function fallbackHud.createMarker()
     state.initialized = true
     local system = createSystem(FALLBACK_OWNER)
     system.overlays.define(function(overlay)
-        overlay.createLine("marker", {
+        overlay.createStamp("marker", {
+            hudVisibility = "independent",
             componentName = "ModpackMark_FallbackUi",
             region = "middleRightStack",
             order = system.overlays.order.system,

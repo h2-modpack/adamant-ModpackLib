@@ -77,6 +77,93 @@ function TestOverlays_Retained:testIndependentLinesAndTablesRespectOwnVisibility
     lu.assertEquals(opacity("Persistent"), 0)
 end
 
+function TestOverlays_Retained:testVictoryKeepsOnlyStampsAndRestoresTheirLayer()
+    local alpha, groups, hooks = {}, {}, {}
+    local stampVisible = true
+    self.h.game.setAlpha = function(args) alpha[args.Id] = args.Fraction end
+    self.h.game.changeDrawGroup = function(id, group) groups[id] = group end
+    self.h.game.insertGroupInFront = function(args)
+        lu.assertEquals(args, {
+            Name = "AdamantVictoryStamp", DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
+        })
+    end
+    self.h.modutil.Path.Wrap = function(path, handler) hooks[path] = handler end
+    self.h.createSystem("test.victory.stamp").overlays.define(function(overlays)
+        overlays.createStamp("stamp", {
+            componentName = "VictoryStamp", hudVisibility = "independent",
+            visible = function() return stampVisible end,
+        })
+        overlays.createLine("otherSystem", { componentName = "OtherSystem", hudVisibility = "independent" })
+        overlays.onCommit(function(ctx)
+            ctx.setLine("stamp", "Modded")
+            ctx.setLine("otherSystem", "Other system")
+            ctx.refreshOwned()
+        end)
+    end)
+    local host, author = self:createModuleWithOverlays("test.victory.module", function(overlays)
+        lu.assertNil(overlays.createStamp)
+        overlays.createLine("ordinary", { componentName = "VictoryOrdinary", columns = { { key = "text" } } })
+        overlays.createLine("persistent", { componentName = "VictoryPersistent", hudVisibility = "independent",
+            columns = { { key = "text" } } })
+        overlays.createTable("table", { componentName = "VictoryTable", hudVisibility = "independent",
+            maxRows = 1, columns = { { key = "text" } } })
+        overlays.onCommit(function(_, _, ctx)
+            ctx.setLine("ordinary", { text = "Ordinary" })
+            ctx.setLine("persistent", { text = "Persistent" })
+            ctx.setTable("table", { { text = "Table" } })
+            ctx.refreshOwned()
+        end)
+    end)
+    lu.assertTrue(author.activate())
+    self.h.overlays.dispatchCommit(host, {})
+    local function id(name)
+        local component = self.h.game.hudScreen.Components["AdamantOverlay_" .. name .. "_text"]
+        lu.assertNotNil(component, name)
+        return component.Id
+    end
+    local function open(name)
+        hooks.OnScreenOpened(function(screen) self.h.game.activeScreens[screen.Name] = screen end, { Name = name })
+    end
+    local function close(name)
+        hooks.OnScreenCloseFinished(function(screen) self.h.game.activeScreens[screen.Name] = nil end, { Name = name })
+    end
+    open("RunClear")
+    local originalStamp = id("VictoryStamp")
+    lu.assertEquals(alpha[originalStamp], 1)
+    lu.assertEquals(groups[originalStamp], "AdamantVictoryStamp")
+    for _, name in ipairs({ "VictoryOrdinary", "VictoryPersistent", "VictoryTable_1", "OtherSystem" }) do
+        lu.assertEquals(alpha[id(name)], 0)
+    end
+    open("TraitTrayScreen")
+    close("TraitTrayScreen")
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(alpha[id("VictoryPersistent")], 0)
+    local token = self.h.overlays.suppressForUi()
+    lu.assertEquals(alpha[originalStamp], 0)
+    token.release()
+    lu.assertEquals(alpha[originalStamp], 1)
+    stampVisible = false
+    self.h.overlays.dispatchCommit("test.victory.stamp", {})
+    lu.assertEquals(alpha[originalStamp], 0)
+    stampVisible = true
+    self.h.game.hudScreen = { Components = {} }
+    self.h.overlays.dispatchCommit("test.victory.stamp", {})
+    lu.assertNotEquals(id("VictoryStamp"), originalStamp)
+    lu.assertEquals(groups[id("VictoryStamp")], "AdamantVictoryStamp")
+    self.h.game.showingCombatUI = false
+    close("RunClear")
+    lu.assertEquals(groups[id("VictoryStamp")], "HUD_Overlay")
+    lu.assertEquals(alpha[id("VictoryStamp")], 1)
+    lu.assertEquals(alpha[id("VictoryOrdinary")], 0)
+    lu.assertEquals(alpha[id("VictoryPersistent")], 1)
+    lu.assertEquals(alpha[id("OtherSystem")], 1)
+    open("RunClear")
+    lu.assertEquals(groups[id("VictoryStamp")], "AdamantVictoryStamp")
+    lu.assertEquals(alpha[id("VictoryPersistent")], 0)
+    close("RunClear")
+    lu.assertEquals(groups[id("VictoryStamp")], "HUD_Overlay")
+end
+
 function TestOverlays_Retained:testRejectsUnknownHudVisibilityPolicy()
     lu.assertError(function()
         self:createModuleWithOverlays("test.independent.invalid", function(overlays)

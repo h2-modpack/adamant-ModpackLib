@@ -9,6 +9,12 @@ local rendererSystem = deps.system
 local overlayGameDeps = deps.gameDeps
 
 local refreshStackRows
+local VICTORY_STAMP_GROUP = "AdamantVictoryStamp"
+
+local function isVictoryScreenOpen()
+    local screens = overlayGameDeps.ActiveScreens()
+    return screens ~= nil and screens.RunClear ~= nil
+end
 
 local REGIONS = {
     middleRightStack = {
@@ -79,6 +85,7 @@ end
 
 local function isVisible(entry)
     return (entry.hudVisibility == "independent" or isGameHudVisible())
+        and (not isVictoryScreenOpen() or entry.isStamp == true)
         and not isUiSuppressed() and isEntryVisible(entry)
 end
 
@@ -222,7 +229,22 @@ local function ensureComponent(entry)
         entry.componentId = component.Id
         entry.displayedText = nil
         entry.displayedVisible = nil
+        entry.drawGroup = "HUD_Overlay"
         entry.componentLayoutSignature = entry.componentLayoutSignature or layoutSignature(entry.layout)
+    end
+
+    if entry.isStamp then
+        local group = isVictoryScreenOpen() and VICTORY_STAMP_GROUP or "HUD_Overlay"
+        if entry.drawGroup ~= group then
+            if group == VICTORY_STAMP_GROUP then
+                overlayGameDeps.InsertGroupInFront({
+                    Name = VICTORY_STAMP_GROUP,
+                    DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
+                })
+            end
+            overlayGameDeps.ChangeDrawGroup(component.Id, group)
+            entry.drawGroup = group
+        end
     end
 
     return component
@@ -452,6 +474,18 @@ end
 
 local function ensureGameHooks()
     rendererSystem.hooks.define(function(hooks)
+        hooks.wrap("OnScreenOpened", "victoryOpened", function(base, screen, args)
+            base(screen, args)
+            if screen.Name == "RunClear" then
+                refreshVisibility()
+            end
+        end)
+        hooks.wrap("OnScreenCloseFinished", "victoryClosed", function(base, screen, args)
+            base(screen, args)
+            if screen.Name == "RunClear" then
+                refreshVisibility()
+            end
+        end)
         hooks.wrap("StartRoomPresentation", "roomPresentation", function(base, currentRun, currentRoom, metaPointsAwarded)
             base(currentRun, currentRoom, metaPointsAwarded)
             refreshVisibility()
@@ -535,6 +569,7 @@ local function createTextElement(opts)
         text = opts.text or "",
         visible = opts.visible,
         hudVisibility = opts.hudVisibility,
+        isStamp = opts.isStamp == true,
         displayedText = nil,
         deferHiddenComponentCreation = opts.deferHiddenComponentCreation == true,
         deferUntilLayout = opts.deferUntilLayout == true,
@@ -595,6 +630,7 @@ local function createStackRow(opts)
                 text = column.text,
                 visible = false,
                 hudVisibility = opts.hudVisibility,
+                isStamp = opts.isStamp == true,
                 deferInitialUpdate = true,
                 deferHiddenComponentCreation = true,
                 deferUntilLayout = true,

@@ -49,6 +49,7 @@ local function createGameDeps(game)
             end,
         },
         overlays = {
+            ActiveScreens = function() return {} end,
             ScreenData = function()
                 return game.screenData
             end,

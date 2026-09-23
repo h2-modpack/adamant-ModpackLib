@@ -26,7 +26,8 @@ local function createHud(packId, packIndex, configHash, theme, config, hideHashM
                 return
             end
 
-            overlays.createLine("hash", {
+            overlays.createStamp("hash", {
+                hudVisibility = "independent",
                 componentName = componentName,
                 region = "middleRightStack",
                 order = overlaySurface.order.modpack + packIndex,
