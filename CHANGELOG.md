@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.1.0] - 2026-09-23
+
+### Added
+
+- overlays: reserve victory screen visibility for mod stamps (d2b4b37)
+- overlays: allow HUD-independent retained elements (
+b5f862)
+- lifecycle: add reload observer (
+d5ed71)
+
+### Fixed
+
+- types: wrap overlay visibility annotations (
+98f535)
+- test: expose plugin config path to smoke harness (
+eb87ce)
+
 ## [4.0.1] - 2026-06-22
 
 ### Fixed
