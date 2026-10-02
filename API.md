@@ -745,8 +745,17 @@ configuration-window suppression still apply.
 Lib modpack and fallback module UIs use this gate so configuration UI and
 gameplay overlays are mutually exclusive on screen.
 
-Managed region:
+Managed regions (listed as `module.overlays.regions`, a read-only
+`{ [name] = true }` proxy; iterate it with `pairs`, since `next` and `#` do not
+apply):
 - `middleRightStack`: a right-anchored vertical stack used for pack markers and module status text.
+- `centerLowerStack`: a centered stack in the lower half of the screen.
+- `victoryStack`: a right-anchored stack directly beneath the top-right `Modded`
+  label on the victory (RunClear) screen. Lines and tables placed here are
+  HUD-independent regardless of `hudVisibility`; they are visible only while
+  RunClear is open, the `Modded` label is eligible, no configuration-window
+  suppression is active, and their own `visible` passes. They are hidden at all
+  other times.
 
 Order bands:
 - `module.overlays.order.system`

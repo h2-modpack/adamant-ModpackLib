@@ -97,4 +97,5 @@ return {
     system = system,
     modpack = modpack,
     order = overlayOrder,
+    regions = renderer.regions,
 }

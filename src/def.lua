@@ -727,6 +727,7 @@ local lib = {}
 ---@alias AdamantModpackLib.RetainedOverlayRegion
 ---| "middleRightStack"
 ---| "centerLowerStack"
+---| "victoryStack"
 
 ---@class AdamantModpackLib.RetainedOverlayColumn
 ---@field key? string Stable column key used by retained values.
@@ -810,6 +811,7 @@ local lib = {}
 
 ---@class AdamantModpackLib.RetainedOverlayRegistrar
 ---@field order table<string, integer> Shared overlay order bands.
+---@field regions table<AdamantModpackLib.RetainedOverlayRegion, true> Managed regions available to modules.
 ---@field createLine fun(name: string, spec: AdamantModpackLib.RetainedLineSpec)
 ---@field createTable fun(name: string, spec: AdamantModpackLib.RetainedTableSpec)
 ---@field onCommit fun(callback: AdamantModpackLib.OverlayCommitCallback)

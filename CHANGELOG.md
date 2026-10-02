@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- overlays: add the victoryStack region for module victory-screen lines
+
 ## [4.1.1] - 2026-09-23
 
 ### Fixed

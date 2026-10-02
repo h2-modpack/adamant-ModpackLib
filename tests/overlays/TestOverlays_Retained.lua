@@ -183,6 +183,119 @@ function TestOverlays_Retained:testVictoryUsesOneDedicatedStampAndRestoresRegula
     lu.assertNil(victory())
 end
 
+function TestOverlays_Retained:testVictoryStackRowsFollowStampEligibility()
+    local alpha, hooks = {}, {}
+    local inserts = 0
+    local stampVisible = true
+    self.h.game.setAlpha = function(args) alpha[args.Id] = args.Fraction end
+    self.h.game.insertGroupInFront = function(args)
+        inserts = inserts + 1
+        lu.assertEquals(args, {
+            Name = "AdamantVictoryStamp", DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
+        })
+    end
+    self.h.modutil.Path.Wrap = function(path, handler) hooks[path] = handler end
+    self.h.createSystem("test.victory.stack.stamp").overlays.define(function(overlays)
+        overlays.createStamp("stamp", {
+            componentName = "StackStamp", hudVisibility = "independent",
+            visible = function() return stampVisible end,
+        })
+        overlays.onCommit(function(ctx)
+            ctx.setLine("stamp", "Modded")
+            ctx.refreshOwned()
+        end)
+    end)
+    local host, author = self:createModuleWithOverlays("test.victory.stack.module", function(overlays)
+        lu.assertNil(overlays.createStamp)
+        overlays.createLine("regular", { componentName = "StackRegular", hudVisibility = "independent",
+            columns = { { key = "text" } } })
+        overlays.createLine("summary", { region = "victoryStack", componentName = "StackSummary",
+            columns = { { key = "text" } } })
+        overlays.createTable("rows", { region = "victoryStack", componentName = "StackRows",
+            order = overlays.order.module + 1, maxRows = 2, columns = { { key = "text" } } })
+        overlays.onCommit(function(_, _, ctx)
+            ctx.setLine("regular", { text = "Regular" })
+            ctx.setLine("summary", { text = "Summary" })
+            ctx.setTable("rows", { { text = "Row 1" }, { text = "Row 2" } })
+            ctx.refreshOwned()
+        end)
+    end)
+    lu.assertTrue(author.activate())
+    self.h.overlays.dispatchCommit(host, {})
+    local function id(name)
+        local component = self.h.game.hudScreen.Components["AdamantOverlay_" .. name .. "_text"]
+        lu.assertNotNil(component, name)
+        return component.Id
+    end
+    local function open(name)
+        hooks.OnScreenOpened(function(screen) self.h.game.activeScreens[screen.Name] = screen end, { Name = name })
+    end
+    local function close(name)
+        hooks.OnScreenCloseFinished(function(screen) self.h.game.activeScreens[screen.Name] = nil end, { Name = name })
+    end
+    local function victory()
+        return self.h.game.hudScreen.Components.AdamantVictoryStamp
+    end
+    local stackNames = { "StackSummary", "StackRows_1", "StackRows_2" }
+    local function assertStackAlpha(expected)
+        for _, name in ipairs(stackNames) do
+            lu.assertEquals(alpha[id(name)], expected, name)
+        end
+    end
+    assertStackAlpha(0)
+    lu.assertEquals(alpha[id("StackRegular")], 1)
+    lu.assertTrue(inserts >= 3)
+    local insertsBeforeOpen = inserts
+    open("RunClear")
+    lu.assertEquals(alpha[victory().Id], 1)
+    lu.assertEquals(inserts, insertsBeforeOpen + 1)
+    assertStackAlpha(1)
+    lu.assertEquals(alpha[id("StackRegular")], 0)
+    local componentData = self.h.game.screenData.HUD.ComponentData
+    local stampLayout = componentData.AdamantVictoryStamp
+    lu.assertEquals(stampLayout.Y, 28)
+    local expectedY = { 28 + 28 + 4, 28 + 28 + 4 + 32, 28 + 28 + 4 + 64 }
+    for index, name in ipairs(stackNames) do
+        local layout = componentData["AdamantOverlay_" .. name .. "_text"]
+        lu.assertEquals(layout.GroupName, "AdamantVictoryStamp", name)
+        lu.assertEquals(layout.RightOffset, 24, name)
+        lu.assertEquals(layout.TextArgs.FontSize, stampLayout.TextArgs.FontSize, name)
+        lu.assertEquals(layout.Y, expectedY[index], name)
+    end
+    self.h.game.showingCombatUI = false
+    hooks.HideCombatUI(function() end, true, {})
+    assertStackAlpha(1)
+    lu.assertEquals(alpha[id("StackRegular")], 0)
+    self.h.game.showingCombatUI = true
+    local insertsBeforeSuppress = inserts
+    local token = self.h.overlays.suppressForUi()
+    lu.assertNil(victory())
+    assertStackAlpha(0)
+    token.release()
+    lu.assertEquals(alpha[victory().Id], 1)
+    assertStackAlpha(1)
+    lu.assertEquals(inserts, insertsBeforeSuppress + 1)
+    stampVisible = false
+    self.h.overlays.dispatchCommit("test.victory.stack.stamp", {})
+    lu.assertNil(victory())
+    assertStackAlpha(0)
+    stampVisible = true
+    self.h.overlays.dispatchCommit("test.victory.stack.stamp", {})
+    lu.assertEquals(alpha[victory().Id], 1)
+    assertStackAlpha(1)
+    local insertsBeforeRebuild = inserts
+    self.h.game.hudScreen = { Components = {} }
+    self.h.overlays.dispatchCommit(host, {})
+    lu.assertEquals(alpha[victory().Id], 1)
+    assertStackAlpha(1)
+    lu.assertEquals(inserts, insertsBeforeRebuild + 4)
+    lu.assertEquals(componentData.AdamantOverlay_StackSummary_text.GroupName, "AdamantVictoryStamp")
+    close("RunClear")
+    lu.assertNil(victory())
+    assertStackAlpha(0)
+    lu.assertEquals(alpha[id("StackRegular")], 1)
+end
+
 function TestOverlays_Retained:testRejectsUnknownHudVisibilityPolicy()
     lu.assertError(function()
         self:createModuleWithOverlays("test.independent.invalid", function(overlays)

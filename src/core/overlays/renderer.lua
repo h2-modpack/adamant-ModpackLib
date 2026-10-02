@@ -10,11 +10,34 @@ local overlayGameDeps = deps.gameDeps
 
 local refreshStackRows
 local VICTORY_STAMP_GROUP = "AdamantVictoryStamp"
+local VICTORY_STAMP_DESTINATION = "Combat_Menu_TraitTray_Overlay_Additive"
+local VICTORY_STAMP_LAYOUT = { Anchor = "right", RightOffset = 24, Y = 28, GroupName = VICTORY_STAMP_GROUP }
+local VICTORY_ROW_HEIGHT = 28
+local VICTORY_ROW_GAP = 4
+local VICTORY_REGION = "victoryStack"
 
 local function isVictoryScreenOpen()
     local screens = overlayGameDeps.ActiveScreens()
     return screens ~= nil and screens.RunClear ~= nil
 end
+
+local DEFAULT_TEXT_ARGS = {
+    Text = "",
+    Font = "MonospaceTypewriterBold",
+    FontSize = 18,
+    Color = { 1, 1, 1, 1 },
+    ShadowRed = 0.1,
+    ShadowBlue = 0.1,
+    ShadowGreen = 0.1,
+    OutlineColor = { 0.113, 0.113, 0.113, 1 },
+    OutlineThickness = 2,
+    ShadowAlpha = 1.0,
+    ShadowBlur = 1,
+    ShadowOffset = { 0, 4 },
+    Justification = "Right",
+    VerticalJustification = "Top",
+    DataProperties = { OpacityWithOwner = true },
+}
 
 local REGIONS = {
     middleRightStack = {
@@ -43,25 +66,36 @@ local REGIONS = {
         verticalJustification = "Center",
         fontSize = 22,
     },
+    -- Rows beneath the Modded stamp on the RunClear screen; shown only while that stamp is.
+    [VICTORY_REGION] = {
+        anchor = "right",
+        RightOffset = VICTORY_STAMP_LAYOUT.RightOffset,
+        Y = VICTORY_STAMP_LAYOUT.Y + VICTORY_ROW_HEIGHT + VICTORY_ROW_GAP,
+        itemHeight = VICTORY_ROW_HEIGHT,
+        gap = VICTORY_ROW_GAP,
+        groupGap = 12,
+        justification = "Right",
+        verticalJustification = "Top",
+        fontSize = DEFAULT_TEXT_ARGS.FontSize,
+        groupName = VICTORY_STAMP_GROUP,
+    },
 }
 
-local DEFAULT_TEXT_ARGS = {
-    Text = "",
-    Font = "MonospaceTypewriterBold",
-    FontSize = 18,
-    Color = { 1, 1, 1, 1 },
-    ShadowRed = 0.1,
-    ShadowBlue = 0.1,
-    ShadowGreen = 0.1,
-    OutlineColor = { 0.113, 0.113, 0.113, 1 },
-    OutlineThickness = 2,
-    ShadowAlpha = 1.0,
-    ShadowBlur = 1,
-    ShadowOffset = { 0, 4 },
-    Justification = "Right",
-    VerticalJustification = "Top",
-    DataProperties = { OpacityWithOwner = true },
-}
+local function listRegions()
+    local names = {}
+    for name in pairs(REGIONS) do
+        names[name] = true
+    end
+    return setmetatable({}, {
+        __index = names,
+        __newindex = function()
+            logging.violate("overlays.invalid_registration", "overlays.regions is read-only")
+        end,
+        __pairs = function()
+            return pairs(names)
+        end,
+    })
+end
 
 local function sanitizeComponentName(id)
     return "AdamantOverlay_" .. tostring(id):gsub("[^%w_%-]", "_")
@@ -83,10 +117,27 @@ local function isGameHudVisible()
     return overlayGameDeps.ShowingCombatUI() == true
 end
 
+local function isVictoryStampEligible()
+    if not isVictoryScreenOpen() or isUiSuppressed() then
+        return false
+    end
+    for _, entry in pairs(rendererState.textElements) do
+        if entry.isStamp and isEntryVisible(entry) then
+            return true
+        end
+    end
+    return false
+end
+
 local function isVisible(entry)
+    if isUiSuppressed() or not isEntryVisible(entry) then
+        return false
+    end
+    if entry.region == VICTORY_REGION then
+        return isVictoryStampEligible()
+    end
     return (entry.hudVisibility == "independent" or isGameHudVisible())
         and not isVictoryScreenOpen()
-        and not isUiSuppressed() and isEntryVisible(entry)
 end
 
 local function resolveText(entry)
@@ -217,6 +268,12 @@ local function ensureComponent(entry)
                 component.Screen = hudScreen
                 hudScreen.Components[entry.componentName] = component
                 entry.componentLayoutSignature = layoutSignature(entry.layout)
+                if entry.layout.GroupName == VICTORY_STAMP_GROUP then
+                    overlayGameDeps.InsertGroupInFront({
+                        Name = VICTORY_STAMP_GROUP,
+                        DestinationName = VICTORY_STAMP_DESTINATION,
+                    })
+                end
             end
         end
     end
@@ -236,15 +293,7 @@ local function ensureComponent(entry)
 end
 
 local function refreshVictoryStamp()
-    local eligible = false
-    if isVictoryScreenOpen() and not isUiSuppressed() then
-        for _, entry in pairs(rendererState.textElements) do
-            if entry.isStamp and isEntryVisible(entry) then
-                eligible = true
-                break
-            end
-        end
-    end
+    local eligible = isVictoryStampEligible()
     local entry = rendererState.victoryStamp
     if not eligible then
         if entry then
@@ -254,13 +303,15 @@ local function refreshVictoryStamp()
                 data.HUD.ComponentData[entry.componentName] = nil
             end
             rendererState.victoryStamp = nil
+            refreshStackRows(VICTORY_REGION)
         end
         return
     end
-    if not entry then
+    local created = entry == nil
+    if created then
         entry = {
             componentName = "AdamantVictoryStamp",
-            layout = { Anchor = "right", RightOffset = 24, Y = 28, GroupName = VICTORY_STAMP_GROUP },
+            layout = values.deepCopy(VICTORY_STAMP_LAYOUT),
             textArgs = {},
         }
         rendererState.victoryStamp = entry
@@ -268,12 +319,11 @@ local function refreshVictoryStamp()
     local previousId = entry.componentId
     local component = ensureComponent(entry)
     if component and previousId ~= component.Id then
-        overlayGameDeps.InsertGroupInFront({
-            Name = VICTORY_STAMP_GROUP,
-            DestinationName = "Combat_Menu_TraitTray_Overlay_Additive",
-        })
         overlayGameDeps.ModifyTextBox({ Id = component.Id, Text = "Modded" })
         overlayGameDeps.SetAlpha({ Id = component.Id, Fraction = 1.0, Duration = 0.0 })
+    end
+    if created then
+        refreshStackRows(VICTORY_REGION)
     end
 end
 
@@ -371,6 +421,7 @@ local function layoutRegion(regionName, opts)
             X = x,
             RightOffset = rightOffset,
             Y = y,
+            GroupName = region.groupName,
         }
         local layoutOpts = nil
         local recomputeEntries = opts and opts.recomputeEntries or nil
@@ -598,6 +649,7 @@ local function createTextElement(opts)
         text = opts.text or "",
         visible = opts.visible,
         hudVisibility = opts.hudVisibility,
+        region = opts.region,
         isStamp = opts.isStamp == true,
         displayedText = nil,
         deferHiddenComponentCreation = opts.deferHiddenComponentCreation == true,
@@ -659,6 +711,7 @@ local function createStackRow(opts)
                 text = column.text,
                 visible = false,
                 hudVisibility = opts.hudVisibility,
+                region = region,
                 isStamp = opts.isStamp == true,
                 deferInitialUpdate = true,
                 deferHiddenComponentCreation = true,
@@ -707,6 +760,7 @@ local function createStackRow(opts)
                     column.handle.setLayout({
                         X = textX,
                         Y = layout.Y,
+                        GroupName = layout.GroupName,
                     }, columnTextArgs)
 
                     columnX = columnX + column.minWidth
@@ -731,6 +785,7 @@ local function createStackRow(opts)
                 end
                 local columnLayout = {
                     Y = layout.Y,
+                    GroupName = layout.GroupName,
                 }
                 local rightOffset = (layout.RightOffset or 0) + trailingWidth
                 if justification == "Left" then
@@ -804,6 +859,7 @@ local function createStackRow(opts)
 end
 
 return {
+    regions = listRegions(),
     refreshTextElements = refreshTextElements,
     refreshStackRows = refreshStackRows,
     refreshAll = refreshAll,

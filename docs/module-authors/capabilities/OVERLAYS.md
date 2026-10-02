@@ -55,9 +55,16 @@ Retained element names are local to the module owner id derived from
 `pluginGuid`. Different modules can reuse the same local element names without
 colliding.
 
-The shared managed region currently exposed to modules is:
+The shared managed regions exposed to modules (also listed as
+`module.overlays.regions`) are:
 
-- `middleRightStack`
+- `middleRightStack`: right-anchored status stack shown during normal play
+- `centerLowerStack`: centered stack in the lower half of the screen
+- `victoryStack`: rows beneath the `Modded` label on the victory (RunClear)
+  screen. Elements here are HUD-independent regardless of `hudVisibility` and
+  are shown only while RunClear is open, the label is eligible, no
+  configuration-window suppression is active, and the element's own `visible`
+  passes
 
 Order bands:
 
