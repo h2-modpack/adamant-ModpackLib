@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.2.0] - 2026-10-02
+
+### Added
+
+- overlays: add the victoryStack region for module victory-screen rows (d746a55)
+
 ### Added
 
 - overlays: add the victoryStack region for module victory-screen lines
