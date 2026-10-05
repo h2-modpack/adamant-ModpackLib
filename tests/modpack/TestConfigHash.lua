@@ -406,3 +406,40 @@ function TestConfigHashStorage:testTransientRootsAreExcludedFromHash()
     lu.assertNotStrContains(canonical, "FilterText")
 end
 
+
+function TestConfigHashStorage:testModuleOptedOutOfHashIsNeitherEncodedNorApplied()
+    local moduleRegistry = MockModuleRegistry.create({
+        {
+            id = "GodPool",
+            enabled = true,
+            storage = {
+                { type = "bool", alias = "EnabledFlag", default = false },
+            },
+            values = { EnabledFlag = true },
+        },
+        {
+            id = "Timer",
+            hash = false,
+            enabled = true,
+            storage = {
+                { type = "bool", alias = "ShowTimer", default = false },
+            },
+            values = { ShowTimer = true },
+        },
+    })
+    local configHash = makeConfigHash(moduleRegistry)
+    local canonical = configHash.GetConfigHash()
+
+    lu.assertStrContains(canonical, "GodPool=1")
+    lu.assertNotStrContains(canonical, "Timer")
+
+    local timer = moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.Timer)
+    lu.assertTrue(configHash.ApplyConfigHash("_v=3|Timer=0|Timer.ShowTimer=0"))
+    lu.assertTrue(timer.read("Enabled"))
+    lu.assertTrue(timer.read("ShowTimer"))
+
+    lu.assertTrue(configHash.ApplyConfigHash("_v=3"))
+    lu.assertTrue(timer.read("Enabled"))
+    lu.assertTrue(timer.read("ShowTimer"))
+    lu.assertFalse(moduleRegistry.live.getLiveModule(moduleRegistry.modulesById.GodPool).read("Enabled"))
+end

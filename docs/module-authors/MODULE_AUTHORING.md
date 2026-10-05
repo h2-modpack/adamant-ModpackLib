@@ -43,7 +43,8 @@ module.activate()
 ```
 
 `createModule(...)` accepts module identity/display metadata and the Chalk
-config table. Storage, actions, cache, controls, UI, hooks, shared data,
+config table. Pass `hash = false` to keep the module out of pack hashes and
+profiles entirely (enabled state included). Storage, actions, cache, controls, UI, hooks, shared data,
 mutations, overlays, and fallback UI are declarations made before
 activation.
 

@@ -74,6 +74,16 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
         return roots
     end
 
+    local function hashedEntries()
+        local entries = {}
+        for _, entry in ipairs(moduleRegistry.modules) do
+            if entry.hash ~= false then
+                entries[#entries + 1] = entry
+            end
+        end
+        return entries
+    end
+
     local function captureApplySnapshot(snapshot)
         local captured = {
             moduleEnabled = {},
@@ -221,7 +231,7 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
         local kv = {}
         local snapshot = moduleRegistry.live.captureSnapshot()
 
-        for _, entry in ipairs(moduleRegistry.modules) do
+        for _, entry in ipairs(hashedEntries()) do
             local enabled = moduleRegistry.snapshot.isEntryEnabled(entry, snapshot)
             if enabled == nil then enabled = false end
             if enabled then
@@ -268,7 +278,7 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
         local snapshot = moduleRegistry.live.captureSnapshot()
         local captured = captureApplySnapshot(snapshot)
         local moduleTargets = {}
-        for _, entry in ipairs(moduleRegistry.modules) do
+        for _, entry in ipairs(hashedEntries()) do
             local stored = kv[entry.id]
             local enabledTarget, enabledErr = decodeModuleEnabled(entry, stored)
             if enabledErr ~= nil then
@@ -278,7 +288,7 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
         end
 
         local okWrite, writeSucceeded, writeErr = xpcall(function()
-            for _, entry in ipairs(moduleRegistry.modules) do
+            for _, entry in ipairs(hashedEntries()) do
                 for _, root in ipairs(getRootStorage(entry)) do
                     local stored = kv[entry.id .. "." .. root.alias]
                     if stored ~= nil then
@@ -315,7 +325,7 @@ local function createConfigHash(moduleRegistry, config, packId, storage)
 
         reloadManagedState()
 
-        for _, entry in ipairs(moduleRegistry.modules) do
+        for _, entry in ipairs(hashedEntries()) do
             local ok, err = moduleRegistry.snapshot.setEntryEnabled(entry, moduleTargets[entry], snapshot)
             if ok == false then
                 return failApplyHash(snapshot, captured, err)

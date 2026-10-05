@@ -11,6 +11,7 @@ local KnownModuleOpts = {
     name = true,
     shortName = true,
     tooltip = true,
+    hash = true,
 }
 
 function options.validateKnown(opts)

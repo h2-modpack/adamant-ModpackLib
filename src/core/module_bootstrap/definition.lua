@@ -15,6 +15,7 @@ local KnownDefinitionKeys = {
     name = true,
     shortName = true,
     tooltip = true,
+    hash = true,
     storage = true,
     cache = true,
     actions = true,
@@ -341,6 +342,7 @@ local function ValidateDefinition(definition, label, internalActions)
     for _, key in ipairs({ "modpack", "shortName", "tooltip" }) do
         checkType(key, "string")
     end
+    checkType("hash", "boolean")
     checkType("storage", "table")
     checkType("cache", "table")
     checkType("actions", "table")
@@ -355,6 +357,7 @@ local function GetStructuralFingerprint(definition, structuralSurface)
         name = definition and definition.name or nil,
         shortName = definition and definition.shortName or nil,
         tooltip = definition and definition.tooltip or nil,
+        hash = definition and definition.hash or nil,
         hasQuickContent = structuralSurface and structuralSurface.hasQuickContent == true or false,
         storage = definition and definition.storage or nil,
         cache = definition and definition.cache or nil,

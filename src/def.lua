@@ -411,6 +411,7 @@ local lib = {}
 ---@field name string Display name.
 ---@field shortName? string Short UI label.
 ---@field tooltip? string UI tooltip.
+---@field hash? boolean Set false to exclude the module (enabled state and storage) from pack hashes and profiles.
 ---@field storage? AdamantModpackLib.StorageSchema Module storage schema.
 ---@field cache? AdamantModpackLib.CacheDeclarationMap Managed runtime cache declarations.
 ---@field actions? table<string, AdamantModpackLib.ModuleActionHandler> Module action handlers keyed by action id.
@@ -438,6 +439,7 @@ local lib = {}
 ---@field name string Display name.
 ---@field shortName? string Short display name.
 ---@field tooltip? string UI tooltip.
+---@field hash? boolean Set false to exclude the module from pack hashes and profiles.
 
 ---Immediate UI surface provided to draw callbacks; `imgui` is the raw environment ImGui table.
 ---@class AdamantModpackLib.DrawContext

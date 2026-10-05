@@ -297,6 +297,7 @@ function managedModule.create(opts)
             name = def.name,
             shortName = def.shortName,
             tooltip = def.tooltip,
+            hash = def.hash,
         }
     end
 

@@ -479,6 +479,7 @@ function MockModuleRegistry.create(moduleDefs)
             storage = def.storage or {},
             shortName = def.shortName,
             tooltip = def.tooltip,
+            hash = def.hash,
         })
         local persistentState, stagedState = CreateModuleState(persisted, definition)
         local pluginGuid = def.pluginGuid or ("adamant-" .. def.id)
@@ -526,6 +527,7 @@ function MockModuleRegistry.create(moduleDefs)
             name = definition.name,
             shortName = definition.shortName,
             tooltip = definition.tooltip,
+            hash = definition.hash,
             modpack = definition.modpack,
             storage = definition.storage,
         }

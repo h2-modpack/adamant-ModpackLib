@@ -64,6 +64,7 @@ local function attachModuleUtilitySurface(module, opts, lifecycle)
             name = opts.name,
             shortName = opts.shortName,
             tooltip = opts.tooltip,
+            hash = opts.hash,
         }
     end
 

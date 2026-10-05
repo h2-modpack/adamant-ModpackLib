@@ -132,6 +132,11 @@ Aliases are direct flat storage identifiers.
 
 Only roots with `hash ~= false` participate in hash/profile serialization.
 
+A module can opt out entirely with `hash = false` in `createModule(...)`. Its
+enabled state and all of its storage are then neither encoded nor touched on
+apply, and tokens for it in an incoming hash are ignored. Use this for modules
+that do not affect run outcomes, such as timers and overlays.
+
 Exception: Lib injects `Enabled` as normal prepared storage, but Lib modpack
 serializes it through the module-level `ModuleId=1` key so module enabled state
 keeps the historical hash format. Lib-injected `DebugMode` has `hash = false`.

@@ -51,6 +51,7 @@ local function createDefinitionInput(opts, declarations, statusStorage)
         name = opts.name,
         shortName = opts.shortName,
         tooltip = opts.tooltip,
+        hash = opts.hash,
         storage = mergePublicStorage(declarations.storage, statusStorage),
         cache = declarations.cache,
         actions = declarations.actions,
