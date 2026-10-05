@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.2.1] - 2026-10-05
+
+### Added
+
+- modpack: add module-level hash opt-out (286413a)
+
 ## [4.2.0] - 2026-10-02
 
 ### Added
