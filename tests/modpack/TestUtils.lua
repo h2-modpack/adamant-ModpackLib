@@ -294,7 +294,7 @@ local function mapConstructorOverrides(constructors)
         createConfigHash = "core/modpack/hash/config_hash.lua",
         createHud = "core/modpack/hud/runtime.lua",
         createUI = "core/modpack/ui/window.lua",
-        createTheme = "core/modpack/ui/theme.lua",
+        createTheme = "core/ui/theme.lua",
     }
 
     for name, path in pairs(constructorPaths) do
@@ -346,7 +346,7 @@ local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
     rom = rom,
     logging = logging,
 })
-local createTheme = import("core/modpack/ui/theme.lua", nil, {
+local createTheme = import("core/ui/theme.lua", nil, {
     rom = rom,
 })
 local hashCodec = import("core/modpack/hash/codec.lua")

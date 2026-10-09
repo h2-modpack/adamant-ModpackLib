@@ -102,6 +102,8 @@ local function makeImgui(opts)
         endWindow = 0,
         beginMenu = 0,
         endMenu = 0,
+        stylePushed = 0,
+        stylePopped = 0,
         separator = 0,
         spacing = 0,
         sameLine = 0,
@@ -128,6 +130,12 @@ local function makeImgui(opts)
         end,
         End = function()
             calls.endWindow = calls.endWindow + 1
+        end,
+        PushStyleColor = function()
+            calls.stylePushed = calls.stylePushed + 1
+        end,
+        PopStyleColor = function(count)
+            calls.stylePopped = calls.stylePopped + (count or 1)
         end,
         Checkbox = function(label, current)
             calls.checkboxLabels[#calls.checkboxLabels + 1] = label
@@ -544,6 +552,34 @@ function TestFallbackUi:testFallbackWindowEndsImguiWindowWhenModuleDrawErrors()
     lu.assertStrContains(tostring(err), "draw tab boom")
     lu.assertEquals(calls.begin, 1)
     lu.assertEquals(calls.endWindow, 1)
+    lu.assertEquals(calls.stylePopped, calls.stylePushed)
+end
+
+function TestFallbackUi:testFallbackWindowAppliesBalancedTheme()
+    local host = makeHost({ modpack = nil })
+    local imgui, calls = makeImgui({ menuClicked = true })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    lu.assertEquals(calls.begin, 1)
+    lu.assertTrue(calls.stylePushed > 0)
+    lu.assertEquals(calls.stylePopped, calls.stylePushed)
+end
+
+function TestFallbackUi:testFallbackWindowPopsThemeWhenWindowIsCollapsed()
+    local host = makeHost({ modpack = nil })
+    local imgui, calls = makeImgui({ menuClicked = true, shouldDraw = false })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    lu.assertTrue(calls.stylePushed > 0)
+    lu.assertEquals(calls.stylePopped, calls.stylePushed)
 end
 
 function TestFallbackUi:testCloseFlushesRunDataAfterAffectingEnabledToggle()

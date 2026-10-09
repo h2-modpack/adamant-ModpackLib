@@ -117,6 +117,7 @@ local function createFallbackUiHarness(opts)
     }
 
     h.rom.ImGuiCond = { FirstUseEver = 1 }
+    h.rom.ImGuiCol = setmetatable({}, { __index = function() return 0 end })
 
     function h:captureWarnings()
         self.warnings = {}

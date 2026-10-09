@@ -122,7 +122,12 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     controlsDraw = controlsBundle.draw,
 })
 
+local createTheme = import('core/ui/theme.lua', nil, {
+    rom = externals.rom,
+})
+
 local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
+    createTheme = createTheme,
     gameDeps = gameDeps,
     rom = externals.rom,
     modutil = externals.modutil,

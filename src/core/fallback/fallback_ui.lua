@@ -5,6 +5,7 @@ local moduleRegistry = deps.moduleRegistry
 local coordination = deps.coordination
 local overlays = deps.overlays
 local createSystem = deps.createSystem
+local createTheme = deps.createTheme
 local fallbackRegistry = deps.fallbackRegistry
 local rom = deps.rom
 local modutil = deps.modutil
@@ -25,6 +26,13 @@ local bridges = fallbackRegistry.bridges
 local guiAttached = fallbackRegistry.guiAttached
 local runtimes = fallbackRegistry.runtimes
 local fallbackUi = {}
+local theme = nil
+
+local function getTheme()
+    -- Created lazily because it reads rom.ImGui / rom.ImGuiCol, which may not exist at module creation.
+    theme = theme or createTheme()
+    return theme
+end
 
 local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     coordination = coordination,
@@ -244,10 +252,12 @@ local function createRuntime(module)
         suppressOverlays()
 
         local imgui = rom.ImGui
+        local activeTheme = getTheme()
         local title = tostring(meta.name or moduleId or "Module") .. "###" .. tostring(moduleId)
         local beganWindow = false
         local openState = showWindow
 
+        activeTheme.PushTheme()
         local ok, err = xpcall(function()
             ensureControlsInitialized()
             seedWindowSize(imgui)
@@ -306,6 +316,7 @@ local function createRuntime(module)
         if beganWindow then
             imgui.End()
         end
+        activeTheme.PopTheme()
 
         if not ok then
             error(err)

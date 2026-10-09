@@ -11,7 +11,7 @@ local packRegistry = import("core/modpack/registry.lua", nil, {
 
 local logging = import "core/modpack/logging.lua"
 local hashCodec = import "core/modpack/hash/codec.lua"
-local createTheme = import("core/modpack/ui/theme.lua", nil, {
+local createTheme = import("core/ui/theme.lua", nil, {
     rom = rom,
 })
 local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {

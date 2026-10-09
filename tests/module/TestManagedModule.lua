@@ -122,7 +122,10 @@ function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
     local function noop() end
 
     self.h.rom.ImGuiCond = { FirstUseEver = 1 }
+    self.h.rom.ImGuiCol = setmetatable({}, { __index = function() return 0 end })
     self.h.rom.ImGui = {
+        PushStyleColor = noop,
+        PopStyleColor = noop,
         BeginMenu = function() return true end,
         MenuItem = function() return true end,
         EndMenu = noop,

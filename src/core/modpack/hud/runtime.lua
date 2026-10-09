@@ -2,7 +2,7 @@
 --- @param packId string Pack identifier used for component naming.
 --- @param packIndex number Stable vertical stacking index for this pack.
 --- @param configHash table Config-hash subsystem returned by `createConfigHash(...)`.
---- @param theme table Theme object returned by `core/modpack/ui/theme.lua`.
+--- @param theme table Theme object returned by `core/ui/theme.lua`.
 --- @param config table Coordinator config table containing `ModEnabled`.
 --- @param hideHashMarker boolean|nil Optional pack-level flag to suppress the HUD fingerprint marker.
 --- @param overlaySurface table Modpack overlay surface returned by Lib.

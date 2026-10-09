@@ -175,6 +175,8 @@ module.fallbackUi.attachGuiOnce(function(fallbackUi)
 end)
 ```
 
+The standalone window uses the same Lib theme as the modpack window, so no per-module styling is needed.
+
 ## Next Reads
 
 1. [MODULE_AUTHORING.md](MODULE_AUTHORING.md)
