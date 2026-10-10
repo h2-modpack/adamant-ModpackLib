@@ -77,6 +77,20 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
 end
 
+function TestOverlays:testRetainedLineDefaultsToLabelFont()
+    local system = self.h.createSystem("test.overlay.default.font")
+    system.overlays.define(function(overlays)
+        overlays.createLine("plain", {
+            componentName = "PlainOverlay",
+            region = "middleRightStack",
+            minWidth = 80,
+        })
+    end)
+
+    local componentData = self.h.game.screenData.HUD.ComponentData.AdamantOverlay_PlainOverlay_text
+    lu.assertEquals(componentData.TextArgs.Font, "P22UndergroundSCMedium")
+end
+
 function TestOverlays:testRetainedLinesUseStableMiddleRightOrderingAndBands()
     local system = self.h.createSystem("test.overlay.order")
     system.overlays.define(function(overlays)
@@ -192,7 +206,7 @@ function TestOverlays:testRetainedTableUsesStableColumnSpacing()
                     minWidth = 96,
                     justify = "Right",
                     textArgs = {
-                        Font = "MonospaceTypewriterBold",
+                        Font = "NumericP22UndergroundSCMedium",
                     },
                 },
             },
@@ -213,7 +227,7 @@ function TestOverlays:testRetainedTableUsesStableColumnSpacing()
     lu.assertEquals(label.Y, 200)
     lu.assertEquals(time.Y, 200)
     lu.assertEquals(label.TextArgs.Font, "P22UndergroundSCMedium")
-    lu.assertEquals(time.TextArgs.Font, "MonospaceTypewriterBold")
+    lu.assertEquals(time.TextArgs.Font, "NumericP22UndergroundSCMedium")
 end
 
 function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOverlays()

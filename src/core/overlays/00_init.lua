@@ -98,4 +98,5 @@ return {
     modpack = modpack,
     order = overlayOrder,
     regions = renderer.regions,
+    fonts = renderer.fonts,
 }

@@ -814,6 +814,7 @@ local lib = {}
 ---@class AdamantModpackLib.RetainedOverlayRegistrar
 ---@field order table<string, integer> Shared overlay order bands.
 ---@field regions table<AdamantModpackLib.RetainedOverlayRegion, true> Managed regions available to modules.
+---@field fonts { label: string, numeric: string } Game HUD fonts for `textArgs.Font`; `label` is the overlay default.
 ---@field createLine fun(name: string, spec: AdamantModpackLib.RetainedLineSpec)
 ---@field createTable fun(name: string, spec: AdamantModpackLib.RetainedTableSpec)
 ---@field onCommit fun(callback: AdamantModpackLib.OverlayCommitCallback)

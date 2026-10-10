@@ -66,6 +66,12 @@ The shared managed regions exposed to modules (also listed as
   configuration-window suppression is active, and the element's own `visible`
   passes
 
+Fonts: overlay text defaults to `module.overlays.fonts.label`
+(`P22UndergroundSCMedium`, the game HUD font). Use
+`module.overlays.fonts.numeric` in a `textArgs.Font` for digit columns that
+should align (timers, counters). Any other game font name can still be set
+directly through `textArgs.Font`.
+
 Order bands:
 
 - `module.overlays.order.system`

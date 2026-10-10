@@ -21,9 +21,15 @@ local function isVictoryScreenOpen()
     return screens ~= nil and screens.RunClear ~= nil
 end
 
+-- Game HUD fonts. `label` is the default; `numeric` has tabular digits for aligned timers and counters.
+local FONTS = {
+    label = "P22UndergroundSCMedium",
+    numeric = "NumericP22UndergroundSCMedium",
+}
+
 local DEFAULT_TEXT_ARGS = {
     Text = "",
-    Font = "MonospaceTypewriterBold",
+    Font = FONTS.label,
     FontSize = 18,
     Color = { 1, 1, 1, 1 },
     ShadowRed = 0.1,
@@ -80,6 +86,18 @@ local REGIONS = {
         groupName = VICTORY_STAMP_GROUP,
     },
 }
+
+local function listFonts()
+    return setmetatable({}, {
+        __index = FONTS,
+        __newindex = function()
+            logging.violate("overlays.invalid_registration", "overlays.fonts is read-only")
+        end,
+        __pairs = function()
+            return pairs(FONTS)
+        end,
+    })
+end
 
 local function listRegions()
     local names = {}
@@ -860,6 +878,7 @@ end
 
 return {
     regions = listRegions(),
+    fonts = listFonts(),
     refreshTextElements = refreshTextElements,
     refreshStackRows = refreshStackRows,
     refreshAll = refreshAll,

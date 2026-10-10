@@ -8,6 +8,7 @@ local options = import('core/module_bootstrap/module/options.lua', nil, {
 local declarationSurface = import('core/module_bootstrap/module/declaration_surface.lua', nil, {
     logging = logging,
     overlayRegions = deps.overlayRegions,
+    overlayFonts = deps.overlayFonts,
     hookDeclarations = deps.hookDeclarations,
     hookContext = deps.hookContext,
     overlayDeclarations = deps.overlayDeclarations,

@@ -5,6 +5,7 @@ local hookDeclarations = deps.hookDeclarations
 local hookContext = deps.hookContext
 local overlayDeclarations = deps.overlayDeclarations
 local overlayRegions = deps.overlayRegions
+local overlayFonts = deps.overlayFonts
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local mutationLifecycle = deps.mutationLifecycle
@@ -273,6 +274,7 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
     module.overlays = {
         order = overlayOrder,
         regions = overlayRegions,
+        fonts = overlayFonts,
         createLine = function(...)
             lifecycle.requireOpen("module.overlays.createLine")
             return overlayDeclarations.declareLine(declarations.overlayDeclarations, "module.overlays.createLine", ...)
