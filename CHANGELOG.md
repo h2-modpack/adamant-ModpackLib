@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.2.2] - 2026-10-10
+
+### Added
+
+- overlays: default overlay text to the game HUD font and expose font constants (8b3a37b)
+- theme: allow standalone module to use the theme of packs (
+9c7988)
+
 ## [4.2.1] - 2026-10-05
 
 ### Added
