@@ -83,7 +83,8 @@ end
 
 function TestMutation_DefinitionLifecycle:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
     pluginGuid = pluginGuid or ("test-" .. tostring(def and def.id or "mutation"))
-    return self.mutation.bind(pluginGuid, mutationBundle, callbackHost, {
+    -- Managed modules always bind a bundle; "no mutation" is an empty one.
+    return self.mutation.bind(pluginGuid, mutationBundle or {}, callbackHost, {
         data = store,
     })
 end

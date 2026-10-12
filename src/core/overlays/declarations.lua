@@ -1,7 +1,32 @@
 local deps = ...
 
+-- Contact point for authored overlay declarations: module declarations validate here when
+-- declared, system defines validate here through the retained declaration surface, and replay
+-- trusts the recorded entries.
 local logging = deps.logging
+local regions = deps.regions
+local fonts = deps.fonts
 local declarations = {}
+
+local function readOnlyView(source, label)
+    return setmetatable({}, {
+        __index = source,
+        __newindex = function()
+            logging.violate("overlays.invalid_registration", "%s is read-only", label)
+        end,
+        __pairs = function()
+            return pairs(source)
+        end,
+    })
+end
+
+local regionNames = {}
+for name in pairs(regions) do
+    regionNames[name] = true
+end
+
+declarations.regions = readOnlyView(regionNames, "overlays.regions")
+declarations.fonts = readOnlyView(fonts, "overlays.fonts")
 
 local function validateName(context, name)
     if type(name) ~= "string" or name == "" then
@@ -22,6 +47,16 @@ local function validateSpec(context, spec)
     if spec.hudVisibility ~= nil and spec.hudVisibility ~= "follow" and spec.hudVisibility ~= "independent" then
         logging.violate("overlays.invalid_registration", "%s: hudVisibility must be follow or independent", context)
     end
+    if spec.region ~= nil and regionNames[spec.region] == nil then
+        logging.violate("overlays.invalid_registration", "%s: unknown region '%s'", context, tostring(spec.region))
+    end
+    if type(spec.columns) == "table" then
+        for index, column in ipairs(spec.columns) do
+            if type(column) ~= "table" then
+                logging.violate("overlays.invalid_registration", "%s: column #%d must be a table", context, index)
+            end
+        end
+    end
 end
 
 local function validateCallback(context, callback)
@@ -40,6 +75,26 @@ local function validateTableSpec(context, spec)
         logging.violate("overlays.invalid_registration", "%s: maxRows must be a positive integer", context)
     end
 end
+
+local function validateIntervalOpts(context, opts)
+    if opts == nil then
+        return
+    end
+    if type(opts) ~= "table" then
+        logging.violate("overlays.invalid_registration", "%s: opts must be a table", context)
+    end
+    if opts.when ~= nil and type(opts.when) ~= "function" then
+        logging.violate("overlays.invalid_registration", "%s: opts.when must be a function", context)
+    end
+end
+
+--- Validates a line (or stamp) declaration for paths that do not record declarations.
+function declarations.validateLine(context, name, spec)
+    validateName(context, name)
+    validateSpec(context, spec)
+end
+
+declarations.validateCallback = validateCallback
 
 local function recordDeclaration(target, entry)
     target.entries[#target.entries + 1] = entry
@@ -86,6 +141,7 @@ function declarations.declareInterval(target, context, name, seconds, callback, 
     if not seconds or seconds <= 0 then
         logging.violate("overlays.invalid_registration", "%s: seconds must be positive", context)
     end
+    validateIntervalOpts(context, opts)
     recordDeclaration(target, {
         kind = "onInterval",
         name = name,

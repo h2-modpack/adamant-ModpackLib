@@ -100,6 +100,7 @@ local function createLibHarness(opts)
         overlays = imports["core/overlays/00_init.lua"].service,
         mutation = imports["core/mutations/00_init.lua"],
         mutationPlan = imports["core/mutations/plan.lua"],
+        createMutationBackup = imports["core/mutations/backup.lua"],
         widgetsBundle = imports["core/widgets/00_init.lua"],
         widgets = imports["core/widgets/00_init.lua"].widgets,
         nav = imports["core/widgets/00_init.lua"].nav,

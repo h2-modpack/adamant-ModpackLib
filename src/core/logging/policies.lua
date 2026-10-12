@@ -209,10 +209,6 @@ return {
         description = "Fallback UI attachment requires a managed module and one-time registration callback.",
     },
 
-    ["mutation.invalid_runtime_key"] = {
-        severity = "error",
-        description = "Mutation lifecycle operations require a stable plugin guid runtime key.",
-    },
     ["mutation.invalid_registration"] = {
         severity = "error",
         description = "Mutation declarations require a managed module and a patch callback before activation.",

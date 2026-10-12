@@ -387,9 +387,6 @@ rawset(ModpackTestApi, "createOverlaySurface", function()
                 release = function() end,
             }
         end,
-        isUiSuppressed = function()
-            return false
-        end,
     }
 end)
 

@@ -2,7 +2,6 @@ local deps = ...
 
 local logging = deps.logging
 local moduleIdentity = deps.moduleIdentity
-local overlayOrder = deps.overlayOrder
 local options = deps.options
 local declarationSurface = deps.declarationSurface
 local activationFinalizer = deps.activationFinalizer
@@ -108,7 +107,7 @@ function declarationFacade.create(opts)
         return false, err
     end
 
-    declarationSurface.attach(module, declarations, lifecycle, overlayOrder)
+    declarationSurface.attach(module, declarations, lifecycle)
     attachModuleUtilitySurface(module, opts, function()
         return activeModule
     end)

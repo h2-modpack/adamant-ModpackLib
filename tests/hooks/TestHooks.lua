@@ -176,6 +176,90 @@ function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
     lu.assertEquals(self.env.AdamantHookTestWrap("x"), "second:base:x")
 end
 
+-- Reload boundary: the ModUtil adapter is reinstalled only when the hooked target changes.
+function TestHooks:testWrapReinstallsOnlyWhenModUtilTargetIsReplaced()
+    local pluginGuid = "hook-test-wrap-target-replaced"
+    local path = "AdamantHookTestWrapTargetReplaced"
+    -- The path mock wraps `env`; Lib reads the hooked target through ModUtil's globals.
+    local modutilGlobals = self.harness.modutilPlugin.globals
+    local function setTarget(fn)
+        self.env[path] = fn
+        modutilGlobals[path] = fn
+    end
+    setTarget(function(value)
+        return "base:" .. value
+    end)
+    local function declare(host)
+        host.wrap(path, function(base, value)
+            return "wrapped:" .. base(value)
+        end)
+    end
+
+    self:createModuleWithHooks(pluginGuid, declare)
+    self:createModuleWithHooks(pluginGuid, declare)
+    lu.assertEquals(self.counts.wrap, 1)
+    lu.assertEquals(self.env[path]("x"), "wrapped:base:x")
+
+    setTarget(function(value)
+        return "fresh:" .. value
+    end)
+    self:createModuleWithHooks(pluginGuid, declare)
+
+    lu.assertEquals(self.counts.wrap, 2)
+    lu.assertEquals(self.env[path]("x"), "wrapped:fresh:x")
+end
+
+function TestHooks.testWrapDispatcherSurvivesLibReimportWithoutReinstall()
+    local runtimeRoot = {}
+    local target = {}
+    local counts, modutil = createPathMock(target)
+    local first = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    target.env = first.env
+    first.env.AdamantHookTestReimportWrap = function(value)
+        return "base:" .. value
+    end
+    first.createSystem("test.system.hooks.reimport").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestReimportWrap", function(base, value)
+            return "first:" .. base(value)
+        end)
+    end)
+    local wrapsAfterFirst = counts.wrap
+
+    local second = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    second.createSystem("test.system.hooks.reimport").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestReimportWrap", function(base, value)
+            return "second:" .. base(value)
+        end)
+    end)
+
+    lu.assertEquals(counts.wrap, wrapsAfterFirst)
+    lu.assertEquals(first.env.AdamantHookTestReimportWrap("x"), "second:base:x")
+end
+
+function TestHooks:testOverrideReinstallsAfterRestoreAndDisablesRestoredAdapter()
+    local pluginGuid = "hook-test-override-reinstall"
+    local path = "AdamantHookTestOverrideReinstall"
+    self.env[path] = function()
+        return "base"
+    end
+    local function declare(host)
+        host.override(path, function()
+            return "override"
+        end)
+    end
+
+    self:createModuleWithHooks(pluginGuid, declare)
+    local restoredAdapter = self.env[path]
+    self:createModuleWithHooks(pluginGuid, function() end)
+    lu.assertEquals(self.env[path](), "base")
+    lu.assertErrorMsgContains("function replacement is inactive", restoredAdapter)
+
+    self:createModuleWithHooks(pluginGuid, declare)
+
+    lu.assertEquals(self.counts.override, 2)
+    lu.assertEquals(self.env[path](), "override")
+end
+
 function TestHooks:testWrapUsesInjectedModUtilWhenGlobalIsMissing()
     self.env.modutil = nil
     self.env.AdamantHookTestWrapInjected = function(value)

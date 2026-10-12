@@ -1,123 +1,21 @@
 local deps = ...
 
+-- Overlay entry registry and refresh orchestration: text and stack-row entries, visibility
+-- policy, and the game hooks that re-evaluate visibility.
 local rendererState = deps.state
 local isUiSuppressed = deps.isUiSuppressed
-local logging = deps.logging
 local values = deps.values
 local overlayOrder = deps.order
 local rendererSystem = deps.system
 local overlayGameDeps = deps.gameDeps
+local overlayLayout = deps.layout
+local hudComponents = deps.hudComponents
+local victoryStamp = deps.victoryStamp
+
+local REGIONS = overlayLayout.REGIONS
+local VICTORY_REGION = overlayLayout.VICTORY_REGION
 
 local refreshStackRows
-local VICTORY_STAMP_GROUP = "AdamantVictoryStamp"
-local VICTORY_STAMP_DESTINATION = "Combat_Menu_TraitTray_Overlay_Additive"
-local VICTORY_STAMP_LAYOUT = { Anchor = "right", RightOffset = 24, Y = 28, GroupName = VICTORY_STAMP_GROUP }
-local VICTORY_ROW_HEIGHT = 28
-local VICTORY_ROW_GAP = 4
-local VICTORY_REGION = "victoryStack"
-
-local function isVictoryScreenOpen()
-    local screens = overlayGameDeps.ActiveScreens()
-    return screens ~= nil and screens.RunClear ~= nil
-end
-
--- Game HUD fonts. `label` is the default; `numeric` has tabular digits for aligned timers and counters.
-local FONTS = {
-    label = "P22UndergroundSCMedium",
-    numeric = "NumericP22UndergroundSCMedium",
-}
-
-local DEFAULT_TEXT_ARGS = {
-    Text = "",
-    Font = FONTS.label,
-    FontSize = 18,
-    Color = { 1, 1, 1, 1 },
-    ShadowRed = 0.1,
-    ShadowBlue = 0.1,
-    ShadowGreen = 0.1,
-    OutlineColor = { 0.113, 0.113, 0.113, 1 },
-    OutlineThickness = 2,
-    ShadowAlpha = 1.0,
-    ShadowBlur = 1,
-    ShadowOffset = { 0, 4 },
-    Justification = "Right",
-    VerticalJustification = "Top",
-    DataProperties = { OpacityWithOwner = true },
-}
-
-local REGIONS = {
-    middleRightStack = {
-        anchor = "right",
-        RightOffset = 10,
-        Y = 200,
-        itemHeight = 28,
-        gap = 4,
-        groupGap = 12,
-        justification = "Right",
-        verticalJustification = "Top",
-        fontSize = 18,
-    },
-    centerLowerStack = {
-        anchor = "center",
-        X = function()
-            return overlayGameDeps.ScreenCenterX() or 960
-        end,
-        Y = function()
-            return (overlayGameDeps.ScreenHeight() or 1080) * 0.60
-        end,
-        itemHeight = 32,
-        gap = 4,
-        groupGap = 12,
-        justification = "Center",
-        verticalJustification = "Center",
-        fontSize = 22,
-    },
-    -- Rows beneath the Modded stamp on the RunClear screen; shown only while that stamp is.
-    [VICTORY_REGION] = {
-        anchor = "right",
-        RightOffset = VICTORY_STAMP_LAYOUT.RightOffset,
-        Y = VICTORY_STAMP_LAYOUT.Y + VICTORY_ROW_HEIGHT + VICTORY_ROW_GAP,
-        itemHeight = VICTORY_ROW_HEIGHT,
-        gap = VICTORY_ROW_GAP,
-        groupGap = 12,
-        justification = "Right",
-        verticalJustification = "Top",
-        fontSize = DEFAULT_TEXT_ARGS.FontSize,
-        groupName = VICTORY_STAMP_GROUP,
-    },
-}
-
-local function listFonts()
-    return setmetatable({}, {
-        __index = FONTS,
-        __newindex = function()
-            logging.violate("overlays.invalid_registration", "overlays.fonts is read-only")
-        end,
-        __pairs = function()
-            return pairs(FONTS)
-        end,
-    })
-end
-
-local function listRegions()
-    local names = {}
-    for name in pairs(REGIONS) do
-        names[name] = true
-    end
-    return setmetatable({}, {
-        __index = names,
-        __newindex = function()
-            logging.violate("overlays.invalid_registration", "overlays.regions is read-only")
-        end,
-        __pairs = function()
-            return pairs(names)
-        end,
-    })
-end
-
-local function sanitizeComponentName(id)
-    return "AdamantOverlay_" .. tostring(id):gsub("[^%w_%-]", "_")
-end
 
 local function resolveValue(value)
     if type(value) == "function" then
@@ -136,7 +34,7 @@ local function isGameHudVisible()
 end
 
 local function isVictoryStampEligible()
-    if not isVictoryScreenOpen() or isUiSuppressed() then
+    if not victoryStamp.isScreenOpen() or isUiSuppressed() then
         return false
     end
     for _, entry in pairs(rendererState.textElements) do
@@ -155,19 +53,11 @@ local function isVisible(entry)
         return isVictoryStampEligible()
     end
     return (entry.hudVisibility == "independent" or isGameHudVisible())
-        and not isVictoryScreenOpen()
+        and not victoryStamp.isScreenOpen()
 end
 
 local function resolveText(entry)
     return tostring(resolveValue(entry.text) or "")
-end
-
-local function resolveColumnVisible(rowVisible, column)
-    if rowVisible == false then
-        return false
-    end
-    local visible = resolveValue(column.visible)
-    return visible ~= false
 end
 
 local function readColumnVisible(rowVisible, column, opts)
@@ -177,22 +67,9 @@ local function readColumnVisible(rowVisible, column, opts)
     if opts and opts.useCachedVisible == true and column.layoutVisible ~= nil then
         return column.layoutVisible
     end
-    local visible = resolveColumnVisible(rowVisible, column)
+    local visible = resolveValue(column.visible) ~= false
     column.layoutVisible = visible
     return visible
-end
-
-local function overlayOrderBand(order)
-    if order >= overlayOrder.debug then
-        return "debug"
-    end
-    if order >= overlayOrder.module then
-        return "module"
-    end
-    if order >= overlayOrder.modpack then
-        return "modpack"
-    end
-    return "system"
 end
 
 local function sanitizeStackRowTextArgs(textArgs)
@@ -207,140 +84,15 @@ end
 
 local function columnComponentName(baseName, column, index)
     local suffix = column.key or index
-    return sanitizeComponentName(baseName .. "." .. tostring(suffix))
+    return hudComponents.sanitizeName(baseName .. "." .. tostring(suffix))
 end
 
 local function stackRowElementId(region, id)
     return "stack:" .. tostring(region) .. ":" .. tostring(id)
 end
 
-local function layoutSignature(layout)
-    layout = layout or {}
-    return table.concat({
-        tostring(layout.Anchor),
-        tostring(layout.X),
-        tostring(layout.Y),
-        tostring(layout.RightOffset),
-        tostring(layout.BottomOffset),
-    }, "|")
-end
-
-local function ensureComponentData(entry)
-    local screenData = overlayGameDeps.ScreenData()
-    if not (screenData and screenData.HUD and screenData.HUD.ComponentData) then
-        return false
-    end
-
-    local data = values.deepCopy(entry.layout or {})
-    data.Name = data.Name or "BlankObstacle"
-    data.GroupName = data.GroupName or "HUD_Overlay"
-    data.Alpha = data.Alpha or 1.0
-    data.AlphaTarget = data.AlphaTarget or 1.0
-    data.TextArgs = values.deepCopy(DEFAULT_TEXT_ARGS)
-    for key, value in pairs(entry.textArgs or {}) do
-        data.TextArgs[key] = values.deepCopy(value)
-    end
-    data.TextArgs.Text = ""
-    screenData.HUD.ComponentData[entry.componentName] = data
-    return true
-end
-
-local function discardExistingComponent(entry)
-    local hudScreen = overlayGameDeps.HUDScreen()
-    local component = hudScreen and hudScreen.Components and hudScreen.Components[entry.componentName]
-    if not component then
-        return
-    end
-
-    if component.Id ~= nil then
-        overlayGameDeps.Destroy({ Id = component.Id })
-    end
-    hudScreen.Components[entry.componentName] = nil
-    entry.displayedText = nil
-    entry.displayedVisible = nil
-    entry.componentLayoutSignature = nil
-    entry.componentId = nil
-end
-
-local function ensureComponent(entry)
-    if entry.deferUntilLayout == true and entry.layoutSignature == nil then
-        ensureComponentData(entry)
-        return nil
-    end
-
-    ensureComponentData(entry)
-
-    local hudScreen = overlayGameDeps.HUDScreen()
-    if not hudScreen or not hudScreen.Components then
-        return nil
-    end
-
-    local component = hudScreen.Components[entry.componentName]
-    local screenData = overlayGameDeps.ScreenData()
-    if not component and screenData and screenData.HUD and screenData.HUD.ComponentData then
-
-        local componentData = screenData.HUD.ComponentData[entry.componentName]
-        if componentData then
-            component = overlayGameDeps.CreateComponentFromData(screenData.HUD.ComponentData, componentData)
-            if component then
-                component.Screen = hudScreen
-                hudScreen.Components[entry.componentName] = component
-                entry.componentLayoutSignature = layoutSignature(entry.layout)
-                if entry.layout.GroupName == VICTORY_STAMP_GROUP then
-                    overlayGameDeps.InsertGroupInFront({
-                        Name = VICTORY_STAMP_GROUP,
-                        DestinationName = VICTORY_STAMP_DESTINATION,
-                    })
-                end
-            end
-        end
-    end
-
-    if not component then
-        return nil
-    end
-
-    if entry.componentId ~= component.Id then
-        entry.componentId = component.Id
-        entry.displayedText = nil
-        entry.displayedVisible = nil
-        entry.componentLayoutSignature = entry.componentLayoutSignature or layoutSignature(entry.layout)
-    end
-
-    return component
-end
-
 local function refreshVictoryStamp()
-    local eligible = isVictoryStampEligible()
-    local entry = rendererState.victoryStamp
-    if not eligible then
-        if entry then
-            discardExistingComponent(entry)
-            local data = overlayGameDeps.ScreenData()
-            if data and data.HUD and data.HUD.ComponentData then
-                data.HUD.ComponentData[entry.componentName] = nil
-            end
-            rendererState.victoryStamp = nil
-            refreshStackRows(VICTORY_REGION)
-        end
-        return
-    end
-    local created = entry == nil
-    if created then
-        entry = {
-            componentName = "AdamantVictoryStamp",
-            layout = values.deepCopy(VICTORY_STAMP_LAYOUT),
-            textArgs = {},
-        }
-        rendererState.victoryStamp = entry
-    end
-    local previousId = entry.componentId
-    local component = ensureComponent(entry)
-    if component and previousId ~= component.Id then
-        overlayGameDeps.ModifyTextBox({ Id = component.Id, Text = "Modded" })
-        overlayGameDeps.SetAlpha({ Id = component.Id, Fraction = 1.0, Duration = 0.0 })
-    end
-    if created then
+    if victoryStamp.sync(isVictoryStampEligible()) then
         refreshStackRows(VICTORY_REGION)
     end
 end
@@ -357,7 +109,7 @@ local function applyVisibility(entry, component, force)
 end
 
 local function updateText(entry, force)
-    local component = ensureComponent(entry)
+    local component = hudComponents.ensure(entry)
     if not component then
         return
     end
@@ -375,17 +127,12 @@ local function updateText(entry, force)
 end
 
 local function updateVisibility(entry, force)
-    local component = ensureComponent(entry)
+    local component = hudComponents.ensure(entry)
     if not component then
         return
     end
 
     applyVisibility(entry, component, force)
-end
-
-local function updateEntry(entry)
-    updateText(entry)
-    updateVisibility(entry)
 end
 
 local function readLayoutVisible(entry, opts)
@@ -414,35 +161,10 @@ local function getRegionEntries(regionName, opts)
 end
 
 local function layoutRegion(regionName, opts)
-    local region = REGIONS[regionName]
-    if not region then
-        return
-    end
-
+    local recomputeEntries = opts and opts.recomputeEntries or nil
     local entries = getRegionEntries(regionName, opts)
-    local y = resolveValue(region.Y)
-    local x = resolveValue(region.X)
-    local rightOffset = resolveValue(region.RightOffset)
-    local previousBand = nil
-    for index, entry in ipairs(entries) do
-        local band = overlayOrderBand(entry.order)
-        if index > 1 then
-            if band ~= previousBand then
-                y = y + (region.groupGap or region.gap or 0)
-            else
-                y = y + (region.gap or 0)
-            end
-        end
-
-        local layout = {
-            Anchor = region.anchor or "right",
-            X = x,
-            RightOffset = rightOffset,
-            Y = y,
-            GroupName = region.groupName,
-        }
+    overlayLayout.placeRows(REGIONS[regionName], entries, function(entry, rowLayout, rowTextArgs)
         local layoutOpts = nil
-        local recomputeEntries = opts and opts.recomputeEntries or nil
         if opts
             and opts.useCachedVisible == true
             and opts.recomputeEntry ~= entry
@@ -452,14 +174,8 @@ local function layoutRegion(regionName, opts)
                 useCachedVisible = true,
             }
         end
-        entry.setLayout(layout, {
-            FontSize = region.fontSize,
-            Justification = region.justification,
-            VerticalJustification = region.verticalJustification,
-        }, layoutOpts)
-        y = y + (region.itemHeight or 24)
-        previousBand = band
-    end
+        entry.setLayout(rowLayout, rowTextArgs, layoutOpts)
+    end)
 end
 
 local function refreshStackRowEntry(entry, layoutAlreadyRefreshed, opts)
@@ -482,12 +198,17 @@ local function refreshOwnedStackRowEntry(entry)
     })
 end
 
-local function refreshOwnedStackRowEntries(entries)
+-- Re-lays out the regions the given stack-row handles occupy, re-evaluating only their
+-- entries' visibility (siblings keep their cached layout visibility).
+local function refreshOwnedStackRowHandles(handles)
+    local entries = {}
     local regionNames = {}
     local regions = {}
     local recomputeEntries = {}
-    for _, entry in ipairs(entries or {}) do
-        if entry ~= nil then
+    for _, handle in ipairs(handles) do
+        local entry = handle.__stackRowEntry
+        if recomputeEntries[entry] ~= true then
+            entries[#entries + 1] = entry
             entry.layoutVisible = isEntryVisible(entry)
             recomputeEntries[entry] = true
             if regions[entry.region] ~= true then
@@ -504,32 +225,11 @@ local function refreshOwnedStackRowEntries(entries)
         })
     end
 
-    for _, entry in ipairs(entries or {}) do
-        if entry ~= nil then
-            refreshStackRowEntry(entry, true, {
-                useCachedVisible = true,
-            })
-        end
+    for _, entry in ipairs(entries) do
+        refreshStackRowEntry(entry, true, {
+            useCachedVisible = true,
+        })
     end
-end
-
-local function refreshOwnedStackRowHandles(handles)
-    local entries = {}
-    local seenEntries = {}
-    for _, handle in ipairs(handles or {}) do
-        local entry = handle and handle.__stackRowEntry or nil
-        if entry ~= nil and seenEntries[entry] ~= true then
-            seenEntries[entry] = true
-            entries[#entries + 1] = entry
-        end
-    end
-    refreshOwnedStackRowEntries(entries)
-end
-
-local function unregisterStackRowEntry(region, key, unregisterComponents)
-    rendererState.stackRows[key] = nil
-    unregisterComponents()
-    refreshStackRows(region)
 end
 
 local function refreshTextElements(forceVisibility)
@@ -566,10 +266,6 @@ local function refreshAll()
     refreshVictoryStamp()
 end
 
-local function refreshVisibility()
-    refreshAll()
-end
-
 -- Import-local on purpose: a Lib re-import redefines the hooks once, and the system
 -- hook define replaces the previous import's install for the renderer owner.
 local gameHooksDefined = false
@@ -582,148 +278,107 @@ local function ensureGameHooks()
         hooks.wrap("OnScreenOpened", "victoryOpened", function(base, screen, args)
             base(screen, args)
             if screen.Name == "RunClear" then
-                refreshVisibility()
+                refreshAll()
             end
         end)
         hooks.wrap("OnScreenCloseFinished", "victoryClosed", function(base, screen, args)
             base(screen, args)
             if screen.Name == "RunClear" then
-                refreshVisibility()
+                refreshAll()
             end
         end)
         hooks.wrap("StartRoomPresentation", "roomPresentation", function(base, currentRun, currentRoom, metaPointsAwarded)
             base(currentRun, currentRoom, metaPointsAwarded)
-            refreshVisibility()
+            refreshAll()
         end)
         hooks.wrap("ShowCombatUI", "showCombatUI", function(base, flag, args)
             base(flag, args)
-            refreshVisibility()
+            refreshAll()
         end)
         hooks.wrap("HideCombatUI", "hideCombatUI", function(base, flag, args)
             base(flag, args)
-            refreshVisibility()
+            refreshAll()
         end)
     end)
     gameHooksDefined = true
 end
 
-local function makeTextHandle(id)
+-- One HUD text component backing a stack-row column. It stays hidden and component-less
+-- until its row lays it out.
+local function createTextElement(opts)
+    local id = opts.id
+    local entry = {
+        id = id,
+        componentName = opts.componentName,
+        layout = {},
+        textArgs = opts.textArgs,
+        text = opts.text or "",
+        visible = false,
+        hudVisibility = opts.hudVisibility,
+        region = opts.region,
+        isStamp = opts.isStamp,
+        displayedText = nil,
+        deferHiddenComponentCreation = true,
+        deferUntilLayout = true,
+    }
+
+    rendererState.textElements[id] = entry
+    hudComponents.ensureData(entry)
+    ensureGameHooks()
+
+    -- Handles look the entry up by id so calls after unregister are no-ops.
     return {
         setText = function(text)
-            local entry = rendererState.textElements[id]
-            if not entry then return end
-            entry.text = text
-            updateText(entry)
+            local current = rendererState.textElements[id]
+            if not current then return end
+            current.text = text
+            updateText(current)
         end,
         setVisible = function(visible)
-            local entry = rendererState.textElements[id]
-            if not entry then return end
-            if type(visible) == "function" then
-                entry.visible = visible
-            else
-                entry.visible = visible == true
-            end
-            if entry.deferHiddenComponentCreation == true and not isEntryVisible(entry) and entry.displayedText == nil then
+            local current = rendererState.textElements[id]
+            if not current then return end
+            current.visible = visible == true
+            if current.deferHiddenComponentCreation == true
+                and not isEntryVisible(current)
+                and current.displayedText == nil
+            then
                 return
             end
-            updateVisibility(entry)
+            updateVisibility(current)
         end,
         setLayout = function(layout, textArgs)
-            local entry = rendererState.textElements[id]
-            if not entry then return end
-            local nextLayout = layout or {}
-            local nextSignature = layoutSignature(nextLayout)
-            if entry.layoutSignature ~= nextSignature or entry.componentLayoutSignature ~= nextSignature then
-                discardExistingComponent(entry)
+            local current = rendererState.textElements[id]
+            if not current then return end
+            local nextSignature = hudComponents.layoutSignature(layout)
+            if current.layoutSignature ~= nextSignature or current.componentLayoutSignature ~= nextSignature then
+                hudComponents.discard(current)
             end
-            entry.layout = nextLayout
-            entry.layoutSignature = nextSignature
+            current.layout = layout
+            current.layoutSignature = nextSignature
             for key, value in pairs(textArgs or {}) do
-                entry.textArgs[key] = value
+                current.textArgs[key] = value
             end
-            ensureComponentData(entry)
-        end,
-        refresh = function()
-            local entry = rendererState.textElements[id]
-            if not entry then return end
-            updateEntry(entry)
+            hudComponents.ensureData(current)
         end,
         unregister = function()
-            local entry = rendererState.textElements[id]
-            if not entry then return end
-            entry.visible = false
-            updateVisibility(entry)
-            discardExistingComponent(entry)
+            local current = rendererState.textElements[id]
+            if not current then return end
+            current.visible = false
+            updateVisibility(current)
+            hudComponents.discard(current)
             rendererState.textElements[id] = nil
         end,
     }
 end
 
-local function createTextElement(opts)
-    if type(opts) ~= "table" then
-        logging.violate("overlays.invalid_registration", "overlay renderer: hud text opts must be a table")
-    end
-    if type(opts.id) ~= "string" or opts.id == "" then
-        logging.violate("overlays.invalid_registration", "overlay renderer: hud text id must be a non-empty string")
-    end
-
-    local entry = {
-        id = opts.id,
-        componentName = opts.componentName or sanitizeComponentName(opts.id),
-        layout = opts.layout or {},
-        textArgs = opts.textArgs or {},
-        text = opts.text or "",
-        visible = opts.visible,
-        hudVisibility = opts.hudVisibility,
-        region = opts.region,
-        isStamp = opts.isStamp == true,
-        displayedText = nil,
-        deferHiddenComponentCreation = opts.deferHiddenComponentCreation == true,
-        deferUntilLayout = opts.deferUntilLayout == true,
-    }
-
-    rendererState.textElements[opts.id] = entry
-    ensureComponentData(entry)
-    ensureGameHooks()
-    if opts.deferInitialUpdate ~= true then
-        updateEntry(entry)
-    end
-
-    return makeTextHandle(opts.id)
-end
-
+--- Registers one stack row in a managed region. Specs arrive validated by overlay declarations.
 local function createStackRow(opts)
-    if type(opts) ~= "table" then
-        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row opts must be a table")
-    end
-    if type(opts.id) ~= "string" or opts.id == "" then
-        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row id must be a non-empty string")
-    end
-    if type(opts.columns) ~= "table" or #opts.columns == 0 then
-        logging.violate("overlays.invalid_registration", "overlay renderer: stacked row columns must be a non-empty array")
-    end
-
     local region = opts.region or "middleRightStack"
-    if REGIONS[region] == nil then
-        logging.violate(
-            "overlays.invalid_registration",
-            "overlay renderer: unknown stacked region '%s'",
-            tostring(region)
-        )
-    end
-
     local componentBase = opts.componentName or opts.id
     local columnGap = tonumber(opts.columnGap) or 6
     local columns = {}
     for index, column in ipairs(opts.columns) do
-        if type(column) ~= "table" then
-            logging.violate(
-                "overlays.invalid_registration",
-                "overlay renderer: stacked row column #%d must be a table",
-                index
-            )
-        end
-        local columnEntry = {
+        columns[#columns + 1] = {
             key = column.key or tostring(index),
             minWidth = tonumber(column.minWidth) or 0,
             justify = column.justify,
@@ -732,19 +387,17 @@ local function createStackRow(opts)
             handle = createTextElement({
                 id = stackRowElementId(region, opts.id .. ":" .. tostring(column.key or index)),
                 componentName = column.componentName or columnComponentName(componentBase, column, index),
-                layout = {},
                 textArgs = sanitizeStackRowTextArgs(column.textArgs),
                 text = column.text,
-                visible = false,
                 hudVisibility = opts.hudVisibility,
                 region = region,
                 isStamp = opts.isStamp == true,
-                deferInitialUpdate = true,
-                deferHiddenComponentCreation = true,
-                deferUntilLayout = true,
             }),
         }
-        columns[#columns + 1] = columnEntry
+    end
+
+    local function placeColumn(column, columnLayout, columnTextArgs)
+        column.handle.setLayout(columnLayout, columnTextArgs)
     end
 
     local entry = {
@@ -753,77 +406,32 @@ local function createStackRow(opts)
         order = tonumber(opts.order) or overlayOrder.module,
         visible = opts.visible,
         columns = columns,
-        setLayout = function(layout, textArgs, layoutOpts)
-            if layout.Anchor == "center" then
+        setLayout = function(rowLayout, rowTextArgs, layoutOpts)
+            if rowLayout.Anchor == "center" then
                 local visibleColumns = {}
-                local totalWidth = 0
                 for _, column in ipairs(columns) do
                     if readColumnVisible(true, column, layoutOpts) then
                         visibleColumns[#visibleColumns + 1] = column
-                        totalWidth = totalWidth + column.minWidth
                     else
                         column.handle.setVisible(false)
                     end
                 end
-                if #visibleColumns > 1 then
-                    totalWidth = totalWidth + (#visibleColumns - 1) * columnGap
-                end
-
-                local columnX = (layout.X or 0) - (totalWidth / 2)
-                for index, column in ipairs(visibleColumns) do
-                    local columnTextArgs = values.deepCopy(textArgs or {})
-                    local justification = column.justify or columnTextArgs.Justification
-                    if justification then
-                        columnTextArgs.Justification = justification
-                    end
-
-                    local textX = columnX
-                    if justification == "Right" then
-                        textX = textX + column.minWidth
-                    elseif justification == "Center" then
-                        textX = textX + (column.minWidth / 2)
-                    end
-                    column.handle.setLayout({
-                        X = textX,
-                        Y = layout.Y,
-                        GroupName = layout.GroupName,
-                    }, columnTextArgs)
-
-                    columnX = columnX + column.minWidth
-                    if index < #visibleColumns then
-                        columnX = columnX + columnGap
-                    end
-                end
+                overlayLayout.placeCenteredColumns(rowLayout, rowTextArgs, visibleColumns, columnGap, placeColumn)
                 return
             end
 
             local trailingWidth = 0
             for index = #columns, 1, -1 do
                 local column = columns[index]
-                if not readColumnVisible(true, column, layoutOpts) then
+                if readColumnVisible(true, column, layoutOpts) then
+                    placeColumn(column, overlayLayout.rightColumnLayout(rowLayout, rowTextArgs, column, trailingWidth))
+                    trailingWidth = trailingWidth + column.minWidth
+                    if index > 1 then
+                        trailingWidth = trailingWidth + columnGap
+                    end
+                else
                     column.handle.setVisible(false)
-                    goto continue
                 end
-                local columnTextArgs = values.deepCopy(textArgs or {})
-                local justification = column.justify or columnTextArgs.Justification
-                if justification then
-                    columnTextArgs.Justification = justification
-                end
-                local columnLayout = {
-                    Y = layout.Y,
-                    GroupName = layout.GroupName,
-                }
-                local rightOffset = (layout.RightOffset or 0) + trailingWidth
-                if justification == "Left" then
-                    rightOffset = rightOffset + column.minWidth
-                end
-                columnLayout.RightOffset = rightOffset
-                column.handle.setLayout(columnLayout, columnTextArgs)
-                trailingWidth = trailingWidth + column.minWidth
-                if index > 1 then
-                    trailingWidth = trailingWidth + columnGap
-                end
-                ::continue::
             end
         end,
         setVisible = function(visible)
@@ -847,53 +455,23 @@ local function createStackRow(opts)
 
     return {
         __stackRowEntry = entry,
-        setColumnText = function(columnKey, text)
-            for _, column in ipairs(columns) do
-                if column.key == columnKey then
-                    column.text = text
-                    refreshStackRowEntry(entry)
-                    return true
-                end
-            end
-            return false
-        end,
-        setVisible = function(visible)
-            if type(visible) == "function" then
-                entry.visible = visible
-            else
-                entry.visible = visible == true
-            end
-            refreshStackRowEntry(entry)
-        end,
-        refresh = function()
-            refreshStackRowEntry(entry)
-        end,
         refreshOwned = function()
             refreshOwnedStackRowEntry(entry)
         end,
-        refreshText = function()
-            entry.refreshText(isEntryVisible(entry))
-        end,
         unregister = function()
-            unregisterStackRowEntry(region, key, function()
-                for _, column in ipairs(columns) do
-                    column.handle.unregister()
-                end
-            end)
+            rendererState.stackRows[key] = nil
+            for _, column in ipairs(columns) do
+                column.handle.unregister()
+            end
+            refreshStackRows(region)
         end,
     }
 end
 
 return {
-    regions = listRegions(),
-    fonts = listFonts(),
     refreshTextElements = refreshTextElements,
     refreshStackRows = refreshStackRows,
     refreshAll = refreshAll,
-    refreshVisibility = refreshVisibility,
     refreshOwnedStackRowHandles = refreshOwnedStackRowHandles,
-    ensureGameHooks = ensureGameHooks,
-    makeTextHandle = makeTextHandle,
-    createTextElement = createTextElement,
     createStackRow = createStackRow,
 }

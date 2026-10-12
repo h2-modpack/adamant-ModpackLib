@@ -3,9 +3,8 @@ local deps = ...
 local logging = deps.logging
 local hookDeclarations = deps.hookDeclarations
 local hookContext = deps.hookContext
-local overlayDeclarations = deps.overlayDeclarations
-local overlayRegions = deps.overlayRegions
-local overlayFonts = deps.overlayFonts
+local overlayAuthoring = deps.overlayAuthoring
+local overlayDeclarations = overlayAuthoring.declarations
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local mutationLifecycle = deps.mutationLifecycle
@@ -78,7 +77,7 @@ local function validatePublicDataStorage(storage)
     end
 end
 
-function declarationSurface.attach(module, declarations, lifecycle, overlayOrder)
+function declarationSurface.attach(module, declarations, lifecycle)
     local function setOnce(field, value, context)
         lifecycle.requireOpen(context)
         if declarations[field] ~= nil then
@@ -275,9 +274,9 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
     }
 
     module.overlays = {
-        order = overlayOrder,
-        regions = overlayRegions,
-        fonts = overlayFonts,
+        order = overlayAuthoring.order,
+        regions = overlayAuthoring.regions,
+        fonts = overlayAuthoring.fonts,
         createLine = function(...)
             lifecycle.requireOpen("module.overlays.createLine")
             return overlayDeclarations.declareLine(declarations.overlayDeclarations, "module.overlays.createLine", ...)

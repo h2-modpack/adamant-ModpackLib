@@ -274,21 +274,21 @@ function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOver
         end)
     end)
 
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
 
     local firstToken = self.h.overlays.suppressForUi()
-    lu.assertTrue(self.h.overlays.isUiSuppressed())
+    lu.assertTrue(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
     local secondToken = self.h.overlays.suppressForUi()
     firstToken.release()
-    lu.assertTrue(self.h.overlays.isUiSuppressed())
+    lu.assertTrue(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
     secondToken.release()
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
 
     secondToken.release()
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
 end

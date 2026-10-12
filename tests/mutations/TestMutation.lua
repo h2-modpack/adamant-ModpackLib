@@ -26,7 +26,7 @@ function TestMutation:testBackupRestoresChangedAndRemovedValues()
         Count = 1,
         Nested = { Value = "before" },
     }
-    local backup, restore = self.mutationPlan.createBackup()
+    local backup, restore = self.harness.createMutationBackup()
 
     backup(tbl, "Count", "Nested", "Missing")
     tbl.Count = 7

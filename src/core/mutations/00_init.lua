@@ -9,12 +9,15 @@ mutationRegistry.planExecutors = mutationRegistry.planExecutors or setmetatable(
 local plan = import('core/mutations/plan.lua', nil, {
     values = deps.values,
     planExecutors = mutationRegistry.planExecutors,
+    createBackup = import('core/mutations/backup.lua', nil, {
+        values = deps.values,
+    }),
 })
 
 return import('core/mutations/lifecycle.lua', nil, {
     logging = deps.logging,
     setupRunData = deps.gameDeps.runData.SetupRunData,
-    mutationRegistry = mutationRegistry,
+    ownerSlots = mutationRegistry.ownerSlots,
     plan = plan,
     receipt = deps.receipt,
 })

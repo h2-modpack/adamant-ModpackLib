@@ -1,6 +1,5 @@
 local deps = ...
 
-local logging = deps.logging
 local hooks = deps.hooks
 local hookDeclarations = deps.hookDeclarations
 local retained = deps.retained
@@ -35,9 +34,6 @@ end
 ---@param inputs { owner: table, declarations: table?, host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext }
 ---@return AdamantModpackLib.Receipt
 function ownerInstall.install(ownerId, inputs)
-    if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("overlays.invalid_registration", "overlays.install: ownerId is required")
-    end
     local owner = inputs.owner
     local host = inputs.host
     local runtime = inputs.runtime

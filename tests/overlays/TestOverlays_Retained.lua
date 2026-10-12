@@ -718,6 +718,57 @@ function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     end)
 end
 
+function TestOverlays_Retained:createDeclaringModule(pluginGuid)
+    self.h.harness:writeNativeConfig(pluginGuid, {
+        Enabled = true,
+        DebugMode = false,
+    })
+    return self.h.public.createModule({
+        pluginGuid = pluginGuid,
+        id = "OverlayModule",
+        name = "Overlay Module",
+    })
+end
+
+function TestOverlays_Retained:testModuleOverlayUnknownRegionRejectedAtDeclare()
+    local authorModule = self:createDeclaringModule("test.retained.unknown-region")
+
+    lu.assertErrorMsgContains("module.overlays.createLine: unknown region 'nowhereStack'", function()
+        authorModule.overlays.createLine("line", { region = "nowhereStack" })
+    end)
+    lu.assertErrorMsgContains("module.overlays.createTable: unknown region 'nowhereStack'", function()
+        authorModule.overlays.createTable("runs", {
+            region = "nowhereStack",
+            maxRows = 1,
+            columns = { { key = "label" } },
+        })
+    end)
+    lu.assertErrorMsgContains("column #2 must be a table", function()
+        authorModule.overlays.createLine("columns", { columns = { { key = "label" }, "value" } })
+    end)
+end
+
+function TestOverlays_Retained:testSystemOverlayUnknownRegionRejectedAtDefine()
+    lu.assertErrorMsgContains("system.overlays.createLine: unknown region 'nowhereStack'", function()
+        self.h.createSystem("test.retained.system.unknown-region").overlays.define(function(overlays)
+            overlays.createLine("line", { region = "nowhereStack" })
+        end)
+    end)
+    lu.assertNil(next(self.h.rendererState.stackRows))
+end
+
+function TestOverlays_Retained:testIntervalWhenValidatedAtDeclare()
+    local authorModule = self:createDeclaringModule("test.retained.interval.when-invalid")
+
+    lu.assertErrorMsgContains("module.overlays.onInterval: opts.when must be a function", function()
+        authorModule.overlays.onInterval("tick", 1.0, function() end, { when = true })
+    end)
+    lu.assertErrorMsgContains("module.overlays.onInterval: opts must be a table", function()
+        authorModule.overlays.onInterval("tick", 1.0, function() end, "always")
+    end)
+    authorModule.overlays.onInterval("tick", 1.0, function() end, {})
+end
+
 function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivation()
     self.h.harness:writeNativeConfig("test.retained.after-activation", {
         Enabled = true,
@@ -760,7 +811,7 @@ end
 
 function TestOverlays_Retained:testInstallTakesExplicitInputsWithoutModuleRecord()
     local ownerId = "test.retained.explicit-install"
-    local declarations = self.h.harness.overlaysBundle.declarations
+    local declarations = self.h.harness.overlaysBundle.authoring.declarations
     local overlayDeclarations = declarations.create()
     declarations.declareLine(overlayDeclarations, "test", "line", {
         region = "middleRightStack",
@@ -1015,9 +1066,9 @@ function TestOverlays_Retained:testRetainedIntervalDispatchesWhenDue()
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(0)
-    self.h.overlays.dispatchIntervals(0.5)
-    self.h.overlays.dispatchIntervals(1.1)
+    self.h.retainedState.dispatchIntervals(0)
+    self.h.retainedState.dispatchIntervals(0.5)
+    self.h.retainedState.dispatchIntervals(1.1)
 
     lu.assertEquals(calls, 2)
 end
@@ -1060,7 +1111,7 @@ function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext(
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(2.5)
+    self.h.retainedState.dispatchIntervals(2.5)
 
     lu.assertEquals(calls, 1)
     lu.assertEquals(seen, {
@@ -1163,7 +1214,7 @@ function TestOverlays_Retained:testExplicitOwnerIntervalPredicateRunsOncePerDisp
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(0)
+    self.h.retainedState.dispatchIntervals(0)
 
     lu.assertEquals(whenCalls, 1)
 end

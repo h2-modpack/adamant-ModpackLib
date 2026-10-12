@@ -121,9 +121,10 @@ local function dispatchProjection(registry, callback, event)
     callback(registry.host, registry.runtime, overlay, event)
 end
 
+-- `opts.when` was validated when the interval was declared.
 local function shouldDispatchInterval(registry, event)
-    local when = event.opts and event.opts.when or nil
-    if type(when) ~= "function" then
+    local when = event.opts.when
+    if when == nil then
         return true
     end
     local intervalEvent = {
@@ -145,7 +146,7 @@ local function dispatchCommit(owner, commit)
         return
     end
 
-    for _, callback in ipairs(registry.events.commit or {}) do
+    for _, callback in ipairs(registry.events.commit) do
         dispatchProjection(registry, callback, commit)
     end
 end
@@ -156,7 +157,7 @@ local function dispatchIntervals(now)
         if registry.hidden == true then
             return
         end
-        for _, event in pairs(registry.events.intervals or {}) do
+        for _, event in pairs(registry.events.intervals) do
             event.now = now
             local shouldRun = shouldDispatchInterval(registry, event)
             if shouldRun and (event.lastRun == nil or now - event.lastRun >= event.seconds) then
@@ -181,7 +182,7 @@ end
 
 local function dispatchAfterHook(owner, path, args, results)
     local registry = getRegistry(owner, false)
-    local event = registry and registry.events.afterHooks and registry.events.afterHooks[path] or nil
+    local event = registry and registry.events.afterHooks[path] or nil
     if not event then
         return
     end

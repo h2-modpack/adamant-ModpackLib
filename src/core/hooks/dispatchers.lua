@@ -1,10 +1,9 @@
 local deps = ...
 local hookRegistry = deps.hookRegistry
 local logging = deps.logging
-local modutilHooks = import('core/hooks/modutil_registry.lua', nil, {
+local modutilPaths = import('core/hooks/modutil_paths.lua', nil, {
     modutil = deps.modutil,
     logging = deps.logging,
-    registryKey = hookRegistry.modutilOwnerKey,
 })
 
 -- `dispatchers` own the installed ModUtil adapter for each path.
@@ -12,7 +11,6 @@ local modutilHooks = import('core/hooks/modutil_registry.lua', nil, {
 -- Both tables are hot-reload-stable because ModUtil wrappers close over them.
 local ownerSlots = hookRegistry.ownerSlots
 local dispatchers = hookRegistry.dispatchers
-local MODUTIL_DISPATCHER_KEY = "__hook_dispatcher"
 
 local function getOwnerSlot(ownerId)
     local slot = ownerSlots[ownerId]
@@ -35,7 +33,6 @@ local function getDispatcher(kind, path)
         dispatcher = {
             kind = kind,
             path = path,
-            modutilOwner = {},
             ownerOrder = {},
             ownerSeen = {},
             handlers = {},
@@ -43,9 +40,6 @@ local function getDispatcher(kind, path)
         }
         bucket[path] = dispatcher
     end
-    dispatcher.modutilOwner = dispatcher.modutilOwner or {}
-    dispatcher.ownerSeen = dispatcher.ownerSeen or {}
-    dispatcher.handlers = dispatcher.handlers or {}
     return dispatcher
 end
 
@@ -81,11 +75,11 @@ local refreshOverrideDispatcher
 
 local function dispatcherHasOwnerHandlers(dispatcher, ownerId)
     local byOwner = dispatcher.handlers[ownerId]
-    return type(byOwner) == "table" and next(byOwner) ~= nil
+    return byOwner ~= nil and next(byOwner) ~= nil
 end
 
 local function dispatcherHasAnyHandlers(dispatcher)
-    for ownerId in pairs(dispatcher.handlers or {}) do
+    for ownerId in pairs(dispatcher.handlers) do
         if dispatcherHasOwnerHandlers(dispatcher, ownerId) then
             return true
         end
@@ -208,12 +202,19 @@ local function dispatchOverride(dispatcher, ...)
     return nil
 end
 
+-- A dispatcher installs one ModUtil adapter per path that closes over the (anchored)
+-- dispatcher. It is reinstalled only when the value at the ModUtil path is no longer the one
+-- it was installed against (for example, the game redefined the function).
 local function modutilDispatcherIsCurrent(dispatcher)
-    return dispatcher.installed and modutilHooks.getPathTarget(dispatcher.path) == dispatcher.installedTarget
+    return dispatcher.installed and modutilPaths.getTarget(dispatcher.path) == dispatcher.installedTarget
+end
+
+local function markModUtilDispatcherInstalled(dispatcher)
+    dispatcher.installed = true
+    dispatcher.installedTarget = modutilPaths.getTarget(dispatcher.path)
 end
 
 local function resetModUtilDispatcher(dispatcher)
-    dispatcher.modutilOwner = {}
     dispatcher.installed = false
     dispatcher.installedTarget = nil
     dispatcher.state = nil
@@ -239,7 +240,7 @@ local function createContextSurface()
                 )
             end
             validateScopedWrap(path, handler)
-            return modutilHooks.installScopedWrap(path, handler)
+            return modutilPaths.getPath().Wrap(path, handler)
         end,
     }, function()
         closed = true
@@ -253,11 +254,10 @@ local function ensureWrapDispatcher(dispatcher)
     if dispatcher.installed then
         resetModUtilDispatcher(dispatcher)
     end
-    modutilHooks.installWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(base, ...)
+    modutilPaths.getPath().Wrap(dispatcher.path, function(base, ...)
         return dispatchWrap(dispatcher, base, ...)
     end)
-    dispatcher.installed = true
-    dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
+    markModUtilDispatcherInstalled(dispatcher)
 end
 
 local function ensureContextWrapDispatcher(dispatcher)
@@ -267,11 +267,10 @@ local function ensureContextWrapDispatcher(dispatcher)
     if dispatcher.installed then
         resetModUtilDispatcher(dispatcher)
     end
-    modutilHooks.installContextWrap(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(...)
+    modutilPaths.getPath().Context.Wrap(dispatcher.path, function(...)
         return dispatchContextWrap(dispatcher, ...)
     end)
-    dispatcher.installed = true
-    dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
+    markModUtilDispatcherInstalled(dispatcher)
 end
 
 function refreshOverrideDispatcher(dispatcher)
@@ -283,16 +282,28 @@ function refreshOverrideDispatcher(dispatcher)
         if dispatcher.installed then
             resetModUtilDispatcher(dispatcher)
         end
-        dispatcher.state = modutilHooks.installOverride(dispatcher.modutilOwner, dispatcher.path, MODUTIL_DISPATCHER_KEY, function(...)
-            return dispatchOverride(dispatcher, ...)
+        -- `state.replacement` is cleared on restore so a captured reference to the installed
+        -- override fails loudly instead of dispatching after its install was restored.
+        local state = {
+            replacement = function(...)
+                return dispatchOverride(dispatcher, ...)
+            end,
+        }
+        modutilPaths.getPath().Override(dispatcher.path, function(...)
+            local current = state.replacement
+            if current == nil then
+                logging.violate("hooks.inactive_override", "hooks.override: function replacement is inactive")
+            end
+            return current(...)
         end)
-        dispatcher.installed = true
-        dispatcher.installedTarget = modutilHooks.getPathTarget(dispatcher.path)
+        dispatcher.state = state
+        markModUtilDispatcherInstalled(dispatcher)
         return
     end
 
     if dispatcher.installed and dispatcher.state then
-        modutilHooks.deactivateSlot(dispatcher.state)
+        dispatcher.state.replacement = nil
+        modutilPaths.getPath().Restore(dispatcher.path)
         dispatcher.installed = false
         dispatcher.installedTarget = nil
         dispatcher.state = nil
@@ -301,7 +312,7 @@ end
 
 local function refreshOverrideDispatchersForOwner(ownerId)
     for _, dispatcher in pairs(dispatchers.override) do
-        if dispatcher.handlers and dispatcher.handlers[ownerId] then
+        if dispatcher.handlers[ownerId] then
             refreshOverrideDispatcher(dispatcher)
         end
     end

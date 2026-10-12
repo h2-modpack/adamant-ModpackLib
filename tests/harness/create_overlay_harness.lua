@@ -140,31 +140,31 @@ local function createOverlayHarness(opts)
                 Enabled = true,
                 DebugMode = false,
             }, definition)
-            local overlayDeclarations = base.overlaysBundle.declarations.create()
+            local overlayDeclarations = base.overlaysBundle.authoring.declarations.create()
             local overlayRegistrar = {
-                order = base.overlaysBundle.order,
+                order = base.overlaysBundle.authoring.order,
                 createLine = function(name, spec)
-                    return base.overlaysBundle.declarations.declareLine(
+                    return base.overlaysBundle.authoring.declarations.declareLine(
                         overlayDeclarations,
                         "module.overlays.createLine",
                         name,
                         spec)
                 end,
                 createTable = function(name, spec)
-                    return base.overlaysBundle.declarations.declareTable(
+                    return base.overlaysBundle.authoring.declarations.declareTable(
                         overlayDeclarations,
                         "module.overlays.createTable",
                         name,
                         spec)
                 end,
                 onCommit = function(callback)
-                    return base.overlaysBundle.declarations.declareCommit(
+                    return base.overlaysBundle.authoring.declarations.declareCommit(
                         overlayDeclarations,
                         "module.overlays.onCommit",
                         callback)
                 end,
                 onInterval = function(name, seconds, callback, intervalOpts)
-                    return base.overlaysBundle.declarations.declareInterval(
+                    return base.overlaysBundle.authoring.declarations.declareInterval(
                         overlayDeclarations,
                         "module.overlays.onInterval",
                         name,
@@ -173,7 +173,7 @@ local function createOverlayHarness(opts)
                         intervalOpts)
                 end,
                 afterHook = function(path, callback)
-                    return base.overlaysBundle.declarations.declareAfterHook(
+                    return base.overlaysBundle.authoring.declarations.declareAfterHook(
                         overlayDeclarations,
                         "module.overlays.afterHook",
                         path,

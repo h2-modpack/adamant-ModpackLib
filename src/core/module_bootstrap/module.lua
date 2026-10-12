@@ -7,11 +7,9 @@ local options = import('core/module_bootstrap/module/options.lua', nil, {
 })
 local declarationSurface = import('core/module_bootstrap/module/declaration_surface.lua', nil, {
     logging = logging,
-    overlayRegions = deps.overlayRegions,
-    overlayFonts = deps.overlayFonts,
+    overlayAuthoring = deps.overlayAuthoring,
     hookDeclarations = deps.hookDeclarations,
     hookContext = deps.hookContext,
-    overlayDeclarations = deps.overlayDeclarations,
     sharedDataDeclarations = deps.sharedDataDeclarations,
     sharedRegistrations = deps.sharedRegistrations,
     mutationLifecycle = deps.mutationLifecycle,
@@ -32,12 +30,11 @@ local declarationFacade = import('core/module_bootstrap/module/declaration_facad
     moduleIdentity = import('core/module_bootstrap/identity.lua', nil, {
         logging = logging,
     }),
-    overlayOrder = deps.overlayOrder,
     options = options,
     declarationSurface = declarationSurface,
     activationFinalizer = activationFinalizer,
     hookDeclarations = deps.hookDeclarations,
-    overlayDeclarations = deps.overlayDeclarations,
+    overlayDeclarations = deps.overlayAuthoring.declarations,
     sharedDataDeclarations = deps.sharedDataDeclarations,
     sharedRegistrations = deps.sharedRegistrations,
     controlDeclarations = deps.controlDeclarations,
