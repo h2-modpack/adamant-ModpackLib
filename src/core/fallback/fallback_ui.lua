@@ -20,7 +20,6 @@ local RUNTIME_CONTROL_GAP = 16
 fallbackRegistry.bridges = fallbackRegistry.bridges or {}
 fallbackRegistry.guiAttached = fallbackRegistry.guiAttached or {}
 fallbackRegistry.runtimes = fallbackRegistry.runtimes or {}
-fallbackRegistry.fallbackHud = fallbackRegistry.fallbackHud or {}
 
 local bridges = fallbackRegistry.bridges
 local guiAttached = fallbackRegistry.guiAttached
@@ -39,7 +38,6 @@ local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     overlays = overlays,
     createSystem = createSystem,
     runtimes = runtimes,
-    state = fallbackRegistry.fallbackHud,
 })
 
 local function requireModuleRecord(module, apiName)

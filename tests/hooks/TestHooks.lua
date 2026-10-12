@@ -413,6 +413,37 @@ function TestHooks:testSystemHooksDefineRemovesOmittedDeclarations()
     lu.assertEquals(self.env.AdamantHookTestSystemOmit("x"), "base:x")
 end
 
+function TestHooks.testSystemHooksRedefineAfterLibReloadDisposesPreviousInstall()
+    local runtimeRoot = {}
+    local target = {}
+    local _, modutil = createPathMock(target)
+    local first = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    target.env = first.env
+    first.env.AdamantHookTestSystemReload = function(value)
+        return "base:" .. value
+    end
+    first.createSystem("test.system.hooks.reload").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestSystemReload", function(base, value)
+            return "first:" .. base(value)
+        end)
+    end)
+
+    local second = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    second.createSystem("test.system.hooks.reload").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestSystemReload", function(base, value)
+            return "second:" .. base(value)
+        end)
+    end)
+
+    local dispatcher = second.registry.hooks.dispatchers.wrap.AdamantHookTestSystemReload
+    local ownerCount = 0
+    for _ in pairs(dispatcher.handlers["test.system.hooks.reload"]) do
+        ownerCount = ownerCount + 1
+    end
+    lu.assertEquals(ownerCount, 1)
+    lu.assertEquals(first.env.AdamantHookTestSystemReload("x"), "second:base:x")
+end
+
 function TestHooks:testModuleHookDeclarationsRejectAfterActivation()
     self.harness:writeNativeConfig("hook-test-declare-after-activation", {
         Enabled = false,

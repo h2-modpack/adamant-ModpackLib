@@ -34,6 +34,9 @@ local function makeNoopReceipt()
         dispose = function()
             return true, nil
         end,
+        retire = function()
+            return true, nil
+        end,
     }
 end
 
@@ -153,6 +156,24 @@ function registrations.install(ownerId, hostRegistrations)
                                 install.ownerToken)
                             registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
                         end
+                    end
+                end
+            end
+            install.disposed = true
+            return true, nil
+        end,
+        -- Retire removes only listeners this install still owns; unlike dispose it
+        -- never restores the listener it replaced, which belongs to a retired generation.
+        retire = function()
+            if install.disposed then
+                return true, nil
+            end
+            if install.committed then
+                for index = #install.listenerEntries, 1, -1 do
+                    local previous = install.previousListeners[index]
+                    local bucket = registry.getListenerBucket(previous.id, previous.eventName, false)
+                    if registry.removeListenerFromBucket(bucket, previous.key, install.ownerId, install.ownerToken) then
+                        registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
                     end
                 end
             end

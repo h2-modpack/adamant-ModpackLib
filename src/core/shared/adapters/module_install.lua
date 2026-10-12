@@ -22,6 +22,22 @@ function moduleAdapter.installForModule(module)
     local committedData = false
     local committedEvents = false
 
+    local function release(methodName)
+        local ok, err = true, nil
+        if committedEvents then
+            ok, err = eventReceipt[methodName]()
+            committedEvents = false
+        end
+        if committedData then
+            local dataOk, dataErr = dataReceipt[methodName]()
+            committedData = false
+            if ok and not dataOk then
+                ok, err = dataOk, dataErr
+            end
+        end
+        return ok, err
+    end
+
     return {
         commit = function()
             local ok, err = dataReceipt.commit()
@@ -40,19 +56,10 @@ function moduleAdapter.installForModule(module)
             return true, nil
         end,
         dispose = function()
-            local ok, err = true, nil
-            if committedEvents then
-                ok, err = eventReceipt.dispose()
-                committedEvents = false
-            end
-            if committedData then
-                local dataOk, dataErr = dataReceipt.dispose()
-                committedData = false
-                if ok and not dataOk then
-                    ok, err = dataOk, dataErr
-                end
-            end
-            return ok, err
+            return release("dispose")
+        end,
+        retire = function()
+            return release("retire")
         end,
     }
 end

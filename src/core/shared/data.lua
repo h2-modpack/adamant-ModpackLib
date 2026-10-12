@@ -132,6 +132,9 @@ local function makeNoopReceipt()
         dispose = function()
             return true, nil
         end,
+        retire = function()
+            return true, nil
+        end,
     }
 end
 
@@ -294,6 +297,30 @@ function sharedData.install(ownerId, declarations)
                         and current.ownerToken == install.ownerToken
                     then
                         records[entry.id] = install.previous[entry.id]
+                    end
+                end
+                if declarations.ownerToken == install.ownerToken then
+                    declarations.ownerToken = nil
+                end
+            end
+            install.disposed = true
+            return true, nil
+        end,
+        -- Retire removes only records this install still owns; unlike dispose it
+        -- never restores the record it replaced, which belongs to a retired generation.
+        retire = function()
+            if install.disposed then
+                return true, nil
+            end
+            if install.committed then
+                for index = #install.entries, 1, -1 do
+                    local entry = install.entries[index]
+                    local current = records[entry.id]
+                    if current
+                        and current.ownerId == ownerId
+                        and current.ownerToken == install.ownerToken
+                    then
+                        records[entry.id] = nil
                     end
                 end
                 if declarations.ownerToken == install.ownerToken then

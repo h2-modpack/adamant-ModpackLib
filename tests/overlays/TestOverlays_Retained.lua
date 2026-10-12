@@ -1031,6 +1031,51 @@ function TestOverlays_Retained.testRetainedIntervalDriverUsesInjectedRom()
     lu.assertEquals(calls, 1)
 end
 
+function TestOverlays_Retained.testRetainedIntervalDriverDispatchesThroughReimportedLib()
+    local runtimeRoot = {}
+    local alwaysDrawCallbacks = {}
+    local rom = {
+        gui = {
+            add_always_draw_imgui = function(callback)
+                alwaysDrawCallbacks[#alwaysDrawCallbacks + 1] = callback
+            end,
+        },
+    }
+    local first = createOverlayHarness({ runtime = runtimeRoot, rom = rom })
+    local baselineCallbacks = #alwaysDrawCallbacks
+    local _, authorModule = first.createModuleWithOverlays("test.retained.interval.reload", function(overlays)
+        overlays.onInterval("tick", 1.0, function() end)
+    end)
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(#alwaysDrawCallbacks, baselineCallbacks + 1)
+    local intervalDriver = alwaysDrawCallbacks[#alwaysDrawCallbacks]
+
+    local reloadedDispatches = {}
+    local second = createOverlayHarness({
+        runtime = runtimeRoot,
+        rom = rom,
+        importOverrides = {
+            ["core/overlays/retained_dispatch.lua"] = {
+                dispatchCommit = function() end,
+                dispatchAfterHook = function() end,
+                dispatchIntervals = function(now)
+                    reloadedDispatches[#reloadedDispatches + 1] = now
+                end,
+            },
+        },
+    })
+    _, authorModule = second.createModuleWithOverlays("test.retained.interval.reload", function(overlays)
+        overlays.onInterval("tick", 1.0, function() end)
+    end)
+    ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    lu.assertEquals(#alwaysDrawCallbacks, baselineCallbacks + 1)
+    intervalDriver()
+    lu.assertEquals(#reloadedDispatches, 1)
+end
+
 function TestOverlays_Retained:testExplicitOwnerIntervalPredicateRunsOncePerDispatch()
     local whenCalls = 0
     local _, authorModule = self:createModuleWithOverlays("test.retained.interval.once", function(overlays)

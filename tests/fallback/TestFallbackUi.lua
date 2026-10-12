@@ -506,6 +506,19 @@ function TestFallbackUi:testFallbackMarkerShowsWhenAnyFallbackRuntimeIsUncoordin
     lu.assertTrue(row.visible())
 end
 
+function TestFallbackUi.testFallbackMarkerIsRedefinedAfterLibReload()
+    local runtimeRoot = {}
+    local first = createFallbackUiHarness({ runtime = runtimeRoot })
+    local firstRow = first:getFallbackMarkerRow()
+    lu.assertNotNil(firstRow)
+
+    local second = createFallbackUiHarness({ runtime = runtimeRoot })
+    local secondRow = second:getFallbackMarkerRow()
+
+    lu.assertNotNil(secondRow)
+    lu.assertNotIs(secondRow, firstRow)
+end
+
 function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     local host = makeHost({ modpack = "fallback-pack" })
     self.h.coordinator.register("fallback-pack", nil)

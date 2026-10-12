@@ -43,11 +43,15 @@ local function warnReceiptDisposal(warningId, warningPrefix, errors)
     end
 end
 
-local function disposeReceipts(receipts, warningId, warningPrefix)
+local function disposeReceipts(receipts, warningId, warningPrefix, preferRetire)
     local errors = {}
     for index = #receipts, 1, -1 do
         local entry = receipts[index]
-        local ok, err = callReceipt(entry.receipt, "dispose")
+        local methodName = "dispose"
+        if preferRetire and entry.receipt and entry.receipt.retire ~= nil then
+            methodName = "retire"
+        end
+        local ok, err = callReceipt(entry.receipt, methodName)
         if not ok then
             errors[#errors + 1] = tostring(entry.name or "receipt") .. ": " .. tostring(err)
         end
@@ -72,7 +76,8 @@ local function retireOldModule(previousModule, replacementLabel)
     if type(receipts) ~= "table" or #receipts == 0 then
         return
     end
-    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " previous module retirement failed")
+    -- Retire, not dispose: restoring what the old module replaced would resurrect an older generation.
+    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " previous module retirement failed", true)
     oldRecord.effectReceipts = {}
 end
 

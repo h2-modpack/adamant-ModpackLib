@@ -356,11 +356,12 @@ local function ensureIntervalDriver()
     if retainedState.intervalDriverRegistered then
         return
     end
-    retainedState.intervalDriverRegistered = true
     if rom and rom.gui and type(rom.gui.add_always_draw_imgui) == "function" then
+        -- The ImGui callback outlives Lib re-imports, so it late-reads the current dispatcher.
         rom.gui.add_always_draw_imgui(function()
-            deps.dispatchIntervals(os.clock())
+            retainedState.dispatchIntervals(os.clock())
         end)
+        retainedState.intervalDriverRegistered = true
     end
 end
 
@@ -647,6 +648,8 @@ local dispatch = import('core/overlays/retained_dispatch.lua', nil, {
     getRegistry = getRegistry,
     logging = logging,
 })
+-- Refreshed every import so the persistent interval driver dispatches through current code.
+retainedState.dispatchIntervals = dispatch.dispatchIntervals
 
 return {
     beginTransaction = beginTransaction,

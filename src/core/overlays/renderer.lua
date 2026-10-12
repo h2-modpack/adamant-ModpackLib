@@ -570,7 +570,14 @@ local function refreshVisibility()
     refreshAll()
 end
 
+-- Import-local on purpose: a Lib re-import redefines the hooks once, and the system
+-- hook define replaces the previous import's install for the renderer owner.
+local gameHooksDefined = false
+
 local function ensureGameHooks()
+    if gameHooksDefined then
+        return
+    end
     rendererSystem.hooks.define(function(hooks)
         hooks.wrap("OnScreenOpened", "victoryOpened", function(base, screen, args)
             base(screen, args)
@@ -597,6 +604,7 @@ local function ensureGameHooks()
             refreshVisibility()
         end)
     end)
+    gameHooksDefined = true
 end
 
 local function makeTextHandle(id)

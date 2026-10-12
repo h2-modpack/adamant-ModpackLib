@@ -36,9 +36,6 @@ local retained = import('core/overlays/retained.lua', nil, {
     logging = deps.logging,
     order = overlayOrder,
     rom = deps.rom,
-    dispatchIntervals = function(now)
-        return service.dispatchIntervals(now)
-    end,
 })
 
 local declarations = import('core/overlays/declarations.lua', nil, {

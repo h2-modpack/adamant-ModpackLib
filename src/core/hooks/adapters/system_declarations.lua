@@ -3,9 +3,9 @@ local deps = ...
 local logging = deps.logging
 local declarations = deps.declarations
 local ownerInstall = deps.ownerInstall
+local activeReceipts = deps.activeReceipts
 
 local systemAdapter = {}
-local activeReceipts = {}
 
 local function commitReceipt(receipt)
     local ok, err = receipt.commit()

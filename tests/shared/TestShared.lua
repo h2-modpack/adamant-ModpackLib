@@ -697,6 +697,67 @@ function TestShared:testDeclaredDataSameOwnerHotReloadReplacesPublication()
     end)
 end
 
+function TestShared:testHotReloadRetireDoesNotResurrectOlderListener()
+    local received = {}
+    local function activateGeneration(label)
+        activateModule(self.harness, "shared-retire-listener", {
+            id = "SharedRetireListener",
+            name = "Shared Retire Listener",
+            configureModule = function(authorModule)
+                if label then
+                    authorModule.shared.listen("test.retire", "changed", function()
+                        received[#received + 1] = label
+                    end)
+                end
+            end,
+        })
+    end
+    activateGeneration("first")
+    activateGeneration("second")
+    activateGeneration(nil)
+    activateModule(self.harness, "shared-retire-emitter")
+
+    local ok, delivered = getLiveRuntime(self.harness, "shared-retire-emitter").shared.emit("test.retire", "changed", {})
+
+    lu.assertTrue(ok)
+    lu.assertEquals(delivered, 0)
+    lu.assertEquals(received, {})
+end
+
+function TestShared:testHotReloadRetireDoesNotResurrectOlderPublication()
+    local function activateGeneration(default)
+        local module = createSharedModule(self.harness, "test-shared-data-retire", {
+            id = "SharedRetire",
+            name = "Shared Retire",
+            shared = default and {
+                Snapshot = {
+                    id = "test.shared.retire",
+                    access = "owner",
+                    default = default,
+                },
+            } or nil,
+        })
+        activateAndEnableModule(self.harness, module, "test-shared-data-retire")
+    end
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-retire-reader", {
+        shared = {
+            Snapshot = {
+                id = "test.shared.retire",
+                access = "reader",
+                fallback = "fallback",
+            },
+        },
+    })
+    activateAndEnableModule(self.harness, reader, "test-shared-data-retire-reader")
+    activateGeneration("first")
+    activateGeneration("second")
+    lu.assertEquals(readerStore.shared.read("Snapshot"), "second")
+
+    activateGeneration(nil)
+
+    lu.assertEquals(readerStore.shared.read("Snapshot"), "fallback")
+end
+
 function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
     local publisher, publisherStore = createSharedModule(self.harness, "test-shared-data-disabled", {
         shared = {
