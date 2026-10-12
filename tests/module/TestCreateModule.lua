@@ -51,7 +51,7 @@ end
 
 local function getLiveStore(h, pluginGuid)
     local liveModule = h:liveModule(pluginGuid)
-    local record = h.managedModule.getRecord(liveModule)
+    local record = h.moduleRegistry.getRecord(liveModule)
     return record and record.runtime.data or nil
 end
 
@@ -223,7 +223,7 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorRows:read(1, "Limit"), 3)
     lu.assertEquals(authorRows:get(1, "Limit"):read(), 3)
     lu.assertEquals(authorRowField:read(), 3)
-    local liveRecord = self.h.managedModule.getRecord(liveModule)
+    local liveRecord = self.h.moduleRegistry.getRecord(liveModule)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
 
@@ -633,7 +633,7 @@ function TestCreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHost
     lu.assertTrue(emitter.activate())
 
     local liveEmitter = self.h:liveModule("test-create-module-declarative-emitter")
-    local emitterRecord = self.h.managedModule.getRecord(liveEmitter)
+    local emitterRecord = self.h.moduleRegistry.getRecord(liveEmitter)
     local ok, count = emitterRecord.runtime.shared.emit("test.declarative-event", "changed", { value = 7 })
 
     lu.assertTrue(ok)
@@ -670,7 +670,7 @@ function TestCreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArg
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-create-module-declarative-hooks")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     local slot = record.capabilityInputs.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
     local result = slot.value(function(value)
         return value + 1

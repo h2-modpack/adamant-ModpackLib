@@ -20,6 +20,8 @@ local declarationSurface = import('core/module_bootstrap/module/declaration_surf
 local activationFinalizer = import('core/module_bootstrap/module/activation_finalizer.lua', nil, {
     logging = logging,
     managedModule = deps.managedModule,
+    definition = deps.definition,
+    moduleRegistry = deps.moduleRegistry,
     moduleState = deps.moduleState,
     fallbackUi = deps.fallbackUi,
     controlCompiler = deps.controlCompiler,
@@ -27,6 +29,9 @@ local activationFinalizer = import('core/module_bootstrap/module/activation_fina
 })
 local declarationFacade = import('core/module_bootstrap/module/declaration_facade.lua', nil, {
     logging = logging,
+    moduleIdentity = import('core/module_bootstrap/identity.lua', nil, {
+        logging = logging,
+    }),
     overlayOrder = deps.overlayOrder,
     options = options,
     declarationSurface = declarationSurface,

@@ -43,38 +43,9 @@ local transactionModule = import('core/module_state/transaction.lua', nil, {
     values = values,
 })
 
----@param persistentState AdamantModpackLib.PersistentState
----@param stagedView AdamantModpackLib.StagedState
----@param status AdamantModpackLib.StatusState
----@param actionBuffer table
----@return AdamantModpackLib.ModuleStateLanes
-local function createLanes(persistentState, stagedView, status, actionBuffer)
-    return {
-        runtimeData = storageRefAdapter.createLane({
-            get = persistentState.get,
-            source = "runtime.data",
-        }),
-        runtimeStatus = storageRefAdapter.createLane({
-            get = status.get,
-            source = "runtime.status",
-            writable = true,
-            resetRoot = status.reset,
-        }),
-        uiData = storageRefAdapter.createLane({
-            get = stagedView.get,
-            source = "ui.data",
-            writable = true,
-        }),
-        uiStatus = storageRefAdapter.createLane({
-            get = status.get,
-            source = "ui.status",
-        }),
-        uiActions = uiActionsModule.create(actionBuffer),
-    }
-end
-
 ---Construct one module's state: committed persistent data, staged view,
----status, action buffer, author lanes, and the lifecycle transaction.
+---status, action buffer, and the lifecycle transaction. Author lanes come from
+---`moduleState.createLanes(state, fields)`.
 ---@param definition AdamantModpackLib.PreparedDefinition
 ---@param opts? table Backend options (`configPath`, `pluginGuid`).
 ---@return AdamantModpackLib.ModuleState
@@ -102,8 +73,40 @@ function moduleState.create(definition, opts)
         staged = stagedView,
         status = status,
         actionBuffer = actionBuffer,
-        lanes = createLanes(persistentState, stagedView, status, actionBuffer),
         txn = transactionModule.create(persistentState, stagedView, stagedInternals, status, actionBuffer),
+    }
+end
+
+---Build the author-facing lanes over one module's state. `fields.runtimeData` and
+---`fields.uiData` are attached to those lanes at construction.
+---@param state AdamantModpackLib.ModuleState
+---@param fields? { runtimeData?: table<string, any>, uiData?: table<string, any> }
+---@return AdamantModpackLib.ModuleStateLanes
+function moduleState.createLanes(state, fields)
+    fields = fields or {}
+    return {
+        runtimeData = storageRefAdapter.createLane({
+            get = state.persistent.get,
+            source = "runtime.data",
+            fields = fields.runtimeData,
+        }),
+        runtimeStatus = storageRefAdapter.createLane({
+            get = state.status.get,
+            source = "runtime.status",
+            writable = true,
+            resetRoot = state.status.reset,
+        }),
+        uiData = storageRefAdapter.createLane({
+            get = state.staged.get,
+            source = "ui.data",
+            writable = true,
+            fields = fields.uiData,
+        }),
+        uiStatus = storageRefAdapter.createLane({
+            get = state.status.get,
+            source = "ui.status",
+        }),
+        uiActions = uiActionsModule.create(state.actionBuffer),
     }
 end
 

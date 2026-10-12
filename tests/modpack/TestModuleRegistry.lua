@@ -15,7 +15,7 @@ end
 local function attachModule(pluginGuid, definition, persisted, exports)
     exports = exports or {}
     local patchPlan = definition.patchPlan
-    definition = LibManagedModule.prepareDefinition({}, {
+    definition = LibModuleDefinition.prepareDefinition({}, {
         modpack = definition.modpack,
         id = definition.id,
         name = definition.name,

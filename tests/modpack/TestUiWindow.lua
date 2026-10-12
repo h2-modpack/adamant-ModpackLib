@@ -262,7 +262,7 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
     local okFirst, errFirst = pcall(builtUi.renderWindow)
 
     local entry = moduleRegistry.modules[1]
-    local replacementDefinition = LibManagedModule.prepareDefinition({}, {
+    local replacementDefinition = LibModuleDefinition.prepareDefinition({}, {
         id = entry.id,
         name = entry.name,
         modpack = entry.modpack,

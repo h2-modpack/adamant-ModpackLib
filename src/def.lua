@@ -180,8 +180,8 @@ local lib = {}
 ---@field flushWithoutCommit fun()
 ---@field reload fun(): AdamantModpackLib.ReloadReceipt
 
----Author-facing lanes built over one module's state.
----`runtimeData` and `uiData` receive `cache`/`shared`/`controls` from the managed module.
+---Author-facing lanes built over one module's state by `moduleState.createLanes(state, fields)`.
+---`runtimeData` and `uiData` carry the `fields` (`cache`/`shared`/`controls`, `shared`) from construction.
 ---@class AdamantModpackLib.ModuleStateLanes
 ---@field runtimeData AdamantModpackLib.Store
 ---@field runtimeStatus AdamantModpackLib.RuntimeStatus
@@ -506,9 +506,66 @@ local lib = {}
 ---@class AdamantModpackLib.CapabilityInputs
 ---@field hookDeclarations table
 ---@field shared { data: table, events: table? }
----@field overlayDeclarations table?
+---@field overlays { declarations: table?, host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext }
 ---@field mutation AdamantModpackLib.BoundMutation
 ---@field fallbackUiRequested boolean
+
+---Internal: one capability activation installs (composed in `core/init.lua`). `install` returns the
+---capability's receipt, or nil when the module declares nothing for it; commit order is the receipt phase.
+---@class AdamantModpackLib.ModuleCapability
+---@field name string
+---@field install fun(ownerId: string, owner: table, inputs: AdamantModpackLib.CapabilityInputs): AdamantModpackLib.Receipt?
+
+---Internal: Lib-built inputs for `managedModule.create(...)` (finalizer or test harness only).
+---@class AdamantModpackLib.ManagedModuleCreateOpts
+---@field definition AdamantModpackLib.PreparedDefinition
+---@field pluginGuid string
+---@field state AdamantModpackLib.ModuleState
+---@field drawTab AdamantModpackLib.UiCallback
+---@field drawQuickContent? AdamantModpackLib.UiCallback
+---@field mutationBundle? table
+---@field hookDeclarations? table
+---@field sharedDataDeclarations? table
+---@field sharedEventRegistrations? table
+---@field overlayDeclarations? table
+---@field fallbackUiRequested? boolean
+---@field controlCatalog? table
+---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
+---@field onCommit? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, commit: table): any
+---@field onReload? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, reload: table): any
+
+---Internal: inputs for `moduleContexts.create(...)`, which builds the runtime and UI contexts once.
+---@class AdamantModpackLib.ModuleContextInputs
+---@field state AdamantModpackLib.ModuleState
+---@field ownerId string
+---@field cacheDeclarations table?
+---@field sharedDeclarations table
+---@field emitShared fun(id: string, eventName: string, payload: any): boolean, integer? Runtime-lane emit.
+---@field stageShared fun(id: string, eventName: string, payload: any): boolean, integer? UI-lane staged emit.
+---@field controlCatalog table
+---@field host AdamantModpackLib.Host
+
+---Internal: one module's lifecycle session (`managed_module_lifecycle.bind`).
+---@class AdamantModpackLib.LifecycleSession
+---@field def table Prepared definition (log label source).
+---@field txn AdamantModpackLib.ModuleStateTxn
+---@field mutation AdamantModpackLib.BoundMutation
+---@field notifyCommit fun(commit: table): any Raises on failure; failures and `false` are reported, never propagated.
+---@field notifyReload fun(reason: string, receipt: table?): AdamantModpackLib.ReloadContext
+---@field runActions fun(actionSnapshot: table): any
+---@field flushSharedEvents fun(): any
+
+---@class AdamantModpackLib.CommitNotifierOpts
+---@field onCommit? function Author observer `(host, runtime, commit)`.
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+---@field dispatchOverlayCommit fun(commit: table)
+
+---@class AdamantModpackLib.ReloadNotifierOpts
+---@field def table Prepared definition (log label source).
+---@field onReload? function Author observer `(host, runtime, reload)`.
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
 
 ---Internal: per-module activation record (weak-keyed by module in `registry.modules.records`).
 ---Capabilities never read it; activation passes them slices from `capabilityInputs`.
@@ -520,7 +577,7 @@ local lib = {}
 ---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
 ---@field capabilityInputs AdamantModpackLib.CapabilityInputs
 ---@field effectReceipts AdamantModpackLib.Receipt[]
----@field activating? boolean
+---@field activating? boolean Instance activation state; the declaration facade only tracks sealing.
 ---@field activated boolean
 
 ---@class AdamantModpackLib.ModuleCreateOpts
@@ -958,7 +1015,6 @@ local lib = {}
 ---@field staged AdamantModpackLib.StagedState
 ---@field status AdamantModpackLib.StatusState
 ---@field actionBuffer table
----@field lanes AdamantModpackLib.ModuleStateLanes
 ---@field txn AdamantModpackLib.ModuleStateTxn
 
 ---@type AdamantModpackLib.ModpackApi

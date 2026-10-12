@@ -102,6 +102,7 @@ local function createLibHarness(opts)
         moduleDefinition = imports["core/module_bootstrap/definition.lua"],
         managedModuleLifecycle = imports["core/module_bootstrap/managed_module_lifecycle.lua"],
         managedModule = imports["core/module_bootstrap/managed_module.lua"],
+        moduleActivation = imports["core/module_bootstrap/managed_module_activation.lua"],
         moduleBundle = imports["core/module_bootstrap/module.lua"],
         fallbackUi = imports["core/fallback/fallback_ui.lua"],
     }

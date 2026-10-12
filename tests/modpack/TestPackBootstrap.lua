@@ -125,7 +125,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         setupRunDataCalls = setupRunDataCalls + 1
     end
 
-    local definition = LibManagedModule.prepareDefinition({}, {
+    local definition = LibModuleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",

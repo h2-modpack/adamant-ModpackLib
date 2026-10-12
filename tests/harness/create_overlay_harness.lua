@@ -131,7 +131,7 @@ local function createOverlayHarness(opts)
 
         createModuleWithOverlays = function(pluginGuid, declareOverlays, moduleOpts)
             moduleOpts = moduleOpts or {}
-            local definition = base.managedModule.prepareDefinition({}, {
+            local definition = base.moduleDefinition.prepareDefinition({}, {
                 id = moduleOpts.id or "OverlayModule",
                 name = moduleOpts.name or "Overlay Module",
                 storage = moduleOpts.storage or {},

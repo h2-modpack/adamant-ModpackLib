@@ -749,10 +749,10 @@ function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivatio
 end
 
 function TestOverlays_Retained:installOverlays(host)
-    local record = self.h.harness.managedModule.getRecord(host)
+    local record = self.h.harness.moduleRegistry.getRecord(host)
     return self.h.overlays.install(host.getOwnerId(), {
         owner = host,
-        declarations = record.capabilityInputs.overlayDeclarations,
+        declarations = record.capabilityInputs.overlays.declarations,
         host = record.host,
         runtime = record.runtime,
     })
@@ -827,7 +827,7 @@ function TestOverlays_Retained:testActivationFailureRestoresPreviousGenerationOv
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "second onActivate boom")
-    lu.assertIs(self.h.harness.managedModule.getLiveModule(pluginGuid), firstHost)
+    lu.assertIs(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), firstHost)
     local row = self.h.rendererState.stackRows[rowKey]
     lu.assertNotNil(row)
     lu.assertTrue(row.visible())
@@ -998,7 +998,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
     local secondRegistry = self.h.retainedState.tableRegistries[secondHost]
 
-    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), secondHost)
+    lu.assertEquals(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), secondHost)
     lu.assertNotNil(secondRow)
     lu.assertNotEquals(firstRow, secondRow)
     lu.assertTrue(firstRegistry == nil or firstRegistry.elements.shared == nil)
@@ -1396,5 +1396,5 @@ function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations
     local retained = self.h.retainedState.tableRegistries[firstHost]
     lu.assertNotNil(retained.elements.stable)
     lu.assertNil(retained.elements.replacement)
-    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), firstHost)
+    lu.assertEquals(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), firstHost)
 end

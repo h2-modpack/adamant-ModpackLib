@@ -36,21 +36,21 @@ end
 
 local function activateAndEnableModule(harness, module, pluginGuid)
     lu.assertTrue(module.activate())
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
     lu.assertNotNil(liveModule)
     lu.assertTrue(liveModule.setEnabled(true))
     return liveModule
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
-    local record = harness.managedModule.getRecord(liveModule)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
+    local record = harness.moduleRegistry.getRecord(liveModule)
     return record and record.runtime.data or nil
 end
 
 local function getLiveRuntime(harness, pluginGuid)
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
-    local record = harness.managedModule.getRecord(liveModule)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
+    local record = harness.moduleRegistry.getRecord(liveModule)
     return record and record.runtime or nil
 end
 
@@ -200,19 +200,19 @@ function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     })
     lu.assertTrue(secondAuthorModule.activate())
 
-    local firstRecord = self.harness.managedModule.getRecord(self.harness.managedModule.getLiveModule("shared-structural-a"))
-    local secondRecord = self.harness.managedModule.getRecord(self.harness.managedModule.getLiveModule("shared-structural-b"))
+    local firstRecord = self.harness.moduleRegistry.getRecord(self.harness.moduleRegistry.getLiveModule("shared-structural-a"))
+    local secondRecord = self.harness.moduleRegistry.getRecord(self.harness.moduleRegistry.getLiveModule("shared-structural-b"))
 
     lu.assertEquals(
         firstRecord.definition._structuralFingerprint,
         secondRecord.definition._structuralFingerprint
     )
 
-    self.harness.managedModule.prepareDefinition(owner, {
+    self.harness.moduleDefinition.prepareDefinition(owner, {
         id = "SharedStructural",
         name = "Shared Structural",
     })
-    self.harness.managedModule.prepareDefinition(owner, {
+    self.harness.moduleDefinition.prepareDefinition(owner, {
         id = "SharedStructural",
         name = "Shared Structural",
     })
@@ -430,7 +430,7 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
     activateAndEnableModule(self.harness, reader, "test-shared-data-reader")
     lu.assertFalse(readerStore.shared.read("Active"))
 
-    self.harness.managedModule.getLiveModule("test-shared-data-publisher").drawTab()
+    self.harness.moduleRegistry.getLiveModule("test-shared-data-publisher").drawTab()
     lu.assertTrue(readerStore.shared.read("Active"))
     lu.assertErrorMsgContains("does not support set", function()
         readerStore.shared.set("Active", false)
@@ -512,7 +512,7 @@ function TestShared:testDeclaredDataReadsTableViews()
     activateAndEnableModule(self.harness, reader, "test-shared-data-table-reader")
     lu.assertFalse(readerStore.shared.read("Availability").active)
 
-    self.harness.managedModule.getLiveModule("test-shared-data-table-publisher").drawTab()
+    self.harness.moduleRegistry.getLiveModule("test-shared-data-table-publisher").drawTab()
     local availability = readerStore.shared.read("Availability")
     lu.assertTrue(availability.active)
     lu.assertFalse(availability.available.Apollo)
@@ -838,7 +838,7 @@ function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
     activateAndEnableModule(self.harness, publisher, "test-shared-data-disabled")
     publisherStore.shared.set("Snapshot", "visible")
 
-    local liveModule = self.harness.managedModule.getLiveModule("test-shared-data-disabled")
+    local liveModule = self.harness.moduleRegistry.getLiveModule("test-shared-data-disabled")
     lu.assertEquals(readerStore.shared.read("Snapshot"), "visible")
     lu.assertTrue(liveModule.setEnabled(false))
     lu.assertEquals(readerStore.shared.read("Snapshot"), "fallback")

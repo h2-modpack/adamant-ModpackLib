@@ -103,7 +103,7 @@ end
 
 local function createPackedDefinition(base, fields)
     fields = fields or {}
-    return base.managedModule.prepareDefinition({}, {
+    return base.moduleDefinition.prepareDefinition({}, {
         modpack = fields.modpack or "test-pack",
         id = fields.id or "PackedWidgetTest",
         name = fields.name or "Packed Widget Test",

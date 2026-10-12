@@ -24,10 +24,12 @@ Every module, coordinated or standalone, enters through the same Lib path:
    state.
 7. Persistent state hydrates persisted roots from config exactly once.
 8. Staged state copies from committed roots.
-9. `managedModule.create(...)` builds the live module, runtime context, UI
-   context, action buffer, callback host, and control catalog.
-10. Activation installs and commits capability receipts: shared, hooks,
-    overlays, mutation, and optional fallback UI.
+9. `managedModule.create(...)` builds the live module, callback host, and
+   (through `module_contexts.lua`, once) the runtime and UI contexts, and binds
+   the lifecycle session.
+10. Activation runs each entry of the capability list composed in
+    `core/init.lua` (shared, hooks, overlays, mutation, optional fallback UI)
+    and commits the returned receipts in phase order.
 11. Lib publishes the live module by `pluginGuid`.
 12. `module.onActivate(host, runtime)` runs, if declared, against the prepared
     runtime state.

@@ -110,7 +110,7 @@ local function createPathMock(target)
 end
 
 local function createHookModuleState(harness, enabled)
-    local definition = harness.managedModule.prepareDefinition({}, {
+    local definition = harness.moduleDefinition.prepareDefinition({}, {
         id = "HookTestState",
         name = "Hook Test State",
         storage = {},
@@ -130,6 +130,9 @@ function TestHooks:setUp()
     self.public = self.harness.public
     self.coordinator = self.harness.coordinator
     self.managedModule = self.harness.managedModule
+    self.moduleDefinition = self.harness.moduleDefinition
+    self.moduleRegistry = self.harness.moduleRegistry
+    self.moduleActivation = self.harness.moduleActivation
     self.mutation = self.harness.mutation
     self.hookRegistry = self.harness.registry.hooks
 end
@@ -143,7 +146,7 @@ function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOp
     }
     local host = self.managedModule.create({
         pluginGuid = pluginGuid,
-        definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
+        definition = self.moduleDefinition.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
         state = moduleState,
         hookDeclarations = hookDeclarations,
         mutationBundle = mutationBundle,
@@ -152,7 +155,7 @@ function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOp
     if registerHooks ~= nil then
         registerHooks(self.harness.hooksBundle.declarations.createRegistrar(hookDeclarations, "module.hooks"), store)
     end
-    return self.managedModule.activateOrThrow(host)
+    return self.moduleActivation.activateOrThrow(host)
 end
 
 function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
@@ -772,7 +775,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
     local target = { Value = "base" }
     self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
-    local definition = self.managedModule.prepareDefinition({}, {
+    local definition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
@@ -791,7 +794,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
         mutationBundle = mutationBundle,
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(host)
+    self.moduleActivation.activateOrThrow(host)
 
     lu.assertEquals(buildCalls, 1)
     lu.assertEquals(target.Value, "patched")
@@ -806,7 +809,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
 
     local firstModuleState, store = createHookModuleState(self.harness, true)
 
-    local firstDefinition = self.managedModule.prepareDefinition({}, {
+    local firstDefinition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
@@ -824,9 +827,9 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         },
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(firstHost)
+    self.moduleActivation.activateOrThrow(firstHost)
 
-    local secondDefinition = self.managedModule.prepareDefinition({}, {
+    local secondDefinition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
@@ -844,7 +847,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         },
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(secondHost)
+    self.moduleActivation.activateOrThrow(secondHost)
 
     lu.assertEquals(firstBuildCalls, 1)
     lu.assertEquals(secondBuildCalls, 1)
@@ -855,7 +858,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         patchMutation = function(_, _, plan)
             plan:set(target, "Value", "third")
         end,
-    }, secondHost, self.managedModule.getRecord(secondHost).runtime)
+    }, secondHost, self.moduleRegistry.getRecord(secondHost).runtime)
     lu.assertTrue(reloadedHandle.revert())
     lu.assertEquals(target.Value, "base")
 end

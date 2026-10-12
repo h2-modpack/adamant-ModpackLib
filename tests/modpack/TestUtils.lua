@@ -108,6 +108,16 @@ LibModuleState = setmetatable({}, {
         assert(LibTestImports["core/module_state/00_init.lua"], "LibModuleState test service missing")[key] = value
     end,
 })
+LibModuleDefinition = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/module_bootstrap/definition.lua"], "LibModuleDefinition test service missing")[key]
+    end,
+})
+LibModuleRegistry = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/lib_bootstrap/module_registry.lua"], "LibModuleRegistry test service missing")[key]
+    end,
+})
 LibManagedModule = setmetatable({}, {
     __index = function(_, key)
         return assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key]
@@ -313,7 +323,7 @@ function CreateModpackHarness(opts)
     local harnessRom = opts.rom or rom
     local harnessLibConfig = opts.libConfig or LibConfig
     local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
-    local getLiveModule = opts.getLiveModule or LibManagedModule.getLiveModule
+    local getLiveModule = opts.getLiveModule or LibModuleRegistry.getLiveModule
     local harnessPackRegistry = opts.packRegistry or {}
     local harnessCoordination = opts.coordination or import("core/coordination/coordination.lua", nil, {
         logging = logging,
@@ -396,7 +406,7 @@ local function createTestHud(packId, packIndex, configHash, theme, config, hideH
 end
 
 rawset(ModpackTestApi, "createModuleRegistry", function(packId, testConfig, opts)
-    local getLiveModule = opts and opts.getLiveModule or LibManagedModule.getLiveModule
+    local getLiveModule = opts and opts.getLiveModule or LibModuleRegistry.getLiveModule
     return createModuleRegistry(packId, testConfig, getLiveModule)
 end)
 rawset(ModpackTestApi, "createTheme", createTheme)
@@ -429,7 +439,7 @@ config = { ModEnabled = true, DebugMode = false }
 MockModuleRegistry = {}
 
 local function prepareDefinition(definition)
-    return LibManagedModule.prepareDefinition({}, definition)
+    return LibModuleDefinition.prepareDefinition({}, definition)
 end
 
 local function makePersistedConfig(storage, overrides)
@@ -554,7 +564,7 @@ function MockModuleRegistry.create(moduleDefs)
         }
 
         for _, module in ipairs(moduleRegistry.modules) do
-            local liveModule = LibManagedModule.getLiveModule(module.pluginGuid)
+            local liveModule = LibModuleRegistry.getLiveModule(module.pluginGuid)
             snapshot.liveModules[module] = liveModule or false
         end
 
@@ -562,7 +572,7 @@ function MockModuleRegistry.create(moduleDefs)
     end
 
     function moduleRegistry.live.getLiveModule(entry)
-        return LibManagedModule.getLiveModule(entry.pluginGuid)
+        return LibModuleRegistry.getLiveModule(entry.pluginGuid)
     end
 
     function moduleRegistry.snapshot.getLiveModule(entry, snapshot)

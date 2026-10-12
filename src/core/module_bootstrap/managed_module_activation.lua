@@ -1,12 +1,12 @@
 local deps = ...
 
 local logging = deps.logging
-local shared = deps.shared
-local hooks = deps.hooks
-local overlays = deps.overlays
-local fallbackUi = deps.fallbackUi
 local coordinator = deps.coordinator
 local moduleRegistry = deps.moduleRegistry
+-- Ordered `{ name, install(ownerId, owner, capabilityInputs) -> Receipt? }` list composed by
+-- `core/init.lua`. `install` returns nil when the module declares nothing for that capability.
+---@type AdamantModpackLib.ModuleCapability[]
+local capabilities = deps.capabilities
 
 local moduleActivation = {}
 
@@ -89,19 +89,13 @@ function moduleActivation.activateOrThrow(module)
     record.activating = true
 
     local ok, err = pcall(function()
-        -- The module itself is the owner token for hooks and overlays (the overlay after-hook
-        -- install shares the module's hook slot).
-        candidateReceipts[#candidateReceipts + 1] = shared.install(pluginGuid, inputs.shared)
-        candidateReceipts[#candidateReceipts + 1] = hooks.install(pluginGuid, module, inputs.hookDeclarations)
-        candidateReceipts[#candidateReceipts + 1] = overlays.install(pluginGuid, {
-            owner = module,
-            declarations = inputs.overlayDeclarations,
-            host = record.host,
-            runtime = record.runtime,
-        })
-        candidateReceipts[#candidateReceipts + 1] = inputs.mutation.sync()
-        if inputs.fallbackUiRequested then
-            candidateReceipts[#candidateReceipts + 1] = fallbackUi.install(pluginGuid, module)
+        -- The module itself is the owner token (hooks and the overlay after-hook install share
+        -- the module's hook slot).
+        for _, capability in ipairs(capabilities) do
+            local capabilityReceipt = capability.install(pluginGuid, module, inputs)
+            if capabilityReceipt ~= nil then
+                candidateReceipts[#candidateReceipts + 1] = capabilityReceipt
+            end
         end
         -- Rollback and retirement walk this list in reverse, so commit order is release order.
         candidateReceipts = orderByPhase(candidateReceipts)
@@ -119,7 +113,7 @@ function moduleActivation.activateOrThrow(module)
         moduleRegistry.setLiveModule(pluginGuid, module)
         published = true
 
-        if type(record.onActivate) == "function" then
+        if record.onActivate ~= nil then
             record.onActivate(record.host, record.runtime)
         end
 

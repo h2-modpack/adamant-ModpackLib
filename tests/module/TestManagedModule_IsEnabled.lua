@@ -14,38 +14,43 @@ function TestManagedModule_IsEnabled:makeStore(enabled)
         storage = {},
     })
     local _, _, moduleState = self.h:createModuleState({ Enabled = enabled }, definition)
-    return moduleState.txn
+    local module = self.h:createManagedModule("test-is-enabled-store", {
+        definition = definition,
+        state = moduleState,
+        drawTab = function() end,
+    })
+    return module
 end
 
 function TestManagedModule_IsEnabled:testEnabledUncoordinated()
-    lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
+    lu.assertTrue(self:makeStore(true).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testDisabledUncoordinated()
-    lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
+    lu.assertFalse(self:makeStore(false).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testEnabledNoPackId()
-    lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
-    lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
+    lu.assertTrue(self:makeStore(true).isEnabled())
+    lu.assertFalse(self:makeStore(false).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testEnabledWithCoordinatorEnabled()
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
-    lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
+    lu.assertTrue(self:makeStore(true).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testDisabledWithCoordinatorEnabled()
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
-    lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
+    lu.assertFalse(self:makeStore(false).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testEnabledWithCoordinatorDisabled()
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = false })
-    lu.assertTrue(self.h.managedModuleLifecycle.isEnabled(self:makeStore(true)))
+    lu.assertTrue(self:makeStore(true).isEnabled())
 end
 
 function TestManagedModule_IsEnabled:testDisabledWithCoordinatorDisabled()
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = false })
-    lu.assertFalse(self.h.managedModuleLifecycle.isEnabled(self:makeStore(false)))
+    lu.assertFalse(self:makeStore(false).isEnabled())
 end

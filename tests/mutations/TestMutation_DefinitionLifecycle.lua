@@ -60,6 +60,7 @@ function TestMutation_DefinitionLifecycle:setUp()
     self.mutation = self.harness.mutation
     self.mutationPlan = self.harness.mutationPlan
     self.managedModule = self.harness.managedModule
+    self.moduleDefinition = self.harness.moduleDefinition
     self.managedModuleLifecycle = self.harness.managedModuleLifecycle
     self.coordinator = self.harness.coordinator
 end
@@ -73,7 +74,7 @@ function TestMutation_DefinitionLifecycle:revertPlan(plan)
 end
 
 function TestMutation_DefinitionLifecycle:makeStore(enabled)
-    return createModuleState(self.harness, { Enabled = enabled }, self.managedModule.prepareDefinition({}, {
+    return createModuleState(self.harness, { Enabled = enabled }, self.moduleDefinition.prepareDefinition({}, {
         id = "LifecycleStore",
         name = "Lifecycle Store",
         storage = {},
@@ -95,15 +96,29 @@ function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutati
     return self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store).revert()
 end
 
+local function noop() end
+
+function TestMutation_DefinitionLifecycle:bindLifecycle(def, bound, txn, commitNotifier)
+    return self.managedModuleLifecycle.bind({
+        def = def,
+        txn = txn,
+        mutation = bound,
+        notifyCommit = commitNotifier or noop,
+        notifyReload = noop,
+        runActions = noop,
+        flushSharedEvents = noop,
+    })
+end
+
 function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, callbackHost, store, txn,
         pluginGuid)
     local bound = self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.commitStagedState(def, bound, commitNotifier, txn, nil, nil)
+    return self:bindLifecycle(def, bound, txn, commitNotifier).flush()
 end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, txn, enabled, pluginGuid)
     local bound = self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.setEnabled(def, bound, nil, txn, nil, nil, enabled)
+    return self:bindLifecycle(def, bound, txn).setEnabled(enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationModule(pluginGuid, definition, config, patchCallback)
@@ -353,7 +368,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
         Enabled = true,
         Value = false,
     }
-    local definition = self.managedModule.prepareDefinition({}, {
+    local definition = self.moduleDefinition.prepareDefinition({}, {
         id = "CommitStagedStateObserver",
         name = "Commit stagedState Observer",
         storage = {
@@ -394,7 +409,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObse
     local config = {
         Enabled = true,
     }
-    local definition = self.managedModule.prepareDefinition({}, {
+    local definition = self.moduleDefinition.prepareDefinition({}, {
         id = "CommitStagedStateActionObserver",
         name = "Commit stagedState Action Observer",
         storage = {},
@@ -439,7 +454,7 @@ function TestMutation_DefinitionLifecycle:testCommitStagedStateAppliesMutationFr
         Enabled = true,
         Value = false,
     }
-    local definition = self.managedModule.prepareDefinition({}, {
+    local definition = self.moduleDefinition.prepareDefinition({}, {
         modpack = "test-pack-disabled-commit",
         id = "CommitStagedStateRawEnabled",
         name = "Commit stagedState Raw Enabled",
@@ -527,7 +542,7 @@ end
 function TestMutation_DefinitionLifecycle:testActivationSyncRevertsStablePatchWhenReloadedDisabled()
     local target = { Value = 1 }
     local pluginGuid = "test-disabled-reload-patch-runtime"
-    local def = self.managedModule.prepareDefinition({}, {
+    local def = self.moduleDefinition.prepareDefinition({}, {
         id = "DisabledReloadPatchRuntime",
         name = "Disabled Reload Patch Runtime",
         storage = {},
@@ -636,7 +651,7 @@ end
 function TestMutation_DefinitionLifecycle:testActivationSyncDisabledDoesNotBuildInactivePatch()
     local buildCalls = 0
     local pluginGuid = "test-inactive-patch-revert"
-    local def = self.managedModule.prepareDefinition({}, {
+    local def = self.moduleDefinition.prepareDefinition({}, {
         id = "InactivePatchRevert",
         name = "Inactive Patch Revert",
         storage = {},
@@ -838,7 +853,7 @@ function TestMutation_DefinitionLifecycle:testSetDebugModeCommitsWhenStagedMirro
     })
     local bound = self:bindMutation("test-stale-debug-mirror", def, nil, nil, store)
 
-    local ok, err = self.managedModuleLifecycle.setDebugMode(def, bound, nil, txn, nil, nil, true)
+    local ok, err = self:bindLifecycle(def, bound, txn).setDebugMode(true)
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(err)

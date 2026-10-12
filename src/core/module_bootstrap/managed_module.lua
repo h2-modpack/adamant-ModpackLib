@@ -1,219 +1,92 @@
 local deps = ...
 
 local logging = deps.logging
-local cache = deps.cache
 local shared = deps.shared
 local hookDeclarations = deps.hookDeclarations
-local moduleState = deps.moduleState
 local overlays = deps.overlays
 local mutation = deps.mutation
-local definition = deps.definition
 local moduleRegistry = deps.moduleRegistry
-local uiDraw = deps.uiDraw
-local controls = deps.controls
-local managedModule = {
-    prepareDefinition = definition.prepareDefinition,
-    prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
-    prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
-}
-local ReloadReasons = {
-    manual = true,
-    frameworkSnapshot = true,
-    hashReload = true,
-    driftRepair = true,
-}
-local uiContextModule = import('core/module_bootstrap/ui/context.lua', nil, {
-    uiDraw = uiDraw,
+local moduleActivation = deps.moduleActivation
+local managedModule = {}
+
+local moduleIdentity = import('core/module_bootstrap/identity.lua', nil, {
+    logging = logging,
 })
 local moduleLifecycle = import('core/module_bootstrap/managed_module_lifecycle.lua', nil, {
     logging = logging,
-    moduleState = moduleState,
+    moduleState = deps.moduleState,
 })
-local moduleActivation = import('core/module_bootstrap/managed_module_activation.lua', nil, {
-    logging = logging,
-    shared = shared,
-    hooks = deps.hooks,
-    overlays = overlays,
-    fallbackUi = deps.fallbackUi,
-    coordinator = deps.coordinator,
-    moduleRegistry = moduleRegistry,
+local moduleContexts = import('core/module_bootstrap/module_contexts.lua', nil, {
+    moduleState = deps.moduleState,
+    cache = deps.cache,
+    sharedRefs = shared.refs,
+    controlRefs = deps.controlRefs,
+    uiContext = import('core/module_bootstrap/ui/context.lua', nil, {
+        uiDraw = deps.uiDraw,
+    }),
 })
 
-function managedModule.getRecord(module)
-    return moduleRegistry.getRecord(module)
-end
-
-function managedModule.getLiveModule(pluginGuid)
-    return moduleRegistry.getLiveModule(pluginGuid)
-end
-
-local KnownModuleCreateOpts = {
-    definition = true,
-    pluginGuid = true,
-    state = true,
-    mutationBundle = true,
-    hookDeclarations = true,
-    sharedDataDeclarations = true,
-    sharedEventRegistrations = true,
-    overlayDeclarations = true,
-    fallbackUiRequested = true,
-    onActivate = true,
-    onCommit = true,
-    onReload = true,
-    drawTab = true,
-    drawQuickContent = true,
-    controlCatalog = true,
-}
-
-local function validateKnownOpts(opts, context)
-    for key in pairs(opts) do
-        if not KnownModuleCreateOpts[key] then
-            logging.violate("module.unknown_opt", "%s: unknown option '%s'", context, tostring(key))
-        end
-    end
-end
-
-local function createMutationBundle()
-    return {
-        patchMutation = nil,
-    }
-end
-
-local function validateLifecycleObservers(opts)
-    if opts.onActivate ~= nil and type(opts.onActivate) ~= "function" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: onActivate must be a function")
-    end
-    if opts.onCommit ~= nil and type(opts.onCommit) ~= "function" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: onCommit must be a function")
-    end
-    if opts.onReload ~= nil and type(opts.onReload) ~= "function" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: onReload must be a function")
-    end
-    return opts.onCommit, opts.onReload
-end
-
-local function createRuntimeContext(store, status)
-    return {
-        data = store,
-        status = status,
-        cache = store and store.cache or nil,
-        shared = store and store.shared or nil,
-        controls = store and store.controls or nil,
-    }
-end
-
+---Build one managed module instance from Lib-built inputs. The author contact point is
+---`lib.createModule(...)` and the declaration facade; this only asserts the prepared-definition
+---and drawTab invariants.
+---@param opts AdamantModpackLib.ManagedModuleCreateOpts
+---@return AdamantModpackLib.ManagedModule module
+---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext } contexts
 function managedModule.create(opts)
-    if type(opts) ~= "table" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: opts must be a table")
-    end
-    validateKnownOpts(opts, "managedModule.create")
     local def = opts.definition
-    local pluginGuid = opts.pluginGuid
-    local state = opts.state
     if type(def) ~= "table" or def._preparedDefinition ~= true then
         logging.violate("module.invalid_create_opts", "managedModule.create: prepared definition is required")
     end
-    if type(pluginGuid) ~= "string" or pluginGuid == "" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: pluginGuid is required")
-    end
-    if type(state) ~= "table" or type(state.txn) ~= "table" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: module state is required")
-    end
-    local persistentState = state.persistent
-    local stagedState = state.staged
-    local txn = state.txn
-    local lanes = state.lanes
-
     local drawTab = opts.drawTab
+    if type(drawTab) ~= "function" then
+        logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required")
+    end
     local drawQuickContent = opts.drawQuickContent
+    local pluginGuid = opts.pluginGuid
+    local state = opts.state
+    local persistentState = state.persistent
     local actionBuffer = state.actionBuffer
-    local mutationBundle = opts.mutationBundle or createMutationBundle()
     local sharedDataDeclarations = opts.sharedDataDeclarations or shared.dataDeclarations.createDeclarations()
-    local commitObserver, reloadObserver = validateLifecycleObservers(opts)
-    local store
-    local runtimeContext
-    local host
-    local record
-    local boundMutation
     local controlCatalog = opts.controlCatalog or {
         instances = {},
         order = {},
     }
+    local record
 
-    if type(drawTab) ~= "function" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required")
-    end
-    local module = {}
+    local module = moduleIdentity.create(def, pluginGuid, function()
+        return persistentState.read("DebugMode") == true
+    end)
 
-    local function notifyCommit(commit)
-        local observerOk = true
-        local observerResult = nil
-        if commitObserver ~= nil then
-            observerOk, observerResult = pcall(commitObserver, host, runtimeContext, commit)
-        end
-
-        local overlayOk, overlayErr = pcall(overlays.dispatchCommit, module, commit)
-        if not observerOk then
-            if not overlayOk then
-                error(tostring(observerResult) .. " (overlay dispatch failed: " .. tostring(overlayErr) .. ")", 0)
-            end
-            error(observerResult, 0)
-        end
-        if not overlayOk then
-            error(overlayErr, 0)
-        end
-        return observerResult
+    function module.isEnabled()
+        return persistentState.read("Enabled") == true
     end
 
-    local function reloadContext(reason, receipt)
-        receipt = receipt or {}
-        return {
-            reason = function()
-                return reason
-            end,
-            hadCommittedChanges = function()
-                return receipt.hadCommittedChanges == true
-            end,
-            hadSettingChanges = function()
-                return receipt.hadSettingChanges == true
-            end,
-            hadStatusChanges = function()
-                return receipt.hadStatusChanges == true
-            end,
-        }
+    function module.getStorage()
+        return def.storage
     end
 
-    local function notifyReload(reason, receipt)
-        local context = reloadContext(reason, receipt)
-        if reloadObserver == nil then
-            return context
-        end
-        local ok, result = pcall(reloadObserver, host, runtimeContext, context)
-        if not ok then
-            logging.violate("lifecycle.on_reload_failed", "%s: onReload failed: %s",
-                tostring(def.name or def.id or "module"), tostring(result))
-        elseif result == false then
-            logging.violate("lifecycle.on_reload_false", "%s: onReload returned false",
-                tostring(def.name or def.id or "module"))
-        end
-        return context
+    function module.read(alias)
+        return persistentState.read(alias)
     end
 
-    local function normalizeReloadReason(reason)
-        reason = reason or "manual"
-        if ReloadReasons[reason] ~= true then
-            logging.violate(
-                "lifecycle.invalid_reload_reason",
-                "module.reloadFromConfig: unknown reason '%s'",
-                tostring(reason)
-            )
-        end
-        return reason
+    function module.stage(alias, value)
+        state.staged.write(alias, value)
+        return true
     end
 
-    local function executeActionsDuringCommit(actionSnapshot)
-        return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
+    function module.activate()
+        return moduleActivation.activate(module)
     end
+
+    local host = {
+        getOwnerId = module.getOwnerId,
+        getModuleId = module.getModuleId,
+        getPackId = module.getPackId,
+        getMeta = module.getMeta,
+        isEnabled = module.isEnabled,
+        log = module.log,
+        logIf = module.logIf,
+    }
 
     -- Runtime-lane emit: immediate delivery, gated on activation and the committed Enabled state.
     local function emitSharedEvent(id, eventName, payload)
@@ -232,195 +105,47 @@ function managedModule.create(opts)
         return actionBuffer.emitShared(id, eventName, payload)
     end
 
-    local function flushSharedEventsDuringCommit()
-        return actionBuffer.flushPendingSharedEvents(emitSharedEvent)
-    end
-
-    local function requireActivated(methodName)
-        if record.activated ~= true then
-            logging.violate("managed_module.not_activated", "module.%s requires module.activate() before it can run", methodName)
-        end
-    end
-
-    function module.getOwnerId()
-        return pluginGuid
-    end
-
-    function module.getModuleId()
-        return def.id
-    end
-
-    function module.getPackId()
-        return def.modpack
-    end
-
-    function module.getMeta()
-        return {
-            name = def.name,
-            shortName = def.shortName,
-            tooltip = def.tooltip,
-            hash = def.hash,
-        }
-    end
+    local runtime, uiContext = moduleContexts.create({
+        state = state,
+        ownerId = pluginGuid,
+        cacheDeclarations = def.cache,
+        sharedDeclarations = sharedDataDeclarations,
+        emitShared = emitSharedEvent,
+        stageShared = stageSharedEvent,
+        controlCatalog = controlCatalog,
+        host = host,
+    })
+    local boundMutation = mutation.bind(pluginGuid, opts.mutationBundle or { patchMutation = nil }, host, runtime)
 
     function module.affectsRunData()
         return boundMutation.affectsRunData()
     end
 
-    function module.getStorage()
-        return def.storage
-    end
-
-    function module.read(alias)
-        return persistentState.read(alias)
-    end
-
-    function module.writeAndFlush(alias, value)
-        requireActivated("writeAndFlush")
-        stagedState.write(alias, value)
-        local ok, err = moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-        return ok, err
-    end
-
-    function module.stage(alias, value)
-        stagedState.write(alias, value)
-        return true
-    end
-
-    function module.flush()
-        requireActivated("flush")
-        if not txn.hasPending() then
-            return true
-        end
-        return moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-    end
-
-    function module.reloadFromConfig(reason)
-        requireActivated("reloadFromConfig")
-        reason = normalizeReloadReason(reason)
-        return notifyReload(reason, txn.reload())
-    end
-
-    function module.resync()
-        requireActivated("resync")
-        local mismatches, receipt = moduleLifecycle.resyncStagedState(def, txn)
-        if receipt ~= nil then
-            return mismatches, notifyReload("driftRepair", receipt)
-        end
-        return mismatches, nil
-    end
-
-    function module.resetAll(resetOpts)
-        requireActivated("resetAll")
-        return txn.queueResetAll(resetOpts)
-    end
-
-    function module.commitIfDirty()
-        requireActivated("commitIfDirty")
-        if not txn.hasPending() then
-            return true, nil, false
-        end
-        local ok, err = moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-        return ok, err, ok == true
-    end
-
-    function module.isEnabled()
-        return persistentState.read("Enabled") == true
-    end
-
-    function module.setEnabled(enabled)
-        requireActivated("setEnabled")
-        return moduleLifecycle.setEnabled(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
-    end
-
-    function module.setDebugMode(enabled)
-        requireActivated("setDebugMode")
-        return moduleLifecycle.setDebugMode(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
-    end
-
-    function module.suspendForPackDisable()
-        requireActivated("suspendForPackDisable")
-        return moduleLifecycle.suspendForPackDisable(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-    end
-
-    function module.ensureSuspendedForPackDisable()
-        requireActivated("ensureSuspendedForPackDisable")
-        return moduleLifecycle.ensureSuspendedForPackDisable(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-    end
-
-    function module.restoreForPackEnable()
-        requireActivated("restoreForPackEnable")
-        return moduleLifecycle.restoreForPackEnable(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit)
-    end
-
-    function module.rollbackPackTransition(receipt)
-        requireActivated("rollbackPackTransition")
-        return moduleLifecycle.rollbackPackTransition(def, boundMutation, notifyCommit, txn,
-            executeActionsDuringCommit, flushSharedEventsDuringCommit, receipt)
-    end
-
-    function module.restorePackTransitionState(receipt)
-        requireActivated("restorePackTransitionState")
-        return moduleLifecycle.restorePackTransitionState(txn, receipt)
-    end
-
-    local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
-
-    function module.log(fmt, ...)
-        logging.printWithPrefix(logPrefix, fmt, ...)
-    end
-
-    function module.logIf(fmt, ...)
-        logging.printWithPrefixIf(persistentState.read("DebugMode") == true, logPrefix, fmt, ...)
-    end
-
-    host = {
-        getOwnerId = module.getOwnerId,
-        getModuleId = module.getModuleId,
-        getPackId = module.getPackId,
-        getMeta = module.getMeta,
-        isEnabled = module.isEnabled,
-        log = module.log,
-        logIf = module.logIf,
-    }
-
-    function module.applyMutation()
-        requireActivated("applyMutation")
-        return boundMutation.apply()
-    end
-
-    function module.revertMutation()
-        requireActivated("revertMutation")
-        return boundMutation.revert()
-    end
-
-    function module.activate()
-        return managedModule.activate(module)
-    end
-
-    store = lanes.runtimeData
-    store.cache = cache.data.create({
-        declarations = def.cache,
-        ownerId = pluginGuid,
-        source = "store.cache",
+    local lifecycleOps = moduleLifecycle.bind({
+        def = def,
+        txn = state.txn,
+        mutation = boundMutation,
+        notifyCommit = moduleLifecycle.createCommitNotifier({
+            onCommit = opts.onCommit,
+            host = host,
+            runtime = runtime,
+            dispatchOverlayCommit = function(commit)
+                return overlays.dispatchCommit(module, commit)
+            end,
+        }),
+        notifyReload = moduleLifecycle.createReloadNotifier({
+            def = def,
+            onReload = opts.onReload,
+            host = host,
+            runtime = runtime,
+        }),
+        runActions = function(actionSnapshot)
+            return actionBuffer.executeCommittedActions(host, runtime, actionSnapshot)
+        end,
+        flushSharedEvents = function()
+            return actionBuffer.flushPendingSharedEvents(emitSharedEvent)
+        end,
     })
-    store.shared = shared.refs.create({
-        ownerId = pluginGuid,
-        declarations = sharedDataDeclarations,
-        emit = emitSharedEvent,
-        source = "store.shared",
-    })
-    store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
-    runtimeContext = createRuntimeContext(store, lanes.runtimeStatus)
-    boundMutation = mutation.bind(pluginGuid, mutationBundle, host, runtimeContext)
 
     -- Activation state plus the explicit slices activation hands each capability install.
     -- Capabilities never read this record.
@@ -428,7 +153,7 @@ function managedModule.create(opts)
         definition = def,
         pluginGuid = pluginGuid,
         host = host,
-        runtime = runtimeContext,
+        runtime = runtime,
         onActivate = opts.onActivate,
         capabilityInputs = {
             hookDeclarations = opts.hookDeclarations or hookDeclarations.create(),
@@ -436,7 +161,11 @@ function managedModule.create(opts)
                 data = sharedDataDeclarations,
                 events = opts.sharedEventRegistrations,
             },
-            overlayDeclarations = opts.overlayDeclarations,
+            overlays = {
+                declarations = opts.overlayDeclarations,
+                host = host,
+                runtime = runtime,
+            },
             mutation = boundMutation,
             fallbackUiRequested = opts.fallbackUiRequested == true,
         },
@@ -445,57 +174,44 @@ function managedModule.create(opts)
     }
     moduleRegistry.setRecord(module, record)
 
-    local uiShared = shared.refs.create({
-        ownerId = pluginGuid,
-        declarations = sharedDataDeclarations,
-        emit = stageSharedEvent,
-        source = "state.shared",
-    })
-    lanes.uiData.shared = uiShared
-    local uiContext = uiContextModule.create({
-        lanes = lanes,
-        shared = uiShared,
-        host = host,
-        controls = controls.refs.createUi(stagedState, controlCatalog),
-        resetAll = txn.queueResetAll,
-    })
-
-    local function runDrawLifecycle(drawCallback)
-        uiContext.run(drawCallback)
-        return module.commitIfDirty()
+    -- Side-effecting module methods are gated on the instance's activation state.
+    local function defineActivated(methodName, fn)
+        module[methodName] = function(...)
+            if record.activated ~= true then
+                logging.violate("managed_module.not_activated",
+                    "module.%s requires module.activate() before it can run", methodName)
+            end
+            return fn(...)
+        end
     end
 
-    function module.drawTab()
-        requireActivated("drawTab")
+    for methodName, fn in pairs(lifecycleOps) do
+        defineActivated(methodName, fn)
+    end
+    defineActivated("applyMutation", boundMutation.apply)
+    defineActivated("revertMutation", boundMutation.revert)
+    defineActivated("drawTab", function()
         return uiContext.run(drawTab)
-    end
-
-    function module.drawTabAndCommit()
-        requireActivated("drawTabAndCommit")
-        return runDrawLifecycle(drawTab)
-    end
-
+    end)
+    -- Draw-and-commit reads `module.commitIfDirty` late so the module table stays the method surface.
+    defineActivated("drawTabAndCommit", function()
+        uiContext.run(drawTab)
+        return module.commitIfDirty()
+    end)
     if type(drawQuickContent) == "function" then
-        function module.drawQuickContent()
-            requireActivated("drawQuickContent")
+        defineActivated("drawQuickContent", function()
             return uiContext.run(drawQuickContent)
-        end
-
-        function module.drawQuickContentAndCommit()
-            requireActivated("drawQuickContentAndCommit")
-            return runDrawLifecycle(drawQuickContent)
-        end
+        end)
+        defineActivated("drawQuickContentAndCommit", function()
+            uiContext.run(drawQuickContent)
+            return module.commitIfDirty()
+        end)
     end
 
-    return module, store
-end
-
-function managedModule.activateOrThrow(module)
-    return moduleActivation.activateOrThrow(module)
-end
-
-function managedModule.activate(module)
-    return moduleActivation.activate(module)
+    return module, {
+        host = host,
+        runtime = runtime,
+    }
 end
 
 return managedModule

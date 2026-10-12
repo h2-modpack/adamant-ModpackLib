@@ -34,12 +34,12 @@ local function adaptHookCallback(keyOrCallback, maybeCallback, buildCallback)
     return keyOrCallback, buildCallback(maybeCallback)
 end
 
-local function requireActiveRecord(lifecycle, context)
-    local record = lifecycle.getActiveRecord()
-    if not record then
+local function requireActiveContexts(lifecycle, context)
+    local active = lifecycle.getActiveContexts()
+    if not active then
         logging.violate("managed_module.not_activated", "%s requires module.activate() before it can run", context)
     end
-    return record
+    return active
 end
 
 local function rejectPublicDataModeField(context, node)
@@ -167,8 +167,8 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
             local keyOrAdaptedHandler, adaptedHandler = adaptHookCallback(keyOrHandler, maybeHandler,
                 function(handler)
                     return function(base, ...)
-                        local record = requireActiveRecord(lifecycle, "module.hooks.wrap callback")
-                        return handler(record.host, record.runtime, base, ...)
+                        local active = requireActiveContexts(lifecycle, "module.hooks.wrap callback")
+                        return handler(active.host, active.runtime, base, ...)
                     end
                 end)
             return hookDeclarations.declareWrap(
@@ -186,8 +186,8 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 maybeReplacement,
                 function(replacement)
                     return function(...)
-                        local record = requireActiveRecord(lifecycle, "module.hooks.override callback")
-                        return replacement(record.host, record.runtime, ...)
+                        local active = requireActiveContexts(lifecycle, "module.hooks.override callback")
+                        return replacement(active.host, active.runtime, ...)
                     end
                 end)
             return hookDeclarations.declareOverride(
@@ -203,9 +203,9 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
             local keyOrAdaptedContext, adaptedContext = adaptHookCallback(keyOrContext, maybeContext,
                 function(context)
                     return function(...)
-                        local record = requireActiveRecord(lifecycle, "module.hooks.contextWrap callback")
+                        local active = requireActiveContexts(lifecycle, "module.hooks.contextWrap callback")
                         local contextSurface, closeContextSurface = hookContext.createSurface()
-                        local results = copyArgs(pcall(context, record.host, record.runtime, contextSurface, ...))
+                        local results = copyArgs(pcall(context, active.host, active.runtime, contextSurface, ...))
                         closeContextSurface()
                         if not results[1] then
                             error(results[2], 0)
@@ -230,8 +230,8 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 return sharedDataDeclarations.stageOwnerDeclaration(
                     declarations.sharedDataDeclarations,
                     function()
-                        local record = lifecycle.getActiveRecord()
-                        return record and record.host or nil
+                        local active = lifecycle.getActiveContexts()
+                        return active and active.host or nil
                     end,
                     ...)
             end,
@@ -240,8 +240,8 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 return sharedDataDeclarations.stageReaderDeclaration(
                     declarations.sharedDataDeclarations,
                     function()
-                        local record = lifecycle.getActiveRecord()
-                        return record and record.host or nil
+                        local active = lifecycle.getActiveContexts()
+                        return active and active.host or nil
                     end,
                     ...)
             end,
@@ -252,14 +252,14 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
                 logging.violate("module.invalid_create_opts", "module.shared.listen callback must be a function")
             end
             local function wrappedCallback(payload)
-                local record = requireActiveRecord(lifecycle, "module.shared.listen callback")
-                return callback(record.host, record.runtime, payload)
+                local active = requireActiveContexts(lifecycle, "module.shared.listen callback")
+                return callback(active.host, active.runtime, payload)
             end
             return sharedRegistrations.stageListener(
                 declarations.sharedEventRegistrations,
                 function()
-                    local record = lifecycle.getActiveRecord()
-                    return record and record.host or nil
+                    local active = lifecycle.getActiveContexts()
+                    return active and active.host or nil
                 end,
                 id,
                 eventName,

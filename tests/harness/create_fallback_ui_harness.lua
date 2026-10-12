@@ -106,6 +106,7 @@ local function createFallbackUiHarness(opts)
         fallbackUi = base.fallbackUi,
         overlays = base.overlays,
         managedModule = base.managedModule,
+        moduleDefinition = base.moduleDefinition,
         moduleState = base.moduleState,
         registry = base.registry,
         moduleRegistry = base.moduleRegistry,
@@ -144,7 +145,7 @@ local function createFallbackUiHarness(opts)
 
     function h:createLibModule(pluginGuid, moduleOpts)
         moduleOpts = moduleOpts or {}
-        local definition = self.managedModule.prepareDefinition({}, {
+        local definition = self.moduleDefinition.prepareDefinition({}, {
             modpack = moduleOpts.modpack or "fallback-pack",
             id = moduleOpts.id or "FallbackUiTest",
             name = moduleOpts.name or "Fallback UI Test",
@@ -172,7 +173,7 @@ local function createFallbackUiHarness(opts)
         end
         local ok, err = host.activate()
         assert(ok, tostring(err))
-        return self.managedModule.getLiveModule(pluginGuid), host
+        return self.moduleRegistry.getLiveModule(pluginGuid), host
     end
 
     function h:getFallbackUiRuntime(pluginGuid)

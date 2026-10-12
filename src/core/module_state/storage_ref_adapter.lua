@@ -195,9 +195,10 @@ end
 
 ---Build one author-facing storage lane over a state-owned root.
 ---The root owns alias/mode validation; the lane owns private-alias rejection,
----method-syntax wrapping, and read-only projection.
+---method-syntax wrapping, and read-only projection. `fields` are attached to the
+---lane at construction (for example `cache`/`shared`/`controls` on `runtime.data`).
 ---@param opts { get: fun(alias: string, context: string): table?, source: string, writable?: boolean,
----    resetRoot?: fun(alias: string): boolean }
+---    resetRoot?: fun(alias: string): boolean, fields?: table<string, any> }
 ---@return table lane
 function storageRefAdapter.createLane(opts)
     local rootGet = opts.get
@@ -207,6 +208,9 @@ function storageRefAdapter.createLane(opts)
     local resetRoot = opts.resetRoot
     local refs = {}
     local lane = {}
+    for key, value in pairs(opts.fields or {}) do
+        lane[key] = value
+    end
 
     function lane.get(alias)
         rejectPrivateAlias(getContext, alias)

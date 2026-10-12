@@ -6,11 +6,23 @@ helpers.createLibHarness = createLibHarness
 function helpers.prepareDefinition(harness, definition)
     definition.id = definition.id or "StagedStateTest"
     definition.name = definition.name or "stagedState Test"
-    return harness.managedModule.prepareDefinition({}, definition)
+    return harness.moduleDefinition.prepareDefinition({}, definition)
 end
 
 function helpers.createModuleState(harness, config, definition)
     return harness:createModuleState(config, definition)
+end
+
+local lanesByState = setmetatable({}, { __mode = "k" })
+
+-- Author lanes for a bare module state (no cache/shared/controls attachments), built once per state.
+function helpers.lanesOf(harness, state)
+    local lanes = lanesByState[state]
+    if lanes == nil then
+        lanes = harness.moduleState.createLanes(state)
+        lanesByState[state] = lanes
+    end
+    return lanes
 end
 
 function helpers.getManagedModuleLifecycle(harness)

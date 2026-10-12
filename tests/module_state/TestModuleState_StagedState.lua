@@ -5,6 +5,7 @@ local createLibHarness = helpers.createLibHarness
 local prepareDefinition = helpers.prepareDefinition
 local createModuleState = helpers.createModuleState
 local getManagedModuleLifecycle = helpers.getManagedModuleLifecycle
+local lanesOf = helpers.lanesOf
 local withLoggingPolicy = helpers.withLoggingPolicy
 local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
@@ -97,7 +98,11 @@ function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
     local _, stagedState, moduleState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     config.Packed = 5
-    local mismatches = getManagedModuleLifecycle(self.harness).resyncStagedState({ name = "PackedStagedState" }, moduleState.txn)
+    local mismatches = getManagedModuleLifecycle(self.harness).bind({
+        def = { name = "PackedStagedState" },
+        txn = moduleState.txn,
+        notifyReload = function() end,
+    }).resync()
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })
@@ -129,11 +134,11 @@ end
 function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState()
     local _, stagedState, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
 
-    lu.assertFalse(moduleState.lanes.uiStatus.read("RuntimeFlag"))
+    lu.assertFalse(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
     lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
-    lu.assertTrue(moduleState.lanes.uiStatus.read("RuntimeFlag"))
-    lu.assertTrue(moduleState.lanes.uiStatus.read("RuntimeFlag"))
-    lu.assertTrue(moduleState.lanes.uiStatus.get("RuntimeFlag"):read())
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.get("RuntimeFlag"):read())
     lu.assertErrorMsgContains("status", function()
         stagedState.read("RuntimeFlag")
     end)
@@ -146,9 +151,9 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     lu.assertErrorMsgContains("status", function()
         stagedState.write("RuntimeBit", true)
     end)
-    lu.assertTrue(moduleState.lanes.uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
 
-    local runtimeRows = moduleState.lanes.uiStatus.get("RuntimeRows")
+    local runtimeRows = lanesOf(self.harness, moduleState).uiStatus.get("RuntimeRows")
     lu.assertEquals(runtimeRows:count(), 1)
     lu.assertFalse(runtimeRows:read(1, "Enabled"))
     lu.assertNil(runtimeRows.write)
@@ -157,8 +162,8 @@ end
 
 function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsSemantically()
     local _, _, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
-    local state = moduleState.lanes.uiData
-    local status = moduleState.lanes.uiStatus
+    local state = lanesOf(self.harness, moduleState).uiData
+    local status = lanesOf(self.harness, moduleState).uiStatus
     moduleState.status.write("RuntimeFlag", true)
 
     inDraw(self.harness, function()
@@ -181,8 +186,8 @@ end
 
 function TestModuleState_StagedState:testStatusSurfacesUseStatusDiagnostics()
     local _, _, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
-    local runtimeStatus = moduleState.lanes.runtimeStatus
-    local uiStatus = moduleState.lanes.uiStatus
+    local runtimeStatus = lanesOf(self.harness, moduleState).runtimeStatus
+    local uiStatus = lanesOf(self.harness, moduleState).uiStatus
 
     lu.assertErrorMsgContains("runtime.status.get: unknown status alias 'MissingStatus'", function()
         runtimeStatus.read("MissingStatus")
@@ -342,7 +347,7 @@ function TestModuleState_StagedState:testTableHandleReadsWritesAndCreatesCellFie
 
     moduleState.txn.flushWithoutCommit()
     local storeTiers = store.table("Tiers")
-    local publicStore = moduleState.lanes.runtimeData
+    local publicStore = lanesOf(self.harness, moduleState).runtimeData
     local publicStoreTiers = publicStore.get("Tiers")
     local publicStoreChoiceMode = publicStoreTiers:get(2, "ChoiceMode")
 
@@ -699,12 +704,12 @@ function TestModuleState_StagedState:testStagedViewAndLanesLackTransactionPowers
     for _, key in ipairs(txnKeys) do
         lu.assertNil(stagedState[key], "staged view exposes " .. key)
         lu.assertNil(persistentState[key], "persistent state exposes " .. key)
-        lu.assertNil(moduleState.lanes.uiData[key], "ui.data lane exposes " .. key)
-        lu.assertNil(moduleState.lanes.runtimeData[key], "runtime.data lane exposes " .. key)
+        lu.assertNil(lanesOf(self.harness, moduleState).uiData[key], "ui.data lane exposes " .. key)
+        lu.assertNil(lanesOf(self.harness, moduleState).runtimeData[key], "runtime.data lane exposes " .. key)
     end
-    lu.assertNil(moduleState.lanes.uiStatus.write)
-    lu.assertNil(moduleState.lanes.uiStatus.reset)
-    lu.assertNil(moduleState.lanes.runtimeData.write)
+    lu.assertNil(lanesOf(self.harness, moduleState).uiStatus.write)
+    lu.assertNil(lanesOf(self.harness, moduleState).uiStatus.reset)
+    lu.assertNil(lanesOf(self.harness, moduleState).runtimeData.write)
 end
 
 function TestModuleState_StagedState:testQueuedStatusResetAppliesOnlyDuringCommit()
