@@ -238,6 +238,10 @@ return {
         severity = "error",
         description = "A configuration reload used an unknown lifecycle reason.",
     },
+    ["lifecycle.invalid_reset_opts"] = {
+        severity = "error",
+        description = "resetAll accepts only nil or { exclude = { [alias] = true } } options.",
+    },
     ["lifecycle.staged_state_drift_detected"] = {
         severity = "warn",
         description = "Staged UI state drifted from persisted config and was reloaded.",
@@ -341,14 +345,6 @@ return {
     ["storage.private_alias"] = {
         severity = "error",
         description = "Private Lib storage aliases are not accessible through author-facing storage refs.",
-    },
-    ["storage.invalid_field_owner"] = {
-        severity = "error",
-        description = "Storage fields require a storage owner exposing read and schema access.",
-    },
-    ["storage.unknown_field_alias"] = {
-        severity = "error",
-        description = "Storage fields can only target prepared storage aliases.",
     },
     ["storage.invalid_field_args"] = {
         severity = "error",

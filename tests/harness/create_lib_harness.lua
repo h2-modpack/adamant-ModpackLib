@@ -12,7 +12,13 @@ local function createLibHarness(opts)
     local nativeConfigRoot = opts.nativeConfigRoot
         or ("/tmp/adamant-modpacklib-tests-" .. tostring(os.clock()):gsub("[^%d]", ""))
     local imports = {}
-    local importOverrides = opts.importOverrides or {}
+    local importOverrides = {}
+    for path, override in pairs(opts.importOverrides or {}) do
+        importOverrides[path] = override
+    end
+    if opts.gameDeps ~= nil then
+        importOverrides["core/game_deps/game_deps.lua"] = opts.gameDeps
+    end
     local callbacks = opts.callbacks or fakeEngine.createCallbacks()
     local env = fakeEngine.createBaseEnv({
         callbacks = callbacks,
@@ -49,7 +55,6 @@ local function createLibHarness(opts)
         chalk = opts.chalk or rom.mods['SGG_Modding-Chalk'],
         plugin = plugin,
         modutil = rom.mods['SGG_Modding-ModUtil'],
-        gameDeps = opts.gameDeps,
     }
 
     local core = env.import('core/init.lua', nil, {
@@ -78,7 +83,7 @@ local function createLibHarness(opts)
         logging = imports["core/logging/logging.lua"],
         values = imports["core/helpers/values.lua"],
         receipt = imports["core/helpers/receipt.lua"],
-        gameDeps = externals.gameDeps or imports["core/game_deps/game_deps.lua"],
+        gameDeps = imports["core/game_deps/game_deps.lua"],
         cacheBundle = imports["core/cache/00_init.lua"],
         storage = imports["core/storage/00_init.lua"],
         registry = imports["core/lib_bootstrap/registry.lua"],
@@ -106,7 +111,6 @@ local function createLibHarness(opts)
         moduleBundle = imports["core/module_bootstrap/module.lua"],
         fallbackUi = imports["core/fallback/fallback_ui.lua"],
     }
-    harness.externals.gameDeps = harness.gameDeps
     function harness:writeNativeConfig(pluginGuid, values)
         nativeConfigFixture.write(self.nativeConfigRoot, pluginGuid, values)
     end

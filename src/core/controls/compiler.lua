@@ -1,20 +1,14 @@
 local deps = ...
 
 local logging = deps.logging
+local identifiers = deps.identifiers
 local values = deps.values
 
 local compiler = {}
 
-local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
-
-local function isStableIdentifier(value)
-    return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
-end
-
 local function requireStableIdentifier(context, value)
-    if not isStableIdentifier(value) then
-        logging.violate("controls.invalid_field", "%s '%s' %s", context, tostring(value), StableIdentifierDescription)
+    if not identifiers.isStable(value) then
+        logging.violate("controls.invalid_field", "%s '%s' %s", context, tostring(value), identifiers.STABLE_DESCRIPTION)
     end
 end
 

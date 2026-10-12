@@ -2,14 +2,9 @@ local deps = ...
 
 local logging = deps.logging
 local storage = deps.storage
+local requireMethodSelf = deps.requireMethodSelf
 
 local storageRefAdapter = {}
-
-local function requireMethodSelf(context, self, expected)
-    if self ~= expected then
-        logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
-    end
-end
 
 local function rejectPrivateAlias(context, alias)
     if storage.isPrivateAlias(alias) then

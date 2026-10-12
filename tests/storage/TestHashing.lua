@@ -58,8 +58,6 @@ function TestHashing:testHashCodecRoundTripsSupportedStorageTypes()
     lu.assertEquals(self.storage.fromHash(aliases.Count, "99"), 7)
     lu.assertEquals(self.storage.toHash(aliases.Name, "Athena"), "Athena")
     lu.assertEquals(self.storage.fromHash(aliases.Name, "Apollo"), "Apollo")
-    lu.assertEquals(self.storage.toHash({ type = "unknown" }, "x"), nil)
-    lu.assertEquals(self.storage.fromHash({ type = "unknown" }, "x"), nil)
 end
 
 function TestHashing:testPackedAliasesResolveFromPreparedNode()

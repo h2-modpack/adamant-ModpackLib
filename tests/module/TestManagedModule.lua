@@ -1674,6 +1674,44 @@ function TestManagedModule:testActivationRejectsReentrantActivateCalls()
     lu.assertStrContains(self.h.warnings[1], "managed_module.activation_in_progress")
 end
 
+function TestManagedModule:testResetAllRejectsInvalidOptsAtBoundary()
+    local uiResult = nil
+    local definition = self.h.moduleDefinition.prepareDefinition({}, {
+        id = "ResetOpts",
+        name = "Reset Opts",
+        storage = {
+            { type = "bool", alias = "EnabledFlag", default = false },
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
+        },
+    })
+    local _, stagedState, moduleState = self.h:createModuleState({
+        EnabledFlag = true,
+    }, definition)
+    createActivatedManagedModule(self.h, "test-reset-opts", {
+        definition = definition,
+        state = moduleState,
+        drawTab = function(_, _, _, ui)
+            uiResult = { pcall(ui.resetAll, { exclude = "EnabledFlag" }) }
+        end,
+    })
+    local host = self.h.moduleRegistry.getLiveModule("test-reset-opts")
+    moduleState.status.write("RuntimeFlag", true)
+
+    lu.assertErrorMsgContains("lifecycle.invalid_reset_opts", function()
+        host.resetAll("EnabledFlag")
+    end)
+    lu.assertErrorMsgContains("lifecycle.invalid_reset_opts", function()
+        host.resetAll({ exclude = true })
+    end)
+    host.drawTab()
+    lu.assertFalse(uiResult[1])
+    lu.assertStrContains(tostring(uiResult[2]), "lifecycle.invalid_reset_opts")
+
+    lu.assertTrue(stagedState.read("EnabledFlag"))
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+    lu.assertFalse(moduleState.txn.hasPending())
+end
+
 function TestManagedModule:testFailedCommitDiscardsQueuedStatusReset()
     local failPatch = false
     local definition = self.h.moduleDefinition.prepareDefinition({}, {

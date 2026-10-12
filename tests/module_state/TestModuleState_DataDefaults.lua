@@ -164,17 +164,70 @@ function TestModuleState_DataDefaults:testWarnsWhenNativeBackendPathCannotResolv
         rom = {},
     })
 
+    local backend
     local lines = capturePrints(self.harness.env, function()
-        local backend = backendFactory.create({
+        backend = backendFactory.create({
             pluginGuid = "test-missing-native-path",
         })
-        lu.assertNil(backend)
     end)
 
     lu.assertEquals(#lines, 1)
     lu.assertStrContains(lines[1], "[lib] persistent_backend.unavailable:")
     lu.assertStrContains(lines[1], "test-missing-native-path")
     lu.assertStrContains(lines[1], "will not persist")
+
+    -- Memory-only backend: same interface, values held for the session only.
+    lu.assertNil(backend.read("config", "MyFlag"))
+    lu.assertTrue(backend.write("config", "MyFlag", true))
+    backend.reload()
+    lu.assertTrue(backend.read("config", "MyFlag"))
+end
+
+function TestModuleState_DataDefaults:testModuleStateWithoutConfigPathKeepsValuesInMemory()
+    local definition = self.harness.moduleDefinition.prepareDefinition({}, {
+        id = "MemoryOnly",
+        name = "Memory Only",
+        storage = {
+            { type = "bool", alias = "MyFlag", default = false },
+            { type = "int", alias = "MyCount", default = 1, min = 0, max = 10 },
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                maxRows = 5,
+                row = {
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    })
+
+    local state
+    local lines = capturePrints(self.harness.env, function()
+        state = self.harness.moduleState.create(definition, {})
+    end)
+    lu.assertEquals(#lines, 1)
+    lu.assertStrContains(lines[1], "[lib] persistent_backend.unavailable:")
+
+    lu.assertFalse(state.staged.read("MyFlag"))
+    lu.assertEquals(state.staged.table("Rows"):count(), 1)
+    lu.assertEquals(state.staged.table("Rows"):read(1, "Limit"), 2)
+
+    state.staged.write("MyFlag", true)
+    state.staged.write("MyCount", 7)
+    lu.assertTrue(state.staged.table("Rows"):append({ Limit = 4 }))
+    state.txn.flushWithoutCommit()
+
+    lu.assertTrue(state.persistent.read("MyFlag"))
+    lu.assertEquals(state.persistent.read("MyCount"), 7)
+    lu.assertEquals(state.persistent.table("Rows"):count(), 2)
+    lu.assertEquals(state.persistent.table("Rows"):read(2, "Limit"), 4)
+
+    -- Reloading the memory backend keeps its values: no drift, and a reload keeps them.
+    lu.assertEquals(state.txn.auditMismatches(), {})
+    state.txn.reload()
+    lu.assertTrue(state.staged.read("MyFlag"))
+    lu.assertEquals(state.staged.table("Rows"):count(), 2)
 end
 
 function TestModuleState_DataDefaults:testWarnsWhenNativeBackendCannotSave()

@@ -2,19 +2,14 @@ local deps = ...
 
 local logging = deps.logging
 local CloneValue = deps.values.deepCopy
+local requireMethodSelf = deps.requireMethodSelf
 
+-- Per-import marker. Draw refs and the widgets that recognize them (`isDrawActionRef`) come
+-- from the same Lib generation: a module's UI context captures `uiDraw.get()` and its action
+-- refs together at module creation, so refs never cross a Lib re-import boundary.
 local ACTION_REF_MARKER = {}
 local DRAW_ACTION_REF = "draw"
 local COMMIT_ACTION_REF = "commit"
-
-local function createActionCatalog(actions, actionOrder)
-    local handlers = actions or {}
-    local order = actionOrder or {}
-    return {
-        handlers = handlers,
-        order = order,
-    }
-end
 
 local function validateActionKey(context, actionKey)
     if type(actionKey) ~= "string" or actionKey == "" then
@@ -37,9 +32,9 @@ local function rejectPrivateActionKey(context, actionKey)
     end
 end
 
-local function validateDeclaredAction(catalog, context, actionKey)
+local function validateDeclaredAction(handlers, context, actionKey)
     validateActionKey(context, actionKey)
-    if catalog ~= nil and catalog.handlers[actionKey] == nil then
+    if handlers[actionKey] == nil then
         logging.violate("actions.unknown_key", "%s: unknown action key '%s'", tostring(context), tostring(actionKey))
     end
 end
@@ -60,29 +55,23 @@ local function isDrawActionRef(value)
     return actionRefKind(value) == DRAW_ACTION_REF
 end
 
-local function requireRefSelf(context, self, ref)
-    if self ~= ref then
-        logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
-    end
-end
-
 local function createDrawActionRef(actionBuffer, actionKey)
     local ref
     ref = markActionRef({
         stage = function(self, value)
-            requireRefSelf("actions.get(...):stage", self, ref)
+            requireMethodSelf("actions.get(...):stage", self, ref)
             actionBuffer.stage(actionKey, value)
         end,
         read = function(self)
-            requireRefSelf("actions.get(...):read", self, ref)
+            requireMethodSelf("actions.get(...):read", self, ref)
             return actionBuffer.read(actionKey)
         end,
         clear = function(self)
-            requireRefSelf("actions.get(...):clear", self, ref)
+            requireMethodSelf("actions.get(...):clear", self, ref)
             actionBuffer.clear(actionKey)
         end,
         has = function(self)
-            requireRefSelf("actions.get(...):has", self, ref)
+            requireMethodSelf("actions.get(...):has", self, ref)
             return actionBuffer.has(actionKey)
         end,
     }, DRAW_ACTION_REF)
@@ -91,11 +80,7 @@ end
 
 local function createDrawActionRefForKey(actionBuffer, actionKey)
     rejectPrivateActionKey("actions.get", actionKey)
-    if type(actionBuffer.validateAction) == "function" then
-        actionBuffer.validateAction("actions.get", actionKey)
-    else
-        validateActionKey("actions.get", actionKey)
-    end
+    actionBuffer.validateAction("actions.get", actionKey)
     return createDrawActionRef(actionBuffer, actionKey)
 end
 
@@ -103,25 +88,26 @@ local function createCommitActionRef(snapshot, actionKey)
     local ref
     ref = markActionRef({
         read = function(self)
-            requireRefSelf("commit.actions.get(...):read", self, ref)
+            requireMethodSelf("commit.actions.get(...):read", self, ref)
             return CloneValue(snapshot[actionKey])
         end,
         has = function(self)
-            requireRefSelf("commit.actions.get(...):has", self, ref)
+            requireMethodSelf("commit.actions.get(...):has", self, ref)
             return snapshot[actionKey] ~= nil
         end,
     }, COMMIT_ACTION_REF)
     return ref
 end
 
-local function createBuffer(actionCatalog)
-    local catalog = actionCatalog and createActionCatalog(actionCatalog.actions, actionCatalog.order) or nil
+---@param catalog { actions: table<string, function>, order: string[] } Prepared definition actions.
+local function createBuffer(catalog)
+    local handlers = catalog.actions
     local slots = {}
     local pendingEvents = {}
     local buffer = {}
 
     function buffer.stage(actionKey, value)
-        validateDeclaredAction(catalog, "actions.stage", actionKey)
+        validateDeclaredAction(handlers, "actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
             return
@@ -130,21 +116,21 @@ local function createBuffer(actionCatalog)
     end
 
     function buffer.validateAction(context, actionKey)
-        validateDeclaredAction(catalog, context, actionKey)
+        validateDeclaredAction(handlers, context, actionKey)
     end
 
     function buffer.read(actionKey)
-        validateDeclaredAction(catalog, "actions.read", actionKey)
+        validateDeclaredAction(handlers, "actions.read", actionKey)
         return CloneValue(slots[actionKey])
     end
 
     function buffer.clear(actionKey)
-        validateDeclaredAction(catalog, "actions.clear", actionKey)
+        validateDeclaredAction(handlers, "actions.clear", actionKey)
         slots[actionKey] = nil
     end
 
     function buffer.has(actionKey)
-        validateDeclaredAction(catalog, "actions.has", actionKey)
+        validateDeclaredAction(handlers, "actions.has", actionKey)
         return slots[actionKey] ~= nil
     end
 
@@ -171,11 +157,9 @@ local function createBuffer(actionCatalog)
     end
 
     function buffer.executeCommittedActions(host, runtime, actionSnapshot)
-        if catalog ~= nil then
-            for _, actionKey in ipairs(catalog.order) do
-                if actionSnapshot and actionSnapshot[actionKey] ~= nil then
-                    catalog.handlers[actionKey](host, runtime, CloneValue(actionSnapshot[actionKey]))
-                end
+        for _, actionKey in ipairs(catalog.order) do
+            if actionSnapshot and actionSnapshot[actionKey] ~= nil then
+                handlers[actionKey](host, runtime, CloneValue(actionSnapshot[actionKey]))
             end
         end
     end

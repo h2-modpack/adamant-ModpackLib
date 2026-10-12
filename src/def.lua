@@ -123,8 +123,8 @@ local lib = {}
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
 ---@field write fun(alias: string, ...): boolean?
 ---@field reset fun(alias: string, ...): boolean?
----@field countResettable fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
----@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field countResettable fun(exclude: table<string, boolean>): boolean, integer
+---@field resetAll fun(exclude: table<string, boolean>): boolean, integer
 
 ---Committed-root internals returned by persistent state for staged/status state. Not handed to lanes.
 ---@class AdamantModpackLib.CommittedRoots
@@ -141,7 +141,6 @@ local lib = {}
 ---@field get fun(alias: string, context?: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
----@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
@@ -154,7 +153,7 @@ local lib = {}
 ---@field reloadFromConfig fun(): AdamantModpackLib.ReloadReceipt
 ---@field captureDirtyConfigSnapshot fun(): table[]
 ---@field restoreConfigSnapshot fun(snapshot: table[]?)
----@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field resetAll fun(exclude: table<string, boolean>): boolean, integer
 ---@field auditMismatches fun(): string[]
 
 ---One in-flight commit; also the rollback token.
@@ -162,7 +161,7 @@ local lib = {}
 ---@field actionSnapshot table<string, any>
 ---@field hadConfigChanges boolean
 ---@field configSnapshot table[]?
----@field statusReset { opts: AdamantModpackLib.ResetOpts? }? Queued status reset taken by this commit.
+---@field statusReset { exclude: table<string, boolean> }? Queued status reset taken by this commit.
 
 ---Lifecycle-only transaction surface over staged state, action buffer, and queued status reset.
 ---@class AdamantModpackLib.ModuleStateTxn

@@ -23,7 +23,6 @@ end
 local function makeCommitContext(actionSnapshot, hadConfigChanges)
     return {
         actions = moduleState.createCommitActions(actionSnapshot),
-        _actionSnapshot = actionSnapshot,
         hadConfigChanges = function()
             return hadConfigChanges == true
         end,

@@ -80,20 +80,6 @@ local function create(committed)
         return writeRoot(node, node.default)
     end
 
-    local function eachChangedRoot(opts, visit)
-        local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
-        local count = 0
-        for _, root in ipairs(allRoots) do
-            local alias = root.alias
-            if root._mode == "runtime" and alias ~= nil and not exclude[alias]
-                and not storageInternal.valuesEqual(root, readRoot(root), root.default)
-                and visit(root) then
-                count = count + 1
-            end
-        end
-        return count > 0, count
-    end
-
     local fieldOwner = {
         read = function(alias)
             return storageInternal.readAlias(aliasNodes, readBackend, alias)
@@ -124,7 +110,7 @@ local function create(committed)
         if cached then
             return cached
         end
-        local field = storageInternal.field.createKnown(fieldOwner, alias, node, "status.get")
+        local field = storageInternal.field.create(fieldOwner, alias, node, "status.get")
         fieldHandles[alias] = field
         return field
     end
@@ -183,14 +169,27 @@ local function create(committed)
         return ref:reset(...)
     end
 
-    function status.countResettable(opts)
-        return eachChangedRoot(opts, function()
+    -- `exclude` is the root-alias skip set resolved from ResetOpts by the module-state txn.
+    local function eachResettableRoot(exclude, visit)
+        local count = 0
+        for _, root in ipairs(allRoots) do
+            if root._mode == "runtime" and not exclude[root.alias]
+                and not storageInternal.valuesEqual(root, readRoot(root), root.default)
+                and visit(root) then
+                count = count + 1
+            end
+        end
+        return count > 0, count
+    end
+
+    function status.countResettable(exclude)
+        return eachResettableRoot(exclude, function()
             return true
         end)
     end
 
-    function status.resetAll(opts)
-        return eachChangedRoot(opts, function(root)
+    function status.resetAll(exclude)
+        return eachResettableRoot(exclude, function(root)
             return writeRoot(root, root.default)
         end)
     end

@@ -31,6 +31,7 @@ local statusStateModule = import('core/module_state/status_state.lua', nil, {
 local actionBufferModule = import('core/module_state/actions/action_buffer.lua', nil, {
     logging = logging,
     values = values,
+    requireMethodSelf = deps.requireMethodSelf,
 })
 local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, {
     actionRefs = actionBufferModule,
@@ -38,8 +39,10 @@ local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, 
 local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', nil, {
     logging = logging,
     storage = storageApi,
+    requireMethodSelf = deps.requireMethodSelf,
 })
 local transactionModule = import('core/module_state/transaction.lua', nil, {
+    logging = logging,
     values = values,
 })
 

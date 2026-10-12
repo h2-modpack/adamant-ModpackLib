@@ -37,11 +37,13 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
     local previousSetupRunData = rom.game.SetupRunData
     local setupRunDataCalls = 0
 
+    local storage = {}
+    LibStorage.validate(storage, "Alpha")
     local entry = {
         id = "Alpha",
         name = "Alpha",
         pluginGuid = "Alpha",
-        storage = {},
+        storage = storage,
         affectsRunData = true,
         definition = {
             id = "Alpha",

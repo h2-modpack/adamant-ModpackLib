@@ -537,7 +537,6 @@ Internal view surface (the `staged` field of the per-module state object):
 - `stagedState.get(alias)`
 - `stagedState.read(alias)`
 - `stagedState.table(alias)`
-- `stagedState.field(alias)`
 - `stagedState.getAliasSchema(alias)`
 - `stagedState.write(alias, value)`
 - `stagedState.reset(alias)`
@@ -598,6 +597,8 @@ is hidden from `commit.actions`.
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
+- `opts` must be `nil` or a table, and `exclude` must be `nil` or a table;
+  anything else fails with `lifecycle.invalid_reset_opts`.
 
 ### Live module `resetAll(opts?)`
 
@@ -614,6 +615,8 @@ Returns:
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
+- `opts` must be `nil` or a table, and `exclude` must be `nil` or a table;
+  anything else fails with `lifecycle.invalid_reset_opts`.
 
 ## `module.hooks`
 

@@ -18,17 +18,22 @@ local systemScope = import('core/lib_bootstrap/system_scope.lua', nil, {
     logging = logging,
 })
 
-local gameDeps = externals.gameDeps or import('core/game_deps/game_deps.lua', nil, {
+local gameDeps = import('core/game_deps/game_deps.lua', nil, {
     rom = externals.rom,
     logging = logging,
 })
 
 local values = import('core/helpers/values.lua')
 local receipt = import('core/helpers/receipt.lua')
+local identifiers = import('core/helpers/identifiers.lua')
+local requireMethodSelf = import('core/helpers/method_self.lua', nil, {
+    logging = logging,
+})
 
 local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
     values = values,
+    identifiers = identifiers,
 })
 
 local moduleState = import('core/module_state/00_init.lua', nil, {
@@ -36,6 +41,7 @@ local moduleState = import('core/module_state/00_init.lua', nil, {
     rom = externals.rom,
     storage = storage,
     values = values,
+    requireMethodSelf = requireMethodSelf,
 })
 
 local cacheBundle = import('core/cache/00_init.lua', nil, {
@@ -47,11 +53,14 @@ local controlsBundle = import('core/controls/00_init.lua', nil, {
     logging = logging,
     values = values,
     storage = storage,
+    identifiers = identifiers,
+    requireMethodSelf = requireMethodSelf,
 })
 
 local statusDeclarations = import('core/status/declarations.lua', nil, {
     logging = logging,
     values = values,
+    identifiers = identifiers,
 })
 
 local modpackCoordination = import('core/coordination/coordination.lua', nil, {
@@ -64,6 +73,7 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
     logging = logging,
     storage = storage,
     values = values,
+    identifiers = identifiers,
     coordinator = modpackCoordination,
 })
 local sharedBundle = import('core/shared/00_init.lua', nil, {

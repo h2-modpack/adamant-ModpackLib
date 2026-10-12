@@ -3,6 +3,7 @@ local deps = ...
 local logging = deps.logging
 local storage = deps.storage
 local values = deps.values
+local identifiers = deps.identifiers
 local coordinator = deps.coordinator
 local plugin = deps.plugin
 
@@ -39,46 +40,9 @@ local BuiltInStorageAliases = {
     __Modpack_PackRestoreMarker = true,
 }
 
-local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
-local InternalPathSeparator = "-"
-local InternalIdentifierDescription =
-    "must start with '_' and contain '-'-separated stable identifier segments"
-
-
 local KnownStructuralSurfaceKeys = {
     hasQuickContent = true,
 }
-
-local function IsStableIdentifier(value)
-    return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
-end
-
-local function IsInternalIdentifier(value)
-    if type(value) ~= "string" or string.byte(value, 1) ~= 95 then
-        return false
-    end
-
-    local rest = string.sub(value, 2)
-    if rest == "" then
-        return false
-    end
-
-    local segmentStart = 1
-    while true do
-        local separatorStart, separatorEnd = string.find(rest, InternalPathSeparator, segmentStart, true)
-        local segment = separatorStart ~= nil
-            and string.sub(rest, segmentStart, separatorStart - 1)
-            or string.sub(rest, segmentStart)
-        if not IsStableIdentifier(segment) then
-            return false
-        end
-        if separatorStart == nil then
-            return true
-        end
-        segmentStart = separatorEnd + 1
-    end
-end
 
 local function NormalizeStructuralSurface(surface)
     if surface == nil then
@@ -132,13 +96,13 @@ local function PrepareActions(definition, prefix, internalActions)
         if type(key) ~= "string" or key == "" then
             logging.violate("definition.invalid_field_type", "%s: action keys must be non-empty strings", prefix)
         elseif isInternalAction then
-            if not IsInternalIdentifier(key) then
+            if not identifiers.isInternal(key) then
                 logging.violate("definition.invalid_field_type", "%s: internal action key '%s' %s",
-                    prefix, key, InternalIdentifierDescription)
+                    prefix, key, identifiers.INTERNAL_DESCRIPTION)
             end
-        elseif not IsStableIdentifier(key) then
+        elseif not identifiers.isStable(key) then
             logging.violate("definition.invalid_field_type", "%s: action key '%s' %s",
-                prefix, key, StableIdentifierDescription)
+                prefix, key, identifiers.STABLE_DESCRIPTION)
         end
         if type(handler) ~= "function" then
             logging.violate("definition.invalid_field_type", "%s: actions.%s should be function, got %s",
@@ -154,9 +118,9 @@ end
 local function ValidateCacheKey(prefix, name)
     if type(name) ~= "string" or name == "" then
         logging.violate("definition.invalid_field_type", "%s: cache declaration keys must be non-empty strings", prefix)
-    elseif not IsStableIdentifier(name) then
+    elseif not identifiers.isStable(name) then
         logging.violate("definition.invalid_field_type", "%s: cache declaration key '%s' %s",
-            prefix, name, StableIdentifierDescription)
+            prefix, name, identifiers.STABLE_DESCRIPTION)
     end
 end
 
@@ -326,9 +290,9 @@ local function ValidateDefinition(definition, label, internalActions)
     elseif type(definition.id) ~= "string" then
         logging.violate("definition.invalid_field_type", "%s: definition.id should be string, got %s",
             prefix, type(definition.id))
-    elseif not IsStableIdentifier(definition.id) then
+    elseif not identifiers.isStable(definition.id) then
         logging.violate("definition.invalid_field_type", "%s: definition.id '%s' %s",
-            prefix, definition.id, StableIdentifierDescription)
+            prefix, definition.id, identifiers.STABLE_DESCRIPTION)
     end
 
     if definition.name == nil or definition.name == "" then
@@ -408,9 +372,9 @@ local function collectInternalStorageNodes(nodes, internalNodes, prefix)
         local alias = node.alias
         if type(alias) ~= "string" or alias == "" then
             logging.violate("storage.invalid_node", "%s: missing alias", nodePrefix)
-        elseif not IsInternalIdentifier(alias) then
+        elseif not identifiers.isInternal(alias) then
             logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
-                nodePrefix, alias, InternalIdentifierDescription)
+                nodePrefix, alias, identifiers.INTERNAL_DESCRIPTION)
         end
         internalNodes[node] = true
 
@@ -419,9 +383,9 @@ local function collectInternalStorageNodes(nodes, internalNodes, prefix)
                 local bitAlias = type(bitNode) == "table" and bitNode.alias or nil
                 local bitPrefix = nodePrefix .. " bits[" .. bitIndex .. "]"
                 if type(bitAlias) == "string" and bitAlias ~= "" then
-                    if not IsInternalIdentifier(bitAlias) then
+                    if not identifiers.isInternal(bitAlias) then
                         logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
-                            bitPrefix, bitAlias, InternalIdentifierDescription)
+                            bitPrefix, bitAlias, identifiers.INTERNAL_DESCRIPTION)
                     end
                     internalNodes[bitNode] = true
                 end
@@ -474,9 +438,9 @@ local function injectInternalActions(definition, internalActions, label)
     for key, handler in pairs(internalActions) do
         if type(key) ~= "string" or key == "" then
             logging.violate("definition.invalid_field_type", "%s: internal action keys must be non-empty strings", label)
-        elseif not IsInternalIdentifier(key) then
+        elseif not identifiers.isInternal(key) then
             logging.violate("definition.invalid_field_type", "%s: internal action key '%s' %s",
-                label, key, InternalIdentifierDescription)
+                label, key, identifiers.INTERNAL_DESCRIPTION)
         end
         if definition.actions[key] ~= nil then
             logging.violate("definition.invalid_field_type", "%s: duplicate internal action key '%s'", label, tostring(key))

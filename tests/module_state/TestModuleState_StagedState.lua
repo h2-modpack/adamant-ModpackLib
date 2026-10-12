@@ -358,7 +358,7 @@ end
 
 function TestModuleState_StagedState:testStagedStateAndRowsCreateStorageFields()
     local _, stagedState = createModuleState(self.harness, { Enabled = true, MaxGods = 5 }, makeScalarDefinition(self.harness))
-    local rootField = stagedState.field("MaxGods")
+    local rootField = stagedState.get("MaxGods")
 
     lu.assertEquals(rootField:alias(), "MaxGods")
     lu.assertEquals(rootField:controlId(), "MaxGods")
@@ -648,7 +648,10 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
         storage = {},
     })
     local _, _, moduleState = createModuleState(self.harness, {}, definition)
-    local actionBuffer = self.harness.actionBuffer.createBuffer()
+    local actionBuffer = self.harness.actionBuffer.createBuffer({
+        actions = { recording = function() end },
+        order = { "recording" },
+    })
     local actions = self.harness.uiActions.create(actionBuffer)
     local recording = inDraw(self.harness, function()
         return actions.get("recording")
@@ -675,7 +678,10 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
 end
 
 function TestModuleState_StagedState:testActionRefsRequireMethodCallSyntax()
-    local actionBuffer = self.harness.actionBuffer.createBuffer()
+    local actionBuffer = self.harness.actionBuffer.createBuffer({
+        actions = { recording = function() end },
+        order = { "recording" },
+    })
     local actions = self.harness.uiActions.create(actionBuffer)
     local drawAction = inDraw(self.harness, function()
         return actions.get("recording")

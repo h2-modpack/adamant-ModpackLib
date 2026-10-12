@@ -65,7 +65,7 @@ local function create(storageConfig, storage, committed)
     end
 
     local function syncPackedChildren(root, packedValue)
-        for _, child in ipairs(root._bitAliases or {}) do
+        for _, child in ipairs(root._bitAliases) do
             staging[child.alias] = DecodePackedChild(child, packedValue)
         end
     end
@@ -225,7 +225,7 @@ local function create(storageConfig, storage, committed)
         if cached then
             return cached
         end
-        local field = storageInternal.field.createKnown(view, alias, node, "stagedState.get")
+        local field = storageInternal.field.create(view, alias, node, "stagedState.get")
         fieldHandles[alias] = field
         return field
     end
@@ -258,10 +258,6 @@ local function create(storageConfig, storage, committed)
         return getTableHandleForNode(alias, node)
     end
 
-    function view.field(alias)
-        return storageInternal.field.create(view, alias, "stagedState.field")
-    end
-
     function view.getAliasSchema(alias)
         return aliasNodes[alias]
     end
@@ -285,12 +281,12 @@ local function create(storageConfig, storage, committed)
         return receipt
     end
 
-    function internals.resetAll(opts)
-        local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
+    ---@param exclude table<string, boolean> Root aliases to skip (validated by the txn).
+    function internals.resetAll(exclude)
         local count = 0
         for _, root in ipairs(stagedRootNodes) do
             local alias = root.alias
-            if root._mode ~= "runtime" and alias ~= nil and not exclude[alias]
+            if root._mode ~= "runtime" and not exclude[alias]
                 and not storageInternal.valuesEqual(root, readStagingValue(alias), root.default) then
                 resetAliasValue(alias)
                 count = count + 1
@@ -300,9 +296,7 @@ local function create(storageConfig, storage, committed)
     end
 
     function internals.auditMismatches()
-        if type(storageConfig.reloadSource) == "function" then
-            storageConfig.reloadSource()
-        end
+        storageConfig.reloadSource()
         local mismatches = {}
         for _, root in ipairs(stagedRootNodes) do
             if root._persist and root._mode ~= "runtime" then
@@ -315,7 +309,7 @@ local function create(storageConfig, storage, committed)
                     table.insert(mismatches, root.alias)
                 end
                 if root.type == "packedInt" then
-                    for _, child in ipairs(root._bitAliases or {}) do
+                    for _, child in ipairs(root._bitAliases) do
                         local childValue = DecodePackedChild(child, persistedValue)
                         if not storageInternal.valuesEqual(child, childValue, staging[child.alias]) then
                             table.insert(mismatches, child.alias)

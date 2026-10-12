@@ -147,7 +147,7 @@ local function createWidgetHarness(opts)
     end
 
     function h.createField(owner, alias)
-        return base.storage.field.create(owner, alias, "TestWidgets")
+        return base.storage.field.create(owner, alias, owner.getAliasSchema(alias), "TestWidgets")
     end
 
     function h.prepareDefinition(fields)

@@ -1,6 +1,33 @@
 local deps = ...
 
+local logging = deps.logging
 local CloneValue = deps.values.deepCopy
+
+local NO_EXCLUDE = {}
+
+---Contact point for author ResetOpts (`module.resetAll`, `ui.resetAll`); returns the
+---exclude set the staged and status resets consume.
+---@param opts AdamantModpackLib.ResetOpts?
+---@return table<string, boolean>
+local function resolveResetExclude(opts)
+    if opts == nil then
+        return NO_EXCLUDE
+    end
+    if type(opts) ~= "table" then
+        logging.violate("lifecycle.invalid_reset_opts", "resetAll: opts must be a table when provided, got %s",
+            type(opts))
+        return NO_EXCLUDE
+    end
+    if opts.exclude == nil then
+        return NO_EXCLUDE
+    end
+    if type(opts.exclude) ~= "table" then
+        logging.violate("lifecycle.invalid_reset_opts", "resetAll: opts.exclude must be a table when provided, got %s",
+            type(opts.exclude))
+        return NO_EXCLUDE
+    end
+    return opts.exclude
+end
 
 ---Commit/reload transaction over one module's staged state, action buffer, and
 ---queued status reset. Handed only to the managed-module lifecycle.
@@ -33,11 +60,12 @@ local function create(persistentState, stagedView, staged, status, actionBuffer)
     ---Stage a full module reset: staged data resets now, pending action intent is
     ---dropped, and status reset is queued for the next commit.
     function txn.queueResetAll(opts)
-        local stagedChanged, stagedCount = staged.resetAll(opts)
+        local exclude = resolveResetExclude(opts)
+        local stagedChanged, stagedCount = staged.resetAll(exclude)
         actionBuffer.clearAll()
-        local statusChanged, statusCount = status.countResettable(opts)
+        local statusChanged, statusCount = status.countResettable(exclude)
         if statusChanged then
-            queuedStatusReset = { opts = CloneValue(opts) }
+            queuedStatusReset = { exclude = CloneValue(exclude) }
         else
             queuedStatusReset = nil
         end
@@ -64,7 +92,7 @@ local function create(persistentState, stagedView, staged, status, actionBuffer)
 
     function txn.applyStatusReset(commit)
         if commit.statusReset ~= nil then
-            status.resetAll(commit.statusReset.opts)
+            status.resetAll(commit.statusReset.exclude)
         end
     end
 

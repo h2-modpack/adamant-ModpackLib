@@ -1,14 +1,13 @@
 local deps = ...
 
 local logging = deps.logging
-local values = deps.values
-local storage = deps.storage
+local identifiers = deps.identifiers
+local StorageTypes = deps.types
+local NormalizeInteger = deps.NormalizeInteger
+local nodeOps = deps.nodeOps
 local packed = deps.packed
 local tableStorage = deps.tableStorage
 local schema = {}
-
-local StorageTypes = storage.types
-local NormalizeInteger = storage.NormalizeInteger
 
 -- Storage schemas are prepared once by prepareDefinition, then treated as
 -- runtime-stable metadata by store/staged-state/modpack consumers. Validation is
@@ -33,43 +32,7 @@ local CommonNodeFields = {
     type = true,
 }
 
-local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
-local InternalPathSeparator = "-"
-local InternalIdentifierDescription =
-    "must start with '_' and contain '-'-separated stable identifier segments"
-
-local function IsStableIdentifier(value)
-    return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
-end
-
-local function IsInternalIdentifier(value)
-    if type(value) ~= "string" or string.byte(value, 1) ~= 95 then
-        return false
-    end
-
-    local rest = string.sub(value, 2)
-    if rest == "" then
-        return false
-    end
-
-    local segmentStart = 1
-    while true do
-        local separatorStart, separatorEnd = string.find(rest, InternalPathSeparator, segmentStart, true)
-        local segment = separatorStart ~= nil
-            and string.sub(rest, segmentStart, separatorStart - 1)
-            or string.sub(rest, segmentStart)
-        if not IsStableIdentifier(segment) then
-            return false
-        end
-        if separatorStart == nil then
-            return true
-        end
-        segmentStart = separatorEnd + 1
-    end
-end
-
-local function IsPrivateAlias(value)
+function schema.isPrivateAlias(value)
     return type(value) == "string" and string.byte(value, 1) == 95
 end
 
@@ -94,20 +57,12 @@ local RootNodeFieldsByType = {
     },
 }
 
-local function IsInternalField(key)
-    return type(key) == "string" and string.sub(key, 1, 1) == "_"
-end
-
 local function ValidateKnownFields(node, allowedFields, prefix)
     for key in pairs(node) do
-        if not IsInternalField(key) and not allowedFields[key] and not CommonNodeFields[key] then
+        if not nodeOps.isInternalField(key) and not allowedFields[key] and not CommonNodeFields[key] then
             logging.violate("storage.unknown_field", "%s: unknown storage field '%s'", prefix, tostring(key))
         end
     end
-end
-
-local function PrepareRootNodeMetadata(node)
-    node._storageKey = node.alias
 end
 
 local function NormalizeMode(prefix, mode)
@@ -136,34 +91,27 @@ local function ValidateAliasIdentifier(node, alias, prefix, opts)
     end
 
     if IsTrustedInternalAlias(node, opts) then
-        if not IsInternalIdentifier(alias) then
+        if not identifiers.isInternal(alias) then
             logging.violate("storage.invalid_node", "%s: internal alias '%s' %s",
-                prefix, tostring(alias), InternalIdentifierDescription)
+                prefix, tostring(alias), identifiers.INTERNAL_DESCRIPTION)
         end
         return
     end
 
-    if not IsStableIdentifier(alias) then
+    if not identifiers.isStable(alias) then
         logging.violate("storage.invalid_node", "%s: alias '%s' %s",
-            prefix, tostring(alias), StableIdentifierDescription)
+            prefix, tostring(alias), identifiers.STABLE_DESCRIPTION)
     end
 end
 
-local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases, seenRootKeys, prefix, opts)
-    if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
-        return
-    end
+-- Runs after packed.validatePackedBits, so bit aliases are non-empty strings and bit types are known.
+local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases, prefix, opts)
     ValidateAliasIdentifier(bitNode, bitNode.alias, prefix, opts)
 
     if seenAliases[bitNode.alias] then
         logging.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, bitNode.alias)
     end
-    local ownerKey = seenRootKeys[bitNode.alias]
-    if ownerKey and ownerKey ~= root._storageKey then
-        logging.violate("storage.duplicate_alias", "%s: alias '%s' conflicts with root alias '%s'", prefix, bitNode.alias, ownerKey)
-    end
 
-    local storageType = StorageTypes[bitNode.type]
     local child = {
         alias = bitNode.alias,
         label = bitNode.label or bitNode.alias,
@@ -179,7 +127,6 @@ local function PreparePackedChildAlias(bitNode, root, storageSchema, seenAliases
         _hash = root._hash,
         _mode = root._mode,
         _storageKey = root._storageKey .. "." .. bitNode.alias,
-        _valueKind = storageType and storageType.valueKind or bitNode.type,
     }
     if child.type == "bool" and child.default == nil then
         child.default = false
@@ -195,13 +142,13 @@ end
 
 local function ValidatePersistedDefaults(storageSchema, label)
     local prefix = label or "storage"
-    for _, root in ipairs(rawget(storageSchema, "_persistRootNodes") or {}) do
+    for _, root in ipairs(storageSchema._persistRootNodes) do
         if root.default == nil then
             logging.violate(
                 "storage.missing_persisted_default",
                 "%s: persisted storage alias '%s' must declare an effective default",
                 prefix,
-                tostring(root.alias or "<unknown>")
+                root.alias
             )
         end
     end
@@ -218,7 +165,6 @@ function schema.validate(storageSchema, label, opts)
     storageSchema._aliasNodes = {}
 
     local seenAliases = {}
-    local seenRootKeys = {}
 
     for index, node in ipairs(storageSchema) do
         local prefix = label .. " storage #" .. index
@@ -252,38 +198,26 @@ function schema.validate(storageSchema, label, opts)
                 ValidateKnownFields(node, RootNodeFieldsByType[node.type] or {}, prefix)
                 storageType.validate(node, prefix)
                 ValidateAliasIdentifier(node, node.alias, prefix, opts)
-                PrepareRootNodeMetadata(node)
-                node._isRoot = true
+                node._storageKey = node.alias
                 node._persist = persist
                 node._hash = hash
                 node._mode = mode
-                node._valueKind = storageType.valueKind
                 node._bitAliases = {}
 
-                if node._storageKey ~= nil then
-                    if not seenRootKeys[node._storageKey] then
-                        seenRootKeys[node._storageKey] = node._storageKey
-                    end
-                end
-
-                local aliasValid = false
                 if seenAliases[node.alias] then
                     logging.violate("storage.duplicate_alias", "%s: duplicate alias '%s'", prefix, node.alias)
-                else
-                    aliasValid = true
-                    seenAliases[node.alias] = true
-                    storageSchema._aliasNodes[node.alias] = node
                 end
+                seenAliases[node.alias] = true
+                storageSchema._aliasNodes[node.alias] = node
 
                 if node.type == "packedInt" then
                     packed.validatePackedBits(node, prefix)
-                    for bitIndex, bitNode in ipairs(node.bits or {}) do
+                    for bitIndex, bitNode in ipairs(node.bits) do
                         PreparePackedChildAlias(
                             bitNode,
                             node,
                             storageSchema,
                             seenAliases,
-                            seenRootKeys,
                             prefix .. " bits[" .. bitIndex .. "]",
                             opts
                         )
@@ -293,10 +227,8 @@ function schema.validate(storageSchema, label, opts)
                     if node.default == nil then
                         node.default = 0
                         for _, child in ipairs(node._bitAliases) do
-                            local encoded = child.type == "bool"
-                                and (child.default == true and 1 or 0)
-                                or child.default
-                            node.default = packed.writePackedBits(node.default, child.offset, child.width, encoded)
+                            node.default = packed.writePackedBits(node.default, child.offset, child.width,
+                                packed.encodeChild(child, child.default))
                         end
                     else
                         node.default = NormalizeInteger(node, node.default)
@@ -312,11 +244,8 @@ function schema.validate(storageSchema, label, opts)
                                 child.default = packed.readPackedBits(node.default, child.offset, child.width)
                             else
                                 local expected = packed.readPackedBits(node.default, child.offset, child.width)
-                                local normalized = StorageTypes[child.type].normalize(child, child.default)
-                                local encoded = child.type == "bool"
-                                    and (normalized == true and 1 or 0)
-                                    or normalized
-                                if expected ~= encoded then
+                                local normalized = nodeOps.normalize(child, child.default)
+                                if expected ~= packed.encodeChild(child, normalized) then
                                     logging.violate(
                                         "storage.packed_child_default_mismatch",
                                         "%s: packed child default '%s' does not match packedInt default",
@@ -326,13 +255,15 @@ function schema.validate(storageSchema, label, opts)
                         end
                     end
                 elseif node.type == "table" then
-                    tableStorage.PrepareTableNode(node, prefix, opts)
+                    tableStorage.ValidateRowDeclarations(node, prefix)
+                    schema.validate(node.row, prefix .. " row", opts)
+                    tableStorage.PrepareTableNode(node)
                 end
                 if node._persist then
                     table.insert(storageSchema._persistRootNodes, node)
                 end
                 table.insert(storageSchema._stagedRootNodes, node)
-                if node._hash and aliasValid then
+                if node._hash then
                     table.insert(storageSchema._rootNodes, node)
                 end
             end
@@ -342,68 +273,20 @@ function schema.validate(storageSchema, label, opts)
     ValidatePersistedDefaults(storageSchema, label)
 end
 
-function schema.isPrivateAlias(alias)
-    return IsPrivateAlias(alias)
-end
-
 function schema.getRoots(storageSchema)
-    if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_rootNodes") or {}
+    return storageSchema._rootNodes
 end
 
 function schema.getPersistRoots(storageSchema)
-    if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_persistRootNodes") or {}
+    return storageSchema._persistRootNodes
 end
 
 function schema.getStagedRoots(storageSchema)
-    if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_stagedRootNodes") or {}
+    return storageSchema._stagedRootNodes
 end
 
 function schema.getAliases(storageSchema)
-    if type(storageSchema) ~= "table" then return {} end
-    return rawget(storageSchema, "_aliasNodes") or {}
-end
-
-function schema.valuesEqual(node, a, b)
-    local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
-    if storageType and storageType.equals ~= nil then
-        return storageType.equals(node, a, b)
-    end
-    return values.deepEqual(a, b)
-end
-
-function schema.NormalizeStorageValue(node, value)
-    local storageType = node and node.type and storage.types[node.type] or nil
-    if storageType and storageType.normalize ~= nil then
-        return storageType.normalize(node, value)
-    end
-    return value
-end
-
-function schema.toHash(node, value)
-    local storageType = node and node.type and StorageTypes[node.type] or nil
-    if not storageType then
-        return nil
-    end
-    return storageType.toHash(node, value)
-end
-
-function schema.fromHash(node, str)
-    local storageType = node and node.type and StorageTypes[node.type] or nil
-    if not storageType then
-        return nil
-    end
-    return storageType.fromHash(node, str)
-end
-
-function schema.isHashTokenValid(node, str)
-    local storageType = node and StorageTypes and node.type and StorageTypes[node.type] or nil
-    if storageType and storageType.isHashTokenValid ~= nil then
-        return storageType.isHashTokenValid(node, str)
-    end
-    return str ~= nil
+    return storageSchema._aliasNodes
 end
 
 return schema

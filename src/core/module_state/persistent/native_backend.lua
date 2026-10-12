@@ -125,11 +125,11 @@ local function createEntry(value, defaultValue)
     }
 end
 
+---Native config-file backend. Without `opts.path` the backend is memory-only: same
+---interface and semantics, but nothing is loaded from or saved to disk.
+---@param opts { path: string? }
 local function create(opts)
-    local path = type(opts) == "table" and opts.path or nil
-    if type(path) ~= "string" or path == "" then
-        return nil
-    end
+    local path = opts.path
 
     local metrics = backendMetrics.create("native")
     local sections = {}
@@ -176,13 +176,6 @@ local function create(opts)
         return true
     end
 
-    local function removeEntry(section, key)
-        local sectionEntries = sections[section]
-        if sectionEntries then
-            sectionEntries[key] = nil
-        end
-    end
-
     local function markDirty()
         savePending = true
     end
@@ -213,6 +206,9 @@ local function create(opts)
     end
 
     local function saveFile()
+        if path == nil then
+            return
+        end
         local startedMs = nowMs()
         local file = io.open(path, "w")
         if not file then
@@ -258,9 +254,15 @@ local function create(opts)
         saveFile()
     end
 
-    loadFile()
+    if path ~= nil then
+        loadFile()
+    end
 
     function backend.reload()
+        if path == nil then
+            -- Memory-only: the in-memory sections are the source of truth.
+            return
+        end
         sections = {}
         loadFile()
     end
@@ -487,16 +489,6 @@ local function create(opts)
         end
         metrics.count("write_table_time_ms", nowMs() - startedMs)
         return true
-    end
-
-    function backend.clear(section, key)
-        if getEntry(section, key) then
-            removeEntry(section, key)
-            requestSave()
-            metrics.count("entry_sets")
-            return true
-        end
-        return false
     end
 
     function backend.beginDiagnosticScope()

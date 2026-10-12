@@ -130,11 +130,7 @@ local function create(storageConfig, storage)
     end
 
     local function hydratePersistRoots()
-        if type(storageConfig.withSaveBatch) == "function" then
-            storageConfig.withSaveBatch(hydratePersistRootsNow)
-            return
-        end
-        hydratePersistRootsNow()
+        storageConfig.withSaveBatch(hydratePersistRootsNow)
     end
 
     local function capturePersistedRoots()
@@ -224,7 +220,7 @@ local function create(storageConfig, storage)
             return cached
         end
 
-        local field = storageInternal.field.createKnown(persistentState, alias, node, "store.get")
+        local field = storageInternal.field.create(persistentState, alias, node, "store.get")
         fieldHandles[alias] = field
         return field
     end
