@@ -150,10 +150,10 @@ function TestStorageValidation:testPublicStorageCannotReachLibInternalAliases()
         { type = "bool", alias = "_PrivateFlag", default = true, hash = false },
         { type = "int", alias = "_PrivateRuntime", mode = "runtime", default = 0, min = 0, max = 10 },
     })
-    local persistentState, stagedState = createModuleState(self.harness, {}, definition)
-    local store = self.harness.moduleState.createStore(persistentState)
-    local status = self.harness.moduleState.createRuntimeStatus(persistentState)
-    local uiState = self.harness.moduleState.uiState.create(stagedState)
+    local _, _, moduleState = createModuleState(self.harness, {}, definition)
+    local store = moduleState.lanes.runtimeData
+    local status = moduleState.lanes.runtimeStatus
+    local uiState = moduleState.lanes.uiData
 
     lu.assertErrorMsgContains("storage.private_alias", function()
         store.get("_PrivateFlag")

@@ -337,15 +337,14 @@ function TestMutation:testCommittedNoopSyncReceiptRollsBackSuccessfully()
         name = "Noop Mutation Receipt",
         storage = {},
     })
-    local store, stagedState = createModuleState(self.harness, {
+    local _, _, moduleState = createModuleState(self.harness, {
         Enabled = true,
         DebugMode = false,
     }, definition)
     local host = self.harness.managedModule.create({
         pluginGuid = "test-noop-mutation-receipt",
         definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
+        state = moduleState,
         drawTab = function() end,
     })
     local receipt = self.mutation.syncForModule(host)
@@ -363,15 +362,14 @@ function TestMutation:createPatchedHost(pluginGuid, tbl, value)
         name = "Mutation Receipt Release",
         storage = {},
     })
-    local store, stagedState = createModuleState(self.harness, {
+    local _, _, moduleState = createModuleState(self.harness, {
         Enabled = true,
         DebugMode = false,
     }, definition)
     return self.harness.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
+        state = moduleState,
         mutationBundle = {
             patchMutation = function(_, _, plan)
                 plan:set(tbl, "Value", value)

@@ -23,7 +23,7 @@ end
 
 function TestModuleState_PersistentState:testCreatePersistentStateReadsAndWritesScalarAliases()
     local config = { Enabled = false, MaxGods = 4 }
-    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local persistentState, stagedState, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
     lu.assertFalse(persistentState.read("Enabled"))
     lu.assertEquals(persistentState.read("MaxGods"), 4)
@@ -33,7 +33,7 @@ function TestModuleState_PersistentState:testCreatePersistentStateReadsAndWrites
 
     stagedState.write("Enabled", true)
     stagedState.write("MaxGods", 12)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
 
     lu.assertTrue(config.Enabled)
     lu.assertEquals(config.MaxGods, 9)
@@ -42,19 +42,19 @@ end
 
 function TestModuleState_PersistentState:testPersistentStateReadsCommittedSnapshotUntilReload()
     local config = { MaxGods = 4 }
-    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local persistentState, _, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
     lu.assertEquals(persistentState.read("MaxGods"), 4)
     config.MaxGods = 8
     lu.assertEquals(persistentState.read("MaxGods"), 4)
 
-    local receipt = stagedState._reloadFromConfig()
+    local receipt = moduleState.txn.reload()
     lu.assertEquals(persistentState.read("MaxGods"), 8)
     lu.assertTrue(receipt.hadCommittedChanges)
     lu.assertTrue(receipt.hadSettingChanges)
     lu.assertFalse(receipt.hadStatusChanges)
 
-    local unchanged = stagedState._reloadFromConfig()
+    local unchanged = moduleState.txn.reload()
     lu.assertFalse(unchanged.hadCommittedChanges)
     lu.assertFalse(unchanged.hadSettingChanges)
     lu.assertFalse(unchanged.hadStatusChanges)
@@ -62,12 +62,12 @@ end
 
 function TestModuleState_PersistentState:testReloadReceiptSeparatesPersistentStatusChanges()
     local config = { RuntimeFlag = false, RuntimeCount = 1, RuntimePacked = 0 }
-    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+    local _, _, moduleState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
 
     config.RuntimeFlag = true
-    local receipt = persistentState._reloadFromConfig()
+    local receipt = moduleState.txn.reload()
 
-    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
     lu.assertTrue(receipt.hadCommittedChanges)
     lu.assertFalse(receipt.hadSettingChanges)
     lu.assertTrue(receipt.hadStatusChanges)
@@ -75,18 +75,18 @@ end
 
 function TestModuleState_PersistentState:testRuntimeStorageWriteAndResetUpdatesCommittedSnapshot()
     local config = { RuntimeFlag = false, RuntimeCount = 1, RuntimePacked = 0 }
-    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+    local persistentState, _, moduleState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
 
-    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
-    lu.assertEquals(persistentState.status.read("RuntimeCount"), 1)
-    lu.assertFalse(persistentState.status.read("RuntimeBit"))
+    lu.assertFalse(moduleState.status.read("RuntimeFlag"))
+    lu.assertEquals(moduleState.status.read("RuntimeCount"), 1)
+    lu.assertFalse(moduleState.status.read("RuntimeBit"))
 
-    lu.assertTrue(persistentState.status.write("RuntimeFlag", true))
-    lu.assertTrue(persistentState.status.write("RuntimeCount", 10))
-    lu.assertTrue(persistentState.status.write("RuntimePacked", 1))
-    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
-    lu.assertEquals(persistentState.status.read("RuntimeCount"), 5)
-    lu.assertTrue(persistentState.status.read("RuntimeBit"))
+    lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
+    lu.assertTrue(moduleState.status.write("RuntimeCount", 10))
+    lu.assertTrue(moduleState.status.write("RuntimePacked", 1))
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+    lu.assertEquals(moduleState.status.read("RuntimeCount"), 5)
+    lu.assertTrue(moduleState.status.read("RuntimeBit"))
     lu.assertErrorMsgContains("status", function()
         persistentState.read("RuntimeFlag")
     end)
@@ -94,21 +94,21 @@ function TestModuleState_PersistentState:testRuntimeStorageWriteAndResetUpdatesC
     lu.assertEquals(config.RuntimeCount, 5)
     lu.assertEquals(config.RuntimePacked, 1)
 
-    lu.assertTrue(persistentState.status.reset("RuntimeFlag"))
-    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
+    lu.assertTrue(moduleState.status.reset("RuntimeFlag"))
+    lu.assertFalse(moduleState.status.read("RuntimeFlag"))
     lu.assertFalse(config.RuntimeFlag)
 
-    lu.assertTrue(persistentState.status.write("RuntimeBit", false))
+    lu.assertTrue(moduleState.status.write("RuntimeBit", false))
     lu.assertEquals(config.RuntimePacked, 0)
-    lu.assertFalse(persistentState.status.read("RuntimeBit"))
-    lu.assertTrue(persistentState.status.write("RuntimeBit", true))
+    lu.assertFalse(moduleState.status.read("RuntimeBit"))
+    lu.assertTrue(moduleState.status.write("RuntimeBit", true))
     lu.assertEquals(config.RuntimePacked, 1)
-    lu.assertTrue(persistentState.status.reset("RuntimeBit"))
+    lu.assertTrue(moduleState.status.reset("RuntimeBit"))
     lu.assertEquals(config.RuntimePacked, 0)
-    lu.assertFalse(persistentState.status.read("RuntimeBit"))
+    lu.assertFalse(moduleState.status.read("RuntimeBit"))
 
     lu.assertErrorMsgContains("not status", function()
-        persistentState.status.write("SettingFlag", true)
+        moduleState.status.write("SettingFlag", true)
     end)
 end
 
@@ -118,13 +118,13 @@ function TestModuleState_PersistentState:testRuntimeTableHandleReadsWritesAndSna
             { Enabled = false },
         },
     }
-    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
+    local _, _, moduleState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness))
 
     lu.assertErrorMsgContains("storage.invalid_table_handle_args", function()
-        persistentState.status.read("RuntimeRows")
+        moduleState.status.read("RuntimeRows")
     end)
 
-    local rows = persistentState.status.get("RuntimeRows")
+    local rows = moduleState.status.get("RuntimeRows")
     local snapshot = rows:snapshots()
     snapshot[1].Enabled = true
     snapshot[2] = { Enabled = true }
@@ -135,17 +135,17 @@ function TestModuleState_PersistentState:testRuntimeTableHandleReadsWritesAndSna
     lu.assertNil(config.RuntimeRows[2])
 
     lu.assertTrue(rows:write(1, "Enabled", true))
-    lu.assertTrue(persistentState.status.read("RuntimeRows", 1, "Enabled"))
+    lu.assertTrue(moduleState.status.read("RuntimeRows", 1, "Enabled"))
     lu.assertTrue(config.RuntimeRows[1].Enabled)
 
     lu.assertErrorMsgContains("table storage", function()
-        persistentState.status.write("RuntimeRows", {
+        moduleState.status.write("RuntimeRows", {
             { Enabled = false },
         })
     end)
     lu.assertTrue(config.RuntimeRows[1].Enabled)
 
-    lu.assertTrue(persistentState.status.write("RuntimeRows", 1, "Enabled", false))
+    lu.assertTrue(moduleState.status.write("RuntimeRows", 1, "Enabled", false))
     lu.assertFalse(rows:read(1, "Enabled"))
     lu.assertFalse(config.RuntimeRows[1].Enabled)
 
@@ -160,7 +160,7 @@ function TestModuleState_PersistentState:testRuntimeTableHandleReadsWritesAndSna
     lu.assertEquals(rows:count(), 2)
     lu.assertTrue(config.RuntimeRows[2].Enabled)
 
-    lu.assertTrue(persistentState.status.reset("RuntimeRows"))
+    lu.assertTrue(moduleState.status.reset("RuntimeRows"))
     lu.assertEquals(rows:count(), 1)
     lu.assertFalse(rows:read(1, "Enabled"))
     lu.assertNil(config.RuntimeRows[2])
@@ -168,25 +168,25 @@ end
 
 function TestModuleState_PersistentState:testNonPersistentRuntimeStorageKeepsCommittedMemoryOnly()
     local config = {}
-    local persistentState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness, {
+    local _, _, moduleState = createModuleState(self.harness, config, makeRuntimeDefinition(self.harness, {
         persist = false,
     }))
 
-    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
-    lu.assertTrue(persistentState.status.write("RuntimeFlag", true))
-    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
+    lu.assertFalse(moduleState.status.read("RuntimeFlag"))
+    lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
     lu.assertNil(config.RuntimeFlag)
-    persistentState._reloadFromConfig()
-    lu.assertTrue(persistentState.status.read("RuntimeFlag"))
+    moduleState.txn.reload()
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
 
-    lu.assertTrue(persistentState.status.reset("RuntimeFlag"))
-    lu.assertFalse(persistentState.status.read("RuntimeFlag"))
+    lu.assertTrue(moduleState.status.reset("RuntimeFlag"))
+    lu.assertFalse(moduleState.status.read("RuntimeFlag"))
     lu.assertNil(config.RuntimeFlag)
 end
 
 function TestModuleState_PersistentState:testPersistentStateGetReturnsReadOnlyFieldOrTableHandle()
     local config = { Enabled = false, MaxGods = 4 }
-    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local persistentState, stagedState, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
     local maxGods = persistentState.get("MaxGods")
 
     lu.assertIs(maxGods, persistentState.get("MaxGods"))
@@ -199,7 +199,7 @@ function TestModuleState_PersistentState:testPersistentStateGetReturnsReadOnlyFi
     end)
 
     stagedState.write("MaxGods", 8)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
     lu.assertEquals(maxGods:read(), 8)
 
     local tableState = createModuleState(self.harness, {}, makeTableDefinition(self.harness))
@@ -222,19 +222,19 @@ end
 
 function TestModuleState_PersistentState:testPackedAliasReadWriteUpdatesOwningRoot()
     local config = { Packed = 0 }
-    local persistentState, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
+    local persistentState, stagedState, moduleState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     lu.assertFalse(persistentState.read("EnabledBit"))
     lu.assertEquals(persistentState.read("ModeBits"), 0)
     lu.assertEquals(persistentState.read("Packed"), 0)
 
     stagedState.write("EnabledBit", true)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
     lu.assertEquals(config.Packed, 1)
     lu.assertTrue(persistentState.read("EnabledBit"))
 
     stagedState.write("ModeBits", 3)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
     lu.assertEquals(config.Packed, 7)
     lu.assertEquals(persistentState.read("ModeBits"), 3)
 end

@@ -90,8 +90,7 @@ function activationFinalizer.activate(opts, declarations)
     local module = managedModule.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
-        persistentState = state.persistentState,
-        stagedState = state.stagedState,
+        state = state,
         mutationBundle = declarations.mutationBundle,
         hookDeclarations = declarations.hookDeclarations,
         sharedDataDeclarations = declarations.sharedDataDeclarations,

@@ -87,6 +87,7 @@ local function createLibHarness(opts)
         systemScope = imports["core/lib_bootstrap/system_scope.lua"],
         moduleState = imports["core/module_state/00_init.lua"],
         uiActions = imports["core/module_state/actions/ui_actions.lua"],
+        actionBuffer = imports["core/module_state/actions/action_buffer.lua"],
         coordinator = imports["core/modpack/coordination.lua"],
         sharedBundle = imports["core/shared/00_init.lua"],
         shared = imports["core/shared/00_init.lua"].service,
@@ -133,7 +134,7 @@ local function createLibHarness(opts)
         end
         createOpts.configPath = configPath
         local state = self.moduleState.create(definition, createOpts)
-        return state.persistentState, state.stagedState, configPath
+        return state.persistent, state.staged, state
     end
     function harness.createSystem(ownerId)
         return harness.systemScope.create(ownerId, {

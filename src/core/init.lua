@@ -122,7 +122,7 @@ local mutation = mutationBundle.service
 local widgetsBundle = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
-    actions = moduleState.actionBuffer,
+    isDrawActionRef = moduleState.isDrawActionRef,
     rom = externals.rom,
     controlsDraw = controlsBundle.draw,
 })

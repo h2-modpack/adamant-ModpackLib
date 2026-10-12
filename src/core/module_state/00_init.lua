@@ -14,70 +14,70 @@ local backendFactory = import('core/module_state/persistent/backend_factory.lua'
 local storageConfigAdapter = import('core/module_state/persistent/storage_config_adapter.lua', nil, {
     storage = storageApi,
 })
-
 local persistentStateModule = import('core/module_state/persistent/persistent_state.lua', nil, {
     logging = logging,
     storage = storageApi,
     values = values,
 })
-
-local actionBufferModule = import('core/module_state/actions/action_buffer.lua', nil, {
-    logging = logging,
-    values = values,
-})
-moduleState.actionBuffer = actionBufferModule
-
-local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, {
-    actionRefs = actionBufferModule,
-})
-moduleState.uiActions = uiActionsModule
-
 local stagedStateModule = import('core/module_state/staged/staged_state.lua', nil, {
     logging = logging,
     storage = storageApi,
     values = values,
 })
-
+local statusStateModule = import('core/module_state/status_state.lua', nil, {
+    logging = logging,
+    storage = storageApi,
+})
+local actionBufferModule = import('core/module_state/actions/action_buffer.lua', nil, {
+    logging = logging,
+    values = values,
+})
+local uiActionsModule = import('core/module_state/actions/ui_actions.lua', nil, {
+    actionRefs = actionBufferModule,
+})
 local storageRefAdapter = import('core/module_state/storage_ref_adapter.lua', nil, {
     logging = logging,
     storage = storageApi,
 })
-
-local uiStateModule = import('core/module_state/staged/ui_state.lua', nil, {
-    logging = logging,
-    storageRefAdapter = storageRefAdapter,
-})
-moduleState.uiState = uiStateModule
-
-local storeModule = import('core/module_state/persistent/store.lua', nil, {
-    logging = logging,
-    storageRefAdapter = storageRefAdapter,
+local transactionModule = import('core/module_state/transaction.lua', nil, {
+    values = values,
 })
 
-local runtimeStatusModule = import('core/status/adapters/runtime_status.lua', nil, {
-    logging = logging,
-    storageRefAdapter = storageRefAdapter,
-})
-
-local uiStatusModule = import('core/status/adapters/ui_status.lua', nil, {
-    logging = logging,
-    storageRefAdapter = storageRefAdapter,
-})
-
-local function createCommittedRootAdapter(persistentState)
+---@param persistentState AdamantModpackLib.PersistentState
+---@param stagedView AdamantModpackLib.StagedState
+---@param status AdamantModpackLib.StatusState
+---@param actionBuffer table
+---@return AdamantModpackLib.ModuleStateLanes
+local function createLanes(persistentState, stagedView, status, actionBuffer)
     return {
-        readRoot = function(root)
-            return persistentState._readRoot(root)
-        end,
-        replaceRoot = function(root, value)
-            persistentState._replaceRoot(root, value)
-        end,
-        reloadFromConfig = function()
-            return persistentState._reloadFromConfig()
-        end,
+        runtimeData = storageRefAdapter.createLane({
+            get = persistentState.get,
+            source = "runtime.data",
+        }),
+        runtimeStatus = storageRefAdapter.createLane({
+            get = status.get,
+            source = "runtime.status",
+            writable = true,
+            resetRoot = status.reset,
+        }),
+        uiData = storageRefAdapter.createLane({
+            get = stagedView.get,
+            source = "ui.data",
+            writable = true,
+        }),
+        uiStatus = storageRefAdapter.createLane({
+            get = status.get,
+            source = "ui.status",
+        }),
+        uiActions = uiActionsModule.create(actionBuffer),
     }
 end
 
+---Construct one module's state: committed persistent data, staged view,
+---status, action buffer, author lanes, and the lifecycle transaction.
+---@param definition AdamantModpackLib.PreparedDefinition
+---@param opts? table Backend options (`configPath`, `pluginGuid`).
+---@return AdamantModpackLib.ModuleState
 function moduleState.create(definition, opts)
     if type(definition) ~= "table" or definition._preparedDefinition ~= true then
         logging.violate(
@@ -86,39 +86,28 @@ function moduleState.create(definition, opts)
         )
     end
 
-    opts = opts or {}
     local storage = definition.storage
-    local backend = backendFactory.create(opts)
+    local backend = backendFactory.create(opts or {})
     local storageConfig = storageConfigAdapter.create(backend, definition.name or definition.id)
-    local persistentState = persistentStateModule.create(storageConfig, storage)
-    local committedRoots = createCommittedRootAdapter(persistentState)
-    local stagedState = stagedStateModule.createStagedState(storageConfig, storage, committedRoots)
+    local persistentState, committed = persistentStateModule.create(storageConfig, storage)
+    local stagedView, stagedInternals = stagedStateModule.create(storageConfig, storage, committed)
+    local status = statusStateModule.create(committed)
+    local actionBuffer = actionBufferModule.createBuffer({
+        actions = definition.actions,
+        order = definition._actionOrder,
+    })
 
     return {
-        persistentState = persistentState,
-        stagedState = stagedState,
+        persistent = persistentState,
+        staged = stagedView,
+        status = status,
+        actionBuffer = actionBuffer,
+        lanes = createLanes(persistentState, stagedView, status, actionBuffer),
+        txn = transactionModule.create(persistentState, stagedView, stagedInternals, status, actionBuffer),
     }
 end
 
--- Internal API: narrows persistent state to the runtime store.
-function moduleState.createStore(persistentState, cache, shared)
-    return storeModule.create(persistentState, cache, shared)
-end
-
-function moduleState.createRuntimeStatus(persistentState)
-    return runtimeStatusModule.create(persistentState)
-end
-
-function moduleState.createUiStatus(stagedState)
-    return uiStatusModule.create(stagedState)
-end
-
-function moduleState.createActionBuffer(actionCatalog)
-    return actionBufferModule.createBuffer(actionCatalog)
-end
-
-function moduleState.createCommitActions(actionSnapshot)
-    return actionBufferModule.createCommitActions(actionSnapshot)
-end
+moduleState.isDrawActionRef = actionBufferModule.isDrawActionRef
+moduleState.createCommitActions = actionBufferModule.createCommitActions
 
 return moduleState

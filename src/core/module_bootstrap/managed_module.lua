@@ -16,7 +16,6 @@ local managedModule = {
     prepareDefinitionWithInternalStorage = definition.prepareDefinitionWithInternalStorage,
     prepareDefinitionWithInternalDeclarations = definition.prepareDefinitionWithInternalDeclarations,
 }
-local INTERNAL_RESET_STATUS_ACTION = "_ResetStatus"
 local ReloadReasons = {
     manual = true,
     frameworkSnapshot = true,
@@ -25,7 +24,6 @@ local ReloadReasons = {
 }
 local uiContextModule = import('core/module_bootstrap/ui/context.lua', nil, {
     uiDraw = uiDraw,
-    moduleState = moduleState,
 })
 local moduleLifecycle = import('core/module_bootstrap/managed_module_lifecycle.lua', nil, {
     logging = logging,
@@ -54,8 +52,7 @@ end
 local KnownModuleCreateOpts = {
     definition = true,
     pluginGuid = true,
-    persistentState = true,
-    stagedState = true,
+    state = true,
     mutationBundle = true,
     hookDeclarations = true,
     sharedDataDeclarations = true,
@@ -113,28 +110,24 @@ function managedModule.create(opts)
     validateKnownOpts(opts, "managedModule.create")
     local def = opts.definition
     local pluginGuid = opts.pluginGuid
-    local persistentState = opts.persistentState
-    local stagedState = opts.stagedState
+    local state = opts.state
     if type(def) ~= "table" or def._preparedDefinition ~= true then
         logging.violate("module.invalid_create_opts", "managedModule.create: prepared definition is required")
     end
     if type(pluginGuid) ~= "string" or pluginGuid == "" then
         logging.violate("module.invalid_create_opts", "managedModule.create: pluginGuid is required")
     end
-    if not (persistentState and type(persistentState.get) == "function" and type(persistentState.read) == "function") then
-        logging.violate("module.invalid_create_opts", "managedModule.create: persistentState is required")
+    if type(state) ~= "table" or type(state.txn) ~= "table" then
+        logging.violate("module.invalid_create_opts", "managedModule.create: module state is required")
     end
-    if not (stagedState and type(stagedState.get) == "function" and type(stagedState.isDirty) == "function"
-        and type(stagedState.write) == "function" and type(stagedState.getAliasSchema) == "function") then
-        logging.violate("module.invalid_create_opts", "managedModule.create: stagedState is required")
-    end
+    local persistentState = state.persistent
+    local stagedState = state.staged
+    local txn = state.txn
+    local lanes = state.lanes
 
     local drawTab = opts.drawTab
     local drawQuickContent = opts.drawQuickContent
-    local actionBuffer = moduleState.createActionBuffer({
-        actions = def.actions,
-        order = def._actionOrder,
-    })
+    local actionBuffer = state.actionBuffer
     local mutationBundle = opts.mutationBundle or createMutationBundle()
     local commitObserver, reloadObserver = validateLifecycleObservers(opts)
     local store
@@ -220,29 +213,6 @@ function managedModule.create(opts)
         return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
     end
 
-    local function queueStatusReset(resetOpts)
-        actionBuffer.clearPublicIntent()
-        local statusChanged, statusCount = persistentState.status.countResettable(resetOpts)
-        actionBuffer.stageInternal(INTERNAL_RESET_STATUS_ACTION, statusChanged and (resetOpts or true) or nil)
-        return statusChanged, statusCount
-    end
-
-    local function stageResetAll(resetOpts)
-        local stagedChanged, stagedCount = stagedState.resetAll(resetOpts)
-        local statusChanged, statusCount = queueStatusReset(resetOpts)
-        return stagedChanged or statusChanged, (stagedCount or 0) + (statusCount or 0)
-    end
-
-    local function executeInternalActionsDuringCommit(internalSnapshot)
-        if internalSnapshot and internalSnapshot[INTERNAL_RESET_STATUS_ACTION] ~= nil then
-            local resetOpts = internalSnapshot[INTERNAL_RESET_STATUS_ACTION]
-            if type(resetOpts) ~= "table" then
-                resetOpts = nil
-            end
-            persistentState.status.resetAll(resetOpts)
-        end
-    end
-
     local function emitSharedEvent(id, eventName, payload)
         return shared.emitForModule(module, id, eventName, payload)
     end
@@ -294,9 +264,8 @@ function managedModule.create(opts)
     function module.writeAndFlush(alias, value)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
-        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit)
+        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err
     end
 
@@ -307,24 +276,22 @@ function managedModule.create(opts)
 
     function module.flush()
         requireActivated("flush")
-        if not stagedState.isDirty() and not actionBuffer.hasAny() then
+        if not txn.hasPending() then
             return true
         end
-        return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit)
+        return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.reloadFromConfig(reason)
         requireActivated("reloadFromConfig")
         reason = normalizeReloadReason(reason)
-        local receipt = stagedState._reloadFromConfig()
-        actionBuffer.clearAll()
-        return notifyReload(reason, receipt)
+        return notifyReload(reason, txn.reload())
     end
 
     function module.resync()
         requireActivated("resync")
-        local mismatches, receipt = moduleLifecycle.resyncStagedState(def, stagedState, actionBuffer)
+        local mismatches, receipt = moduleLifecycle.resyncStagedState(def, txn)
         if receipt ~= nil then
             return mismatches, notifyReload("driftRepair", receipt)
         end
@@ -333,69 +300,62 @@ function managedModule.create(opts)
 
     function module.resetAll(resetOpts)
         requireActivated("resetAll")
-        return stageResetAll(resetOpts)
+        return txn.queueResetAll(resetOpts)
     end
 
     function module.commitIfDirty()
         requireActivated("commitIfDirty")
-        if not stagedState.isDirty() and not actionBuffer.hasAny() then
+        if not txn.hasPending() then
             return true, nil, false
         end
-        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit)
+        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err, ok == true
     end
 
     function module.isEnabled()
-        return moduleLifecycle.isEnabled(persistentState)
+        return persistentState.read("Enabled") == true
     end
 
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
-        return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit,
-            enabled)
+        return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
-        return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, persistentState, stagedState,
-            actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit, executeInternalActionsDuringCommit,
-            enabled)
+        return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
-        return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit)
+        return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
-        return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit,
-            persistentState, stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit)
+        return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
-        return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit)
+        return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
-        return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, persistentState,
-            stagedState, actionBuffer, executeActionsDuringCommit, flushSharedEventsDuringCommit,
-            executeInternalActionsDuringCommit, receipt)
+        return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, txn,
+            executeActionsDuringCommit, flushSharedEventsDuringCommit, receipt)
     end
 
     function module.restorePackTransitionState(receipt)
         requireActivated("restorePackTransitionState")
-        return moduleLifecycle.restorePackTransitionState(stagedState, actionBuffer, receipt)
+        return moduleLifecycle.restorePackTransitionState(txn, receipt)
     end
 
     local logPrefix = "[" .. tostring(def.id or pluginGuid) .. "] "
@@ -440,52 +400,49 @@ function managedModule.create(opts)
         sharedEventRegistrations = opts.sharedEventRegistrations,
         overlayDeclarations = opts.overlayDeclarations,
         pluginGuid = pluginGuid,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = state,
         store = nil,
         runtime = nil,
         host = host,
         controlCatalog = controlCatalog,
         onActivate = opts.onActivate,
-        actionBuffer = actionBuffer,
         effectReceipts = {},
         fallbackUiRequested = false,
         activated = false,
     }
     moduleRegistry.setRecord(module, record)
 
-    store = moduleState.createStore(persistentState, cache.data.create({
+    store = lanes.runtimeData
+    store.cache = cache.data.create({
         definition = def,
         ownerId = pluginGuid,
         source = "store.cache",
-    }), sharedData.create({
+    })
+    store.shared = sharedData.create({
         host = module,
         record = record,
         lane = "runtime",
         source = "store.shared",
-    }))
+    })
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
-    runtimeContext = createRuntimeContext(store, moduleState.createRuntimeStatus(persistentState))
+    runtimeContext = createRuntimeContext(store, lanes.runtimeStatus)
     record.store = store
     record.runtime = runtimeContext
 
-    local uiContext = uiContextModule.create({
-        definition = def,
-        stagedState = stagedState,
-        shared = sharedData.create({
-            host = module,
-            record = record,
-            lane = "ui",
-            source = "state.shared",
-            actionBuffer = actionBuffer,
-        }),
+    local uiShared = sharedData.create({
+        host = module,
+        record = record,
+        lane = "ui",
+        source = "state.shared",
         actionBuffer = actionBuffer,
+    })
+    lanes.uiData.shared = uiShared
+    local uiContext = uiContextModule.create({
+        lanes = lanes,
+        shared = uiShared,
         host = host,
         controls = controls.refs.createUi(stagedState, controlCatalog),
-        status = moduleState.createUiStatus(stagedState),
-        resetAll = function(resetOpts)
-            return stageResetAll(resetOpts)
-        end,
+        resetAll = txn.queueResetAll,
     })
 
     local function runDrawLifecycle(drawCallback)

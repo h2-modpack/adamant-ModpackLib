@@ -23,7 +23,7 @@ local function attachModule(pluginGuid, definition, persisted, exports)
         tooltip = definition.tooltip,
         storage = definition.storage,
     })
-    local persistentState, stagedState = CreateModuleState(persisted or {}, definition)
+    local _, _, moduleState = CreateModuleState(persisted or {}, definition)
     local function adaptDraw(callback)
         if type(callback) ~= "function" then
             return callback
@@ -50,8 +50,7 @@ local function attachModule(pluginGuid, definition, persisted, exports)
     local liveModule = LibManagedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         mutationBundle = mutationBundle,
         drawTab = adaptDraw(exports.DrawTab),
         drawQuickContent = adaptDraw(exports.DrawQuickContent),

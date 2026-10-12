@@ -439,7 +439,7 @@ Rules:
 - status cannot participate in hashes
 - enabled toggles should write through the module host flow
 - debug toggles should write through the module host flow
-- profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
+- profile/hash plumbing should stage values through `module.stage(...)` and commit them through `module.flush()`
 - transient aliases are read from `ui.data` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
 
@@ -533,7 +533,7 @@ Reserved aliases:
 Managed staged UI state for the module. This is Lib-owned plumbing
 object; module draw callbacks receive the narrower `ui.data` adapter below.
 
-Internal surface:
+Internal view surface (the `staged` field of the per-module state object):
 - `stagedState.get(alias)`
 - `stagedState.read(alias)`
 - `stagedState.table(alias)`
@@ -541,15 +541,10 @@ Internal surface:
 - `stagedState.getAliasSchema(alias)`
 - `stagedState.write(alias, value)`
 - `stagedState.reset(alias)`
-- `stagedState.resetAll(opts?)`
-- `stagedState.isDirty()`
-- `stagedState.auditMismatches()`
 
-Internal plumbing methods:
-- `stagedState._flushToConfig()`
-- `stagedState._reloadFromConfig()`
-- `stagedState._captureDirtyConfigSnapshot()`
-- `stagedState._restoreConfigSnapshot(snapshot)`
+The view has no transaction powers. Dirty tracking, flush, reload, drift audit,
+whole-module reset, and the queued status reset live on the module state's
+lifecycle-only transaction (`state.txn`).
 
 When a module is rendered through a live module, draw callbacks receive a
 restricted author-facing `ui.data` view with:

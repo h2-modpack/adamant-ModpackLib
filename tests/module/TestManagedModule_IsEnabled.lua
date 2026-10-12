@@ -13,8 +13,8 @@ function TestManagedModule_IsEnabled:makeStore(enabled)
         name = "Is Enabled Store",
         storage = {},
     })
-    local store = self.h:createModuleState({ Enabled = enabled }, definition)
-    return store
+    local _, _, moduleState = self.h:createModuleState({ Enabled = enabled }, definition)
+    return moduleState.txn
 end
 
 function TestManagedModule_IsEnabled:testEnabledUncoordinated()

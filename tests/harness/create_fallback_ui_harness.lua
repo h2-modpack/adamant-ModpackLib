@@ -150,15 +150,14 @@ local function createFallbackUiHarness(opts)
             name = moduleOpts.name or "Fallback UI Test",
             storage = {},
         })
-        local store, stagedState = self:createModuleState({
+        local _, _, moduleState = self:createModuleState({
             Enabled = moduleOpts.enabled ~= false,
             DebugMode = moduleOpts.debugMode == true,
         }, definition)
         local host = self.managedModule.create({
             pluginGuid = pluginGuid,
             definition = definition,
-            persistentState = store,
-            stagedState = stagedState,
+            state = moduleState,
             drawTab = function() end,
         })
         return host, host

@@ -109,52 +109,14 @@ local function createPathMock(target)
     return counts, testModUtil
 end
 
-local function createStagedState()
-    local stagedState
-    stagedState = {
-        view = {},
-        get = function(alias)
-            return {
-                read = function()
-                    return stagedState.read(alias)
-                end,
-            }
-        end,
-        read = function() end,
-        write = function() end,
-        reset = function() end,
-        getAliasSchema = function() end,
-        isDirty = function()
-            return false
-        end,
-        _flushToConfig = function() end,
-        _reloadFromConfig = function() end,
-        auditMismatches = function()
-            return {}
-        end,
-    }
-    return stagedState
-end
-
-local function createStore(enabled)
-    local store
-    store = {
-        get = function(alias)
-            return {
-                read = function()
-                    return store.read(alias)
-                end,
-            }
-        end,
-        read = function(key)
-            if key == "Enabled" then
-                return enabled == true
-            end
-            return false
-        end,
-        getAliasSchema = function() end,
-    }
-    return store
+local function createHookModuleState(harness, enabled)
+    local definition = harness.managedModule.prepareDefinition({}, {
+        id = "HookTestState",
+        name = "Hook Test State",
+        storage = {},
+    })
+    local store, _, moduleState = harness:createModuleState({ Enabled = enabled == true }, definition)
+    return moduleState, store
 end
 
 function TestHooks:setUp()
@@ -174,7 +136,7 @@ end
 
 function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOpts)
     activationOpts = activationOpts or {}
-    local store = createStore(activationOpts.enabled == true)
+    local moduleState, store = createHookModuleState(self.harness, activationOpts.enabled)
     local hookDeclarations = self.harness.hooksBundle.declarations.create()
     local mutationBundle = {
         patchMutation = activationOpts.patchMutation,
@@ -182,8 +144,7 @@ function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOp
     local host = self.managedModule.create({
         pluginGuid = pluginGuid,
         definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        persistentState = store,
-        stagedState = createStagedState(),
+        state = moduleState,
         hookDeclarations = hookDeclarations,
         mutationBundle = mutationBundle,
         drawTab = function() end,
@@ -310,8 +271,7 @@ function TestHooks:testModuleHookDeclarationsAreStoredOnModuleRegistry()
     local host = self.managedModule.create({
         pluginGuid = "hook-test-state-declarations",
         definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        persistentState = createStore(false),
-        stagedState = createStagedState(),
+        state = createHookModuleState(self.harness, false),
         hookDeclarations = hookDeclarations,
         drawTab = function() end,
     })
@@ -825,8 +785,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
     local host = self.managedModule.create({
         pluginGuid = "hook-pack.Alpha",
         definition = definition,
-        persistentState = createStore(true),
-        stagedState = createStagedState(),
+        state = createHookModuleState(self.harness, true),
         mutationBundle = mutationBundle,
         drawTab = function() end,
     })
@@ -843,7 +802,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local target = { Value = "base" }
     self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
-    local store = createStore(true)
+    local firstModuleState, store = createHookModuleState(self.harness, true)
 
     local firstDefinition = self.managedModule.prepareDefinition({}, {
         modpack = packId,
@@ -854,8 +813,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local firstHost = self.managedModule.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = firstDefinition,
-        persistentState = store,
-        stagedState = createStagedState(),
+        state = firstModuleState,
         mutationBundle = {
             patchMutation = function(_, _, plan)
                 firstBuildCalls = firstBuildCalls + 1
@@ -875,8 +833,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local secondHost = self.managedModule.create({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = secondDefinition,
-        persistentState = store,
-        stagedState = createStagedState(),
+        state = createHookModuleState(self.harness, true),
         mutationBundle = {
             patchMutation = function(_, _, plan)
                 secondBuildCalls = secondBuildCalls + 1

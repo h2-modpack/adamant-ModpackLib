@@ -136,7 +136,7 @@ local function createOverlayHarness(opts)
                 name = moduleOpts.name or "Overlay Module",
                 storage = moduleOpts.storage or {},
             })
-            local store, stagedState = createModuleState(base, moduleOpts.config or {
+            local store, stagedState, moduleState = createModuleState(base, moduleOpts.config or {
                 Enabled = true,
                 DebugMode = false,
             }, definition)
@@ -186,8 +186,7 @@ local function createOverlayHarness(opts)
             local host = base.managedModule.create({
                 pluginGuid = pluginGuid,
                 definition = definition,
-                persistentState = store,
-                stagedState = stagedState,
+                state = moduleState,
                 mutationBundle = {
                     patchMutation = moduleOpts.patchMutation,
                 },

@@ -32,7 +32,7 @@ Every module, coordinated or standalone, enters through the same Lib path:
 12. `module.onActivate(host, runtime)` runs, if declared, against the prepared
     runtime state.
 
-Activation does not call `_reloadFromConfig()`. If `onActivate(...)` cannot see
+Activation does not call the module state's `txn.reload()`. If `onActivate(...)` cannot see
 hydrated runtime data, the bug is in state construction or declaration
 preparation, not in activation ordering.
 

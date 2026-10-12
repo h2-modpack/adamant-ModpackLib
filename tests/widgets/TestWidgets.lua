@@ -475,7 +475,7 @@ function TestWidgets:testButtonRejectsRawActionKey()
 end
 
 function TestWidgets:testButtonStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "recording")
     local clickedLabels = {}
     local imgui = self.h.makeDropdownImgui()
@@ -496,7 +496,7 @@ function TestWidgets:testButtonStagesDrawActionRef()
 end
 
 function TestWidgets:testCheckboxStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "enabled")
     local stagedState = self.h.createValueStagedState(false)
     local imgui = self.h.makeDropdownImgui()
@@ -514,7 +514,7 @@ function TestWidgets:testCheckboxStagesDrawActionRef()
 end
 
 function TestWidgets:testDropdownStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "mode")
     local stagedState = self.h.createValueStagedState(1)
     local imgui = self.h.makeDropdownImgui()
@@ -610,7 +610,7 @@ function TestWidgets:testDropdownDoesNotRewriteHiddenCurrentValue()
 end
 
 function TestWidgets:testStepperStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "runs")
     local imgui = self.h.makeStepperImgui("+##Runs_inc")
     local stagedState = self.h.createValueStagedState(3)
@@ -627,7 +627,7 @@ function TestWidgets:testStepperStagesDrawActionRef()
 end
 
 function TestWidgets:testRadioStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "mode")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
@@ -679,7 +679,7 @@ function TestWidgets:testRadioSkipsHiddenValues()
 end
 
 function TestWidgets:testPackedRadioStagesSelectedChildAction()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "packed")
     local imgui = self.h.makeDropdownImgui()
     imgui.RadioButton = function(label)
@@ -698,7 +698,7 @@ function TestWidgets:testPackedRadioStagesSelectedChildAction()
 end
 
 function TestWidgets:testSteppedRangeStagesDrawActionRef()
-    local actionBuffer = self.h.moduleState.createActionBuffer()
+    local actionBuffer = self.h.actionBuffer.createBuffer()
     local action = DrawAction(self.h, actionBuffer, "range")
     local imgui = self.h.makeStepperImgui("+##Max_max_inc")
     local stagedState = createWritableStagedState({

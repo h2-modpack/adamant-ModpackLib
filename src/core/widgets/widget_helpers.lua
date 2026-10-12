@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local storageApi = deps.storage
 local widgetHelpers = {
-    actions = deps.actions,
+    isDrawActionRef = deps.isDrawActionRef,
     imguiHelpers = deps.imguiHelpers,
     logging = logging,
 }
@@ -152,7 +152,7 @@ function widgetHelpers.StageAction(context, opts, defaultValue)
     if action == nil then
         return
     end
-    if widgetHelpers.actions.isDrawActionRef(action) then
+    if widgetHelpers.isDrawActionRef(action) then
         local payload = opts.value
         if payload == nil then
             payload = defaultValue

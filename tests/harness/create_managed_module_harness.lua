@@ -99,8 +99,7 @@ local function createManagedModuleHarness(harnessOpts)
         local host, store = self.managedModule.create({
             pluginGuid = pluginGuid,
             definition = moduleOpts.definition,
-            persistentState = moduleOpts.persistentState,
-            stagedState = moduleOpts.stagedState,
+            state = moduleOpts.state,
             mutationBundle = {
                 patchMutation = adaptPatchMutation(moduleOpts.patchMutation),
             },

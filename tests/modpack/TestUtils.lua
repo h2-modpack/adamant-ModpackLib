@@ -152,7 +152,7 @@ function CreateModuleState(config, definition)
     local state = LibModuleState.create(definition, {
         configPath = configPath,
     })
-    return state.persistentState, state.stagedState
+    return state.persistent, state.staged, state
 end
 
 function InstallWindowImGuiStub(overrides)
@@ -481,7 +481,7 @@ function MockModuleRegistry.create(moduleDefs)
             tooltip = def.tooltip,
             hash = def.hash,
         })
-        local persistentState, stagedState = CreateModuleState(persisted, definition)
+        local _, _, moduleState = CreateModuleState(persisted, definition)
         local pluginGuid = def.pluginGuid or ("adamant-" .. def.id)
         local function adaptDraw(callback)
             if type(callback) ~= "function" then
@@ -509,8 +509,7 @@ function MockModuleRegistry.create(moduleDefs)
         local liveModule = LibManagedModule.create({
             pluginGuid = pluginGuid,
             definition = definition,
-            persistentState = persistentState,
-            stagedState = stagedState,
+            state = moduleState,
             mutationBundle = mutationBundle,
             drawTab = adaptDraw(def.DrawTab or function() end),
             drawQuickContent = adaptDraw(def.DrawQuickContent),

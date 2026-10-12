@@ -134,6 +134,7 @@ local function createWidgetHarness(opts)
         managedModule = base.managedModule,
         moduleState = base.moduleState,
         uiActions = base.uiActions,
+        actionBuffer = base.actionBuffer,
 
         createValueStagedState = createValueStagedState,
         createReadOnlyStagedState = createReadOnlyStagedState,

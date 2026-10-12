@@ -270,7 +270,7 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
             { type = "bool", alias = "FlagA", default = false },
         },
     })
-    local persistentState, stagedState = CreateModuleState({
+    local _, _, moduleState = CreateModuleState({
         Enabled = true,
         DebugMode = false,
         FlagA = false,
@@ -278,8 +278,7 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
     local replacementLiveModule = LibManagedModule.create({
         pluginGuid = entry.pluginGuid,
         definition = replacementDefinition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         drawTab = function() end,
         drawQuickContent = function()
             secondQuickRenders = secondQuickRenders + 1

@@ -19,8 +19,8 @@ local function makeStore(harness, definition, config, opts)
     if not (type(definition) == "table" and rawget(definition, "_preparedDefinition") == true) then
         definition = harness.managedModule.prepareDefinition({}, definition)
     end
-    local persistentState, stagedState = harness:createModuleState(config, definition, opts)
-    return persistentState, stagedState, config
+    local persistentState, stagedState, moduleState = harness:createModuleState(config, definition, opts)
+    return persistentState, stagedState, config, moduleState
 end
 
 local function writeTempConfig(contents)
@@ -133,7 +133,7 @@ Limit = 3
     self.harness.chalk.original = function()
         error("native backend should not call Chalk")
     end
-    local ok, _, stagedState = pcall(function()
+    local ok, _, stagedState, _, moduleState = pcall(function()
         return makeStore(self.harness, definition, {}, {
             configPath = path,
         })
@@ -149,7 +149,7 @@ Limit = 3
     lu.assertEquals(stagedState.table("Rows"):read(2, "Limit"), 3)
 
     stagedState.write("MyFlag", true)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
 
     local file = assert(io.open(path, "r"))
     local saved = file:read("*a")

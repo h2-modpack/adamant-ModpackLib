@@ -12,12 +12,11 @@ function TestManagedModule_PrepareDefinition:tearDown()
     self.h:restoreWarnings()
 end
 
-local function createAndActivate(h, pluginGuid, definition, store, stagedState)
+local function createAndActivate(h, pluginGuid, definition, moduleState)
     local module = h.managedModule.create({
         pluginGuid = pluginGuid,
         definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
+        state = moduleState,
         drawTab = function() end,
     })
     return module.activate()
@@ -289,12 +288,12 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRequestsCoordinato
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertTrue(owner.requiresFullReload)
     lu.assertNotNil(self.h.managedModule.getLiveModule("test-module"))
@@ -329,12 +328,12 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordina
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
@@ -368,12 +367,12 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPend
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
@@ -446,7 +445,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRejectsRawDefiniti
             { type = "bool", alias = "EnabledFlag", default = false },
         },
     })
-    local store, stagedState = self.h:createModuleState({}, prepared)
+    local _, _, moduleState = self.h:createModuleState({}, prepared)
 
     lu.assertErrorMsgContains("prepared definition is required", function()
         self.h.managedModule.create({
@@ -456,8 +455,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRejectsRawDefiniti
                     { type = "bool", alias = "EnabledFlag", default = false },
                 },
             },
-            persistentState = store,
-            stagedState = stagedState,
+            state = moduleState,
             drawTab = function() end,
         })
     end)

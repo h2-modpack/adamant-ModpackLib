@@ -131,7 +131,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         name = "Alpha",
         storage = {},
     })
-    local persistentState, stagedState = CreateModuleState({
+    local _, _, moduleState = CreateModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
@@ -145,8 +145,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
     local liveModule = LibManagedModule.create({
         pluginGuid = "test-pack.Alpha",
         definition = definition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         mutationBundle = mutationBundle,
         drawTab = function() end,
     })
