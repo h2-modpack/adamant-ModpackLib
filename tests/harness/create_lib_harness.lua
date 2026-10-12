@@ -136,6 +136,27 @@ local function createLibHarness(opts)
         local state = self.moduleState.create(definition, createOpts)
         return state.persistent, state.staged, state
     end
+    -- Direct `managedModule.create(...)` callers: supply the empty Lib-built declaration inputs the
+    -- activation finalizer always passes in production, unless the test provides its own.
+    function harness:createManagedInstance(opts)
+        local createOpts = {}
+        for key, value in pairs(opts) do
+            createOpts[key] = value
+        end
+        if createOpts.mutationBundle == nil then
+            createOpts.mutationBundle = { patchMutation = nil }
+        end
+        if createOpts.hookDeclarations == nil then
+            createOpts.hookDeclarations = self.hooksBundle.declarations.create()
+        end
+        if createOpts.sharedDataDeclarations == nil then
+            createOpts.sharedDataDeclarations = self.sharedBundle.dataDeclarations.createDeclarations()
+        end
+        if createOpts.controlCatalog == nil then
+            createOpts.controlCatalog = { instances = {}, order = {} }
+        end
+        return self.managedModule.create(createOpts)
+    end
     function harness.createSystem(ownerId)
         return harness.systemScope.create(ownerId, {
             hooks = harness.hooksBundle.system,

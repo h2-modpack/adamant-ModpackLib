@@ -144,7 +144,7 @@ function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOp
     local mutationBundle = {
         patchMutation = activationOpts.patchMutation,
     }
-    local host = self.managedModule.create({
+    local host = self.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = self.moduleDefinition.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
         state = moduleState,
@@ -871,7 +871,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
             plan:set(target, "Value", "patched")
         end,
     }
-    local host = self.managedModule.create({
+    local host = self.harness:createManagedInstance({
         pluginGuid = "hook-pack.Alpha",
         definition = definition,
         state = createHookModuleState(self.harness, true),
@@ -899,7 +899,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         name = "Alpha",
         storage = {},
     })
-    local firstHost = self.managedModule.create({
+    local firstHost = self.harness:createManagedInstance({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = firstDefinition,
         state = firstModuleState,
@@ -919,7 +919,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         name = "Alpha",
         storage = {},
     })
-    local secondHost = self.managedModule.create({
+    local secondHost = self.harness:createManagedInstance({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = secondDefinition,
         state = createHookModuleState(self.harness, true),

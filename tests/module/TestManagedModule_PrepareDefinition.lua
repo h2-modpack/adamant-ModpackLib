@@ -13,7 +13,7 @@ function TestManagedModule_PrepareDefinition:tearDown()
 end
 
 local function createAndActivate(h, pluginGuid, definition, moduleState)
-    local module = h.managedModule.create({
+    local module = h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,
@@ -448,7 +448,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRejectsRawDefiniti
     local _, _, moduleState = self.h:createModuleState({}, prepared)
 
     lu.assertErrorMsgContains("prepared definition is required", function()
-        self.h.managedModule.create({
+        self.h.harness:createManagedInstance({
             pluginGuid = "test-raw-host",
             definition = {
                 storage = {

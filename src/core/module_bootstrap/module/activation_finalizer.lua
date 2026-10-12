@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local managedModule = deps.managedModule
+local moduleActivation = deps.moduleActivation
 local definitionApi = deps.definition
 local moduleRegistry = deps.moduleRegistry
 local moduleState = deps.moduleState
@@ -111,10 +112,8 @@ function activationFinalizer.activate(opts, declarations)
         controlCatalog = compiledControls.catalog,
     })
     attachFallbackUi(declarations, opts.pluginGuid)
-    local ok, err = module.activate()
-    if not ok then
-        error(err, 0)
-    end
+    -- Raises on failure; the facade's `module.activate()` owns the single activate_failed report.
+    moduleActivation.activateOrThrow(module)
     return module, contexts
 end
 

@@ -46,7 +46,10 @@ module.activate()
 config table. Pass `hash = false` to keep the module out of pack hashes and
 profiles entirely (enabled state included). Storage, actions, cache, controls, UI, hooks, shared data,
 mutations, overlays, and fallback UI are declarations made before
-activation.
+activation. Declaration calls validate their arguments immediately: for
+example, an unknown overlay region or a non-function
+`module.fallbackUi.attachGuiOnce(register)` fails at that call, not at
+`module.activate()`.
 
 ## Author Object
 

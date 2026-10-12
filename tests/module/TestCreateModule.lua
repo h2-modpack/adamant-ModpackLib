@@ -728,6 +728,30 @@ function TestCreateModule:testModuleMutationPatchDeclaresActivationMutation()
     lu.assertNil(patchRuntime.data.getAliasSchema)
 end
 
+function TestCreateModule:testFacadeActivationFailureReportsOnce()
+    local host = createTestModule(self.h, {
+        pluginGuid = "test-create-module-activation-failure-once",
+        config = {
+            Enabled = true,
+        },
+        id = "ActivationFailureOnce",
+        name = "Activation Failure Once",
+        drawTab = function() end,
+    })
+    host.mutation.patch(function()
+        error("facade activate boom")
+    end)
+
+    local ok, err = host.activate()
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "facade activate boom")
+    lu.assertEquals(#self.h.warnings, 1)
+    lu.assertStrContains(self.h.warnings[1], "managed_module.activate_failed")
+    lu.assertStrContains(self.h.warnings[1], "module.activate failed; skipping module:")
+    lu.assertStrContains(self.h.warnings[1], "facade activate boom")
+end
+
 function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()
     local host = createTestModule(self.h, {
         pluginGuid = "test-create-module-module-mutation-after-activation",

@@ -124,7 +124,7 @@ end
 
 function TestMutation_DefinitionLifecycle:activateMutationModule(pluginGuid, definition, config, patchCallback)
     local store, _, moduleState = createModuleState(self.harness, config, definition)
-    local module = self.managedModule.create({
+    local module = self.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,

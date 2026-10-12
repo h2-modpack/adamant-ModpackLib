@@ -96,7 +96,7 @@ local function createManagedModuleHarness(harnessOpts)
 
     function h:createManagedModule(pluginGuid, moduleOpts)
         moduleOpts = moduleOpts or {}
-        local host, contexts = self.managedModule.create({
+        local host, contexts = self.harness:createManagedInstance({
             pluginGuid = pluginGuid,
             definition = moduleOpts.definition,
             state = moduleOpts.state,

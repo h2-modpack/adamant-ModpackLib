@@ -5,7 +5,7 @@ local currentRunCache = import('core/cache/current_run_cache.lua', nil, {
     getCurrentRun = deps.gameDeps.cache.CurrentRun,
 })
 
-local data = import('core/cache/adapters/data_cache.lua', nil, {
+local data = import('core/cache/data_cache.lua', nil, {
     logging = deps.logging,
     currentRunCache = currentRunCache,
 })

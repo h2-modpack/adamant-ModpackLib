@@ -2,7 +2,6 @@ local deps = ...
 
 local logging = deps.logging
 local shared = deps.shared
-local hookDeclarations = deps.hookDeclarations
 local overlays = deps.overlays
 local mutation = deps.mutation
 local moduleRegistry = deps.moduleRegistry
@@ -46,11 +45,6 @@ function managedModule.create(opts)
     local state = opts.state
     local persistentState = state.persistent
     local actionBuffer = state.actionBuffer
-    local sharedDataDeclarations = opts.sharedDataDeclarations or shared.dataDeclarations.createDeclarations()
-    local controlCatalog = opts.controlCatalog or {
-        instances = {},
-        order = {},
-    }
     local record
 
     local module = moduleIdentity.create(def, pluginGuid, function()
@@ -109,13 +103,13 @@ function managedModule.create(opts)
         state = state,
         ownerId = pluginGuid,
         cacheDeclarations = def.cache,
-        sharedDeclarations = sharedDataDeclarations,
+        sharedDeclarations = opts.sharedDataDeclarations,
         emitShared = emitSharedEvent,
         stageShared = stageSharedEvent,
-        controlCatalog = controlCatalog,
+        controlCatalog = opts.controlCatalog,
         host = host,
     })
-    local boundMutation = mutation.bind(pluginGuid, opts.mutationBundle or { patchMutation = nil }, host, runtime)
+    local boundMutation = mutation.bind(pluginGuid, opts.mutationBundle, host, runtime)
 
     function module.affectsRunData()
         return boundMutation.affectsRunData()
@@ -156,9 +150,9 @@ function managedModule.create(opts)
         runtime = runtime,
         onActivate = opts.onActivate,
         capabilityInputs = {
-            hookDeclarations = opts.hookDeclarations or hookDeclarations.create(),
+            hookDeclarations = opts.hookDeclarations,
             shared = {
-                data = sharedDataDeclarations,
+                data = opts.sharedDataDeclarations,
                 events = opts.sharedEventRegistrations,
             },
             overlays = {

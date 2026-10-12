@@ -2,7 +2,7 @@
 -- Test utilities: load Lib and expose shared modpack test helpers.
 -- =============================================================================
 -- luacheck: globals LibConfig LibTestImports Warnings lib CaptureWarnings RestoreWarnings
--- luacheck: globals GetRuntimeLiveModules SetRuntimeLiveModule LibStorage LibModuleState LibManagedModule LibOverlays
+-- luacheck: globals GetRuntimeLiveModules SetRuntimeLiveModule LibStorage LibModuleState CreateLibManagedModule LibOverlays
 -- luacheck: globals CreateModuleState InstallWindowImGuiStub CreateModpackHudStub import ModpackTestApi CreateModpackHarness
 -- luacheck: globals MockModuleRegistry _originalPrint print
 
@@ -118,14 +118,27 @@ LibModuleRegistry = setmetatable({}, {
         return assert(LibTestImports["core/lib_bootstrap/module_registry.lua"], "LibModuleRegistry test service missing")[key]
     end,
 })
-LibManagedModule = setmetatable({}, {
-    __index = function(_, key)
-        return assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key]
-    end,
-    __newindex = function(_, key, value)
-        assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key] = value
-    end,
-})
+-- Direct `managedModule.create(...)` for modpack tests, supplying the empty Lib-built declaration
+-- inputs the activation finalizer always passes in production unless the test provides its own.
+function CreateLibManagedModule(opts)
+    local createOpts = {}
+    for key, value in pairs(opts) do
+        createOpts[key] = value
+    end
+    if createOpts.mutationBundle == nil then
+        createOpts.mutationBundle = { patchMutation = nil }
+    end
+    if createOpts.hookDeclarations == nil then
+        createOpts.hookDeclarations = LibTestImports["core/hooks/00_init.lua"].declarations.create()
+    end
+    if createOpts.sharedDataDeclarations == nil then
+        createOpts.sharedDataDeclarations = LibTestImports["core/shared/00_init.lua"].dataDeclarations.createDeclarations()
+    end
+    if createOpts.controlCatalog == nil then
+        createOpts.controlCatalog = { instances = {}, order = {} }
+    end
+    return LibTestImports["core/module_bootstrap/managed_module.lua"].create(createOpts)
+end
 local function GetLibOverlayService()
     local bundle = assert(LibTestImports["core/overlays/00_init.lua"], "LibOverlays test bundle missing")
     return assert(bundle.service, "LibOverlays test service missing")
@@ -524,7 +537,7 @@ function MockModuleRegistry.create(moduleDefs)
             local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
             mutations.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
         end
-        local liveModule = LibManagedModule.create({
+        local liveModule = CreateLibManagedModule({
             pluginGuid = pluginGuid,
             definition = definition,
             state = moduleState,

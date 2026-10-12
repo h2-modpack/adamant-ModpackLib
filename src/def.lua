@@ -509,11 +509,10 @@ local lib = {}
 ---@field mutation AdamantModpackLib.BoundMutation
 ---@field fallbackUiRequested boolean
 
----Internal: one capability activation installs (composed in `core/init.lua`). `install` returns the
+---Internal: one capability install activation runs (composed in `core/init.lua`). Returns the
 ---capability's receipt, or nil when the module declares nothing for it; commit order is the receipt phase.
----@class AdamantModpackLib.ModuleCapability
----@field name string
----@field install fun(ownerId: string, owner: table, inputs: AdamantModpackLib.CapabilityInputs): AdamantModpackLib.Receipt?
+---@alias AdamantModpackLib.ModuleCapabilityInstall
+---| fun(ownerId: string, owner: table, inputs: AdamantModpackLib.CapabilityInputs): AdamantModpackLib.Receipt?
 
 ---Internal: Lib-built inputs for `managedModule.create(...)` (finalizer or test harness only).
 ---@class AdamantModpackLib.ManagedModuleCreateOpts
@@ -522,13 +521,13 @@ local lib = {}
 ---@field state AdamantModpackLib.ModuleState
 ---@field drawTab AdamantModpackLib.UiCallback
 ---@field drawQuickContent? AdamantModpackLib.UiCallback
----@field mutationBundle? table
----@field hookDeclarations? table
----@field sharedDataDeclarations? table
+---@field mutationBundle table
+---@field hookDeclarations table
+---@field sharedDataDeclarations table
 ---@field sharedEventRegistrations? table
 ---@field overlayDeclarations? table
 ---@field fallbackUiRequested? boolean
----@field controlCatalog? table
+---@field controlCatalog table
 ---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
 ---@field onCommit? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, commit: table): any
 ---@field onReload? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, reload: table): any

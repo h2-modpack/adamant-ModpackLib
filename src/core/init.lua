@@ -149,47 +149,32 @@ local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
     receipt = receipt,
 })
 -- Capability installs activation runs for every module, in install order. Commit order comes
--- from each receipt's phase; `install` returns nil when the module declares nothing for it.
----@type AdamantModpackLib.ModuleCapability[]
+-- from each receipt's phase; an install returns nil when the module declares nothing for it.
+---@type AdamantModpackLib.ModuleCapabilityInstall[]
 local moduleCapabilities = {
-    {
-        name = "shared",
-        install = function(ownerId, _, inputs)
-            return sharedBundle.install(ownerId, inputs.shared)
-        end,
-    },
-    {
-        name = "hooks",
-        install = function(ownerId, owner, inputs)
-            return hooks.install(ownerId, owner, inputs.hookDeclarations)
-        end,
-    },
-    {
-        name = "overlays",
-        install = function(ownerId, owner, inputs)
-            return overlays.install(ownerId, {
-                owner = owner,
-                declarations = inputs.overlays.declarations,
-                host = inputs.overlays.host,
-                runtime = inputs.overlays.runtime,
-            })
-        end,
-    },
-    {
-        name = "mutation",
-        install = function(_, _, inputs)
-            return inputs.mutation.sync()
-        end,
-    },
-    {
-        name = "fallbackUi",
-        install = function(ownerId, owner, inputs)
-            if not inputs.fallbackUiRequested then
-                return nil
-            end
-            return fallbackUi.install(ownerId, owner)
-        end,
-    },
+    function(ownerId, _, inputs)
+        return sharedBundle.install(ownerId, inputs.shared)
+    end,
+    function(ownerId, owner, inputs)
+        return hooks.install(ownerId, owner, inputs.hookDeclarations)
+    end,
+    function(ownerId, owner, inputs)
+        return overlays.install(ownerId, {
+            owner = owner,
+            declarations = inputs.overlays.declarations,
+            host = inputs.overlays.host,
+            runtime = inputs.overlays.runtime,
+        })
+    end,
+    function(_, _, inputs)
+        return inputs.mutation.sync()
+    end,
+    function(ownerId, owner, inputs)
+        if not inputs.fallbackUiRequested then
+            return nil
+        end
+        return fallbackUi.install(ownerId, owner)
+    end,
 }
 local moduleActivation = import('core/module_bootstrap/managed_module_activation.lua', nil, {
     logging = logging,
@@ -204,7 +189,6 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     moduleState = moduleState,
     shared = sharedBundle,
     cache = cacheBundle,
-    hookDeclarations = hooksBundle.declarations,
     overlays = overlays,
     mutation = mutation,
     draw = draw,
@@ -228,6 +212,7 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     managedModule = managedModule,
     definition = definition,
     moduleRegistry = moduleRegistry,
+    moduleActivation = moduleActivation,
     moduleState = moduleState,
     overlayAuthoring = overlaysBundle.authoring,
     hookDeclarations = hooksBundle.declarations,

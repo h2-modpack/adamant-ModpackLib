@@ -183,7 +183,7 @@ local function createOverlayHarness(opts)
             if type(declareOverlays) == "function" then
                 declareOverlays(overlayRegistrar, nil, store)
             end
-            local host = base.managedModule.create({
+            local host = base:createManagedInstance({
                 pluginGuid = pluginGuid,
                 definition = definition,
                 state = moduleState,

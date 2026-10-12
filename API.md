@@ -801,6 +801,11 @@ module.activate()
 Retained element names are local to the module owner id derived from
 `pluginGuid` and do not collide across modules.
 
+Overlay declarations are validated when declared: an unknown `region`, a
+malformed `columns` list or `maxRows`, a non-positive `onInterval` period, or
+bad `onInterval` opts (`opts.when` must be a function) fails the declaration
+call with `overlays.invalid_registration`, not `module.activate()`.
+
 ### `module.overlays.createLine(name, spec)`
 
 Declares one retained display line. Lines can use a one-column convenience shape:
@@ -882,7 +887,8 @@ not being coordinated by Lib modpack.
 ### `module.fallbackUi.attachGuiOnce(register)`
 
 Registers stable no-op-safe fallback UI callbacks once for the module's plugin
-guid. Call this before `module.activate()`.
+guid. Call this before `module.activate()`. `register` must be a function; any
+other value fails the call with `fallback_ui.invalid_args`.
 
 The callback still owns the actual ROM registration, so it runs from the module
 context:

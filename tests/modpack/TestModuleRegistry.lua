@@ -47,7 +47,7 @@ local function attachModule(pluginGuid, definition, persisted, exports)
         local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
         mutations.declarePatch(mutationBundle, adaptPatch(patchPlan))
     end
-    local liveModule = LibManagedModule.create({
+    local liveModule = CreateLibManagedModule({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,

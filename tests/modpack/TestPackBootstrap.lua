@@ -144,7 +144,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)
-    local liveModule = LibManagedModule.create({
+    local liveModule = CreateLibManagedModule({
         pluginGuid = "test-pack.Alpha",
         definition = definition,
         state = moduleState,

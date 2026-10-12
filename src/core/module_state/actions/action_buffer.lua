@@ -32,13 +32,6 @@ local function rejectPrivateActionKey(context, actionKey)
     end
 end
 
-local function validateDeclaredAction(handlers, context, actionKey)
-    validateActionKey(context, actionKey)
-    if handlers[actionKey] == nil then
-        logging.violate("actions.unknown_key", "%s: unknown action key '%s'", tostring(context), tostring(actionKey))
-    end
-end
-
 local function markActionRef(ref, kind)
     ref[ACTION_REF_MARKER] = kind
     return ref
@@ -106,8 +99,9 @@ local function createBuffer(catalog)
     local pendingEvents = {}
     local buffer = {}
 
+    -- Slot access trusts `actionKey`: draw refs, the only production callers, are created
+    -- through `validateAction` (the `actions.get` contact point).
     function buffer.stage(actionKey, value)
-        validateDeclaredAction(handlers, "actions.stage", actionKey)
         if value == nil then
             slots[actionKey] = nil
             return
@@ -116,21 +110,21 @@ local function createBuffer(catalog)
     end
 
     function buffer.validateAction(context, actionKey)
-        validateDeclaredAction(handlers, context, actionKey)
+        validateActionKey(context, actionKey)
+        if handlers[actionKey] == nil then
+            logging.violate("actions.unknown_key", "%s: unknown action key '%s'", tostring(context), tostring(actionKey))
+        end
     end
 
     function buffer.read(actionKey)
-        validateDeclaredAction(handlers, "actions.read", actionKey)
         return CloneValue(slots[actionKey])
     end
 
     function buffer.clear(actionKey)
-        validateDeclaredAction(handlers, "actions.clear", actionKey)
         slots[actionKey] = nil
     end
 
     function buffer.has(actionKey)
-        validateDeclaredAction(handlers, "actions.has", actionKey)
         return slots[actionKey] ~= nil
     end
 

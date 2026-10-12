@@ -249,13 +249,16 @@ function storageRefAdapter.createLane(opts)
     end
 
     if resetRoot ~= nil then
+        local resetContext = source .. ".reset"
         function lane.reset(alias, ...)
+            if select("#", ...) == 0 then
+                -- `resetRoot` resolves and validates the alias itself.
+                rejectPrivateAlias(resetContext, alias)
+                return resetRoot(alias)
+            end
             local ref = lane.get(alias)
             if ref == nil then
                 return nil
-            end
-            if select("#", ...) == 0 then
-                return resetRoot(alias)
             end
             return ref:reset(...)
         end

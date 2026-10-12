@@ -155,7 +155,7 @@ local function createFallbackUiHarness(opts)
             Enabled = moduleOpts.enabled ~= false,
             DebugMode = moduleOpts.debugMode == true,
         }, definition)
-        local host = self.managedModule.create({
+        local host = self.harness:createManagedInstance({
             pluginGuid = pluginGuid,
             definition = definition,
             state = moduleState,

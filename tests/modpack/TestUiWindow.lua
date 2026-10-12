@@ -275,7 +275,7 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
         DebugMode = false,
         FlagA = false,
     }, replacementDefinition)
-    local replacementLiveModule = LibManagedModule.create({
+    local replacementLiveModule = CreateLibManagedModule({
         pluginGuid = entry.pluginGuid,
         definition = replacementDefinition,
         state = moduleState,

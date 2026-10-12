@@ -28,7 +28,7 @@ local data = import('core/shared/data.lua', nil, {
     sharedRegistry = sharedRegistry.data,
 })
 
-local refs = import('core/shared/adapters/data_shared.lua', nil, {
+local refs = import('core/shared/refs.lua', nil, {
     logging = deps.logging,
     data = data,
 })

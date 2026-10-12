@@ -3,9 +3,10 @@ local deps = ...
 local logging = deps.logging
 local coordinator = deps.coordinator
 local moduleRegistry = deps.moduleRegistry
--- Ordered `{ name, install(ownerId, owner, capabilityInputs) -> Receipt? }` list composed by
--- `core/init.lua`. `install` returns nil when the module declares nothing for that capability.
----@type AdamantModpackLib.ModuleCapability[]
+-- Ordered `install(ownerId, owner, capabilityInputs) -> Receipt?` list composed by `core/init.lua`.
+-- An install returns nil when the module declares nothing for that capability; the receipt's own
+-- name identifies it in commit and release errors.
+---@type AdamantModpackLib.ModuleCapabilityInstall[]
 local capabilities = deps.capabilities
 
 local moduleActivation = {}
@@ -66,17 +67,17 @@ end
 function moduleActivation.activateOrThrow(module)
     local record = moduleRegistry.getRecord(module)
     if not record then
-        logging.violate("managed_module.invalid_activate_opts", "managedModule.activateOrThrow: module is required")
+        logging.violate("managed_module.invalid_activate_opts", "module.activate: module is required")
     end
 
     local pluginGuid = module.getOwnerId()
     local def = record.definition
 
     if record.activated == true then
-        logging.violate("managed_module.already_activated", "managedModule.activateOrThrow: module is already activated")
+        logging.violate("managed_module.already_activated", "module.activate: module is already activated")
     end
     if record.activating == true then
-        logging.violate("managed_module.activation_in_progress", "managedModule.activateOrThrow: module activation is already in progress")
+        logging.violate("managed_module.activation_in_progress", "module.activate: module activation is already in progress")
     end
     local meta = module.getMeta()
     local moduleId = module.getModuleId()
@@ -91,8 +92,8 @@ function moduleActivation.activateOrThrow(module)
     local ok, err = pcall(function()
         -- The module itself is the owner token (hooks and the overlay after-hook install share
         -- the module's hook slot).
-        for _, capability in ipairs(capabilities) do
-            local capabilityReceipt = capability.install(pluginGuid, module, inputs)
+        for _, install in ipairs(capabilities) do
+            local capabilityReceipt = install(pluginGuid, module, inputs)
             if capabilityReceipt ~= nil then
                 candidateReceipts[#candidateReceipts + 1] = capabilityReceipt
             end

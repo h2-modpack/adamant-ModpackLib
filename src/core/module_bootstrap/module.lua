@@ -18,6 +18,7 @@ local declarationSurface = import('core/module_bootstrap/module/declaration_surf
 local activationFinalizer = import('core/module_bootstrap/module/activation_finalizer.lua', nil, {
     logging = logging,
     managedModule = deps.managedModule,
+    moduleActivation = deps.moduleActivation,
     definition = deps.definition,
     moduleRegistry = deps.moduleRegistry,
     moduleState = deps.moduleState,

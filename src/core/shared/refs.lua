@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local data = deps.data
 
-local dataShared = {}
+local sharedRefs = {}
 
 local function requireMethod(ref, methodName, name, source)
     local method = ref[methodName]
@@ -47,7 +47,7 @@ end
 --- Creates a lane's shared surface (`read/set/clear/emit`) over one owner's declarations.
 --- `emit` is the lane's emit policy (immediate for runtime, staged for UI), owned by the caller.
 ---@param opts AdamantModpackLib.SharedRefsOpts
-function dataShared.create(opts)
+function sharedRefs.create(opts)
     local refs = {}
     local source = opts.source
 
@@ -78,4 +78,4 @@ function dataShared.create(opts)
     }
 end
 
-return dataShared
+return sharedRefs

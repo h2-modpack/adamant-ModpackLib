@@ -65,7 +65,7 @@ local function createActivatedManagedModule(h, pluginGuid, opts)
             end)
     end
     local contexts
-    host, contexts = h.managedModule.create({
+    host, contexts = h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = opts.definition,
         state = opts.state,
@@ -269,7 +269,7 @@ function TestManagedModule:testSideEffectingManagedModuleMethodsRequireActivatio
         storage = {},
     })
     local _, _, moduleState = self.h:createModuleState({}, definition)
-    local host = self.h.managedModule.create({
+    local host = self.h.harness:createManagedInstance({
         pluginGuid = "test-inactive-host",
         definition = definition,
         state = moduleState,
@@ -311,7 +311,7 @@ function TestManagedModule:testOnActivateUsesPreparedRuntimeStateWithoutReloadin
     config.Mode = "single"
     config.RuntimeReady = false
 
-    local host = self.h.managedModule.create({
+    local host = self.h.harness:createManagedInstance({
         pluginGuid = "test-on-activate-prepared-config",
         definition = definition,
         state = moduleState,
@@ -1067,7 +1067,7 @@ function TestManagedModule:testLiveModuleOwnsManagedModuleCapabilities()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.managedModule.create({
+    local host = self.h.harness:createManagedInstance({
         pluginGuid = "test-live-module-capabilities",
         definition = definition,
         state = moduleState,
@@ -1268,7 +1268,7 @@ function TestManagedModule:testActivationFailureRestoresLiveModuleAndShared()
         function(payload)
             previousValue = "replacement:" .. tostring(payload.value)
         end)
-    secondHost = self.h.managedModule.create({
+    secondHost = self.h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
         state = secondModuleState,
@@ -1341,7 +1341,7 @@ local function createNamedManagedModule(h, pluginGuid, name, onActivate)
         Enabled = true,
         DebugMode = false,
     }, definition)
-    return h.managedModule.create({
+    return h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,
@@ -1433,7 +1433,7 @@ function TestManagedModule:testActivationFailureDropsNewStagedSharedListener()
         function()
             delivered = delivered + 1
         end)
-    host = self.h.managedModule.create({
+    host = self.h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,
@@ -1500,7 +1500,7 @@ function TestManagedModule:testRuntimeSyncFailureRestoresPreviousPatchMutation()
         Enabled = true,
         DebugMode = false,
     }, secondDefinition)
-    local secondHost = self.h.managedModule.create({
+    local secondHost = self.h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = secondDefinition,
         state = secondModuleState,
@@ -1537,7 +1537,7 @@ function TestManagedModule:testActivateModuleReturnsErrorAndDoesNotPublishBroken
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.managedModule.create({
+    local host = self.h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,
@@ -1573,7 +1573,7 @@ function TestManagedModule:testActivateModuleSucceedsThroughLiveModule()
         Enabled = true,
         DebugMode = false,
     }, definition)
-    local host = self.h.managedModule.create({
+    local host = self.h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
         state = moduleState,
@@ -1653,7 +1653,7 @@ function TestManagedModule:testActivationRejectsReentrantActivateCalls()
         DebugMode = false,
     }, definition)
     local host
-    host = self.h.managedModule.create({
+    host = self.h.harness:createManagedInstance({
         pluginGuid = "test-reentrant-activate",
         definition = definition,
         state = moduleState,
@@ -1790,31 +1790,28 @@ end
 
 local function createRecordingCapability(h, events, installs, name, phase, opts)
     opts = opts or {}
-    return {
-        name = name,
-        install = function(ownerId, owner, inputs)
-            installs[#installs + 1] = { name = name, ownerId = ownerId, owner = owner, inputs = inputs }
-            if opts.skip then
-                return nil
-            end
-            return h.harness.receipt.create({
-                name = name,
-                phase = phase,
-                commit = function()
-                    events[#events + 1] = "commit:" .. name
-                    if opts.failCommit then
-                        return false, "boom"
-                    end
-                end,
-                rollback = function()
-                    events[#events + 1] = "rollback:" .. name
-                end,
-                retire = function()
-                    events[#events + 1] = "retire:" .. name
-                end,
-            })
-        end,
-    }
+    return function(ownerId, owner, inputs)
+        installs[#installs + 1] = { name = name, ownerId = ownerId, owner = owner, inputs = inputs }
+        if opts.skip then
+            return nil
+        end
+        return h.harness.receipt.create({
+            name = name,
+            phase = phase,
+            commit = function()
+                events[#events + 1] = "commit:" .. name
+                if opts.failCommit then
+                    return false, "boom"
+                end
+            end,
+            rollback = function()
+                events[#events + 1] = "rollback:" .. name
+            end,
+            retire = function()
+                events[#events + 1] = "retire:" .. name
+            end,
+        })
+    end
 end
 
 local function createCapabilityTestModule(h, pluginGuid)
