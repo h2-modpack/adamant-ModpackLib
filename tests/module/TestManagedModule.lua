@@ -1331,6 +1331,100 @@ function TestManagedModule:testActivationFailureRestoresLiveModuleAndShared()
     end)
 end
 
+local function recordActivationReceipts(h, events)
+    local services = {
+        { service = h.shared, method = "installForModule" },
+        { service = h.harness.hooks, method = "installForModule" },
+        { service = h.overlays, method = "installForModule" },
+        { service = h.harness.mutation, method = "syncForModule" },
+    }
+    for _, entry in ipairs(services) do
+        local original = entry.service[entry.method]
+        entry.service[entry.method] = function(module, ...)
+            local receipt = original(module, ...)
+            local label = module.getMeta().name .. ":" .. receipt.name
+            local recorded = { name = receipt.name, phase = receipt.phase }
+            for _, methodName in ipairs({ "commit", "rollback", "retire" }) do
+                recorded[methodName] = function()
+                    events[#events + 1] = methodName .. ":" .. label
+                    return receipt[methodName]()
+                end
+            end
+            return recorded
+        end
+    end
+end
+
+local function createNamedManagedModule(h, pluginGuid, name, onActivate)
+    local definition = h.managedModule.prepareDefinition({}, {
+        id = "ActivationReceiptOrder",
+        name = name,
+        storage = {},
+    })
+    local store, stagedState = h:createModuleState({
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    return h.managedModule.create({
+        pluginGuid = pluginGuid,
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        onActivate = onActivate,
+        drawTab = function() end,
+    })
+end
+
+function TestManagedModule:testActivationCommitsByPhaseAndReleasesInReverse()
+    local pluginGuid = "test-activation-receipt-order"
+    local events = {}
+    recordActivationReceipts(self.h, events)
+    local function clearEvents()
+        for index = #events, 1, -1 do
+            events[index] = nil
+        end
+    end
+
+    local ok, err = createNamedManagedModule(self.h, pluginGuid, "gen1").activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(events, {
+        "commit:gen1:mutation",
+        "commit:gen1:shared",
+        "commit:gen1:hooks",
+        "commit:gen1:overlays",
+    })
+
+    clearEvents()
+    ok = createNamedManagedModule(self.h, pluginGuid, "gen2", function()
+        error("onActivate boom")
+    end).activate()
+    lu.assertFalse(ok)
+    lu.assertEquals(events, {
+        "commit:gen2:mutation",
+        "commit:gen2:shared",
+        "commit:gen2:hooks",
+        "commit:gen2:overlays",
+        "rollback:gen2:overlays",
+        "rollback:gen2:hooks",
+        "rollback:gen2:shared",
+        "rollback:gen2:mutation",
+    })
+
+    clearEvents()
+    ok, err = createNamedManagedModule(self.h, pluginGuid, "gen3").activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(events, {
+        "commit:gen3:mutation",
+        "commit:gen3:shared",
+        "commit:gen3:hooks",
+        "commit:gen3:overlays",
+        "retire:gen1:overlays",
+        "retire:gen1:hooks",
+        "retire:gen1:shared",
+        "retire:gen1:mutation",
+    })
+end
+
 function TestManagedModule:testActivationFailureDropsNewStagedSharedListener()
     local pluginGuid = "test-activation-new-shared-rollback"
     local sharedId = "test.activation.new.rollback"

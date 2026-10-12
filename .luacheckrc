@@ -39,6 +39,7 @@ globals = {
     "TestStorageValidation",
     "TestSystemScope",
     "TestValues",
+    "TestReceipt",
     "TestWidgets",
     "TestWidgets_Nav"
     }

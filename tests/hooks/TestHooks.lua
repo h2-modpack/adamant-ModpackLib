@@ -444,6 +444,51 @@ function TestHooks.testSystemHooksRedefineAfterLibReloadDisposesPreviousInstall(
     lu.assertEquals(first.env.AdamantHookTestSystemReload("x"), "second:base:x")
 end
 
+local function createOwnerInstallHarness(path)
+    local target = {}
+    local _, modutil = createPathMock(target)
+    local h = createLibHarness({ modutil = modutil })
+    target.env = h.env
+    h.env[path] = function(value)
+        return "base:" .. value
+    end
+    local ownerInstall = h.imports["core/hooks/owner_install.lua"]
+    local declarations = h.hooksBundle.declarations
+    local function createReceipt(ownerId, label)
+        local hookDeclarations = declarations.create()
+        declarations.createRegistrar(hookDeclarations, "test").wrap(path, function(base, value)
+            return label .. ":" .. base(value)
+        end)
+        return ownerInstall.createReceipt(ownerId, { label = label }, hookDeclarations)
+    end
+    return h, createReceipt
+end
+
+function TestHooks.testOwnerInstallRollbackRestoresDisplacedOwner()
+    local h, createReceipt = createOwnerInstallHarness("AdamantHookTestOwnerRollback")
+    local first = createReceipt("test.owner.rollback", "first")
+    local second = createReceipt("test.owner.rollback", "second")
+    lu.assertTrue(first.commit())
+    lu.assertTrue(second.commit())
+    lu.assertEquals(h.env.AdamantHookTestOwnerRollback("x"), "second:base:x")
+
+    lu.assertTrue(second.rollback())
+
+    lu.assertEquals(h.env.AdamantHookTestOwnerRollback("x"), "first:base:x")
+end
+
+function TestHooks.testOwnerInstallRetireDoesNotRestoreDisplacedOwner()
+    local h, createReceipt = createOwnerInstallHarness("AdamantHookTestOwnerRetire")
+    local first = createReceipt("test.owner.retire", "first")
+    local second = createReceipt("test.owner.retire", "second")
+    lu.assertTrue(first.commit())
+    lu.assertTrue(second.commit())
+
+    lu.assertTrue(second.retire())
+
+    lu.assertEquals(h.env.AdamantHookTestOwnerRetire("x"), "base:x")
+end
+
 function TestHooks:testModuleHookDeclarationsRejectAfterActivation()
     self.harness:writeNativeConfig("hook-test-declare-after-activation", {
         Enabled = false,

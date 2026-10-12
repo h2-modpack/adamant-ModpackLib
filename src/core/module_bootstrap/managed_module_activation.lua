@@ -20,22 +20,7 @@ local function createPluginInfo(pluginGuid, def)
     }
 end
 
-local function callReceipt(receipt, methodName)
-    if not (receipt and type(receipt[methodName]) == "function") then
-        return true, nil
-    end
-
-    local ok, result, err = pcall(receipt[methodName])
-    if not ok then
-        return false, result
-    end
-    if result == false then
-        return false, err
-    end
-    return true, nil
-end
-
-local function warnReceiptDisposal(warningId, warningPrefix, errors)
+local function warnReceiptRelease(warningId, warningPrefix, errors)
     if warningId == "managed_module.retire_failed" then
         logging.violate("managed_module.retire_failed", "%s: %s", warningPrefix, table.concat(errors, "; "))
     elseif warningId == "managed_module.activation_rollback_failed" then
@@ -43,31 +28,37 @@ local function warnReceiptDisposal(warningId, warningPrefix, errors)
     end
 end
 
-local function disposeReceipts(receipts, warningId, warningPrefix, preferRetire)
+-- Releases receipts in reverse commit order through `methodName` ("rollback" or "retire").
+local function releaseReceipts(receipts, methodName, warningId, warningPrefix)
     local errors = {}
     for index = #receipts, 1, -1 do
-        local entry = receipts[index]
-        local methodName = "dispose"
-        if preferRetire and entry.receipt and entry.receipt.retire ~= nil then
-            methodName = "retire"
-        end
-        local ok, err = callReceipt(entry.receipt, methodName)
+        local receipt = receipts[index]
+        local ok, err = receipt[methodName]()
         if not ok then
-            errors[#errors + 1] = tostring(entry.name or "receipt") .. ": " .. tostring(err)
+            errors[#errors + 1] = tostring(receipt.name) .. ": " .. tostring(err)
         end
     end
     if #errors > 0 then
-        warnReceiptDisposal(warningId, warningPrefix, errors)
+        warnReceiptRelease(warningId, warningPrefix, errors)
     end
-    return errors
 end
 
-local function commitReceipt(entry)
-    local ok, err = callReceipt(entry.receipt, "commit")
-    if not ok then
-        return false, tostring(entry.name or "receipt") .. " commit failed: " .. tostring(err)
+-- Stable order by receipt phase, so lower phases commit first and release last.
+local function orderByPhase(receipts)
+    local ordered = {}
+    for index, receipt in ipairs(receipts) do
+        ordered[index] = { receipt = receipt, index = index }
     end
-    return true, nil
+    table.sort(ordered, function(left, right)
+        if left.receipt.phase ~= right.receipt.phase then
+            return left.receipt.phase < right.receipt.phase
+        end
+        return left.index < right.index
+    end)
+    for index, entry in ipairs(ordered) do
+        ordered[index] = entry.receipt
+    end
+    return ordered
 end
 
 local function retireOldModule(previousModule, replacementLabel)
@@ -76,8 +67,9 @@ local function retireOldModule(previousModule, replacementLabel)
     if type(receipts) ~= "table" or #receipts == 0 then
         return
     end
-    -- Retire, not dispose: restoring what the old module replaced would resurrect an older generation.
-    disposeReceipts(receipts, "managed_module.retire_failed", tostring(replacementLabel) .. " previous module retirement failed", true)
+    -- Retire, not rollback: restoring what the old module replaced would resurrect an older generation.
+    releaseReceipts(receipts, "retire", "managed_module.retire_failed",
+        tostring(replacementLabel) .. " previous module retirement failed")
     oldRecord.effectReceipts = {}
 end
 
@@ -104,50 +96,28 @@ function moduleActivation.activateOrThrow(module)
     local previousModule = moduleRegistry.getLiveModule(pluginGuid)
     local previousPluginInfo = moduleRegistry.getPluginInfo(pluginGuid)
     local candidateReceipts = {}
-    local retireReceipts = {}
     local published = false
     record.activating = true
 
-    local function addReceipt(name, receipt, retire)
-        local entry = {
-            name = name,
-            receipt = receipt,
-        }
-        candidateReceipts[#candidateReceipts + 1] = entry
-        if retire == true then
-            retireReceipts[#retireReceipts + 1] = entry
-        end
-        return entry
-    end
-
     local ok, err = pcall(function()
-        addReceipt("shared", shared.installForModule(module), true)
-        addReceipt("hooks", hooks.installForModule(module), true)
-        addReceipt("overlays", overlays.installForModule(module), true)
-        addReceipt("mutation", mutation.syncForModule(module), false)
+        candidateReceipts[#candidateReceipts + 1] = shared.installForModule(module)
+        candidateReceipts[#candidateReceipts + 1] = hooks.installForModule(module)
+        candidateReceipts[#candidateReceipts + 1] = overlays.installForModule(module)
+        candidateReceipts[#candidateReceipts + 1] = mutation.syncForModule(module)
         if record.fallbackUiRequested == true then
-            addReceipt("fallbackUi", fallbackUi.installForModule(module), true)
+            candidateReceipts[#candidateReceipts + 1] = fallbackUi.installForModule(module)
         end
+        -- Rollback and retirement walk this list in reverse, so commit order is release order.
+        candidateReceipts = orderByPhase(candidateReceipts)
 
-        for _, entry in ipairs(candidateReceipts) do
-            if entry.name == "mutation" then
-                local commitOk, commitErr = commitReceipt(entry)
-                if not commitOk then
-                    error(commitErr, 0)
-                end
+        for _, receipt in ipairs(candidateReceipts) do
+            local commitOk, commitErr = receipt.commit()
+            if not commitOk then
+                error(tostring(receipt.name) .. " commit failed: " .. tostring(commitErr), 0)
             end
         end
 
-        for _, entry in ipairs(candidateReceipts) do
-            if entry.name ~= "mutation" then
-                local commitOk, commitErr = commitReceipt(entry)
-                if not commitOk then
-                    error(commitErr, 0)
-                end
-            end
-        end
-
-        record.effectReceipts = retireReceipts
+        record.effectReceipts = candidateReceipts
         record.activating = false
         record.activated = true
         moduleRegistry.setLiveModule(pluginGuid, module)
@@ -174,7 +144,8 @@ function moduleActivation.activateOrThrow(module)
     if not ok then
         record.activating = false
         record.activated = false
-        disposeReceipts(candidateReceipts, "managed_module.activation_rollback_failed",
+        record.effectReceipts = {}
+        releaseReceipts(candidateReceipts, "rollback", "managed_module.activation_rollback_failed",
             tostring(meta.name or moduleId or "module") .. " activation rollback failed")
         if published then
             moduleRegistry.setLiveModule(pluginGuid, previousModule)

@@ -10,6 +10,7 @@ local systemAdapter = {}
 local function commitReceipt(receipt)
     local ok, err = receipt.commit()
     if not ok then
+        receipt.rollback()
         error(err, 0)
     end
 end
@@ -24,14 +25,15 @@ local function define(systemScope, ownerId, register)
 
     local previous = activeReceipts[ownerId]
     local receipt = ownerInstall.createReceipt(ownerId, systemScope, hookDeclarations)
+    -- Replacing a define retires the previous install; it never restores what that install displaced.
     if previous and previous.systemScope == systemScope then
-        previous.receipt.dispose()
+        previous.receipt.retire()
         activeReceipts[ownerId] = nil
         commitReceipt(receipt)
     else
         commitReceipt(receipt)
         if previous then
-            previous.receipt.dispose()
+            previous.receipt.retire()
         end
     end
 

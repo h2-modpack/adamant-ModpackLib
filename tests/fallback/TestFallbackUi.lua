@@ -419,9 +419,40 @@ function TestFallbackUi:testFallbackRuntimeRollbackRestoresPreviousRuntime()
     lu.assertTrue(secondReceipt.commit())
     lu.assertNotEquals(self.h:getFallbackUiRuntime(PLUGIN_GUID), firstRuntime)
 
-    lu.assertTrue(secondReceipt.dispose())
+    lu.assertTrue(secondReceipt.rollback())
 
     lu.assertEquals(self.h:getFallbackUiRuntime(PLUGIN_GUID), firstRuntime)
+end
+
+function TestFallbackUi:testFallbackRuntimeRetireLeavesSuccessorRuntimeInstalled()
+    local firstHost = makeHost({ modpack = "fallback-pack", name = "First Fallback UI" })
+    local secondHost = makeHost({ modpack = "fallback-pack", name = "Second Fallback UI" })
+    self.h.coordinator.register("fallback-pack", nil)
+    self.h.rom.ImGui = makeImgui({ menuClicked = true })
+    local firstReceipt = self.h.fallbackUi.installForModule(firstHost)
+    lu.assertTrue(firstReceipt.commit())
+    local secondRuntime = self.h:installFallbackRuntime(secondHost)
+    secondRuntime.addMenuBar()
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
+
+    lu.assertTrue(firstReceipt.retire())
+
+    lu.assertEquals(self.h:getFallbackUiRuntime(PLUGIN_GUID), secondRuntime)
+    lu.assertEquals(self.h:countUiSuppressors(), 1)
+end
+
+function TestFallbackUi:testFallbackRuntimeRetireDoesNotRestorePreviousRuntime()
+    local firstHost = makeHost({ modpack = "fallback-pack", name = "First Fallback UI" })
+    local secondHost = makeHost({ modpack = "fallback-pack", name = "Second Fallback UI" })
+    self.h.coordinator.register("fallback-pack", nil)
+
+    self.h:installFallbackRuntime(firstHost)
+    local secondReceipt = self.h.fallbackUi.installForModule(secondHost)
+    lu.assertTrue(secondReceipt.commit())
+
+    lu.assertTrue(secondReceipt.retire())
+
+    lu.assertNil(self.h:getFallbackUiRuntime(PLUGIN_GUID))
 end
 
 function TestFallbackUi:testFallbackRuntimeIsRetiredWithOwningHost()

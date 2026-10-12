@@ -17,6 +17,7 @@ local lifecycle = import('core/mutations/lifecycle.lua', nil, {
     setupRunData = deps.gameDeps.runData.SetupRunData,
     mutationRegistry = mutationRegistry,
     plan = plan,
+    receipt = deps.receipt,
 })
 
 local service = import('core/mutations/adapters/module_lifecycle.lua', nil, {

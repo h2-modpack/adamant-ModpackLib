@@ -77,6 +77,7 @@ local function createLibHarness(opts)
 
         logging = imports["core/logging/logging.lua"],
         values = imports["core/helpers/values.lua"],
+        receipt = imports["core/helpers/receipt.lua"],
         gameDeps = externals.gameDeps or imports["core/game_deps/game_deps.lua"],
         cacheBundle = imports["core/cache/00_init.lua"],
         cache = imports["core/cache/00_init.lua"].service,

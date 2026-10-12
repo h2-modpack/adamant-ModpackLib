@@ -331,7 +331,7 @@ function TestMutation:testFailedPlanRetryRestoresToLatestSnapshot()
     })
 end
 
-function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
+function TestMutation:testCommittedNoopSyncReceiptRollsBackSuccessfully()
     local definition = self.harness.managedModule.prepareDefinition({}, {
         id = "NoopMutationReceipt",
         name = "Noop Mutation Receipt",
@@ -353,6 +353,57 @@ function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
     local ok, err = receipt.commit()
     lu.assertTrue(ok, tostring(err))
 
-    ok, err = receipt.dispose()
+    ok, err = receipt.rollback()
     lu.assertTrue(ok, tostring(err))
+end
+
+function TestMutation:createPatchedHost(pluginGuid, tbl, value)
+    local definition = self.harness.managedModule.prepareDefinition({}, {
+        id = "MutationReceiptRelease",
+        name = "Mutation Receipt Release",
+        storage = {},
+    })
+    local store, stagedState = createModuleState(self.harness, {
+        Enabled = true,
+        DebugMode = false,
+    }, definition)
+    return self.harness.managedModule.create({
+        pluginGuid = pluginGuid,
+        definition = definition,
+        persistentState = store,
+        stagedState = stagedState,
+        mutationBundle = {
+            patchMutation = function(_, _, plan)
+                plan:set(tbl, "Value", value)
+            end,
+        },
+        drawTab = function() end,
+    })
+end
+
+function TestMutation:testSyncReceiptRollbackRestoresPreviousPlan()
+    local pluginGuid = "test-mutation-receipt-rollback"
+    local tbl = { Value = "base" }
+    local first = self.mutation.syncForModule(self:createPatchedHost(pluginGuid, tbl, "first"))
+    lu.assertTrue(first.commit())
+    local second = self.mutation.syncForModule(self:createPatchedHost(pluginGuid, tbl, "second"))
+    lu.assertTrue(second.commit())
+    lu.assertEquals(tbl.Value, "second")
+
+    lu.assertTrue(second.rollback())
+
+    lu.assertEquals(tbl.Value, "first")
+end
+
+function TestMutation:testSyncReceiptRetireLeavesSuccessorPlanApplied()
+    local pluginGuid = "test-mutation-receipt-retire"
+    local tbl = { Value = "base" }
+    local first = self.mutation.syncForModule(self:createPatchedHost(pluginGuid, tbl, "first"))
+    lu.assertTrue(first.commit())
+    local second = self.mutation.syncForModule(self:createPatchedHost(pluginGuid, tbl, "second"))
+    lu.assertTrue(second.commit())
+
+    lu.assertTrue(first.retire())
+
+    lu.assertEquals(tbl.Value, "second")
 end

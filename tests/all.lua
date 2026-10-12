@@ -6,6 +6,7 @@
 require('tests/bootstrap/TestMainBoot')
 require('tests/bootstrap/TestLogging')
 require('tests/bootstrap/TestValues')
+require('tests/bootstrap/TestReceipt')
 require('tests/bootstrap/TestGameDeps')
 require('tests/bootstrap/TestSystemScope')
 require('tests/harness/TestFakeEngine')

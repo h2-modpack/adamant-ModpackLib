@@ -47,28 +47,6 @@ function managedModule.getRecord(module)
     return moduleRegistry.getRecord(module)
 end
 
-function managedModule.addEffectReceipt(module, name, receipt)
-    local record = moduleRegistry.getRecord(module)
-    if not record then
-        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: module is required")
-    end
-    if record.activated ~= true then
-        logging.violate("managed_module.not_activated", "managedModule.addEffectReceipt requires an activated module")
-    end
-    if type(name) ~= "string" or name == "" then
-        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: receipt name is required")
-    end
-    if type(receipt) ~= "table" or type(receipt.dispose) ~= "function" then
-        logging.violate("managed_module.invalid_activate_opts", "managedModule.addEffectReceipt: receipt dispose function is required")
-    end
-
-    record.effectReceipts = record.effectReceipts or {}
-    record.effectReceipts[#record.effectReceipts + 1] = {
-        name = name,
-        receipt = receipt,
-    }
-end
-
 function managedModule.getLiveModule(pluginGuid)
     return moduleRegistry.getLiveModule(pluginGuid)
 end

@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local values = deps.values
+local receipt = deps.receipt
 local sharedRegistry = deps.sharedRegistry
 
 sharedRegistry.records = sharedRegistry.records or {}
@@ -124,20 +125,6 @@ local function ensureDataDeclarations(record)
     return record.sharedDataDeclarations
 end
 
-local function makeNoopReceipt()
-    return {
-        commit = function()
-            return true, nil
-        end,
-        dispose = function()
-            return true, nil
-        end,
-        retire = function()
-            return true, nil
-        end,
-    }
-end
-
 local function hasOwnerDeclarations(declarations)
     if not declarations then
         return false
@@ -229,47 +216,59 @@ end
 function sharedData.install(ownerId, declarations)
     validateOwnerId("shared.data.install", ownerId)
     if not hasOwnerDeclarations(declarations) then
-        return makeNoopReceipt()
+        return receipt.noop("shared.data", receipt.PHASE_EFFECTS)
     end
 
-    local install = {
-        ownerId = ownerId,
-        ownerToken = {},
-        entries = {},
-        previous = {},
-        committed = false,
-        disposed = false,
-    }
+    local ownerToken = {}
+    local entries = {}
+    local previous = {}
 
     for _, entry in ipairs(declarations.entries) do
         if entry.access == "owner" then
-            install.entries[#install.entries + 1] = entry
+            entries[#entries + 1] = entry
         end
     end
 
-    return {
-        commit = function()
-            if install.disposed or install.committed then
-                return true, nil
+    -- Clears every record this install still owns, replacing each with what
+    -- `replacementFor(id)` returns.
+    local function release(replacementFor)
+        for index = #entries, 1, -1 do
+            local id = entries[index].id
+            local current = records[id]
+            if current
+                and current.ownerId == ownerId
+                and current.ownerToken == ownerToken
+            then
+                records[id] = replacementFor(id)
             end
+        end
+        if declarations.ownerToken == ownerToken then
+            declarations.ownerToken = nil
+        end
+        return true, nil
+    end
 
-            for _, entry in ipairs(install.entries) do
-                local previous = records[entry.id]
-                if previous and previous.ownerId ~= ownerId then
+    return receipt.create({
+        name = "shared.data",
+        phase = receipt.PHASE_EFFECTS,
+        commit = function()
+            for _, entry in ipairs(entries) do
+                local existing = records[entry.id]
+                if existing and existing.ownerId ~= ownerId then
                     logging.violate(
                         "shared.duplicate_publisher",
                         "shared.data '%s' is already published by '%s'",
                         tostring(entry.id),
-                        tostring(previous.ownerId))
+                        tostring(existing.ownerId))
                 end
-                install.previous[entry.id] = previous
+                previous[entry.id] = existing
             end
 
-            for _, entry in ipairs(install.entries) do
+            for _, entry in ipairs(entries) do
                 records[entry.id] = {
                     id = entry.id,
                     ownerId = ownerId,
-                    ownerToken = install.ownerToken,
+                    ownerToken = ownerToken,
                     default = copyOptional(entry.default),
                     defaultView = protectOptional(entry.default),
                     hasDefault = entry.hasDefault == true,
@@ -280,57 +279,21 @@ function sharedData.install(ownerId, declarations)
                 }
             end
 
-            install.committed = true
-            declarations.ownerToken = install.ownerToken
+            declarations.ownerToken = ownerToken
             return true, nil
         end,
-        dispose = function()
-            if install.disposed then
-                return true, nil
-            end
-            if install.committed then
-                for index = #install.entries, 1, -1 do
-                    local entry = install.entries[index]
-                    local current = records[entry.id]
-                    if current
-                        and current.ownerId == ownerId
-                        and current.ownerToken == install.ownerToken
-                    then
-                        records[entry.id] = install.previous[entry.id]
-                    end
-                end
-                if declarations.ownerToken == install.ownerToken then
-                    declarations.ownerToken = nil
-                end
-            end
-            install.disposed = true
-            return true, nil
+        rollback = function()
+            return release(function(id)
+                return previous[id]
+            end)
         end,
-        -- Retire removes only records this install still owns; unlike dispose it
-        -- never restores the record it replaced, which belongs to a retired generation.
+        -- Retire never restores the record it replaced, which belongs to a retired generation.
         retire = function()
-            if install.disposed then
-                return true, nil
-            end
-            if install.committed then
-                for index = #install.entries, 1, -1 do
-                    local entry = install.entries[index]
-                    local current = records[entry.id]
-                    if current
-                        and current.ownerId == ownerId
-                        and current.ownerToken == install.ownerToken
-                    then
-                        records[entry.id] = nil
-                    end
-                end
-                if declarations.ownerToken == install.ownerToken then
-                    declarations.ownerToken = nil
-                end
-            end
-            install.disposed = true
-            return true, nil
+            return release(function()
+                return nil
+            end)
         end,
-    }
+    })
 end
 
 local function requireOwnerRecord(context, ownerId, ownerToken, id)

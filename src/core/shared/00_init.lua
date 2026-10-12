@@ -12,6 +12,7 @@ local eventRegistry = import('core/shared/events/registry.lua', nil, {
 local registrations = import('core/shared/events/registrations.lua', nil, {
     logging = deps.logging,
     registry = eventRegistry,
+    receipt = deps.receipt,
 })
 
 local events = import('core/shared/events/events.lua', nil, {
@@ -22,6 +23,7 @@ local events = import('core/shared/events/events.lua', nil, {
 local data = import('core/shared/data.lua', nil, {
     logging = deps.logging,
     values = deps.values,
+    receipt = deps.receipt,
     sharedRegistry = sharedRegistry.data,
 })
 
@@ -30,6 +32,7 @@ local moduleInstall = import('core/shared/adapters/module_install.lua', nil, {
     moduleRegistry = deps.moduleRegistry,
     registrations = registrations,
     data = data,
+    receipt = deps.receipt,
 })
 
 local service = {

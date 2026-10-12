@@ -881,7 +881,7 @@ function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit
     lu.assertNotNil(self.h.rendererState.stackRows[currentRowKey])
     lu.assertTrue(self.h.rendererState.stackRows[currentRowKey].visible())
 
-    ok, err = receipt.dispose()
+    ok, err = receipt.rollback()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(self.h.rendererState.stackRows[currentRowKey])
@@ -1230,6 +1230,60 @@ function TestOverlays_Retained:testHostAfterHookRollsBackOnActivationFailure()
     end, "run")
 
     lu.assertEquals(observed, "first")
+end
+
+function TestOverlays_Retained:installAfterHookGenerations(pluginGuid, path)
+    local wrapped = nil
+    local observed = {}
+    self.h.modutil.Path.Wrap = function(_, handler)
+        wrapped = handler
+    end
+    local hosts, receipts = {}, {}
+    for _, label in ipairs({ "first", "second" }) do
+        hosts[label] = self:createModuleWithOverlays(pluginGuid, function(overlays)
+            overlays.afterHook(path, function()
+                observed[#observed + 1] = label
+            end)
+        end)
+        receipts[label] = self.h.overlays.installForModule(hosts[label])
+        local ok, err = receipts[label].commit()
+        lu.assertTrue(ok, tostring(err))
+    end
+    local function call()
+        wrapped(function(value)
+            return value
+        end, "run")
+    end
+    return hosts, receipts, observed, call
+end
+
+function TestOverlays_Retained:getHookOwner(pluginGuid)
+    return self.h.harness.imports["core/hooks/dispatchers.lua"].getCurrentOwner(pluginGuid)
+end
+
+-- Overlay rollback and retire differ only in how the after-hook install releases the
+-- hook owner slot; neither restores the previous generation's overlay elements.
+function TestOverlays_Retained:testHostAfterHookReceiptRollbackRestoresDisplacedHookOwner()
+    local pluginGuid = "test-retained-after-receipt-rollback"
+    local hosts, receipts = self:installAfterHookGenerations(pluginGuid, "StartNewRunReceiptRollback")
+    lu.assertIs(self:getHookOwner(pluginGuid), hosts.second)
+
+    local ok, err = receipts.second.rollback()
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertIs(self:getHookOwner(pluginGuid), hosts.first)
+end
+
+function TestOverlays_Retained:testHostAfterHookReceiptRetireDoesNotRestoreDisplacedHookOwner()
+    local pluginGuid = "test-retained-after-receipt-retire"
+    local _, receipts, observed, call = self:installAfterHookGenerations(pluginGuid, "StartNewRunReceiptRetire")
+
+    local ok, err = receipts.second.retire()
+    lu.assertTrue(ok, tostring(err))
+    call()
+
+    lu.assertNil(self:getHookOwner(pluginGuid))
+    lu.assertEquals(observed, {})
 end
 
 function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations()

@@ -48,6 +48,7 @@ local moduleAdapter = import('core/overlays/adapters/module_install.lua', nil, {
     hooks = deps.hooks,
     retained = retained,
     declarations = declarations,
+    receipt = deps.receipt,
 })
 
 local system = import('core/overlays/adapters/system_retained.lua', nil, {

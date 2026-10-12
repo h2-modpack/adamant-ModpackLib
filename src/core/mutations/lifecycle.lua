@@ -4,6 +4,7 @@ local logging = deps.logging
 local setupRunData = deps.setupRunData
 local mutationRegistry = deps.mutationRegistry
 local plan = deps.plan
+local receipt = deps.receipt
 
 local lifecycle = {
     createBackup = plan.createBackup,
@@ -172,8 +173,6 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
     end
 
     local previousMutation = captureActiveMutation(ownerId)
-    local committed = false
-    local disposed = false
     local revertedPrevious = false
     local appliedCandidate = false
     local setupRan = false
@@ -216,12 +215,11 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
         return true, nil
     end
 
-    return {
+    return receipt.create({
+        name = "mutation",
+        phase = receipt.PHASE_GAME_DATA,
+        -- A failed commit restores the previous plan itself, so no discard is needed.
         commit = function()
-            if disposed or committed then
-                return true, nil
-            end
-
             local okRevert, errRevert, didRevert = revertActivePlan(ownerId)
             if not okRevert then
                 return false, errRevert
@@ -245,26 +243,17 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
                 setupRan = true
             end
 
-            committed = true
             return true, nil
         end,
-        dispose = function()
-            if disposed then
-                return true, nil
-            end
-            if committed then
-                local okRestore, errRestore = restorePrevious(nil, setupRan or revertedPrevious or appliedCandidate)
-                disposed = true
-                if not okRestore then
-                    return false, errRestore
-                end
-                return true, nil
-            end
-
-            disposed = true
+        rollback = function()
+            return restorePrevious(nil, setupRan or revertedPrevious or appliedCandidate)
+        end,
+        -- The owner's active-plan slot is process-global: a successor's sync commit already
+        -- reverted this install's plan and replaced the slot, so there is nothing left to retire.
+        retire = function()
             return true, nil
         end,
-    }
+    })
 end
 
 function lifecycle.revert(ownerId)

@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local dispatchers = deps.dispatchers
+local receipt = deps.receipt
 local ownerInstall = {}
 
 function ownerInstall.createReceipt(ownerId, owner, hookDeclarations)
@@ -9,42 +10,39 @@ function ownerInstall.createReceipt(ownerId, owner, hookDeclarations)
         logging.violate("hooks.invalid_registration", "hooks.installForModule: ownerId is required")
     end
 
-    local install = {
-        owner = owner,
-        ownerId = ownerId,
-        declarations = hookDeclarations,
-        committed = false,
-        slotsAttached = false,
-        disposed = false,
-        previousCurrentOwner = nil,
-    }
+    local attempted = false
+    local previousCurrentOwner = nil
 
-    return {
+    -- Rollback hands the owner slot back to the owner this install displaced.
+    local function rollback()
+        dispatchers.detachOwner(ownerId, owner, hookDeclarations, previousCurrentOwner)
+        return true, nil
+    end
+
+    return receipt.create({
+        name = "hooks",
+        phase = receipt.PHASE_EFFECTS,
         commit = function()
-            if install.disposed or install.committed then
-                return true, nil
-            end
-
-            install.previousCurrentOwner = dispatchers.getCurrentOwner(ownerId)
-            install.slotsAttached = true
-            dispatchers.attachOwner(ownerId, owner, install.declarations)
-            install.committed = true
+            attempted = true
+            previousCurrentOwner = dispatchers.getCurrentOwner(ownerId)
+            dispatchers.attachOwner(ownerId, owner, hookDeclarations)
             return true, nil
         end,
-        dispose = function()
-            if install.disposed then
-                return true, nil
-            end
-
-            if install.committed or install.slotsAttached then
-                dispatchers.detachOwner(ownerId, owner, install.declarations, install.previousCurrentOwner)
-            end
-
-            install.slotsAttached = false
-            install.disposed = true
+        rollback = rollback,
+        -- Retire never restores the displaced owner: after a reload that owner is a dead
+        -- generation. A successor's attach already moved the slot off this owner.
+        retire = function()
+            dispatchers.detachOwner(ownerId, owner, hookDeclarations, nil)
             return true, nil
         end,
-    }
+        -- A failed attach may have left slots behind; detach them like a rollback.
+        discard = function()
+            if attempted then
+                return rollback()
+            end
+            return true, nil
+        end,
+    })
 end
 
 return ownerInstall

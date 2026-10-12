@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local registry = deps.registry
+local receipt = deps.receipt
 local registrations = {}
 
 local function validateSharedId(context, id)
@@ -24,20 +25,6 @@ end
 
 local function hasRegistrationEntries(registrationSet)
     return registrationSet and #(registrationSet.listenerEntries or {}) > 0
-end
-
-local function makeNoopReceipt()
-    return {
-        commit = function()
-            return true, nil
-        end,
-        dispose = function()
-            return true, nil
-        end,
-        retire = function()
-            return true, nil
-        end,
-    }
 end
 
 local function ensureHostRegistrations(state)
@@ -89,31 +76,27 @@ end
 
 function registrations.install(ownerId, hostRegistrations)
     if not hasRegistrationEntries(hostRegistrations) then
-        return makeNoopReceipt()
+        return receipt.noop("shared.events", receipt.PHASE_EFFECTS)
     end
 
+    local ownerToken = {}
     local install = {
-        ownerId = ownerId,
-        ownerToken = {},
         listenerEntries = {},
-        previousListeners = {},
-        committed = false,
-        disposed = false,
     }
+    local previousListeners = {}
 
     for _, entry in ipairs(hostRegistrations.listenerEntries or {}) do
         recordStagedListener(install, entry.id, entry.eventName, entry.listener)
     end
 
-    return {
+    return receipt.create({
+        name = "shared.events",
+        phase = receipt.PHASE_EFFECTS,
         commit = function()
-            if install.disposed or install.committed then
-                return true, nil
-            end
             for index, entry in ipairs(install.listenerEntries) do
                 local key = ownerId .. "\0" .. tostring(index)
                 local bucket = registry.getListenerBucket(entry.id, entry.eventName, false)
-                install.previousListeners[index] = {
+                previousListeners[index] = {
                     id = entry.id,
                     eventName = entry.eventName,
                     key = key,
@@ -123,64 +106,43 @@ function registrations.install(ownerId, hostRegistrations)
                     ownerToken = bucket and bucket.ownerTokens[key] or nil,
                     orderIndex = bucket and registry.getListenerOrderIndex(bucket, key) or nil,
                 }
-                registry.setListener(entry.id, entry.eventName, key, entry.listener, ownerId, install.ownerToken)
+                registry.setListener(entry.id, entry.eventName, key, entry.listener, ownerId, ownerToken)
             end
-            install.committed = true
             return true, nil
         end,
-        dispose = function()
-            if install.disposed then
-                return true, nil
-            end
-            if install.committed then
-                for index = #install.listenerEntries, 1, -1 do
-                    local previous = install.previousListeners[index]
-                    local bucket = registry.getListenerBucket(
-                        previous.id,
-                        previous.eventName,
-                        previous and previous.existed or false)
-                    if bucket
-                        and bucket.ownerIds[previous.key] == install.ownerId
-                        and bucket.ownerTokens[previous.key] == install.ownerToken
-                    then
-                        if previous and previous.existed then
-                            bucket.listeners[previous.key] = previous.listener
-                            bucket.ownerIds[previous.key] = previous.ownerId
-                            bucket.ownerTokens[previous.key] = previous.ownerToken
-                            registry.insertListenerOrder(bucket, previous.key, previous.orderIndex)
-                        else
-                            registry.removeListenerFromBucket(
-                                bucket,
-                                previous.key,
-                                install.ownerId,
-                                install.ownerToken)
-                            registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
-                        end
-                    end
-                end
-            end
-            install.disposed = true
-            return true, nil
-        end,
-        -- Retire removes only listeners this install still owns; unlike dispose it
-        -- never restores the listener it replaced, which belongs to a retired generation.
-        retire = function()
-            if install.disposed then
-                return true, nil
-            end
-            if install.committed then
-                for index = #install.listenerEntries, 1, -1 do
-                    local previous = install.previousListeners[index]
-                    local bucket = registry.getListenerBucket(previous.id, previous.eventName, false)
-                    if registry.removeListenerFromBucket(bucket, previous.key, install.ownerId, install.ownerToken) then
+        rollback = function()
+            for index = #install.listenerEntries, 1, -1 do
+                local previous = previousListeners[index]
+                local bucket = registry.getListenerBucket(previous.id, previous.eventName, previous.existed)
+                if bucket
+                    and bucket.ownerIds[previous.key] == ownerId
+                    and bucket.ownerTokens[previous.key] == ownerToken
+                then
+                    if previous.existed then
+                        bucket.listeners[previous.key] = previous.listener
+                        bucket.ownerIds[previous.key] = previous.ownerId
+                        bucket.ownerTokens[previous.key] = previous.ownerToken
+                        registry.insertListenerOrder(bucket, previous.key, previous.orderIndex)
+                    else
+                        registry.removeListenerFromBucket(bucket, previous.key, ownerId, ownerToken)
                         registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
                     end
                 end
             end
-            install.disposed = true
             return true, nil
         end,
-    }
+        -- Retire never restores the listener it replaced, which belongs to a retired generation.
+        retire = function()
+            for index = #install.listenerEntries, 1, -1 do
+                local previous = previousListeners[index]
+                local bucket = registry.getListenerBucket(previous.id, previous.eventName, false)
+                if registry.removeListenerFromBucket(bucket, previous.key, ownerId, ownerToken) then
+                    registry.pruneListenerBucket(previous.id, previous.eventName, bucket)
+                end
+            end
+            return true, nil
+        end,
+    })
 end
 
 return registrations

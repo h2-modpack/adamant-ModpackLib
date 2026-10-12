@@ -7,6 +7,7 @@ local overlays = deps.overlays
 local createSystem = deps.createSystem
 local createTheme = deps.createTheme
 local fallbackRegistry = deps.fallbackRegistry
+local receipt = deps.receipt
 local rom = deps.rom
 local modutil = deps.modutil
 local SetupRunData = deps.gameDeps.runData.SetupRunData
@@ -350,9 +351,10 @@ function fallbackUi.installForModule(module)
     local ownerId = module.getOwnerId()
     local activeRuntime = createRuntime(module)
     local previousRuntime = nil
-    local installed = false
 
-    return {
+    return receipt.create({
+        name = "fallbackUi",
+        phase = receipt.PHASE_EFFECTS,
         commit = function()
             previousRuntime = getFallbackUiRuntime(ownerId)
             if previousRuntime and previousRuntime ~= activeRuntime then
@@ -362,14 +364,10 @@ function fallbackUi.installForModule(module)
                 end
             end
             runtimes[ownerId] = activeRuntime
-            installed = true
             fallbackHud.refreshMarker()
-            return true
+            return true, nil
         end,
-        dispose = function()
-            if installed ~= true then
-                return true
-            end
+        rollback = function()
             local ok, err = disposeFallbackUiRuntime(ownerId, activeRuntime)
             if ok and previousRuntime and previousRuntime ~= activeRuntime
                 and getFallbackUiRuntime(ownerId) == nil then
@@ -378,7 +376,15 @@ function fallbackUi.installForModule(module)
             end
             return ok, err
         end,
-    }
+        -- Retire never reinstates the runtime this install replaced, and leaves alone a
+        -- runtime a successor already installed (its commit closed this one).
+        retire = function()
+            if getFallbackUiRuntime(ownerId) ~= activeRuntime then
+                return true, nil
+            end
+            return disposeFallbackUiRuntime(ownerId, activeRuntime)
+        end,
+    })
 end
 
 function fallbackUi.create(module)

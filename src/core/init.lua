@@ -24,6 +24,7 @@ local gameDeps = externals.gameDeps or import('core/game_deps/game_deps.lua', ni
 })
 
 local values = import('core/helpers/values.lua')
+local receipt = import('core/helpers/receipt.lua')
 
 local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
@@ -71,6 +72,7 @@ local sharedBundle = import('core/shared/00_init.lua', nil, {
     sharedRegistry = registry.shared,
     moduleRegistry = moduleRegistry,
     values = values,
+    receipt = receipt,
 })
 local shared = sharedBundle.service
 
@@ -79,6 +81,7 @@ local hooksBundle = import('core/hooks/00_init.lua', nil, {
     logging = logging,
     moduleRegistry = moduleRegistry,
     hookRegistry = registry.hooks,
+    receipt = receipt,
 })
 local hooks = hooksBundle.service
 
@@ -94,6 +97,7 @@ local overlaysBundle = import('core/overlays/00_init.lua', nil, {
     rendererSystem = overlayRendererSystem,
     overlayRegistry = registry.overlays,
     values = values,
+    receipt = receipt,
 })
 local overlays = overlaysBundle.service
 
@@ -111,6 +115,7 @@ local mutationBundle = import('core/mutations/00_init.lua', nil, {
     moduleRegistry = moduleRegistry,
     coordinator = modpackCoordination,
     mutationRegistry = registry.mutations,
+    receipt = receipt,
 })
 local mutation = mutationBundle.service
 
@@ -137,6 +142,7 @@ local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
     overlays = overlays,
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
+    receipt = receipt,
 })
 local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     logging = logging,
