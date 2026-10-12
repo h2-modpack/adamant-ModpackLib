@@ -6,12 +6,7 @@ local mutationRegistry = deps.mutationRegistry
 local plan = deps.plan
 local receipt = deps.receipt
 
-local lifecycle = {
-    createBackup = plan.createBackup,
-    createPlan = plan.createPlan,
-    applyPlan = plan.applyPlan,
-    revertPlan = plan.revertPlan,
-}
+local lifecycle = {}
 
 local function getMutationSlotKey(ownerId)
     if type(ownerId) ~= "string" or ownerId == "" then
@@ -59,7 +54,7 @@ local function restoreActiveMutation(ownerId, snapshot)
         return true, nil
     end
 
-    local okPlan, errPlan = pcall(lifecycle.applyPlan, snapshot.plan)
+    local okPlan, errPlan = pcall(plan.applyPlan, snapshot.plan)
     if not okPlan then
         return false, errPlan
     end
@@ -74,7 +69,7 @@ local function buildMutationPlan(mutationBundle, runtime, host)
         return nil
     end
 
-    local mutationPlan = lifecycle.createPlan()
+    local mutationPlan = plan.createPlan()
     builder(host, runtime, mutationPlan)
     return mutationPlan
 end
@@ -93,7 +88,7 @@ local function revertActivePlan(ownerId)
         return true, nil, false
     end
 
-    local okPlan, errPlan = pcall(lifecycle.revertPlan, activePlan)
+    local okPlan, errPlan = pcall(plan.revertPlan, activePlan)
     slot.plan = nil
     setMutationSlot(ownerId, slot)
     if not okPlan then
@@ -119,11 +114,7 @@ function lifecycle.declarePatch(mutationBundle, callback)
     mutationBundle.patchMutation = callback
 end
 
-function lifecycle.affectsRunData(mutationBundle)
-    return hasPatchMutation(mutationBundle)
-end
-
-function lifecycle.apply(ownerId, mutationBundle, runtime, host)
+local function apply(ownerId, mutationBundle, runtime, host)
     local hasPatch = hasPatchMutation(mutationBundle)
     local previousMutation = captureActiveMutation(ownerId)
 
@@ -152,7 +143,7 @@ function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     end
     local builtPlan = result
     if builtPlan then
-        local okApply, errApply = pcall(lifecycle.applyPlan, builtPlan)
+        local okApply, errApply = pcall(plan.applyPlan, builtPlan)
         if not okApply then
             return failApply(errApply)
         end
@@ -162,8 +153,7 @@ function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     return true, nil
 end
 
-function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
-    local _ = def
+local function sync(ownerId, mutationBundle, runtime, host)
     local enabled = isEnabledForSync(runtime)
     local hasPatch = hasPatchMutation(mutationBundle)
     local candidatePlan = nil
@@ -181,7 +171,7 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
         local rollbackErrors = {}
 
         if appliedCandidate and candidatePlan then
-            local okRevert, errRevert = pcall(lifecycle.revertPlan, candidatePlan)
+            local okRevert, errRevert = pcall(plan.revertPlan, candidatePlan)
             if not okRevert then
                 rollbackErrors[#rollbackErrors + 1] = "candidate revert failed: " .. tostring(errRevert)
             end
@@ -227,7 +217,7 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
             revertedPrevious = didRevert == true
 
             if candidatePlan then
-                local okApply, errApply = pcall(lifecycle.applyPlan, candidatePlan)
+                local okApply, errApply = pcall(plan.applyPlan, candidatePlan)
                 if not okApply then
                     return restorePrevious(errApply, revertedPrevious)
                 end
@@ -256,13 +246,43 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
     })
 end
 
-function lifecycle.revert(ownerId)
+local function revert(ownerId)
     local okPlan, errPlan = revertActivePlan(ownerId)
     if not okPlan then
         return false, errPlan
     end
 
     return true, nil
+end
+
+--- Binds one owner's mutation bundle to the host/runtime its patch builder receives.
+---
+--- Ownership of the run-data recompute (`SetupRunData`):
+--- - `sync()` returns an activation receipt that recomputes run data itself on commit, and on
+---   rollback whenever it changed the active plan.
+--- - `apply()` / `revert()` change the active plan only; the caller owns the recompute
+---   (commit flows mark run data dirty and the pack/fallback UI flushes it).
+---@param ownerId string
+---@param mutationBundle AdamantModpackLib.MutationBundle
+---@param host AdamantModpackLib.Host
+---@param runtime AdamantModpackLib.RuntimeContext
+---@return AdamantModpackLib.BoundMutation
+function lifecycle.bind(ownerId, mutationBundle, host, runtime)
+    getMutationSlotKey(ownerId)
+    return {
+        apply = function()
+            return apply(ownerId, mutationBundle, runtime, host)
+        end,
+        revert = function()
+            return revert(ownerId)
+        end,
+        sync = function()
+            return sync(ownerId, mutationBundle, runtime, host)
+        end,
+        affectsRunData = function()
+            return hasPatchMutation(mutationBundle)
+        end,
+    }
 end
 
 return lifecycle

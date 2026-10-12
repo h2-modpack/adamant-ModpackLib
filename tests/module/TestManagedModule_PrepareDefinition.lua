@@ -338,7 +338,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordina
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(prepared._pendingCoordinatorRebuild)
 end
 
 function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
@@ -377,7 +377,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPend
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(prepared._pendingCoordinatorRebuild)
 end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionKeepsStableStructuralFingerprint()

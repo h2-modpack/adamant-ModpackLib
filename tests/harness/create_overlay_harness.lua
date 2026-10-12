@@ -191,6 +191,7 @@ local function createOverlayHarness(opts)
                     patchMutation = moduleOpts.patchMutation,
                 },
                 overlayDeclarations = overlayDeclarations,
+                onActivate = moduleOpts.onActivate,
                 onCommit = moduleOpts.onCommit,
                 drawTab = function() end,
             })

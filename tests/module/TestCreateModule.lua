@@ -52,7 +52,7 @@ end
 local function getLiveStore(h, pluginGuid)
     local liveModule = h:liveModule(pluginGuid)
     local record = h.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    return record and record.runtime.data or nil
 end
 
 function TestCreateModule:setUp()
@@ -207,12 +207,9 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     liveModule.flush()
     lu.assertEquals(store.read("Flag"), true)
     lu.assertEquals(runtimeField:read(), true)
-    lu.assertEquals(self.h.moduleRegistry.getPluginInfo("test-create-module"), {
-        pluginGuid = "test-create-module",
-        packId = "create-module-pack",
-        moduleId = "CreateModule",
-        name = "Create Module",
-    })
+    lu.assertEquals(liveModule.getPackId(), "create-module-pack")
+    lu.assertEquals(liveModule.getModuleId(), "CreateModule")
+    lu.assertEquals(liveModule.getMeta().name, "Create Module")
     lu.assertNotNil(authorSchemaNode)
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
@@ -674,7 +671,7 @@ function TestCreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArg
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-create-module-declarative-hooks")
     local record = self.h.managedModule.getRecord(liveModule)
-    local slot = record.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
+    local slot = record.capabilityInputs.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
     local result = slot.value(function(value)
         return value + 1
     end, 4)

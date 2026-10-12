@@ -1,30 +1,13 @@
 local deps = ...
 
 local logging = deps.logging
+local getCurrentRun = deps.getCurrentRun
 local currentRunCache = {}
 
 local ROOT_KEY = "_AdamantModpackLibCache"
 
 local function tableIsEmpty(value)
     return next(value) == nil
-end
-
-local function validateOwnerId(ownerId)
-    if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("cache.invalid_args", "cache ownerId must be a non-empty string")
-    end
-end
-
-local function validateKey(context, key)
-    if type(key) ~= "string" or key == "" then
-        logging.violate("cache.invalid_args", "%s key must be a non-empty string", context)
-    end
-end
-
-local function validateFactory(context, factory)
-    if factory ~= nil and type(factory) ~= "function" then
-        logging.violate("cache.invalid_factory", "%s factory must be a function", context)
-    end
 end
 
 local function getOwnerBucket(currentRun, ownerId, create)
@@ -91,15 +74,12 @@ local function clearFromCurrentRun(currentRun, ownerId, key)
     return true
 end
 
-currentRunCache.create = function(getCurrentRun, ownerId, key, opts)
-    validateOwnerId(ownerId)
-    validateKey("cache.currentRun.create", key)
-    if opts ~= nil and type(opts) ~= "table" then
-        logging.violate("cache.invalid_args", "cache.currentRun.create opts must be a table when provided")
-    end
-    opts = opts or {}
-    validateFactory("cache.currentRun.create", opts.factory)
-
+--- Creates a handle on one owner's cache bucket inside the current run. `ownerId`, `key` and
+--- `factory` come from a prepared definition; the run tables themselves are external game data.
+---@param ownerId string
+---@param key string
+---@param factory? fun(): table
+function currentRunCache.create(ownerId, key, factory)
     local lastRun = nil
     local bucket = nil
 
@@ -119,7 +99,7 @@ currentRunCache.create = function(getCurrentRun, ownerId, key, opts)
                 return nil
             end
             if bucket == nil then
-                bucket = getFromCurrentRun(currentRun, ownerId, key, opts.factory)
+                bucket = getFromCurrentRun(currentRun, ownerId, key, factory)
             end
             return bucket
         end,

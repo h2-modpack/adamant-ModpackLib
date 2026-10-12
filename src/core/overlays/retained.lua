@@ -6,19 +6,6 @@ local logging = deps.logging
 local overlayOrder = deps.order
 local rom = deps.rom
 
-local function getRuntimeContext(registry)
-    if registry.runtime ~= nil then
-        return registry.runtime
-    end
-    local store = registry.store
-    return {
-        data = store,
-        cache = store and store.cache or nil,
-        shared = store and store.shared or nil,
-        controls = store and store.controls or nil,
-    }
-end
-
 local function resolveVisibleValue(registry, visible)
     if type(visible) ~= "function" then
         return visible
@@ -26,7 +13,7 @@ local function resolveVisibleValue(registry, visible)
     if registry.explicitOwner == true then
         return visible()
     end
-    return visible(registry.host, getRuntimeContext(registry))
+    return visible(registry.host, registry.runtime)
 end
 
 local function copyArray(source)
@@ -302,7 +289,6 @@ local function snapshotRegistry(registry)
         hidden = registry.hidden,
         host = registry.host,
         runtime = registry.runtime,
-        store = registry.store,
         refreshPass = registry.refreshPass,
         refreshing = registry.refreshing,
         elements = elements,
@@ -323,7 +309,6 @@ local function restoreRegistry(registry, snapshot)
     registry.hidden = snapshot.hidden == true
     registry.host = snapshot.host
     registry.runtime = snapshot.runtime
-    registry.store = snapshot.store
     registry.refreshPass = snapshot.refreshPass
     registry.refreshing = snapshot.refreshing
     registry.events = {
@@ -515,7 +500,6 @@ local function refresh(owner, ownerId, host, runtime, register, opts)
     registry.hidden = opts and opts.hidden == true
     registry.host = host
     registry.runtime = runtime
-    registry.store = runtime and runtime.data or nil
     registry.refreshPass = registry.refreshPass + 1
     registry.refreshing = true
     registry.seenElements = {}
@@ -608,15 +592,13 @@ local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, run
     registry.hidden = false
     registry.host = host
     registry.runtime = runtime
-    registry.store = runtime and runtime.data or nil
     recreateElementSlots(registry)
 end
 
+-- Clears every table-owned registry promoted under `ownerId` except `exceptOwner`.
+-- Returns the cleared registries' snapshots (also on failure, for what was cleared), so a
+-- caller that later rolls back can hand them to `restoreTableRegistries`.
 local function clearTableRegistriesByOwnerId(ownerId, exceptOwner)
-    if type(ownerId) ~= "string" or ownerId == "" then
-        return true, nil
-    end
-
     local owners = {}
     for owner, registry in pairs(retainedState.tableRegistries) do
         if owner ~= exceptOwner and registry.ownerId == ownerId then
@@ -624,22 +606,34 @@ local function clearTableRegistriesByOwnerId(ownerId, exceptOwner)
         end
     end
 
+    local cleared = {}
     local errors = {}
     for _, owner in ipairs(owners) do
-        local transaction = beginTransaction(owner)
+        local registry = getRegistry(owner, false)
+        local snapshot = snapshotRegistry(registry)
         local ok, err = pcall(refresh, owner, ownerId, nil, nil, function() end)
         if ok then
-            transaction.commit()
+            cleared[#cleared + 1] = {
+                registry = registry,
+                snapshot = snapshot,
+            }
         else
-            transaction.rollback()
+            restoreRegistry(registry, snapshot)
             errors[#errors + 1] = tostring(err)
         end
     end
 
     if #errors > 0 then
-        return false, table.concat(errors, "; ")
+        return false, table.concat(errors, "; "), cleared
     end
-    return true, nil
+    return true, nil, cleared
+end
+
+-- Reinstates registries cleared by `clearTableRegistriesByOwnerId`, newest clear first.
+local function restoreTableRegistries(cleared)
+    for index = #cleared, 1, -1 do
+        restoreRegistry(cleared[index].registry, cleared[index].snapshot)
+    end
 end
 
 local dispatch = import('core/overlays/retained_dispatch.lua', nil, {
@@ -657,6 +651,7 @@ return {
     getAfterHookPaths = getAfterHookPaths,
     promoteTableRegistry = promoteTableRegistry,
     clearTableRegistriesByOwnerId = clearTableRegistriesByOwnerId,
+    restoreTableRegistries = restoreTableRegistries,
     dispatchCommit = dispatch.dispatchCommit,
     dispatchIntervals = dispatch.dispatchIntervals,
     dispatchAfterHook = dispatch.dispatchAfterHook,

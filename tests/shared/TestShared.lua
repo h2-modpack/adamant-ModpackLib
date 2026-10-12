@@ -45,7 +45,7 @@ end
 local function getLiveStore(harness, pluginGuid)
     local liveModule = harness.managedModule.getLiveModule(pluginGuid)
     local record = harness.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    return record and record.runtime.data or nil
 end
 
 local function getLiveRuntime(harness, pluginGuid)
@@ -99,7 +99,7 @@ end
 
 function TestShared:setUp()
     self.harness = createLibHarness()
-    self.shared = self.harness.shared
+    self.shared = self.harness.sharedBundle
 end
 
 function TestShared:testPublicSurfaceIsClosed()
@@ -107,8 +107,65 @@ function TestShared:testPublicSurfaceIsClosed()
 end
 
 function TestShared:testServiceSurfaceExposesInstallAndData()
-    lu.assertEquals(type(self.shared.installForModule), "function")
-    lu.assertEquals(type(self.shared.data), "table")
+    lu.assertEquals(type(self.shared.install), "function")
+    lu.assertEquals(type(self.shared.refs.create), "function")
+    lu.assertEquals(type(self.shared.events.emit), "function")
+    lu.assertNil(self.shared.installForModule)
+    lu.assertNil(self.shared.emitForModule)
+end
+
+function TestShared:testInstallAndRefsTakeExplicitInputsWithoutModuleRecord()
+    local ownerId = "shared-explicit-install"
+    local enabled = true
+    local function getHost()
+        return { isEnabled = function() return enabled end }
+    end
+    local dataDeclarations = self.shared.dataDeclarations.createDeclarations()
+    self.shared.dataDeclarations.stageOwnerDeclaration(dataDeclarations, getHost, "status", {
+        id = "test.shared.explicit.status",
+        default = { value = "default" },
+    })
+    local delivered = {}
+    local registrations = self.shared.registrations.create()
+    self.shared.registrations.stageListener(registrations, getHost, "test.shared.explicit.events", "changed",
+        function(payload)
+            delivered[#delivered + 1] = payload
+        end)
+    local emitted = {}
+    local refs = self.shared.refs.create({
+        ownerId = ownerId,
+        declarations = dataDeclarations,
+        emit = function(id, eventName, payload)
+            emitted[#emitted + 1] = { id = id, eventName = eventName }
+            return self.shared.events.emit("test", id, eventName, payload)
+        end,
+        source = "test.shared",
+    })
+
+    local receipt = self.shared.install(ownerId, { data = dataDeclarations, events = registrations })
+    local ok, err = receipt.commit()
+    lu.assertTrue(ok, tostring(err))
+
+    lu.assertTrue(refs.set("status", { value = "published" }))
+    lu.assertEquals(refs.read("status").value, "published")
+    lu.assertTrue(refs.emit("test.shared.explicit.events", "changed", { value = 1 }))
+    lu.assertEquals(#delivered, 1)
+    lu.assertEquals(emitted, { { id = "test.shared.explicit.events", eventName = "changed" } })
+
+    -- A second generation with its own declarations owns the record; the first's refs lose write access.
+    local nextDeclarations = self.shared.dataDeclarations.createDeclarations()
+    self.shared.dataDeclarations.stageOwnerDeclaration(nextDeclarations, getHost, "status", {
+        id = "test.shared.explicit.status",
+    })
+    local nextReceipt = self.shared.install(ownerId, { data = nextDeclarations })
+    lu.assertTrue(nextReceipt.commit())
+    lu.assertErrorMsgContains("shared.not_owner", function()
+        refs.set("status", { value = "stale" })
+    end)
+
+    lu.assertTrue(nextReceipt.rollback())
+    lu.assertTrue(refs.set("status", { value = "restored" }))
+    lu.assertEquals(refs.read("status").value, "restored")
 end
 
 function TestShared:testAuthorSurfaceExposesDataAndEvents()

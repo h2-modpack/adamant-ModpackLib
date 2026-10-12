@@ -1,7 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local service = deps.service
+local data = deps.data
 
 local dataShared = {}
 
@@ -37,21 +37,16 @@ local function wrapReaderRef(rawRef)
 end
 
 local function createSharedRef(opts, name)
-    local rawRef = service.data.createDeclaredRef(opts.record, opts.host, name, opts.source)
+    local rawRef = data.createDeclaredRef(opts.declarations, opts.ownerId, name, opts.source)
     if rawRef.set then
         return wrapSetClearRef(rawRef)
     end
     return wrapReaderRef(rawRef)
 end
 
-local function emitShared(opts, id, eventName, payload)
-    if opts.lane == "ui" then
-        service.validateEmit(opts.source .. ".emit", id, eventName)
-        return opts.actionBuffer.emitShared(id, eventName, payload)
-    end
-    return service.emitForModule(opts.host, id, eventName, payload)
-end
-
+--- Creates a lane's shared surface (`read/set/clear/emit`) over one owner's declarations.
+--- `emit` is the lane's emit policy (immediate for runtime, staged for UI), owned by the caller.
+---@param opts AdamantModpackLib.SharedRefsOpts
 function dataShared.create(opts)
     local refs = {}
     local source = opts.source
@@ -79,9 +74,7 @@ function dataShared.create(opts)
             local sharedRef = ref(name)
             return requireMethod(sharedRef, "clear", name, source)()
         end,
-        emit = function(id, eventName, payload)
-            return emitShared(opts, id, eventName, payload)
-        end,
+        emit = opts.emit,
     }
 end
 

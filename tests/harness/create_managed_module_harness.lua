@@ -16,10 +16,8 @@ local function createManagedModuleHarness(harnessOpts)
         moduleRegistry = base.moduleRegistry,
         coordinator = base.coordinator,
         sharedBundle = base.sharedBundle,
-        shared = base.shared,
         overlays = base.overlays,
         fallbackUi = base.fallbackUi,
-        fallbackUiBundle = base.fallbackUiBundle,
         warnings = {},
     }
 

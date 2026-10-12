@@ -70,6 +70,7 @@ local function createActivatedManagedModule(h, pluginGuid, opts)
         state = opts.state,
         mutationBundle = mutationBundle,
         sharedEventRegistrations = sharedEventRegistrations,
+        fallbackUiRequested = opts.fallbackUiRequested,
         onCommit = adaptCommitCallback(opts.onCommit),
         drawTab = adaptDrawCallback(opts.drawTab),
         drawQuickContent = adaptDrawCallback(opts.drawQuickContent),
@@ -142,9 +143,7 @@ function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
     createActivatedManagedModule(self.h, pluginGuid, {
         definition = definition,
         state = moduleState,
-        beforeActivate = function(module)
-            self.h.fallbackUiBundle.service.attachGuiOnce(module, function() end)
-        end,
+        fallbackUiRequested = true,
         drawTab = function()
             drawCalls = drawCalls + 1
         end,
@@ -180,8 +179,9 @@ function TestManagedModule:testFallbackUiInstallsDuringActivation()
     createActivatedManagedModule(self.h, pluginGuid, {
         definition = definition,
         state = moduleState,
+        fallbackUiRequested = true,
         beforeActivate = function(module)
-            attached = self.h.fallbackUiBundle.service.attachGuiOnce(module, function() end)
+            attached = self.h.fallbackUi.attachGuiOnce(module.getOwnerId(), function() end)
         end,
         drawTab = function() end,
     })
@@ -255,7 +255,7 @@ function TestManagedModule:testPatchMutationReceivesCallbackHostAndRuntimeData()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(patchHost, self.h.managedModule.getRecord(host).host)
-    lu.assertEquals(patchStore, self.h.managedModule.getRecord(host).store)
+    lu.assertEquals(patchStore, self.h.managedModule.getRecord(host).runtime.data)
     lu.assertNotEquals(patchStore, store)
     lu.assertTrue(target.Value)
 end
@@ -1286,39 +1286,46 @@ function TestManagedModule:testActivationFailureRestoresLiveModuleAndShared()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "shared boom")
     lu.assertEquals(self.h.managedModule.getLiveModule(pluginGuid), firstHost)
-    lu.assertEquals(self.h.moduleRegistry.getPluginInfo(pluginGuid), {
-        pluginGuid = pluginGuid,
-        packId = nil,
-        moduleId = "ActivationRollback",
-        name = "Activation Rollback",
-    })
     lu.assertEquals(previousValue, "previous")
     lu.assertErrorMsgContains("managed_module.not_activated", function()
         secondHost.flush()
     end)
 end
 
-local function recordActivationReceipts(h, events)
-    local services = {
-        { service = h.shared, method = "installForModule" },
-        { service = h.harness.hooks, method = "installForModule" },
-        { service = h.overlays, method = "installForModule" },
-        { service = h.harness.mutation, method = "syncForModule" },
-    }
-    for _, entry in ipairs(services) do
-        local original = entry.service[entry.method]
-        entry.service[entry.method] = function(module, ...)
-            local receipt = original(module, ...)
-            local label = module.getMeta().name .. ":" .. receipt.name
-            local recorded = { name = receipt.name, phase = receipt.phase }
-            for _, methodName in ipairs({ "commit", "rollback", "retire" }) do
-                recorded[methodName] = function()
-                    events[#events + 1] = methodName .. ":" .. label
-                    return receipt[methodName]()
-                end
-            end
-            return recorded
+local function recordReceipt(events, generation, receipt)
+    local label = generation .. ":" .. receipt.name
+    local recorded = { name = receipt.name, phase = receipt.phase }
+    for _, methodName in ipairs({ "commit", "rollback", "retire" }) do
+        recorded[methodName] = function()
+            events[#events + 1] = methodName .. ":" .. label
+            return receipt[methodName]()
         end
+    end
+    return recorded
+end
+
+-- Wraps every capability install activation calls; `getGeneration()` labels the installing module.
+local function recordActivationReceipts(h, events, getGeneration)
+    local installs = {
+        { service = h.sharedBundle, method = "install" },
+        { service = h.harness.hooks, method = "install" },
+        { service = h.overlays, method = "install" },
+    }
+    for _, entry in ipairs(installs) do
+        local original = entry.service[entry.method]
+        entry.service[entry.method] = function(...)
+            return recordReceipt(events, getGeneration(), original(...))
+        end
+    end
+    local originalBind = h.harness.mutation.bind
+    h.harness.mutation.bind = function(...)
+        local bound = originalBind(...)
+        local generation = getGeneration()
+        local originalSync = bound.sync
+        bound.sync = function()
+            return recordReceipt(events, generation, originalSync())
+        end
+        return bound
     end
 end
 
@@ -1344,13 +1351,17 @@ end
 function TestManagedModule:testActivationCommitsByPhaseAndReleasesInReverse()
     local pluginGuid = "test-activation-receipt-order"
     local events = {}
-    recordActivationReceipts(self.h, events)
+    local generation = nil
+    recordActivationReceipts(self.h, events, function()
+        return generation
+    end)
     local function clearEvents()
         for index = #events, 1, -1 do
             events[index] = nil
         end
     end
 
+    generation = "gen1"
     local ok, err = createNamedManagedModule(self.h, pluginGuid, "gen1").activate()
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(events, {
@@ -1361,6 +1372,7 @@ function TestManagedModule:testActivationCommitsByPhaseAndReleasesInReverse()
     })
 
     clearEvents()
+    generation = "gen2"
     ok = createNamedManagedModule(self.h, pluginGuid, "gen2", function()
         error("onActivate boom")
     end).activate()
@@ -1377,6 +1389,7 @@ function TestManagedModule:testActivationCommitsByPhaseAndReleasesInReverse()
     })
 
     clearEvents()
+    generation = "gen3"
     ok, err = createNamedManagedModule(self.h, pluginGuid, "gen3").activate()
     lu.assertTrue(ok, tostring(err))
     lu.assertEquals(events, {
@@ -1441,7 +1454,6 @@ function TestManagedModule:testActivationFailureDropsNewStagedSharedListener()
     lu.assertFalse(ok)
     lu.assertStrContains(err, "new shared boom")
     lu.assertNil(self.h.managedModule.getLiveModule(pluginGuid))
-    lu.assertNil(self.h.moduleRegistry.getPluginInfo(pluginGuid))
     lu.assertTrue(emitOk)
     lu.assertEquals(count, 0)
     lu.assertEquals(delivered, 0)

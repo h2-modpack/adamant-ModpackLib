@@ -266,24 +266,25 @@ function TestHooks:testRetiredHookModulePrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(self.env[path]("x"), "second:base:x")
 end
 
-function TestHooks:testModuleHookDeclarationsAreStoredOnModuleRegistry()
-    local hookDeclarations = self.harness.hooksBundle.declarations.create()
-    local host = self.managedModule.create({
-        pluginGuid = "hook-test-state-declarations",
-        definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        state = createHookModuleState(self.harness, false),
-        hookDeclarations = hookDeclarations,
-        drawTab = function() end,
-    })
-
-    self.harness.hooksBundle.declarations.declareWrap(hookDeclarations, "module.hooks.wrap",
-        "AdamantHookTestStateDeclarations", function(base)
-        return base()
+function TestHooks:testInstallTakesExplicitInputsWithoutModuleRecord()
+    local path = "AdamantHookTestExplicitInstall"
+    self.env[path] = function(value)
+        return "base:" .. value
+    end
+    local declarations = self.harness.hooksBundle.declarations
+    local hookDeclarations = declarations.create()
+    declarations.createRegistrar(hookDeclarations, "test").wrap(path, function(base, value)
+        return "explicit:" .. base(value)
     end)
+    local ownerToken = {}
 
-    local record = self.harness.moduleRegistry.getRecord(host)
-    lu.assertNotNil(record.hookDeclarations)
-    lu.assertNotNil(record.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
+    local receipt = self.harness.hooks.install("hook-test-explicit-install", ownerToken, hookDeclarations)
+    lu.assertTrue(receipt.commit())
+
+    lu.assertNil(self.harness.moduleRegistry.getRecord(ownerToken))
+    lu.assertEquals(self.env[path]("x"), "explicit:base:x")
+    lu.assertTrue(receipt.retire())
+    lu.assertEquals(self.env[path]("x"), "base:x")
 end
 
 function TestHooks:testRetiredOverrideModulePrunesEmptyDispatcherPath()
@@ -330,7 +331,8 @@ end
 function TestHooks:testServiceSurfaceOnlyExposesModuleInstallation()
     local hooks = self.harness.hooks
 
-    lu.assertEquals(type(hooks.installForModule), "function")
+    lu.assertEquals(type(hooks.install), "function")
+    lu.assertNil(hooks.installForModule)
     lu.assertNil(hooks.installModUtilWrap)
     lu.assertNil(hooks.installModUtilContextWrap)
     lu.assertNil(hooks.installPhysicalWrap)
@@ -419,7 +421,7 @@ local function createOwnerInstallHarness(path)
         declarations.createRegistrar(hookDeclarations, "test").wrap(path, function(base, value)
             return label .. ":" .. base(value)
         end)
-        return ownerInstall.createReceipt(ownerId, { label = label }, hookDeclarations)
+        return ownerInstall.install(ownerId, { label = label }, hookDeclarations)
     end
     return h, createReceipt
 end
@@ -848,27 +850,12 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     lu.assertEquals(secondBuildCalls, 1)
     lu.assertEquals(target.Value, "second")
 
-    local mutationHost = {
-        getOwnerId = function()
-            return "hook-reload-pack.Alpha"
+    -- The active plan is keyed by owner id, so any handle bound to that owner can revert it.
+    local reloadedHandle = self.mutation.bind("hook-reload-pack.Alpha", {
+        patchMutation = function(_, _, plan)
+            plan:set(target, "Value", "third")
         end,
-    }
-    self.harness.moduleRegistry.setRecord(mutationHost, {
-        pluginGuid = "hook-reload-pack.Alpha",
-        definition = {
-            modpack = packId,
-            id = "Alpha",
-            name = "Alpha",
-            storage = {},
-        },
-        mutationBundle = {
-            patchMutation = function(_, _, plan)
-                plan:set(target, "Value", "second")
-            end,
-        },
-        store = store,
-    })
-
-    self.mutation.revertForModule(mutationHost)
+    }, secondHost, self.managedModule.getRecord(secondHost).runtime)
+    lu.assertTrue(reloadedHandle.revert())
     lu.assertEquals(target.Value, "base")
 end

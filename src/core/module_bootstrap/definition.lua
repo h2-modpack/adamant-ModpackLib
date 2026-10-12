@@ -4,7 +4,6 @@ local logging = deps.logging
 local storage = deps.storage
 local values = deps.values
 local coordinator = deps.coordinator
-local moduleRegistry = deps.moduleRegistry
 local plugin = deps.plugin
 
 local definitionApi = {}
@@ -525,12 +524,13 @@ local function prepareDefinition(structuralState, definition, structuralSurface,
         if previousFingerprint ~= nil and previousFingerprint ~= fingerprint then
             structuralState.requiresFullReload = true
             if type(prepared.modpack) == "string" and coordinator.isRegistered(prepared.modpack) then
-                moduleRegistry.setPendingCoordinatorRebuild(prepared, {
+                -- Carried to activation, which asks the coordinator to rebuild once the module is live.
+                prepared._pendingCoordinatorRebuild = {
                     kind = "structural_definition_changed",
                     moduleId = prepared.id,
                     displayName = prepared.name,
                     modpack = prepared.modpack,
-                })
+                }
             else
                 logging.violate("definition.structural_reload_required", "%s: %s", label,
                     "structural definition changed during hot reload; full reload required")

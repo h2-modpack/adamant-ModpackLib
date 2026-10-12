@@ -27,13 +27,6 @@ local function hasRegistrationEntries(registrationSet)
     return registrationSet and #(registrationSet.listenerEntries or {}) > 0
 end
 
-local function ensureHostRegistrations(state)
-    if not state.sharedEventRegistrations then
-        state.sharedEventRegistrations = registrations.create()
-    end
-    return state.sharedEventRegistrations
-end
-
 local function createListener(getModule, callback)
     return {
         callback = callback,
@@ -66,12 +59,6 @@ function registrations.stageListener(registrationSet, getModule, id, eventName, 
         logging.violate("shared.invalid_args", "%s: callback must be a function", context)
     end
     return recordStagedListener(registrationSet, id, eventName, createListener(getModule, callback))
-end
-
-function registrations.stageAuthorListener(record, host, id, eventName, callback)
-    return registrations.stageListener(ensureHostRegistrations(record), function()
-        return host
-    end, id, eventName, callback)
 end
 
 function registrations.install(ownerId, hostRegistrations)

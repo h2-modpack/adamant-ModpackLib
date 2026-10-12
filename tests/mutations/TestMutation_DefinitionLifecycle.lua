@@ -80,46 +80,30 @@ function TestMutation_DefinitionLifecycle:makeStore(enabled)
     }))
 end
 
-function TestMutation_DefinitionLifecycle:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
+function TestMutation_DefinitionLifecycle:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
     pluginGuid = pluginGuid or ("test-" .. tostring(def and def.id or "mutation"))
-    local module = {
-        getOwnerId = function()
-            return pluginGuid
-        end,
-    }
-    callbackHost = callbackHost or module
-    self.harness.moduleRegistry.setRecord(module, {
-        pluginGuid = pluginGuid,
-        definition = def,
-        mutationBundle = mutationBundle,
-        store = store,
-        runtime = {
-            data = store,
-        },
-        callbackHost = callbackHost,
+    return self.mutation.bind(pluginGuid, mutationBundle, callbackHost, {
+        data = store,
     })
-    return module
 end
 
 function TestMutation_DefinitionLifecycle:applyMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.applyForModule(module)
+    return self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store).apply()
 end
 
 function TestMutation_DefinitionLifecycle:revertMutation(pluginGuid, def, mutationBundle, callbackHost, store)
-    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.mutation.revertForModule(module)
+    return self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store).revert()
 end
 
 function TestMutation_DefinitionLifecycle:commitStagedState(def, mutationBundle, commitNotifier, callbackHost, store, txn,
         pluginGuid)
-    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.commitStagedState(module, def, mutationBundle, commitNotifier, txn, nil, nil)
+    local bound = self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.managedModuleLifecycle.commitStagedState(def, bound, commitNotifier, txn, nil, nil)
 end
 
 function TestMutation_DefinitionLifecycle:setEnabled(def, mutationBundle, callbackHost, store, txn, enabled, pluginGuid)
-    local module = self:createMutationModule(pluginGuid, def, mutationBundle, callbackHost, store)
-    return self.managedModuleLifecycle.setEnabled(module, def, mutationBundle, nil, txn, nil, nil, enabled)
+    local bound = self:bindMutation(pluginGuid, def, mutationBundle, callbackHost, store)
+    return self.managedModuleLifecycle.setEnabled(def, bound, nil, txn, nil, nil, enabled)
 end
 
 function TestMutation_DefinitionLifecycle:activateMutationModule(pluginGuid, definition, config, patchCallback)
@@ -352,11 +336,14 @@ function TestMutation_DefinitionLifecycle:testSetElementErrorsOnNonTableTarget()
 end
 
 function TestMutation_DefinitionLifecycle:testAffectsRunDataUsesPatchDeclarationOnly()
-    lu.assertFalse(self.mutation.affectsRunData({ affectsRunData = true }))
-    lu.assertTrue(self.mutation.affectsRunData({ patchMutation = function() end }))
-    lu.assertFalse(self.mutation.affectsRunData({ affectsRunData = false }))
-    lu.assertFalse(self.mutation.affectsRunData({ dataMutation = true }))
-    lu.assertFalse(self.mutation.affectsRunData({}))
+    local function affectsRunData(bundle)
+        return self.mutation.bind("test-affects-run-data", bundle, {}, {}).affectsRunData()
+    end
+    lu.assertFalse(affectsRunData({ affectsRunData = true }))
+    lu.assertTrue(affectsRunData({ patchMutation = function() end }))
+    lu.assertFalse(affectsRunData({ affectsRunData = false }))
+    lu.assertFalse(affectsRunData({ dataMutation = true }))
+    lu.assertFalse(affectsRunData({}))
 end
 
 function TestMutation_DefinitionLifecycle:testCommitStagedStateCallsSettingsObserverAfterFlush()
@@ -849,9 +836,9 @@ function TestMutation_DefinitionLifecycle:testSetDebugModeCommitsWhenStagedMirro
             staged = committed
         end,
     })
-    local module = self:createMutationModule("test-stale-debug-mirror", def, nil, nil, store)
+    local bound = self:bindMutation("test-stale-debug-mirror", def, nil, nil, store)
 
-    local ok, err = self.managedModuleLifecycle.setDebugMode(module, def, nil, nil, txn, nil, nil, true)
+    local ok, err = self.managedModuleLifecycle.setDebugMode(def, bound, nil, txn, nil, nil, true)
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(err)

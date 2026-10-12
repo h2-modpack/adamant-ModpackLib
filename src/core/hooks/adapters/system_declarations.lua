@@ -24,7 +24,7 @@ local function define(systemScope, ownerId, register)
     register(declarations.createRegistrar(hookDeclarations, "system.hooks.define"))
 
     local previous = activeReceipts[ownerId]
-    local receipt = ownerInstall.createReceipt(ownerId, systemScope, hookDeclarations)
+    local receipt = ownerInstall.install(ownerId, systemScope, hookDeclarations)
     -- Replacing a define retires the previous install; it never restores what that install displaced.
     if previous and previous.systemScope == systemScope then
         previous.receipt.retire()

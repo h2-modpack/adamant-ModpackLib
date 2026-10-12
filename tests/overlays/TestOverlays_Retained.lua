@@ -748,20 +748,94 @@ function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivatio
     end)
 end
 
-function TestOverlays_Retained:testModuleOverlayDeclarationsAreStoredOnModuleRegistry()
-    local host = self:createModuleWithOverlays("test.retained.state-declarations", function(overlays)
-        overlays.createLine("line", {
-            region = "middleRightStack",
-            columns = {
-                { key = "text", minWidth = 40 },
-            },
-        })
-    end)
+function TestOverlays_Retained:installOverlays(host)
+    local record = self.h.harness.managedModule.getRecord(host)
+    return self.h.overlays.install(host.getOwnerId(), {
+        owner = host,
+        declarations = record.capabilityInputs.overlayDeclarations,
+        host = record.host,
+        runtime = record.runtime,
+    })
+end
 
-    local record = self.h.harness.moduleRegistry.getRecord(host)
-    lu.assertNotNil(record.overlayDeclarations)
-    lu.assertEquals(record.overlayDeclarations.entries[1].kind, "createLine")
-    lu.assertEquals(record.overlayDeclarations.entries[1].name, "line")
+function TestOverlays_Retained:testInstallTakesExplicitInputsWithoutModuleRecord()
+    local ownerId = "test.retained.explicit-install"
+    local declarations = self.h.harness.overlaysBundle.declarations
+    local overlayDeclarations = declarations.create()
+    declarations.declareLine(overlayDeclarations, "test", "line", {
+        region = "middleRightStack",
+        columns = {
+            { key = "text", minWidth = 40 },
+        },
+    })
+    local seen = nil
+    declarations.declareCommit(overlayDeclarations, "test", function(host, runtime, overlay)
+        seen = { host = host, runtime = runtime }
+        overlay.setLine("line", { text = "explicit" })
+    end)
+    local owner = {}
+    local host = { label = "host" }
+    local runtime = { label = "runtime" }
+
+    local receipt = self.h.overlays.install(ownerId, {
+        owner = owner,
+        declarations = overlayDeclarations,
+        host = host,
+        runtime = runtime,
+    })
+    local ok, err = receipt.commit()
+    lu.assertTrue(ok, tostring(err))
+    self.h.overlays.dispatchCommit(owner, {})
+
+    lu.assertNil(self.h.harness.moduleRegistry.getRecord(owner))
+    lu.assertNotNil(self.h.rendererState.stackRows["middleRightStack\0" .. ownerId .. ":current:line"])
+    lu.assertIs(seen.host, host)
+    lu.assertIs(seen.runtime, runtime)
+    lu.assertTrue(receipt.retire())
+    lu.assertNil(self.h.rendererState.stackRows["middleRightStack\0" .. ownerId .. ":current:line"])
+end
+
+-- Reload boundary: a successor whose activation fails after the overlay receipt committed
+-- must hand the previous generation its overlays back, not leave the live module bare.
+function TestOverlays_Retained:testActivationFailureRestoresPreviousGenerationOverlays()
+    local pluginGuid = "test-retained-rollback-restores-previous"
+    local rowKey = "middleRightStack\0" .. pluginGuid .. ":current:shared"
+    local function declare(label)
+        return function(overlays)
+            overlays.createLine("shared", {
+                region = "middleRightStack",
+                columns = {
+                    { key = "text", minWidth = 40 },
+                },
+            })
+            overlays.onCommit(function(_, _, overlay)
+                overlay.setLine("shared", { text = label })
+            end)
+        end
+    end
+    local firstHost, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, declare("first"))
+    local ok, err = firstAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(self.h.rendererState.stackRows[rowKey])
+
+    local _, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, declare("second"), {
+        onActivate = function()
+            error("second onActivate boom")
+        end,
+    })
+    ok, err = secondAuthorModule.activate()
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "second onActivate boom")
+    lu.assertIs(self.h.harness.managedModule.getLiveModule(pluginGuid), firstHost)
+    local row = self.h.rendererState.stackRows[rowKey]
+    lu.assertNotNil(row)
+    lu.assertTrue(row.visible())
+    local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
+    lu.assertNotNil(firstRegistry.elements.shared)
+
+    self.h.overlays.dispatchCommit(firstHost, {})
+    lu.assertEquals(firstRegistry.elements.shared.values, { text = "first" })
 end
 
 function TestOverlays_Retained:testSystemOverlayProjectionDoesNotExposeOwner()
@@ -863,7 +937,7 @@ function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit
     local pendingRowKey = "middleRightStack\0" .. ownerId .. ":pending:candidate"
     local currentRowKey = "middleRightStack\0" .. ownerId .. ":current:candidate"
 
-    local receipt = self.h.overlays.installForModule(host)
+    local receipt = self:installOverlays(host)
 
     lu.assertNil(self.h.rendererState.stackRows[currentRowKey])
     lu.assertNotNil(self.h.rendererState.stackRows[pendingRowKey])
@@ -1245,7 +1319,7 @@ function TestOverlays_Retained:installAfterHookGenerations(pluginGuid, path)
                 observed[#observed + 1] = label
             end)
         end)
-        receipts[label] = self.h.overlays.installForModule(hosts[label])
+        receipts[label] = self:installOverlays(hosts[label])
         local ok, err = receipts[label].commit()
         lu.assertTrue(ok, tostring(err))
     end
@@ -1261,8 +1335,8 @@ function TestOverlays_Retained:getHookOwner(pluginGuid)
     return self.h.harness.imports["core/hooks/dispatchers.lua"].getCurrentOwner(pluginGuid)
 end
 
--- Overlay rollback and retire differ only in how the after-hook install releases the
--- hook owner slot; neither restores the previous generation's overlay elements.
+-- Overlay rollback hands the after-hook owner slot back to the displaced generation;
+-- retire never does.
 function TestOverlays_Retained:testHostAfterHookReceiptRollbackRestoresDisplacedHookOwner()
     local pluginGuid = "test-retained-after-receipt-rollback"
     local hosts, receipts = self:installAfterHookGenerations(pluginGuid, "StartNewRunReceiptRollback")

@@ -11,23 +11,10 @@ local plan = import('core/mutations/plan.lua', nil, {
     planExecutors = mutationRegistry.planExecutors,
 })
 
-local lifecycle = import('core/mutations/lifecycle.lua', nil, {
+return import('core/mutations/lifecycle.lua', nil, {
     logging = deps.logging,
-    coordinator = deps.coordinator,
     setupRunData = deps.gameDeps.runData.SetupRunData,
     mutationRegistry = mutationRegistry,
     plan = plan,
     receipt = deps.receipt,
 })
-
-local service = import('core/mutations/adapters/module_lifecycle.lua', nil, {
-    logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
-    lifecycle = lifecycle,
-})
-
-return {
-    service = service,
-    lifecycle = lifecycle,
-    plan = plan,
-}

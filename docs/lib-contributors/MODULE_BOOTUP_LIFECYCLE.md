@@ -42,8 +42,9 @@ An uncoordinated module is a normal live module whose pack id has no registered
 coordinator.
 
 1. The shared module creation sequence runs.
-2. If the module called `module.fallbackUi.attachGuiOnce(...)`, Lib records a
-   fallback UI request before activation.
+2. If the module called `module.fallbackUi.attachGuiOnce(...)`, the activation
+   finalizer passes `fallbackUiRequested` to `managedModule.create(...)` and hands
+   the registered callback the owner's stable bridge before activation.
 3. Activation commits the fallback UI receipt.
 4. The fallback receipt installs a hot-reload-stable runtime for the module's
    owner id and refreshes the fallback HUD marker.

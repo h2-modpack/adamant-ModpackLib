@@ -28,13 +28,6 @@ local ownerInstall = import('core/hooks/owner_install.lua', nil, {
     receipt = deps.receipt,
 })
 
-local moduleAdapter = import('core/hooks/adapters/module_install.lua', nil, {
-    logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
-    declarations = declarations,
-    ownerInstall = ownerInstall,
-})
-
 local system = import('core/hooks/adapters/system_declarations.lua', nil, {
     logging = deps.logging,
     declarations = declarations,
@@ -43,7 +36,7 @@ local system = import('core/hooks/adapters/system_declarations.lua', nil, {
 })
 
 local service = {
-    installForModule = moduleAdapter.installForModule,
+    install = ownerInstall.install,
 }
 
 return {

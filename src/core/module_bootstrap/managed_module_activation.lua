@@ -4,21 +4,11 @@ local logging = deps.logging
 local shared = deps.shared
 local hooks = deps.hooks
 local overlays = deps.overlays
-local mutation = deps.mutation
 local fallbackUi = deps.fallbackUi
 local coordinator = deps.coordinator
 local moduleRegistry = deps.moduleRegistry
 
 local moduleActivation = {}
-
-local function createPluginInfo(pluginGuid, def)
-    return {
-        pluginGuid = pluginGuid,
-        packId = def.modpack,
-        moduleId = def.id,
-        name = def.name,
-    }
-end
 
 local function warnReceiptRelease(warningId, warningPrefix, errors)
     if warningId == "managed_module.retire_failed" then
@@ -91,21 +81,27 @@ function moduleActivation.activateOrThrow(module)
     local meta = module.getMeta()
     local moduleId = module.getModuleId()
     local packId = module.getPackId()
-    local pendingCoordinatorRebuild = moduleRegistry.getPendingCoordinatorRebuild(def)
-    local hasPendingCoordinatorRebuild = pendingCoordinatorRebuild ~= nil
+    local pendingCoordinatorRebuild = def._pendingCoordinatorRebuild
     local previousModule = moduleRegistry.getLiveModule(pluginGuid)
-    local previousPluginInfo = moduleRegistry.getPluginInfo(pluginGuid)
+    local inputs = record.capabilityInputs
     local candidateReceipts = {}
     local published = false
     record.activating = true
 
     local ok, err = pcall(function()
-        candidateReceipts[#candidateReceipts + 1] = shared.installForModule(module)
-        candidateReceipts[#candidateReceipts + 1] = hooks.installForModule(module)
-        candidateReceipts[#candidateReceipts + 1] = overlays.installForModule(module)
-        candidateReceipts[#candidateReceipts + 1] = mutation.syncForModule(module)
-        if record.fallbackUiRequested == true then
-            candidateReceipts[#candidateReceipts + 1] = fallbackUi.installForModule(module)
+        -- The module itself is the owner token for hooks and overlays (the overlay after-hook
+        -- install shares the module's hook slot).
+        candidateReceipts[#candidateReceipts + 1] = shared.install(pluginGuid, inputs.shared)
+        candidateReceipts[#candidateReceipts + 1] = hooks.install(pluginGuid, module, inputs.hookDeclarations)
+        candidateReceipts[#candidateReceipts + 1] = overlays.install(pluginGuid, {
+            owner = module,
+            declarations = inputs.overlayDeclarations,
+            host = record.host,
+            runtime = record.runtime,
+        })
+        candidateReceipts[#candidateReceipts + 1] = inputs.mutation.sync()
+        if inputs.fallbackUiRequested then
+            candidateReceipts[#candidateReceipts + 1] = fallbackUi.install(pluginGuid, module)
         end
         -- Rollback and retirement walk this list in reverse, so commit order is release order.
         candidateReceipts = orderByPhase(candidateReceipts)
@@ -121,17 +117,16 @@ function moduleActivation.activateOrThrow(module)
         record.activating = false
         record.activated = true
         moduleRegistry.setLiveModule(pluginGuid, module)
-        moduleRegistry.setPluginInfo(pluginGuid, createPluginInfo(pluginGuid, def))
         published = true
 
         if type(record.onActivate) == "function" then
             record.onActivate(record.host, record.runtime)
         end
 
-        if hasPendingCoordinatorRebuild then
+        if pendingCoordinatorRebuild ~= nil then
             local requested = coordinator.requestRebuild(packId, pendingCoordinatorRebuild)
             if requested then
-                moduleRegistry.setPendingCoordinatorRebuild(def, nil)
+                def._pendingCoordinatorRebuild = nil
             else
                 logging.violate(
                     "managed_module.structural_rebuild_unavailable",
@@ -149,7 +144,6 @@ function moduleActivation.activateOrThrow(module)
             tostring(meta.name or moduleId or "module") .. " activation rollback failed")
         if published then
             moduleRegistry.setLiveModule(pluginGuid, previousModule)
-            moduleRegistry.setPluginInfo(pluginGuid, previousPluginInfo)
         end
         error(err, 0)
     end

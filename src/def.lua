@@ -476,6 +476,9 @@ local lib = {}
 ---@alias AdamantModpackLib.DrawActionHandler AdamantModpackLib.ModuleActionHandler
 
 ---@class AdamantModpackLib.PreparedDefinition: AdamantModpackLib.ModuleDefinition
+---@field _preparedDefinition true
+---@field _structuralFingerprint string
+---@field _pendingCoordinatorRebuild? table Structural change awaiting a coordinator rebuild; activation requests and clears it.
 
 ---@class AdamantModpackLib.MutationBundle
 ---@field patchMutation? fun(
@@ -483,6 +486,42 @@ local lib = {}
 ---    runtime: AdamantModpackLib.RuntimeContext,
 ---    plan: AdamantModpackLib.MutationPlan
 ---)
+
+---Internal: mutation bundle bound to its owner, host, and runtime (`mutation.bind`).
+---`sync()` owns its run-data recompute; `apply()`/`revert()` leave the recompute to the caller.
+---@class AdamantModpackLib.BoundMutation
+---@field apply fun(): boolean, string?
+---@field revert fun(): boolean, string?
+---@field sync fun(): AdamantModpackLib.Receipt
+---@field affectsRunData fun(): boolean
+
+---Internal: inputs for one lane's shared surface (`shared.refs.create`).
+---@class AdamantModpackLib.SharedRefsOpts
+---@field ownerId string
+---@field declarations table Module shared data declarations.
+---@field emit fun(id: string, eventName: string, payload: any): boolean, integer? Lane emit policy.
+---@field source string Error-message prefix, such as `store.shared`.
+
+---Internal: explicit slices activation hands each capability install.
+---@class AdamantModpackLib.CapabilityInputs
+---@field hookDeclarations table
+---@field shared { data: table, events: table? }
+---@field overlayDeclarations table?
+---@field mutation AdamantModpackLib.BoundMutation
+---@field fallbackUiRequested boolean
+
+---Internal: per-module activation record (weak-keyed by module in `registry.modules.records`).
+---Capabilities never read it; activation passes them slices from `capabilityInputs`.
+---@class AdamantModpackLib.ManagedModuleRecord
+---@field definition AdamantModpackLib.PreparedDefinition
+---@field pluginGuid string
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
+---@field capabilityInputs AdamantModpackLib.CapabilityInputs
+---@field effectReceipts AdamantModpackLib.Receipt[]
+---@field activating? boolean
+---@field activated boolean
 
 ---@class AdamantModpackLib.ModuleCreateOpts
 ---@field pluginGuid string Plugin guid captured at module file load time.

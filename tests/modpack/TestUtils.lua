@@ -315,7 +315,7 @@ function CreateModpackHarness(opts)
     local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
     local getLiveModule = opts.getLiveModule or LibManagedModule.getLiveModule
     local harnessPackRegistry = opts.packRegistry or {}
-    local harnessCoordination = opts.coordination or import("core/modpack/coordination.lua", nil, {
+    local harnessCoordination = opts.coordination or import("core/coordination/coordination.lua", nil, {
         logging = logging,
         coordinationRegistry = opts.coordinationRegistry or {},
     })
@@ -504,7 +504,7 @@ function MockModuleRegistry.create(moduleDefs)
         }
         if def.patchPlan ~= nil then
             local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
-            mutations.lifecycle.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
+            mutations.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
         end
         local liveModule = LibManagedModule.create({
             pluginGuid = pluginGuid,

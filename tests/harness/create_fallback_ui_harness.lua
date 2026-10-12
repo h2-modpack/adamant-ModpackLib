@@ -158,6 +158,7 @@ local function createFallbackUiHarness(opts)
             pluginGuid = pluginGuid,
             definition = definition,
             state = moduleState,
+            fallbackUiRequested = moduleOpts.attachFallbackUi == true,
             drawTab = function() end,
         })
         return host, host
@@ -167,7 +168,7 @@ local function createFallbackUiHarness(opts)
         moduleOpts = moduleOpts or {}
         local host = self:createLibModule(pluginGuid, moduleOpts)
         if moduleOpts.attachFallbackUi == true then
-            self.fallbackUi.attachGuiOnce(host, moduleOpts.registerGui or function() end)
+            self.fallbackUi.attachGuiOnce(pluginGuid, moduleOpts.registerGui or function() end)
         end
         local ok, err = host.activate()
         assert(ok, tostring(err))
@@ -179,7 +180,7 @@ local function createFallbackUiHarness(opts)
     end
 
     function h:installFallbackRuntime(module)
-        local receipt = self.fallbackUi.installForModule(module)
+        local receipt = self.fallbackUi.install(module.getOwnerId(), module)
         local ok, err = receipt.commit()
         assert(ok, tostring(err))
         return self:getFallbackUiRuntime(module.getOwnerId())

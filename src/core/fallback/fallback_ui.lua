@@ -1,7 +1,6 @@
 local deps = ...
 
 local logging = deps.logging
-local moduleRegistry = deps.moduleRegistry
 local coordination = deps.coordination
 local overlays = deps.overlays
 local createSystem = deps.createSystem
@@ -40,25 +39,6 @@ local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     createSystem = createSystem,
     runtimes = runtimes,
 })
-
-local function requireModuleRecord(module, apiName)
-    local record = moduleRegistry.getRecord(module)
-    if not record then
-        logging.violate("fallback_ui.invalid_args", "%s: expected managed module", apiName)
-    end
-    return record
-end
-
-local function requireAttachmentOpen(module)
-    local record = requireModuleRecord(module, "module.fallbackUi.attachGuiOnce")
-    if record.activating == true or record.activated == true then
-        logging.violate(
-            "fallback_ui.invalid_args",
-            "module.fallbackUi.attachGuiOnce cannot be called after activation begins"
-        )
-    end
-    return record
-end
 
 local function getFallbackUiRuntime(ownerId)
     local activeRuntime = runtimes[ownerId]
@@ -126,13 +106,13 @@ local function getOrCreateBridge(ownerId)
     return bridge
 end
 
-function fallbackUi.attachGuiOnce(module, register)
-    if type(register) ~= "function" then
-        logging.violate("fallback_ui.invalid_args", "module.fallbackUi.attachGuiOnce: register must be a function")
-    end
-    local state = requireAttachmentOpen(module)
-    local ownerId = module.getOwnerId()
-    state.fallbackUiRequested = true
+--- Hands `register` the owner's hot-reload-stable GUI bridge, once per owner id per process.
+--- Callers validate `register` at declaration time; whether this owner then installs a fallback
+--- runtime is the activating module's decision (`fallbackUiRequested`), not this call's.
+---@param ownerId string
+---@param register fun(bridge: AdamantModpackLib.FallbackUiBridge)
+---@return boolean attached
+function fallbackUi.attachGuiOnce(ownerId, register)
     local bridge = getOrCreateBridge(ownerId)
     if guiAttached[ownerId] == true then
         return false
@@ -347,8 +327,10 @@ local function createRuntime(module)
     return activeRuntime
 end
 
-function fallbackUi.installForModule(module)
-    local ownerId = module.getOwnerId()
+---@param ownerId string
+---@param module AdamantModpackLib.ManagedModule Live module the fallback window drives.
+---@return AdamantModpackLib.Receipt
+function fallbackUi.install(ownerId, module)
     local activeRuntime = createRuntime(module)
     local previousRuntime = nil
 
@@ -385,14 +367,6 @@ function fallbackUi.installForModule(module)
             return disposeFallbackUiRuntime(ownerId, activeRuntime)
         end,
     })
-end
-
-function fallbackUi.create(module)
-    return {
-        attachGuiOnce = function(register)
-            return fallbackUi.attachGuiOnce(module, register)
-        end
-    }
 end
 
 function fallbackUi.handleGuiClosed()
@@ -436,10 +410,4 @@ modutil.once_loaded.game(function()
     fallbackUi.createFallbackMarker()
 end)
 
-return {
-    service = fallbackUi,
-    author = {
-        create = fallbackUi.create,
-    },
-    public = {},
-}
+return fallbackUi

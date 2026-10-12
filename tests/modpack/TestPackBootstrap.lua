@@ -138,7 +138,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
     local mutationBundle = {
         patchMutation = nil,
     }
-    LibTestImports["core/mutations/00_init.lua"].lifecycle.declarePatch(mutationBundle, function(_, _, plan)
+    LibTestImports["core/mutations/00_init.lua"].declarePatch(mutationBundle, function(_, _, plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)

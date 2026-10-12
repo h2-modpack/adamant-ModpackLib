@@ -187,8 +187,7 @@ end
 
 local function createBridge(h, pluginGuid)
     local bridge = nil
-    local host = h:createLibModule(pluginGuid or PLUGIN_GUID)
-    h.fallbackUi.attachGuiOnce(host, function(ui)
+    h.fallbackUi.attachGuiOnce(pluginGuid or PLUGIN_GUID, function(ui)
         bridge = ui
     end)
     return bridge
@@ -203,23 +202,21 @@ function TestFallbackUi:tearDown()
     self.h:restoreWarnings()
 end
 
-function TestFallbackUi:testAttachGuiOnceRequiresManagedHost()
-    lu.assertErrorMsgContains("expected managed module", function()
-        self.h.fallbackUi.attachGuiOnce(nil, function() end)
-    end)
-end
-
 function TestFallbackUi:testAttachGuiOnceRequiresRegisterCallback()
-    local host = self.h:createLibModule(PLUGIN_GUID)
+    local module = self.h.public.createModule({
+        pluginGuid = PLUGIN_GUID,
+        modpack = "fallback-pack",
+        id = "FallbackUiTest",
+        name = "Fallback UI Test",
+    })
     lu.assertErrorMsgContains("register must be a function", function()
-        self.h.fallbackUi.attachGuiOnce(host)
+        module.fallbackUi.attachGuiOnce()
     end)
 end
 
 function TestFallbackUi:testBridgeCallbacksNoOpBeforeRuntimeExists()
     local bridge = nil
-    local host = self.h:createLibModule(PLUGIN_GUID)
-    self.h.fallbackUi.attachGuiOnce(host, function(ui)
+    self.h.fallbackUi.attachGuiOnce(PLUGIN_GUID, function(ui)
         bridge = ui
     end)
 
@@ -414,7 +411,7 @@ function TestFallbackUi:testFallbackRuntimeRollbackRestoresPreviousRuntime()
     self.h.coordinator.register("fallback-pack", nil)
 
     local firstRuntime = self.h:installFallbackRuntime(firstHost)
-    local secondReceipt = self.h.fallbackUi.installForModule(secondHost)
+    local secondReceipt = self.h.fallbackUi.install(secondHost.getOwnerId(), secondHost)
 
     lu.assertTrue(secondReceipt.commit())
     lu.assertNotEquals(self.h:getFallbackUiRuntime(PLUGIN_GUID), firstRuntime)
@@ -429,7 +426,7 @@ function TestFallbackUi:testFallbackRuntimeRetireLeavesSuccessorRuntimeInstalled
     local secondHost = makeHost({ modpack = "fallback-pack", name = "Second Fallback UI" })
     self.h.coordinator.register("fallback-pack", nil)
     self.h.rom.ImGui = makeImgui({ menuClicked = true })
-    local firstReceipt = self.h.fallbackUi.installForModule(firstHost)
+    local firstReceipt = self.h.fallbackUi.install(firstHost.getOwnerId(), firstHost)
     lu.assertTrue(firstReceipt.commit())
     local secondRuntime = self.h:installFallbackRuntime(secondHost)
     secondRuntime.addMenuBar()
@@ -447,7 +444,7 @@ function TestFallbackUi:testFallbackRuntimeRetireDoesNotRestorePreviousRuntime()
     self.h.coordinator.register("fallback-pack", nil)
 
     self.h:installFallbackRuntime(firstHost)
-    local secondReceipt = self.h.fallbackUi.installForModule(secondHost)
+    local secondReceipt = self.h.fallbackUi.install(secondHost.getOwnerId(), secondHost)
     lu.assertTrue(secondReceipt.commit())
 
     lu.assertTrue(secondReceipt.retire())

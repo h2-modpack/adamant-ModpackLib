@@ -42,10 +42,10 @@ local declarations = import('core/overlays/declarations.lua', nil, {
     logging = deps.logging,
 })
 
-local moduleAdapter = import('core/overlays/adapters/module_install.lua', nil, {
+local ownerInstall = import('core/overlays/owner_install.lua', nil, {
     logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
     hooks = deps.hooks,
+    hookDeclarations = deps.hookDeclarations,
     retained = retained,
     declarations = declarations,
     receipt = deps.receipt,
@@ -63,7 +63,7 @@ local suppression = import('core/overlays/suppression.lua', nil, {
     isUiSuppressed = isUiSuppressed,
 })
 
-service.installForModule = moduleAdapter.installForModule
+service.install = ownerInstall.install
 service.suppressForUi = suppression.suppressForUi
 service.isUiSuppressed = suppression.isUiSuppressed
 

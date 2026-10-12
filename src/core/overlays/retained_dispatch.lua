@@ -112,26 +112,13 @@ local function createOverlayProjection(registry)
     return overlay
 end
 
-local function createRuntimeContext(registry)
-    if registry.runtime ~= nil then
-        return registry.runtime
-    end
-    local store = registry.store
-    return {
-        data = store,
-        cache = store and store.cache or nil,
-        shared = store and store.shared or nil,
-        controls = store and store.controls or nil,
-    }
-end
-
 local function dispatchProjection(registry, callback, event)
     local overlay = createOverlayProjection(registry)
     if registry.explicitOwner == true then
         callback(overlay, event)
         return
     end
-    callback(registry.host, createRuntimeContext(registry), overlay, event)
+    callback(registry.host, registry.runtime, overlay, event)
 end
 
 local function shouldDispatchInterval(registry, event)
@@ -146,7 +133,7 @@ local function shouldDispatchInterval(registry, event)
     if registry.explicitOwner == true then
         return when(intervalEvent) == true
     end
-    return when(registry.host, createRuntimeContext(registry), intervalEvent) == true
+    return when(registry.host, registry.runtime, intervalEvent) == true
 end
 
 local function dispatchCommit(owner, commit)

@@ -22,9 +22,9 @@ local function getStructuralBaseline(pluginGuid)
     }
 end
 
-local function attachFallbackUi(declarations, module)
-    for _, args in ipairs(declarations.fallbackUi) do
-        fallbackUi.attachGuiOnce(module, table.unpack(args, 1, args.n))
+local function attachFallbackUi(declarations, pluginGuid)
+    for _, register in ipairs(declarations.fallbackUi) do
+        fallbackUi.attachGuiOnce(pluginGuid, register)
     end
 end
 
@@ -96,6 +96,7 @@ function activationFinalizer.activate(opts, declarations)
         sharedDataDeclarations = declarations.sharedDataDeclarations,
         sharedEventRegistrations = declarations.sharedEventRegistrations,
         overlayDeclarations = declarations.overlayDeclarations,
+        fallbackUiRequested = #declarations.fallbackUi > 0,
         onActivate = declarations.onActivate,
         onCommit = declarations.onCommit,
         onReload = declarations.onReload,
@@ -103,7 +104,7 @@ function activationFinalizer.activate(opts, declarations)
         drawQuickContent = declarations.drawQuickContent,
         controlCatalog = compiledControls.catalog,
     })
-    attachFallbackUi(declarations, module)
+    attachFallbackUi(declarations, opts.pluginGuid)
     local ok, err = module.activate()
     if not ok then
         error(err, 0)

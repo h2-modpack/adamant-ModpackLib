@@ -1,6 +1,5 @@
 local deps = ...
 local logging = deps.logging
-local mutation = deps.mutation
 local moduleState = deps.moduleState
 
 local PACK_RESTORE_MARKER_ALIAS = "__Modpack_PackRestoreMarker"
@@ -98,15 +97,15 @@ local function isEnabled(txn)
     return txn.readCommitted("Enabled") == true
 end
 
-local function restoreConfigAndRuntime(module, def, txn, commit, previousEffective, primaryErr)
+local function restoreConfigAndRuntime(def, mutation, txn, commit, previousEffective, primaryErr)
     txn.rollback(commit)
 
     local rollbackOk
     local rollbackErr
     if previousEffective then
-        rollbackOk, rollbackErr = mutation.applyForModule(module)
+        rollbackOk, rollbackErr = mutation.apply()
     else
-        rollbackOk, rollbackErr = mutation.revertForModule(module)
+        rollbackOk, rollbackErr = mutation.revert()
     end
     if not rollbackOk then
         logging.violate("lifecycle.staged_state_rollback_reapply_failed", "%s: staged state rollback reapply failed: %s",
@@ -150,8 +149,10 @@ local function finishSuccessfulCommit(def, commitNotifier, txn, commit, actionEx
     return notifyCommitAfterFlush(def, commitNotifier, makeCommitContext(commit.actionSnapshot, commit.hadConfigChanges))
 end
 
+---@param def table Prepared definition.
+---@param mutation AdamantModpackLib.BoundMutation
 ---@param txn AdamantModpackLib.ModuleStateTxn
-local function commitStagedState(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+local function commitStagedState(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
     if not txn.hasPending() then
         return true, nil
     end
@@ -159,7 +160,7 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, tx
     local previousEffective = isEnabled(txn)
     local commit = txn.beginCommit()
     local nextEffective = isEnabled(txn)
-    local shouldSyncMutation = mutation.affectsRunData(mutationBundle)
+    local shouldSyncMutation = mutation.affectsRunData()
         and commit.hadConfigChanges
 
     if not shouldSyncMutation then
@@ -169,9 +170,9 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, tx
     local ok
     local err
     if nextEffective then
-        ok, err = mutation.applyForModule(module)
+        ok, err = mutation.apply()
     elseif previousEffective then
-        ok, err = mutation.revertForModule(module)
+        ok, err = mutation.revert()
     else
         ok, err = true, nil
     end
@@ -179,24 +180,24 @@ local function commitStagedState(module, def, mutationBundle, commitNotifier, tx
         return finishSuccessfulCommit(def, commitNotifier, txn, commit, actionExecutor, sharedEventFlusher)
     end
 
-    return restoreConfigAndRuntime(module, def, txn, commit, previousEffective, err)
+    return restoreConfigAndRuntime(def, mutation, txn, commit, previousEffective, err)
 end
 
-local function setEnabled(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher, enabled)
+local function setEnabled(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher, enabled)
     local previousEffective = stageLifecycleBoolean(txn, "Enabled", enabled)
     if not txn.hasPending() then
-        if previousEffective and enabled == true and mutation.affectsRunData(mutationBundle) then
-            local ok, err = mutation.applyForModule(module)
+        if previousEffective and enabled == true and mutation.affectsRunData() then
+            local ok, err = mutation.apply()
             return ok, err
         end
         return true, nil
     end
-    return commitStagedState(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+    return commitStagedState(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
 end
 
-local function setDebugMode(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher, enabled)
+local function setDebugMode(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher, enabled)
     stageLifecycleBoolean(txn, "DebugMode", enabled)
-    return commitStagedState(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+    return commitStagedState(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
 end
 
 local function makePackTransitionReceipt(txn)
@@ -211,20 +212,20 @@ local function stagePackTransitionReceipt(txn, receipt)
     txn.stage("Enabled", receipt and receipt.previousEnabled == true)
 end
 
-local function suspendForPackDisable(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+local function suspendForPackDisable(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
     local receipt = makePackTransitionReceipt(txn)
     local marker = receipt.previousEnabled and PACK_RESTORE_ENABLED or PACK_RESTORE_DISABLED
     txn.stage(PACK_RESTORE_MARKER_ALIAS, marker)
-    local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher,
+    local ok, err = setEnabled(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher,
         false)
     return ok, err, receipt
 end
 
-local function ensureSuspendedForPackDisable(module, def, mutationBundle, commitNotifier, txn, actionExecutor,
+local function ensureSuspendedForPackDisable(def, mutation, commitNotifier, txn, actionExecutor,
                                              sharedEventFlusher)
     local marker = txn.readCommitted(PACK_RESTORE_MARKER_ALIAS)
     if marker == PACK_RESTORE_NONE or marker == nil then
-        return suspendForPackDisable(module, def, mutationBundle, commitNotifier, txn, actionExecutor,
+        return suspendForPackDisable(def, mutation, commitNotifier, txn, actionExecutor,
             sharedEventFlusher)
     end
     if txn.readCommitted("Enabled") ~= true then
@@ -232,10 +233,10 @@ local function ensureSuspendedForPackDisable(module, def, mutationBundle, commit
     end
 
     txn.stage("Enabled", false)
-    return commitStagedState(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+    return commitStagedState(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
 end
 
-local function restoreForPackEnable(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+local function restoreForPackEnable(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
     local receipt = makePackTransitionReceipt(txn)
     local marker = txn.readCommitted(PACK_RESTORE_MARKER_ALIAS)
     local target = receipt.previousEnabled
@@ -246,15 +247,15 @@ local function restoreForPackEnable(module, def, mutationBundle, commitNotifier,
     end
 
     txn.stage(PACK_RESTORE_MARKER_ALIAS, PACK_RESTORE_NONE)
-    local ok, err = setEnabled(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher,
+    local ok, err = setEnabled(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher,
         target)
     return ok, err, receipt
 end
 
-local function rollbackPackTransition(module, def, mutationBundle, commitNotifier, txn, actionExecutor,
+local function rollbackPackTransition(def, mutation, commitNotifier, txn, actionExecutor,
                                       sharedEventFlusher, receipt)
     stagePackTransitionReceipt(txn, receipt)
-    return commitStagedState(module, def, mutationBundle, commitNotifier, txn, actionExecutor, sharedEventFlusher)
+    return commitStagedState(def, mutation, commitNotifier, txn, actionExecutor, sharedEventFlusher)
 end
 
 local function restorePackTransitionState(txn, receipt)

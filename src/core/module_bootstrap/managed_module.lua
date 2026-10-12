@@ -3,7 +3,7 @@ local deps = ...
 local logging = deps.logging
 local cache = deps.cache
 local shared = deps.shared
-local sharedData = deps.sharedData
+local hookDeclarations = deps.hookDeclarations
 local moduleState = deps.moduleState
 local overlays = deps.overlays
 local mutation = deps.mutation
@@ -27,15 +27,13 @@ local uiContextModule = import('core/module_bootstrap/ui/context.lua', nil, {
 })
 local moduleLifecycle = import('core/module_bootstrap/managed_module_lifecycle.lua', nil, {
     logging = logging,
-    mutation = mutation,
     moduleState = moduleState,
 })
 local moduleActivation = import('core/module_bootstrap/managed_module_activation.lua', nil, {
     logging = logging,
-    shared = deps.shared,
+    shared = shared,
     hooks = deps.hooks,
     overlays = overlays,
-    mutation = mutation,
     fallbackUi = deps.fallbackUi,
     coordinator = deps.coordinator,
     moduleRegistry = moduleRegistry,
@@ -58,6 +56,7 @@ local KnownModuleCreateOpts = {
     sharedDataDeclarations = true,
     sharedEventRegistrations = true,
     overlayDeclarations = true,
+    fallbackUiRequested = true,
     onActivate = true,
     onCommit = true,
     onReload = true,
@@ -129,10 +128,13 @@ function managedModule.create(opts)
     local drawQuickContent = opts.drawQuickContent
     local actionBuffer = state.actionBuffer
     local mutationBundle = opts.mutationBundle or createMutationBundle()
+    local sharedDataDeclarations = opts.sharedDataDeclarations or shared.dataDeclarations.createDeclarations()
     local commitObserver, reloadObserver = validateLifecycleObservers(opts)
     local store
     local runtimeContext
     local host
+    local record
+    local boundMutation
     local controlCatalog = opts.controlCatalog or {
         instances = {},
         order = {},
@@ -213,8 +215,21 @@ function managedModule.create(opts)
         return actionBuffer.executeCommittedActions(host, runtimeContext, actionSnapshot)
     end
 
+    -- Runtime-lane emit: immediate delivery, gated on activation and the committed Enabled state.
     local function emitSharedEvent(id, eventName, payload)
-        return shared.emitForModule(module, id, eventName, payload)
+        if record.activated ~= true then
+            logging.violate("shared.invalid_args", "shared.emit requires module.activate() before it can run")
+        end
+        if module.isEnabled() ~= true then
+            return true, 0
+        end
+        return shared.events.emit("shared.emit", id, eventName, payload)
+    end
+
+    -- UI-lane emit: validated now, staged on the action buffer, delivered by the commit flush.
+    local function stageSharedEvent(id, eventName, payload)
+        shared.events.validate("state.shared.emit", id, eventName)
+        return actionBuffer.emitShared(id, eventName, payload)
     end
 
     local function flushSharedEventsDuringCommit()
@@ -222,8 +237,7 @@ function managedModule.create(opts)
     end
 
     local function requireActivated(methodName)
-        local record = moduleRegistry.getRecord(module)
-        if not record or record.activated ~= true then
+        if record.activated ~= true then
             logging.violate("managed_module.not_activated", "module.%s requires module.activate() before it can run", methodName)
         end
     end
@@ -250,7 +264,7 @@ function managedModule.create(opts)
     end
 
     function module.affectsRunData()
-        return mutation.affectsRunData(mutationBundle)
+        return boundMutation.affectsRunData()
     end
 
     function module.getStorage()
@@ -264,7 +278,7 @@ function managedModule.create(opts)
     function module.writeAndFlush(alias, value)
         requireActivated("writeAndFlush")
         stagedState.write(alias, value)
-        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+        local ok, err = moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err
     end
@@ -279,7 +293,7 @@ function managedModule.create(opts)
         if not txn.hasPending() then
             return true
         end
-        return moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
@@ -308,7 +322,7 @@ function managedModule.create(opts)
         if not txn.hasPending() then
             return true, nil, false
         end
-        local ok, err = moduleLifecycle.commitStagedState(module, def, mutationBundle, notifyCommit, txn,
+        local ok, err = moduleLifecycle.commitStagedState(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
         return ok, err, ok == true
     end
@@ -319,37 +333,37 @@ function managedModule.create(opts)
 
     function module.setEnabled(enabled)
         requireActivated("setEnabled")
-        return moduleLifecycle.setEnabled(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.setEnabled(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.setDebugMode(enabled)
         requireActivated("setDebugMode")
-        return moduleLifecycle.setDebugMode(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.setDebugMode(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit, enabled)
     end
 
     function module.suspendForPackDisable()
         requireActivated("suspendForPackDisable")
-        return moduleLifecycle.suspendForPackDisable(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.suspendForPackDisable(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.ensureSuspendedForPackDisable()
         requireActivated("ensureSuspendedForPackDisable")
-        return moduleLifecycle.ensureSuspendedForPackDisable(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.ensureSuspendedForPackDisable(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.restoreForPackEnable()
         requireActivated("restoreForPackEnable")
-        return moduleLifecycle.restoreForPackEnable(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.restoreForPackEnable(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit)
     end
 
     function module.rollbackPackTransition(receipt)
         requireActivated("rollbackPackTransition")
-        return moduleLifecycle.rollbackPackTransition(module, def, mutationBundle, notifyCommit, txn,
+        return moduleLifecycle.rollbackPackTransition(def, boundMutation, notifyCommit, txn,
             executeActionsDuringCommit, flushSharedEventsDuringCommit, receipt)
     end
 
@@ -380,61 +394,62 @@ function managedModule.create(opts)
 
     function module.applyMutation()
         requireActivated("applyMutation")
-        return mutation.applyForModule(module)
+        return boundMutation.apply()
     end
 
     function module.revertMutation()
         requireActivated("revertMutation")
-        return mutation.revertForModule(module)
+        return boundMutation.revert()
     end
 
     function module.activate()
         return managedModule.activate(module)
     end
 
-    local record = {
-        definition = def,
-        mutationBundle = mutationBundle,
-        hookDeclarations = opts.hookDeclarations,
-        sharedDataDeclarations = opts.sharedDataDeclarations,
-        sharedEventRegistrations = opts.sharedEventRegistrations,
-        overlayDeclarations = opts.overlayDeclarations,
-        pluginGuid = pluginGuid,
-        state = state,
-        store = nil,
-        runtime = nil,
-        host = host,
-        controlCatalog = controlCatalog,
-        onActivate = opts.onActivate,
-        effectReceipts = {},
-        fallbackUiRequested = false,
-        activated = false,
-    }
-    moduleRegistry.setRecord(module, record)
-
     store = lanes.runtimeData
     store.cache = cache.data.create({
-        definition = def,
+        declarations = def.cache,
         ownerId = pluginGuid,
         source = "store.cache",
     })
-    store.shared = sharedData.create({
-        host = module,
-        record = record,
-        lane = "runtime",
+    store.shared = shared.refs.create({
+        ownerId = pluginGuid,
+        declarations = sharedDataDeclarations,
+        emit = emitSharedEvent,
         source = "store.shared",
     })
     store.controls = controls.refs.createRuntime(persistentState, controlCatalog)
     runtimeContext = createRuntimeContext(store, lanes.runtimeStatus)
-    record.store = store
-    record.runtime = runtimeContext
+    boundMutation = mutation.bind(pluginGuid, mutationBundle, host, runtimeContext)
 
-    local uiShared = sharedData.create({
-        host = module,
-        record = record,
-        lane = "ui",
+    -- Activation state plus the explicit slices activation hands each capability install.
+    -- Capabilities never read this record.
+    record = {
+        definition = def,
+        pluginGuid = pluginGuid,
+        host = host,
+        runtime = runtimeContext,
+        onActivate = opts.onActivate,
+        capabilityInputs = {
+            hookDeclarations = opts.hookDeclarations or hookDeclarations.create(),
+            shared = {
+                data = sharedDataDeclarations,
+                events = opts.sharedEventRegistrations,
+            },
+            overlayDeclarations = opts.overlayDeclarations,
+            mutation = boundMutation,
+            fallbackUiRequested = opts.fallbackUiRequested == true,
+        },
+        effectReceipts = {},
+        activated = false,
+    }
+    moduleRegistry.setRecord(module, record)
+
+    local uiShared = shared.refs.create({
+        ownerId = pluginGuid,
+        declarations = sharedDataDeclarations,
+        emit = stageSharedEvent,
         source = "state.shared",
-        actionBuffer = actionBuffer,
     })
     lanes.uiData.shared = uiShared
     local uiContext = uiContextModule.create({

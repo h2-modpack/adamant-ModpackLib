@@ -5,9 +5,15 @@ local dispatchers = deps.dispatchers
 local receipt = deps.receipt
 local ownerInstall = {}
 
-function ownerInstall.createReceipt(ownerId, owner, hookDeclarations)
+--- Installs `hookDeclarations` under `ownerId`, attached to the `owner` token. Installs that
+--- share an owner token share that owner's slot: the slot follows the token, not the install.
+---@param ownerId string
+---@param owner table Owner token identifying this generation in the owner slot.
+---@param hookDeclarations table Prepared hook declarations.
+---@return AdamantModpackLib.Receipt
+function ownerInstall.install(ownerId, owner, hookDeclarations)
     if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("hooks.invalid_registration", "hooks.installForModule: ownerId is required")
+        logging.violate("hooks.invalid_registration", "hooks.install: ownerId is required")
     end
 
     local attempted = false

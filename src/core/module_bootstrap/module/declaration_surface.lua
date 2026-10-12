@@ -154,7 +154,10 @@ function declarationSurface.attach(module, declarations, lifecycle, overlayOrder
     module.fallbackUi = {
         attachGuiOnce = function(register)
             lifecycle.requireOpen("module.fallbackUi.attachGuiOnce")
-            declarations.fallbackUi[#declarations.fallbackUi + 1] = copyArgs(register)
+            if type(register) ~= "function" then
+                logging.violate("fallback_ui.invalid_args", "module.fallbackUi.attachGuiOnce: register must be a function")
+            end
+            declarations.fallbackUi[#declarations.fallbackUi + 1] = register
         end,
     }
 

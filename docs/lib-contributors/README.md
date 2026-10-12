@@ -41,13 +41,15 @@ Runtime identity uses `pluginGuid`. Pack id and module id are Lib modpack
 domain metadata used for coordination, profiles, hashes, labels, and debug
 translation. The low-level `lib_bootstrap/registry` service owns Lib's
 hot-reload-stable root buckets. The module bucket currently includes live-module
-lookup, plugin metadata, and the backing weak side table used by
+lookup and the weak per-module activation-record table used by
 `lib_bootstrap/module_registry`.
 
 Capability backends use `ownerId`, not `pluginGuid`. `pluginGuid` belongs at
 the module bootstrap/runtime/callback-host boundary. Once a capability call
 crosses into stateless subsystem logic, the value is only a unique owner id.
-Module adapters derive `ownerId` from the `ManagedModule`; system adapters
+Capabilities take explicit inputs: module activation passes each install the
+`pluginGuid` as `ownerId` plus the slices it needs (declarations, host, runtime,
+owner token), and capabilities never read the module record. System adapters
 receive an explicit `ownerId` from the managed system scope.
 
 System scopes are Lib-created owner objects for first-party behavior that is

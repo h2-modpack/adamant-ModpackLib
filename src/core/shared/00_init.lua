@@ -1,6 +1,7 @@
 local deps = ...
 
 local sharedRegistry = deps.sharedRegistry
+local receipt = deps.receipt
 sharedRegistry.events = sharedRegistry.events or {}
 sharedRegistry.events.listeners = sharedRegistry.events.listeners or {}
 sharedRegistry.data = sharedRegistry.data or {}
@@ -12,7 +13,7 @@ local eventRegistry = import('core/shared/events/registry.lua', nil, {
 local registrations = import('core/shared/events/registrations.lua', nil, {
     logging = deps.logging,
     registry = eventRegistry,
-    receipt = deps.receipt,
+    receipt = receipt,
 })
 
 local events = import('core/shared/events/events.lua', nil, {
@@ -23,49 +24,30 @@ local events = import('core/shared/events/events.lua', nil, {
 local data = import('core/shared/data.lua', nil, {
     logging = deps.logging,
     values = deps.values,
-    receipt = deps.receipt,
+    receipt = receipt,
     sharedRegistry = sharedRegistry.data,
 })
 
-local moduleInstall = import('core/shared/adapters/module_install.lua', nil, {
+local refs = import('core/shared/adapters/data_shared.lua', nil, {
     logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
-    registrations = registrations,
     data = data,
-    receipt = deps.receipt,
 })
 
-local service = {
-    installForModule = moduleInstall.installForModule,
-    data = data,
-}
-
-function service.emitForModule(module, id, eventName, payload)
-    local record = deps.moduleRegistry.getRecord(module)
-    if not record then
-        deps.logging.violate("shared.invalid_args", "shared.emit: expected managed module record")
-    end
-    if record.activated ~= true then
-        deps.logging.violate("shared.invalid_args", "shared.emit requires module.activate() before it can run")
-    end
-    if module.isEnabled() ~= true then
-        return true, 0
-    end
-    return events.emit("shared.emit", id, eventName, payload)
+--- Installs one owner's shared data publications and event listeners as one receipt.
+---@param ownerId string
+---@param inputs { data: table, events: table }
+---@return AdamantModpackLib.Receipt
+local function install(ownerId, inputs)
+    return receipt.composite("shared", receipt.PHASE_EFFECTS, {
+        data.install(ownerId, inputs.data),
+        registrations.install(ownerId, inputs.events),
+    })
 end
-
-function service.validateEmit(context, id, eventName)
-    return events.validate(context, id, eventName)
-end
-
-local dataAdapter = import('core/shared/adapters/data_shared.lua', nil, {
-    logging = deps.logging,
-    service = service,
-})
 
 return {
-    service = service,
+    install = install,
+    events = events,
     registrations = registrations,
-    data = dataAdapter,
     dataDeclarations = data,
+    refs = refs,
 }

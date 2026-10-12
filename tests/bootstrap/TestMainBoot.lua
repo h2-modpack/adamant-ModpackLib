@@ -60,7 +60,7 @@ local function createBootHarness(opts)
         public = public,
         config = config,
         imports = imports,
-        coordinator = imports["core/modpack/coordination.lua"],
+        coordinator = imports["core/coordination/coordination.lua"],
         rom = env.rom,
         runtime = env.AdamantModpackLib_Runtime,
         menuCallbacks = callbacks.menuBar,
@@ -107,7 +107,7 @@ function TestMainBoot.testMainLoadsPublicSurface()
     lu.assertEquals(type(h.runtime.registry.modpacks.packs), "table")
     lu.assertEquals(type(h.runtime.registry.modpacks.packList), "table")
     lu.assertNil(h.runtime.coordinator)
-    lu.assertEquals(h.imports["core/init.lua"].modpackCoordination, h.imports["core/modpack/coordination.lua"])
+    lu.assertEquals(h.imports["core/init.lua"].modpackCoordination, h.imports["core/coordination/coordination.lua"])
 end
 
 function TestMainBoot.testMainLoadsModpackSubsystem()

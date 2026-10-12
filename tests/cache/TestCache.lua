@@ -18,7 +18,7 @@ end
 local function getLiveStore(harness, pluginGuid)
     local liveModule = harness.managedModule.getLiveModule(pluginGuid)
     local record = harness.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    return record and record.runtime.data or nil
 end
 
 local function createCacheModule(harness, pluginGuid, opts)

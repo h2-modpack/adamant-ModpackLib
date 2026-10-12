@@ -152,6 +152,7 @@ During module creation and activation:
 - Lib refreshes hook registrations under the module owner id derived from `pluginGuid`; absent hook registrations for that owner are deactivated
 - Lib refreshes shared event listener registrations under the module owner id derived from `pluginGuid`; absent shared event listeners for that owner are removed
 - if the coordinator for `definition.modpack` is already registered, Lib immediately syncs live mutation state
+- if activation fails after capability receipts committed (for example `onActivate` throws), each receipt rolls back: the previous generation keeps its live-module slot, hook owner slot, shared publications and listeners, mutation plan, and retained overlay elements
 
 That means one coordinated module reload refreshes its live runtime behavior immediately without forcing a pack rebuild.
 
