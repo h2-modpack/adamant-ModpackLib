@@ -22,7 +22,7 @@ local moduleContexts = import('core/module_bootstrap/module_contexts.lua', nil, 
     sharedRefs = shared.refs,
     controlRefs = deps.controlRefs,
     uiContext = import('core/module_bootstrap/ui/context.lua', nil, {
-        uiDraw = deps.uiDraw,
+        draw = deps.draw,
     }),
 })
 

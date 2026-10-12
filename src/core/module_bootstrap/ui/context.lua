@@ -1,6 +1,6 @@
 local deps = ...
 
-local uiDraw = deps.uiDraw
+local draw = deps.draw
 
 local uiContext = {}
 
@@ -34,7 +34,7 @@ end
 function uiContext.create(opts)
     local lanes = opts.lanes
     local objects = {
-        draw = uiDraw.get(),
+        draw = draw,
     }
     objects.ui = {
         draw = objects.draw,

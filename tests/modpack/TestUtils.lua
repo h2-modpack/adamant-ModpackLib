@@ -286,6 +286,11 @@ ModpackTestApi = setmetatable({
 })
 
 local logging = import("core/modpack/logging.lua")
+local uiSession = LibTestImports["core/ui/session.lua"]
+local setupRunData = LibTestImports["core/game_deps/game_deps.lua"].runData.SetupRunData
+local createTheme = import("core/ui/theme.lua", nil, {
+    rom = rom,
+})
 
 local function makeModpackImportEnv(importOverrides)
     local env = fakeEngine.addFallback({}, _ENV)
@@ -304,7 +309,6 @@ local function mapConstructorOverrides(constructors)
         createConfigHash = "core/modpack/hash/config_hash.lua",
         createHud = "core/modpack/hud/runtime.lua",
         createUI = "core/modpack/ui/window.lua",
-        createTheme = "core/ui/theme.lua",
     }
 
     for name, path in pairs(constructorPaths) do
@@ -332,6 +336,11 @@ function CreateModpackHarness(opts)
     local env = makeModpackImportEnv(mapConstructorOverrides(opts.constructors))
     local modpackCore = assert(loadfile("src/core/modpack/init.lua", "t", env))({
         rom = harnessRom,
+        createTheme = opts.constructors and opts.constructors.createTheme or createTheme,
+        uiSession = uiSession,
+        setupRunData = function()
+            return harnessRom.game.SetupRunData()
+        end,
         libConfig = harnessLibConfig,
         storage = LibStorage,
         coordination = harnessCoordination,
@@ -356,9 +365,6 @@ local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
     rom = rom,
     logging = logging,
 })
-local createTheme = import("core/ui/theme.lua", nil, {
-    rom = rom,
-})
 local hashCodec = import("core/modpack/hash/codec.lua")
 local createConfigHash = import("core/modpack/hash/config_hash.lua", nil, {
     rom = rom,
@@ -369,6 +375,8 @@ local createHud = import("core/modpack/hud/runtime.lua")
 local createUI = import("core/modpack/ui/window.lua", nil, {
     rom = rom,
     logging = logging,
+    uiSession = uiSession,
+    setupRunData = setupRunData,
 })
 
 rawset(ModpackTestApi, "createOverlaySurface", function()
@@ -419,8 +427,11 @@ rawset(ModpackTestApi, "createUIRuntime", function(ctx)
         runtimeCtx[key] = value
     end
     runtimeCtx.lib = runtimeCtx.lib or lib
-    runtimeCtx.rom = runtimeCtx.rom or rom
+    runtimeCtx.session = runtimeCtx.session or ModpackTestApi.createUiSession()
     return import("core/modpack/ui/runtime.lua", nil, runtimeCtx)
+end)
+rawset(ModpackTestApi, "createUiSession", function()
+    return uiSession.create(setupRunData, ModpackTestApi.createOverlaySurface())
 end)
 local profileTools = import("core/modpack/profiles/audit.lua", nil, {
     hashCodec = hashCodec,

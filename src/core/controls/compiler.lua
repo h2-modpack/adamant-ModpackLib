@@ -67,6 +67,7 @@ local function compileBitNodes(bits, controlName, parentKey, binding)
 
     local compiled = {}
     binding.bitAliases = {}
+    binding.bitKeysByAlias = {}
     for index, bit in ipairs(bits) do
         if type(bit) ~= "table" then
             logging.violate("controls.invalid_field", "control '%s' field '%s' bit #%d must be a table",
@@ -80,6 +81,7 @@ local function compileBitNodes(bits, controlName, parentKey, binding)
         local bitCopy = copyDescriptor(bit)
         bitCopy.alias = generatedName(controlName, parentKey, key)
         binding.bitAliases[key] = bitCopy.alias
+        binding.bitKeysByAlias[bitCopy.alias] = key
         compiled[#compiled + 1] = bitCopy
     end
     return compiled
@@ -164,12 +166,12 @@ local function compileStorageNodes(controlName, descriptors)
     return storageNodes, bindings
 end
 
+---@param bucket table Declaration bucket built by `controls/declarations.create()`.
 function compiler.compile(bucket)
-    bucket = bucket or {}
-    local templates = bucket.templates or {}
-    local instances = bucket.instances or {}
+    local templates = bucket.templates
+    local instances = bucket.instances
     local order = {}
-    for _, name in ipairs(bucket.instanceOrder or {}) do
+    for _, name in ipairs(bucket.instanceOrder) do
         order[#order + 1] = name
     end
     table.sort(order, compareStrings)
@@ -191,20 +193,17 @@ function compiler.compile(bucket)
 
         local instance = values.deepCopy(sourceInstance)
         instance.name = name
-        if type(template.prepare) == "function" then
-            local ok, preparedOrErr, maybeErr = pcall(template.prepare, instance)
-            if not ok then
-                error(preparedOrErr, 0)
-            end
-            if preparedOrErr == nil then
+        if template.prepare ~= nil then
+            local prepared, prepareErr = template.prepare(instance)
+            if prepared == nil then
                 logging.violate("controls.invalid_declaration", "control '%s': %s",
-                    tostring(name), tostring(maybeErr or "prepare returned nil"))
+                    tostring(name), tostring(prepareErr or "prepare returned nil"))
             end
-            if type(preparedOrErr) ~= "table" then
+            if type(prepared) ~= "table" then
                 logging.violate("controls.invalid_declaration", "control '%s': prepare must return a table, got %s",
-                    tostring(name), type(preparedOrErr))
+                    tostring(name), type(prepared))
             end
-            instance = preparedOrErr
+            instance = prepared
             instance.name = instance.name or name
         end
 

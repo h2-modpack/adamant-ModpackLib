@@ -8,47 +8,34 @@ local requireMethodSelf = deps.requireMethodSelf
 local refs = {}
 local CONTROL_REF_MARKER = {}
 
-local function findMappedAlias(mapping, alias)
-    if type(mapping) ~= "table" then
-        return nil
-    end
-    return mapping[alias]
-end
+-- Bindings are compiler-built (`controls/compiler.lua`): every binding has `key`/`alias`;
+-- `bitAliases`/`bitKeysByAlias` exist only for packed fields, `rowAliases`/`rowBindings` only
+-- for table fields.
 
-local function toSemanticAlias(mapping, internalAlias)
-    if type(mapping) ~= "table" then
-        return internalAlias
-    end
-    for semanticAlias, mappedAlias in pairs(mapping) do
-        if mappedAlias == internalAlias then
-            return semanticAlias
-        end
-    end
-    return internalAlias
+local function toSemanticBitAlias(binding, internalAlias)
+    local semanticAlias = binding.bitKeysByAlias and binding.bitKeysByAlias[internalAlias]
+    return semanticAlias or internalAlias
 end
 
 local function semanticFieldSchema(rawSchema, binding)
     local schema = values.deepCopy(rawSchema)
-    if binding == nil then
-        return schema
-    end
-    schema.alias = binding.key or schema.alias
+    schema.alias = binding.key
     schema._packedAliasViews = nil
     if type(schema.bits) == "table" then
         for _, bit in ipairs(schema.bits) do
-            bit.alias = toSemanticAlias(binding.bitAliases, bit.alias)
+            bit.alias = toSemanticBitAlias(binding, bit.alias)
         end
     end
     if type(schema._bitAliases) == "table" then
         for _, bit in ipairs(schema._bitAliases) do
-            bit.alias = toSemanticAlias(binding.bitAliases, bit.alias)
+            bit.alias = toSemanticBitAlias(binding, bit.alias)
         end
     end
     return schema
 end
 
 local function mapFieldAlias(binding, alias, context)
-    local internalAlias = findMappedAlias(binding and binding.bitAliases or nil, alias)
+    local internalAlias = binding.bitAliases and binding.bitAliases[alias]
     if internalAlias == nil then
         logging.violate("controls.unknown_field_alias", "%s: unknown control field alias '%s'",
             tostring(context), tostring(alias))
@@ -57,7 +44,7 @@ local function mapFieldAlias(binding, alias, context)
 end
 
 local function mapRowAlias(binding, alias, context)
-    local internalAlias = findMappedAlias(binding and binding.rowAliases or nil, alias)
+    local internalAlias = binding.rowAliases and binding.rowAliases[alias]
     if internalAlias == nil then
         logging.violate("controls.unknown_field_alias", "%s: unknown control table row alias '%s'",
             tostring(context), tostring(alias))
@@ -172,7 +159,7 @@ local function wrapTable(rawTable, binding, writable)
         if rawField == nil then
             return nil
         end
-        local field = wrapField(rawField, binding.rowBindings and binding.rowBindings[rowAlias] or nil, writable)
+        local field = wrapField(rawField, binding.rowBindings[rowAlias], writable)
         rowFields[internalAlias] = field
         return field
     end
@@ -191,7 +178,7 @@ local function wrapTable(rawTable, binding, writable)
         return snapshots
     end
 
-    if writable and type(rawTable.write) == "function" then
+    if writable then
         function handle.write(self, rowIndex, rowAlias, value)
             requireMethodSelf("control table write", self, handle)
             return rawTable:write(rowIndex, mapRowAlias(binding, rowAlias, "control table write"), value)
@@ -249,7 +236,7 @@ local function createFieldSet(root, entry, surface, writable)
         end,
     })
 
-    for key, binding in pairs(entry.bindings or {}) do
+    for key, binding in pairs(entry.bindings) do
         local schema = root.getAliasSchema(binding.alias)
         if schema == nil then
             logging.violate("controls.invalid_field", "control '%s': compiled field '%s' is missing",
@@ -298,10 +285,10 @@ local function attachControlInternals(control, entry, surface)
     return control
 end
 
-local function createControl(entry, fields, factorySurface)
-    local factory = factorySurface == "ui" and entry.template.createUi or entry.template.createRuntime
+local function createControl(entry, fields, surface)
+    local factory = surface == "ui" and entry.template.createUi or entry.template.createRuntime
     local control
-    if type(factory) == "function" then
+    if factory ~= nil then
         control = factory(fields, entry.instance)
     else
         control = {}
@@ -310,14 +297,14 @@ local function createControl(entry, fields, factorySurface)
         logging.violate("controls.invalid_template", "control '%s': template factory must return a table",
             tostring(entry.name))
     end
-    return attachControlInternals(control, entry, factorySurface)
+    return attachControlInternals(control, entry, surface)
 end
 
 local function resetBoundRoots(root, entry)
     local changedCount = 0
     local seen = {}
 
-    for _, binding in pairs(entry.bindings or {}) do
+    for _, binding in pairs(entry.bindings) do
         local alias = binding.alias
         if alias ~= nil and not seen[alias] then
             seen[alias] = true
@@ -338,17 +325,16 @@ local function resetBoundRoots(root, entry)
     return changedCount > 0, changedCount
 end
 
-local function createFacade(opts)
-    local catalog = opts.catalog or {}
-    local surface = opts.surface
-    local factorySurface = opts.factorySurface or surface
-    local root = opts.root
-    local writable = opts.writable == true or surface == "ui"
+---@param root table Persistent state (runtime surface) or staged view (UI surface).
+---@param catalog table Compiled control catalog (`compiler.compile(...).catalog`).
+---@param surface "runtime"|"ui"
+local function createFacade(root, catalog, surface)
+    local writable = surface == "ui"
     local controlCache = {}
     local facade = {}
 
     function facade.get(name)
-        local entry = catalog.instances and catalog.instances[name] or nil
+        local entry = catalog.instances[name]
         if entry == nil then
             logging.violate("controls.unknown_control", "%s.controls.get: unknown control '%s'",
                 surface == "ui" and "ui" or "runtime", tostring(name))
@@ -358,7 +344,7 @@ local function createFacade(opts)
             return cached
         end
         local fields = createFieldSet(root, entry, surface, writable)
-        local control = createControl(entry, fields, factorySurface)
+        local control = createControl(entry, fields, surface)
         controlCache[name] = control
         return control
     end
@@ -373,36 +359,23 @@ local function createFacade(opts)
 
     if surface == "ui" then
         function facade.reset(name)
-            local entry = catalog.instances and catalog.instances[name] or nil
+            local entry = catalog.instances[name]
             if entry == nil then
                 logging.violate("controls.unknown_control", "ui.controls.reset: unknown control '%s'", tostring(name))
             end
             return resetBoundRoots(root, entry)
         end
-
     end
 
     return facade
 end
 
 function refs.createRuntime(persistentState, catalog)
-    return createFacade({
-        root = persistentState,
-        catalog = catalog,
-        surface = "runtime",
-    })
+    return createFacade(persistentState, catalog, "runtime")
 end
 
 function refs.createUi(stagedState, catalog)
-    return createFacade({
-        root = stagedState,
-        catalog = catalog,
-        surface = "ui",
-    })
-end
-
-function refs.isControl(value)
-    return type(value) == "table" and rawget(value, CONTROL_REF_MARKER) ~= nil
+    return createFacade(stagedState, catalog, "ui")
 end
 
 function refs.getEntry(value)

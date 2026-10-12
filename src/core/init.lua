@@ -122,7 +122,7 @@ local mutation = import('core/mutations/00_init.lua', nil, {
     receipt = receipt,
 })
 
-local widgetsBundle = import('core/widgets/00_init.lua', nil, {
+local draw = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
     isDrawActionRef = moduleState.isDrawActionRef,
@@ -133,9 +133,11 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
 local createTheme = import('core/ui/theme.lua', nil, {
     rom = externals.rom,
 })
+local uiSession = import('core/ui/session.lua')
 
 local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
     createTheme = createTheme,
+    uiSession = uiSession,
     gameDeps = gameDeps,
     rom = externals.rom,
     modutil = externals.modutil,
@@ -205,12 +207,15 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     hookDeclarations = hooksBundle.declarations,
     overlays = overlays,
     mutation = mutation,
-    uiDraw = widgetsBundle.uiDraw,
+    draw = draw,
     controlRefs = controlsBundle.refs,
 })
 
 public.modpack = import('core/modpack/init.lua', nil, {
     rom = externals.rom,
+    createTheme = createTheme,
+    uiSession = uiSession,
+    setupRunData = gameDeps.runData.SetupRunData,
     libConfig = deps.config,
     storage = storage,
     coordination = modpackCoordination,

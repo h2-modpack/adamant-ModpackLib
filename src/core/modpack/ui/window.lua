@@ -1,6 +1,8 @@
 local deps = ...
 local rom = deps.rom
 local logging = deps.logging
+local uiSession = deps.uiSession
+local setupRunData = deps.setupRunData
 
 local function TextColored(ui, color, text)
     ui.TextColored(color[1], color[2], color[3], color[4], text)
@@ -62,8 +64,10 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         end
     end
 
+    local session = uiSession.create(setupRunData, overlaySurface)
+
     local runtime = import("core/modpack/ui/runtime.lua", nil, {
-        rom = rom,
+        session = session,
         moduleRegistry = moduleRegistry,
         hud = hud,
         config = config,
@@ -128,7 +132,6 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
     local cachedQuickList = nil
     local selectedTab = "Quick Setup"
     local _showModWindow = false
-    local uiSuppressionToken = nil
     local disposed = false
 
     for _, entry in ipairs(moduleRegistry.modules) do
@@ -214,21 +217,8 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
     end
 
     local function flushPending()
-        runtime.flushPendingRunData()
+        session.flushRunData()
         hud.flushPendingHash()
-    end
-
-    local function suppressOverlays()
-        if not uiSuppressionToken then
-            uiSuppressionToken = overlaySurface.suppressForUi()
-        end
-    end
-
-    local function releaseOverlaySuppression()
-        if uiSuppressionToken then
-            uiSuppressionToken.release()
-            uiSuppressionToken = nil
-        end
     end
 
     local function handleGuiClosed()
@@ -236,7 +226,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
             return
         end
         flushPending()
-        releaseOverlaySuppression()
+        session.releaseOverlays()
     end
 
     local function closeWindow()
@@ -245,7 +235,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         end
         flushPending()
         _showModWindow = false
-        releaseOverlaySuppression()
+        session.releaseOverlays()
     end
 
     local function dispose()
@@ -255,7 +245,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         disposed = true
         flushPending()
         _showModWindow = false
-        releaseOverlaySuppression()
+        session.releaseOverlays()
     end
 
     local function renderWindow()
@@ -265,7 +255,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         if not _showModWindow then
             return
         end
-        suppressOverlays()
+        session.suppressOverlays()
 
         PushTheme()
 
@@ -305,7 +295,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
                 closeWindow()
             else
                 _showModWindow = true
-                suppressOverlays()
+                session.suppressOverlays()
             end
         end
     end

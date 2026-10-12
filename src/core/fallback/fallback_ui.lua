@@ -9,6 +9,7 @@ local fallbackRegistry = deps.fallbackRegistry
 local receipt = deps.receipt
 local rom = deps.rom
 local modutil = deps.modutil
+local uiSession = deps.uiSession
 local SetupRunData = deps.gameDeps.runData.SetupRunData
 
 local DEFAULT_WINDOW_WIDTH = 960
@@ -40,23 +41,8 @@ local fallbackHud = import('core/fallback/fallback_hud.lua', nil, {
     runtimes = runtimes,
 })
 
-local function getFallbackUiRuntime(ownerId)
-    local activeRuntime = runtimes[ownerId]
-    if type(activeRuntime) ~= "table" then
-        return nil
-    end
-    return activeRuntime
-end
-
 local function disposeFallbackUiRuntime(ownerId, activeRuntime)
-    if type(activeRuntime) ~= "table" then
-        return true, nil
-    end
-
-    local closeOk, closeErr = true, nil
-    if type(activeRuntime.handleGuiClosed) == "function" then
-        closeOk, closeErr = pcall(activeRuntime.handleGuiClosed)
-    end
+    local closeOk, closeErr = pcall(activeRuntime.handleGuiClosed)
 
     if runtimes[ownerId] == activeRuntime then
         runtimes[ownerId] = nil
@@ -80,14 +66,14 @@ end
 
 local function getOrCreateBridge(ownerId)
     local existing = bridges[ownerId]
-    if type(existing) == "table" then
+    if existing ~= nil then
         return existing
     end
+    -- Late-reads the owner's current runtime so a replacement module swaps behavior in place.
     local function callRuntime(method)
-        local activeRuntime = getFallbackUiRuntime(ownerId)
-        local callback = activeRuntime and activeRuntime[method] or nil
-        if type(callback) == "function" then
-            return callback()
+        local activeRuntime = runtimes[ownerId]
+        if activeRuntime ~= nil then
+            return activeRuntime[method]()
         end
     end
 
@@ -132,199 +118,209 @@ local function sameLineWithGap(imgui, gap)
     imgui.SetCursorPosX(imgui.GetCursorPosX() + gap)
 end
 
+---@class AdamantModpackLib.FallbackUiRuntime
+---@field module AdamantModpackLib.ManagedModule
+---@field session AdamantModpackLib.UiSession
+---@field showWindow boolean
+---@field didSeedWindowSize boolean
+---@field controls { initialized: boolean, enabled: boolean, debug: boolean } Window checkbox state.
+---@field renderWindow fun()
+---@field addMenuBar fun()
+---@field handleGuiClosed fun()
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function markRunDataDirty(runtime)
+    if runtime.module.affectsRunData() then
+        runtime.session.markRunDataDirty()
+    end
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function snapshotControls(runtime)
+    local controls = runtime.controls
+    controls.enabled = runtime.module.isEnabled() == true
+    controls.debug = runtime.module.read("DebugMode") == true
+    controls.initialized = true
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function ensureControlsInitialized(runtime)
+    if not runtime.controls.initialized then
+        snapshotControls(runtime)
+    end
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function closeSession(runtime)
+    runtime.session.flushRunData()
+    runtime.session.releaseOverlays()
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function setWindowOpen(runtime, open)
+    open = open == true
+    if runtime.showWindow == open then
+        return
+    end
+
+    if open then
+        runtime.showWindow = true
+        ensureControlsInitialized(runtime)
+        runtime.session.suppressOverlays()
+        return
+    end
+
+    runtime.session.flushRunData()
+    runtime.showWindow = false
+    runtime.session.releaseOverlays()
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function seedWindowSize(runtime, imgui)
+    if runtime.didSeedWindowSize then
+        return
+    end
+    imgui.SetNextWindowSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, rom.ImGuiCond.FirstUseEver)
+    runtime.didSeedWindowSize = true
+end
+
+--- Draws the Enabled / Debug Mode / Resync row and, while enabled, the module tab.
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function drawWindowContents(runtime, imgui, meta, moduleId)
+    local module = runtime.module
+    local controls = runtime.controls
+    local enabled = controls.enabled
+    local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
+    if enabledChanged then
+        local transitionOk, transitionErr = module.setEnabled(enabledValue)
+        if transitionOk then
+            controls.enabled = enabledValue == true
+            enabled = controls.enabled
+            markRunDataDirty(runtime)
+        else
+            logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
+                tostring(meta.name or moduleId or "module"),
+                enabledValue and "enable" or "disable",
+                tostring(transitionErr))
+        end
+    end
+
+    sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
+    local debugValue, debugChanged = imgui.Checkbox("Debug Mode", controls.debug)
+    if debugChanged then
+        module.setDebugMode(debugValue)
+        controls.debug = debugValue == true
+    end
+
+    sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
+    if imgui.Button("Resync State") then
+        module.resync()
+        snapshotControls(runtime)
+    end
+
+    if enabled then
+        imgui.Spacing()
+        imgui.Separator()
+        imgui.Spacing()
+        local commitOk, commitErr, committed = module.drawTabAndCommit()
+        if commitOk and committed and module.isEnabled() then
+            markRunDataDirty(runtime)
+        elseif commitOk == false then
+            logging.violate(
+                "managed_module.staged_state_commit_failed",
+                "%s staged state commit failed; restored previous config where possible: %s",
+                tostring(meta.name or moduleId or "module"),
+                tostring(commitErr)
+            )
+        end
+    end
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function renderWindow(runtime)
+    local module = runtime.module
+    local moduleId = module.getModuleId()
+    local meta = module.getMeta() or {}
+    if isCoordinated(module.getPackId()) then
+        return
+    end
+    if not runtime.showWindow then
+        return
+    end
+
+    runtime.session.suppressOverlays()
+
+    local imgui = rom.ImGui
+    local activeTheme = getTheme()
+    local title = tostring(meta.name or moduleId or "Module") .. "###" .. tostring(moduleId)
+    local beganWindow = false
+    local openState = runtime.showWindow
+
+    activeTheme.PushTheme()
+    local ok, err = xpcall(function()
+        ensureControlsInitialized(runtime)
+        seedWindowSize(runtime, imgui)
+        local shouldDraw
+        openState, shouldDraw = imgui.Begin(title, runtime.showWindow)
+        beganWindow = true
+        if shouldDraw then
+            drawWindowContents(runtime, imgui, meta, moduleId)
+        end
+    end, debug.traceback)
+
+    if beganWindow then
+        imgui.End()
+    end
+    activeTheme.PopTheme()
+
+    if not ok then
+        error(err)
+    end
+
+    if openState == false then
+        setWindowOpen(runtime, false)
+    end
+end
+
+---@param runtime AdamantModpackLib.FallbackUiRuntime
+local function drawMenuBar(runtime)
+    local packId = runtime.module.getPackId()
+    if isCoordinated(packId) then
+        local displayName = coordination.getDisplayName(packId) or packId
+        rom.ImGui.TextDisabled("Settings are in " .. displayName .. " Modpack Menu")
+        return
+    end
+    if rom.ImGui.MenuItem("Show Mod Menu") then
+        setWindowOpen(runtime, not runtime.showWindow)
+    end
+end
+
+---@param module AdamantModpackLib.ManagedModule
+---@return AdamantModpackLib.FallbackUiRuntime
 local function createRuntime(module)
-    local function getMeta()
-        return module.getMeta() or {}
-    end
-
-    local showWindow = false
-    local didSeedWindowSize = false
-    local runDataDirty = false
-    local uiSuppressionToken = nil
-    local controls = {
-        initialized = false,
-        enabled = false,
-        debug = false,
-    }
-
-    local function markRunDataDirty()
-        if module.affectsRunData() then
-            runDataDirty = true
-        end
-    end
-
-    local function flushPendingRunData()
-        if not runDataDirty then
-            return
-        end
-        SetupRunData()
-        runDataDirty = false
-    end
-
-    local function suppressOverlays()
-        if not uiSuppressionToken then
-            uiSuppressionToken = overlays.suppressForUi()
-        end
-    end
-
-    local function releaseOverlaySuppression()
-        if uiSuppressionToken then
-            uiSuppressionToken.release()
-            uiSuppressionToken = nil
-        end
-    end
-
-    local function handleGuiClosed()
-        flushPendingRunData()
-        releaseOverlaySuppression()
-    end
-
-    local function snapshotControls()
-        controls.enabled = module.isEnabled() == true
-        controls.debug = module.read("DebugMode") == true
-        controls.initialized = true
-    end
-
-    local function ensureControlsInitialized()
-        if not controls.initialized then
-            snapshotControls()
-        end
-    end
-
-    local function setWindowOpen(open)
-        open = open == true
-        if showWindow == open then
-            return
-        end
-
-        if open then
-            showWindow = true
-            ensureControlsInitialized()
-            suppressOverlays()
-            return
-        end
-
-        flushPendingRunData()
-        showWindow = false
-        releaseOverlaySuppression()
-    end
-
-    local function seedWindowSize(imgui)
-        if didSeedWindowSize then
-            return
-        end
-        imgui.SetNextWindowSize(DEFAULT_WINDOW_WIDTH, DEFAULT_WINDOW_HEIGHT, rom.ImGuiCond.FirstUseEver)
-        didSeedWindowSize = true
-    end
-
-    local function renderWindow()
-        local moduleId = module.getModuleId()
-        local packId = module.getPackId()
-        local meta = getMeta()
-        if isCoordinated(packId) then
-            return
-        end
-        if not showWindow then
-            return
-        end
-
-        suppressOverlays()
-
-        local imgui = rom.ImGui
-        local activeTheme = getTheme()
-        local title = tostring(meta.name or moduleId or "Module") .. "###" .. tostring(moduleId)
-        local beganWindow = false
-        local openState = showWindow
-
-        activeTheme.PushTheme()
-        local ok, err = xpcall(function()
-            ensureControlsInitialized()
-            seedWindowSize(imgui)
-            local shouldDraw
-            openState, shouldDraw = imgui.Begin(title, showWindow)
-            beganWindow = true
-            if shouldDraw then
-                local enabled = controls.enabled
-                local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
-                if enabledChanged then
-                    local transitionOk, transitionErr = module.setEnabled(enabledValue)
-                    if transitionOk then
-                        controls.enabled = enabledValue == true
-                        enabled = controls.enabled
-                        markRunDataDirty()
-                    else
-                        logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
-                            tostring(meta.name or moduleId or "module"),
-                            enabledValue and "enable" or "disable",
-                            tostring(transitionErr))
-                    end
-                end
-
-                sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
-                local debugValue, debugChanged = imgui.Checkbox("Debug Mode", controls.debug)
-                if debugChanged then
-                    module.setDebugMode(debugValue)
-                    controls.debug = debugValue == true
-                end
-
-                sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
-                if imgui.Button("Resync State") then
-                    module.resync()
-                    snapshotControls()
-                end
-
-                if enabled then
-                    imgui.Spacing()
-                    imgui.Separator()
-                    imgui.Spacing()
-                    local commitOk, commitErr, committed = module.drawTabAndCommit()
-                    if commitOk and committed and module.isEnabled() then
-                        markRunDataDirty()
-                    elseif commitOk == false then
-                        logging.violate(
-                            "managed_module.staged_state_commit_failed",
-                            "%s staged state commit failed; restored previous config where possible: %s",
-                            tostring(meta.name or moduleId or "module"),
-                            tostring(commitErr)
-                        )
-                    end
-                end
-            end
-        end, debug.traceback)
-
-        if beganWindow then
-            imgui.End()
-        end
-        activeTheme.PopTheme()
-
-        if not ok then
-            error(err)
-        end
-
-        if openState == false then
-            setWindowOpen(false)
-        end
-    end
-
-    local function addMenuBar()
-        local packId = module.getPackId()
-        if isCoordinated(packId) then
-            local displayName = coordination.getDisplayName(packId) or packId
-            rom.ImGui.TextDisabled("Settings are in " .. displayName .. " Modpack Menu")
-            return
-        end
-        if rom.ImGui.MenuItem("Show Mod Menu") then
-            setWindowOpen(not showWindow)
-        end
-    end
-
-    local activeRuntime = {
+    ---@type AdamantModpackLib.FallbackUiRuntime
+    local runtime = {
         module = module,
-        renderWindow = renderWindow,
-        addMenuBar = addMenuBar,
-        handleGuiClosed = handleGuiClosed,
+        session = uiSession.create(SetupRunData, overlays),
+        showWindow = false,
+        didSeedWindowSize = false,
+        controls = {
+            initialized = false,
+            enabled = false,
+            debug = false,
+        },
     }
-    return activeRuntime
+    -- Zero-argument entry points: hot-reload-stable bridges call these by name.
+    function runtime.renderWindow()
+        return renderWindow(runtime)
+    end
+    function runtime.addMenuBar()
+        return drawMenuBar(runtime)
+    end
+    function runtime.handleGuiClosed()
+        return closeSession(runtime)
+    end
+    return runtime
 end
 
 ---@param ownerId string
@@ -338,7 +334,7 @@ function fallbackUi.install(ownerId, module)
         name = "fallbackUi",
         phase = receipt.PHASE_EFFECTS,
         commit = function()
-            previousRuntime = getFallbackUiRuntime(ownerId)
+            previousRuntime = runtimes[ownerId]
             if previousRuntime and previousRuntime ~= activeRuntime then
                 local disposeOk, disposeErr = disposeFallbackUiRuntime(ownerId, previousRuntime)
                 if not disposeOk then
@@ -352,7 +348,7 @@ function fallbackUi.install(ownerId, module)
         rollback = function()
             local ok, err = disposeFallbackUiRuntime(ownerId, activeRuntime)
             if ok and previousRuntime and previousRuntime ~= activeRuntime
-                and getFallbackUiRuntime(ownerId) == nil then
+                and runtimes[ownerId] == nil then
                 runtimes[ownerId] = previousRuntime
                 fallbackHud.refreshMarker()
             end
@@ -361,7 +357,7 @@ function fallbackUi.install(ownerId, module)
         -- Retire never reinstates the runtime this install replaced, and leaves alone a
         -- runtime a successor already installed (its commit closed this one).
         retire = function()
-            if getFallbackUiRuntime(ownerId) ~= activeRuntime then
+            if runtimes[ownerId] ~= activeRuntime then
                 return true, nil
             end
             return disposeFallbackUiRuntime(ownerId, activeRuntime)
@@ -371,9 +367,7 @@ end
 
 function fallbackUi.handleGuiClosed()
     for _, activeRuntime in pairs(runtimes) do
-        if type(activeRuntime.handleGuiClosed) == "function" then
-            activeRuntime.handleGuiClosed()
-        end
+        activeRuntime.handleGuiClosed()
     end
 end
 
@@ -390,15 +384,15 @@ local function installGuiCloseWatcher()
         return
     end
 
+    -- Registered once per process; the callback late-reads `wasGuiOpen` and `handleGuiClosed`
+    -- from the anchor so a Lib re-import swaps the close handler without re-registering.
+    local function handleGuiClosed()
+        fallbackRegistry.handleGuiClosed()
+    end
     fallbackRegistry.guiCloseWatcherRegistered = true
     fallbackRegistry.wasGuiOpen = rom.gui.is_open() == true
     rom.gui.add_always_draw_imgui(function()
-        local isGuiOpen = rom.gui.is_open() == true
-        if fallbackRegistry.wasGuiOpen and not isGuiOpen
-            and type(fallbackRegistry.handleGuiClosed) == "function" then
-            fallbackRegistry.handleGuiClosed()
-        end
-        fallbackRegistry.wasGuiOpen = isGuiOpen
+        uiSession.trackGuiClose(fallbackRegistry, rom.gui.is_open() == true, handleGuiClosed)
     end)
 end
 

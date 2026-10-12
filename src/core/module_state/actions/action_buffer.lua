@@ -5,8 +5,8 @@ local CloneValue = deps.values.deepCopy
 local requireMethodSelf = deps.requireMethodSelf
 
 -- Per-import marker. Draw refs and the widgets that recognize them (`isDrawActionRef`) come
--- from the same Lib generation: a module's UI context captures `uiDraw.get()` and its action
--- refs together at module creation, so refs never cross a Lib re-import boundary.
+-- from the same Lib generation: a module's UI context captures the shared `draw` surface and its
+-- action refs together at module creation, so refs never cross a Lib re-import boundary.
 local ACTION_REF_MARKER = {}
 local DRAW_ACTION_REF = "draw"
 local COMMIT_ACTION_REF = "commit"

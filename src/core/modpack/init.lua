@@ -11,9 +11,6 @@ local packRegistry = import("core/modpack/registry.lua", nil, {
 
 local logging = import "core/modpack/logging.lua"
 local hashCodec = import "core/modpack/hash/codec.lua"
-local createTheme = import("core/ui/theme.lua", nil, {
-    rom = rom,
-})
 local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
     rom = rom,
     logging = logging,
@@ -31,6 +28,8 @@ local createHud = import("core/modpack/hud/runtime.lua")
 local createUI = import("core/modpack/ui/window.lua", nil, {
     rom = rom,
     logging = logging,
+    uiSession = deps.uiSession,
+    setupRunData = deps.setupRunData,
 })
 
 local constructors = {
@@ -38,11 +37,12 @@ local constructors = {
     createConfigHash = createConfigHash,
     createHud = createHud,
     createUI = createUI,
-    createTheme = createTheme,
+    createTheme = deps.createTheme,
 }
 
 return import("core/modpack/pack_bootstrap.lua", nil, {
     rom = rom,
+    uiSession = deps.uiSession,
     logging = logging,
     libConfig = libConfig,
     storage = storage,

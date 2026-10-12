@@ -34,7 +34,7 @@ function widgets.packedCheckboxList(imgui, field, opts)
     if filterMode ~= "checked" and filterMode ~= "unchecked" then
         filterMode = "all"
     end
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local valueColors = helpers.ValueColors(opts)
     local slotCount = math.max(math.floor(tonumber(opts.slotCount) or DEFAULT_PACKED_SLOT_COUNT), 1)
     local optionsPerLine = math.floor(tonumber(opts.optionsPerLine) or 0)
     if optionsPerLine < 1 then

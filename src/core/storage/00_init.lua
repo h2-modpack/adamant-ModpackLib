@@ -59,7 +59,6 @@ return {
     isPrivateAlias = schema.isPrivateAlias,
     valuesEqual = nodeOps.valuesEqual,
     NormalizeStorageValue = nodeOps.normalize,
-    NormalizeInteger = typesModule.NormalizeInteger,
     toHash = nodeOps.toHash,
     fromHash = nodeOps.fromHash,
     isHashTokenValid = nodeOps.isHashTokenValid,

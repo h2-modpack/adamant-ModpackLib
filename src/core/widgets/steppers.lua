@@ -97,10 +97,7 @@ function widgets.stepper(imgui, field, opts)
     local maxValue = opts.max
     local renderedValue = NormalizeStepperValue(field:read(), opts.default, minValue, maxValue)
 
-    local label = tostring(opts.label or "")
-    if label ~= "" then
-        imgui.AlignTextToFramePadding()
-        imgui.Text(label)
+    if helpers.DrawRowLabel(imgui, tostring(opts.label or "")) then
         helpers.SameLineWithGap(imgui, helpers.ResolveGap(imgui, opts.buttonSpacing))
     end
 
@@ -120,9 +117,7 @@ function widgets.steppedRange(imgui, minField, maxField, opts)
     local changed = false
     local rangeGap = helpers.ResolveGap(imgui, opts.rangeGap)
 
-    if type(opts.label) == "string" and opts.label ~= "" then
-        imgui.AlignTextToFramePadding()
-        imgui.Text(opts.label)
+    if type(opts.label) == "string" and helpers.DrawRowLabel(imgui, opts.label) then
         helpers.SameLineWithGap(imgui, rangeGap)
     end
 

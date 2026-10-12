@@ -2,11 +2,8 @@ local deps = ...
 
 local logging = deps.logging
 local storageApi = deps.storage
-local widgetHelpers = {
-    isDrawActionRef = deps.isDrawActionRef,
-    imguiHelpers = deps.imguiHelpers,
-    logging = logging,
-}
+local isDrawActionRef = deps.isDrawActionRef
+local widgetHelpers = {}
 widgetHelpers.EMPTY_OPTS = {}
 widgetHelpers.EMPTY_LIST = {}
 
@@ -31,15 +28,23 @@ function widgetHelpers.IsChoiceVisible(node, value)
     return type(node.visibleValues) ~= "table" or node.visibleValues[value] ~= false
 end
 
-function widgetHelpers.ChoiceDisplay(node, value)
-    if node.displayValues and node.displayValues[value] ~= nil then
-        return tostring(node.displayValues[value])
+--- Display text for one choice value: `opts.displayValues`, then `fallbackDisplayValues`
+--- (e.g. generated range labels), then the raw value. A nil value renders as "".
+function widgetHelpers.ChoiceDisplay(opts, value, fallbackDisplayValues)
+    if value == nil then
+        return ""
+    end
+    if opts.displayValues and opts.displayValues[value] ~= nil then
+        return tostring(opts.displayValues[value])
+    end
+    if fallbackDisplayValues and fallbackDisplayValues[value] ~= nil then
+        return tostring(fallbackDisplayValues[value])
     end
     return tostring(value)
 end
 
-function widgetHelpers.NormalizeInteger(node, value)
-    return storageApi.NormalizeInteger(node, value)
+function widgetHelpers.ValueColors(opts)
+    return type(opts.valueColors) == "table" and opts.valueColors or nil
 end
 
 function widgetHelpers.ShowTooltip(imgui, tooltip)
@@ -94,6 +99,41 @@ function widgetHelpers.DrawInlineLabel(imgui, label, tooltip, labelWidth, contro
     else
         widgetHelpers.AdvanceInlineGap(imgui, widgetHelpers.ResolveGap(imgui, controlGap))
     end
+end
+
+--- Draws the optional inline label and pushes `opts.controlWidth` (or `defaultWidth`) as the
+--- item width. Pair with `EndLabeledControl`.
+---@return boolean pushedWidth
+function widgetHelpers.BeginLabeledControl(imgui, opts, defaultWidth)
+    local labelText = tostring(opts.label or "")
+    local controlWidth = tonumber(opts.controlWidth) or defaultWidth
+
+    if labelText ~= "" then
+        widgetHelpers.DrawInlineLabel(imgui, labelText, opts.tooltip, opts.labelWidth, opts.controlGap)
+    end
+
+    if controlWidth > 0 then
+        imgui.PushItemWidth(controlWidth)
+        return true
+    end
+    return false
+end
+
+function widgetHelpers.EndLabeledControl(imgui, opts, pushedWidth)
+    if pushedWidth then
+        imgui.PopItemWidth()
+    end
+    widgetHelpers.ShowTooltip(imgui, opts.tooltip)
+end
+
+--- Draws a frame-aligned leading label; returns whether anything was drawn.
+function widgetHelpers.DrawRowLabel(imgui, labelText)
+    if labelText == "" then
+        return false
+    end
+    imgui.AlignTextToFramePadding()
+    imgui.Text(labelText)
+    return true
 end
 
 function widgetHelpers.PushValueColor(imgui, color)
@@ -152,7 +192,7 @@ function widgetHelpers.StageAction(context, opts, defaultValue)
     if action == nil then
         return
     end
-    if widgetHelpers.isDrawActionRef(action) then
+    if isDrawActionRef(action) then
         local payload = opts.value
         if payload == nil then
             payload = defaultValue

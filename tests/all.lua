@@ -37,6 +37,7 @@ require('tests/module/TestCreateModule')
 require('tests/module/TestManagedModule_PrepareDefinition')
 require('tests/module/TestManagedModule_IsEnabled')
 require('tests/fallback/TestFallbackUi')
+require('tests/ui/TestUiSession')
 require('tests/widgets/TestWidgets')
 require('tests/widgets/TestWidgets_Nav')
 

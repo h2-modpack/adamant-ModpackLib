@@ -1,5 +1,6 @@
-local helpers = ...
-local imguiHelpers = helpers.imguiHelpers
+local deps = ...
+local helpers = deps.helpers
+local imguiHelpers = deps.imguiHelpers
 local widgets = {}
 
 local COMBO_FLAG_NONE = imguiHelpers.ImGuiComboFlags.None
@@ -92,19 +93,6 @@ local function ResolveDropdownChoices(opts)
     return values, displayValues
 end
 
-local function ChoiceDisplay(opts, rangeDisplayValues, value)
-    if value == nil then
-        return ""
-    end
-    if opts.displayValues and opts.displayValues[value] ~= nil then
-        return tostring(opts.displayValues[value])
-    end
-    if rangeDisplayValues and rangeDisplayValues[value] ~= nil then
-        return tostring(rangeDisplayValues[value])
-    end
-    return tostring(value)
-end
-
 local function DrawComboPreviewText(imgui, previewText, previewColor)
     local drawList = imgui.GetWindowDrawList()
     if drawList == nil then
@@ -138,29 +126,8 @@ local function DrawComboPreviewText(imgui, previewText, previewColor)
     imgui.PopClipRect()
 end
 
-local function BeginLabeledDropdownControl(imgui, opts)
-    local labelText = tostring(opts.label or "")
-    local controlWidth = tonumber(opts.controlWidth) or 0
-
-    if labelText ~= "" then
-        helpers.DrawInlineLabel(imgui, labelText, opts.tooltip, opts.labelWidth, opts.controlGap)
-    end
-
-    if controlWidth > 0 then
-        imgui.PushItemWidth(controlWidth)
-    end
-    return controlWidth > 0
-end
-
-local function EndLabeledDropdownControl(imgui, opts, pushedWidth)
-    if pushedWidth then
-        imgui.PopItemWidth()
-    end
-    helpers.ShowTooltip(imgui, opts.tooltip)
-end
-
 local function GetDropdownPreview(opts, rangeDisplayValues, current, valueColors)
-    return ChoiceDisplay(opts, rangeDisplayValues, current), valueColors and valueColors[current] or nil
+    return helpers.ChoiceDisplay(opts, current, rangeDisplayValues), valueColors and valueColors[current] or nil
 end
 
 function widgets.dropdown(imgui, field, opts)
@@ -168,9 +135,9 @@ function widgets.dropdown(imgui, field, opts)
     local controlId = opts.id or field:controlId()
     local values, rangeDisplayValues = ResolveDropdownChoices(opts)
     local current = field:read()
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local valueColors = helpers.ValueColors(opts)
     local previewText, previewColor = GetDropdownPreview(opts, rangeDisplayValues, current, valueColors)
-    local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
+    local pushedWidth = helpers.BeginLabeledControl(imgui, opts, 0)
     local opened = imgui.BeginCombo(
         "##" .. tostring(controlId),
         previewColor and "" or previewText,
@@ -183,7 +150,7 @@ function widgets.dropdown(imgui, field, opts)
     if opened then
         for index, value in ipairs(values) do
             if helpers.IsChoiceVisible(opts, value) then
-                local label = ChoiceDisplay(opts, rangeDisplayValues, value)
+                local label = helpers.ChoiceDisplay(opts, value, rangeDisplayValues)
                 local color = valueColors and valueColors[value] or nil
                 local clicked = helpers.SelectableWithValueColor(
                     imgui,
@@ -201,7 +168,7 @@ function widgets.dropdown(imgui, field, opts)
         end
         imgui.EndCombo()
     end
-    EndLabeledDropdownControl(imgui, opts, pushedWidth)
+    helpers.EndLabeledControl(imgui, opts, pushedWidth)
     return changed
 end
 
@@ -209,7 +176,7 @@ function widgets.packedDropdown(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local controlId = opts.id or field:controlId()
     local children = helpers.ResolvePackedChildren(field)
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local valueColors = helpers.ValueColors(opts)
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
     local preview = tostring(opts.noneLabel or "None")
     local previewColor = nil
@@ -220,7 +187,7 @@ function widgets.packedDropdown(imgui, field, opts)
         preview = tostring(opts.multipleLabel or "Multiple")
     end
 
-    local pushedWidth = BeginLabeledDropdownControl(imgui, opts)
+    local pushedWidth = helpers.BeginLabeledControl(imgui, opts, 0)
     local opened = imgui.BeginCombo(
         "##" .. tostring(controlId),
         "",
@@ -261,7 +228,7 @@ function widgets.packedDropdown(imgui, field, opts)
         end
         imgui.EndCombo()
     end
-    EndLabeledDropdownControl(imgui, opts, pushedWidth)
+    helpers.EndLabeledControl(imgui, opts, pushedWidth)
     return changed
 end
 

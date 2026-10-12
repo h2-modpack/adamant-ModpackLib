@@ -14,12 +14,7 @@ local fallbackHud = {}
 local markerDefined = false
 
 local function isRuntimeUncoordinated(activeRuntime)
-    local module = activeRuntime and activeRuntime.module
-    if type(module) ~= "table" or type(module.getPackId) ~= "function" then
-        return false
-    end
-
-    local packId = module.getPackId()
+    local packId = activeRuntime.module.getPackId()
     return not (packId and coordination.isRegistered(packId))
 end
 

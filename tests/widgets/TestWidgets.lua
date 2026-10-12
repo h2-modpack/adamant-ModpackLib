@@ -58,7 +58,7 @@ end
 
 local function DrawWidgets(h, imgui)
     UseImgui(h, imgui)
-    return DrawSurface(h, h.uiDraw.get().widgets)
+    return DrawSurface(h, h.draw.widgets)
 end
 
 local function CreateActionBuffer(h, key)
@@ -473,7 +473,7 @@ function TestWidgets:testButtonRejectsRawActionKey()
     end
 
     lu.assertErrorMsgContains("widgets.invalid_action", function()
-        self.h.widgets.button(imgui, "Start", {
+        DrawWidgets(self.h, imgui).button("Start", {
             id = "start_recording",
             action = "recording",
             value = { kind = "start" },
