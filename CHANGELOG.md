@@ -4,6 +4,37 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.3.0] - 2026-10-14
+
+### Fixed
+
+- correct hot-reload ownership in shared, overlays, fallback and hooks (
+1f3c80)
+
+### Changed
+
+- finish module-layer cleanup and update contributor docs (
+6a1fae)
+- consolidate widget, control and UI session plumbing (
+556da7)
+- split overlay renderer and simplify hook and mutation internals (
+a9a8ab)
+- tidy storage, logging and module_state foundations (
+a0d5e8)
+- module_bootstrap: bind lifecycle and drive activation from capabilities (
+6dc94f)
+- pass explicit inputs to capability installs (
+fd7e62)
+- module_state: expose one per-module state object (
+4b7769)
+- add receipt helper and order activation by phase (
+f10f78)
+
+### Documentation
+
+- add changelog entry for layering refactor and clean test lint nits (
+eb485c)
+
 ### Breaking Changes
 
 - overlays: unknown regions, bad columns and interval opts now fail at declaration instead of activation.
