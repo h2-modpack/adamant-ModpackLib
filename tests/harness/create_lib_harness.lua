@@ -138,9 +138,9 @@ local function createLibHarness(opts)
     end
     -- Direct `managedModule.create(...)` callers: supply the empty Lib-built declaration inputs the
     -- activation finalizer always passes in production, unless the test provides its own.
-    function harness:createManagedInstance(opts)
+    function harness:createManagedInstance(instanceOpts)
         local createOpts = {}
-        for key, value in pairs(opts) do
+        for key, value in pairs(instanceOpts) do
             createOpts[key] = value
         end
         if createOpts.mutationBundle == nil then

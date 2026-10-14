@@ -891,7 +891,7 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local target = { Value = "base" }
     self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
-    local firstModuleState, store = createHookModuleState(self.harness, true)
+    local firstModuleState = createHookModuleState(self.harness, true)
 
     local firstDefinition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,

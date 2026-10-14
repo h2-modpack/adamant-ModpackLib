@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Breaking Changes
+
+- overlays: unknown regions, bad columns and interval opts now fail at declaration instead of activation.
+- fallback: `attachGuiOnce` type and "after activation" guards now fail at declaration time.
+- lifecycle: invalid `resetAll` options now raise `lifecycle.invalid_reset_opts` instead of being ignored.
+- logging: removed violation ids `mutation.invalid_runtime_key`, `storage.invalid_field_owner` and `storage.unknown_field_alias`; their checks moved to the owning contact points.
+- module_state: pruned internal `stagedState` methods from the documented surface; use `module.stage`/`module.flush`.
+- managedModule.create: requires its declaration inputs and no longer re-exports `prepareDefinition*`, `getRecord`, `getLiveModule`, `activateOrThrow` or `activate`; callers use the owning services.
+
+### Changed
+
+- module_bootstrap: activation installs capabilities through receipts with explicit inputs; failed activation rolls back, replaced modules are retired, never rolled back.
+- module_state: one per-module state object with a transaction split for commit, reset and reload.
+- overlays: renderer split into layout, hud_components and victory_stamp; single declaration validator.
+- hooks: `modutil_registry.lua` replaced by `modutil_paths.lua`; dispatchers call ModUtil directly with unchanged hot-reload anchors.
+- storage, logging, widgets, controls, fallback UI and modpack UI internals tidied; a memory backend replaces the duck-typed missing-config fallback.
+- docs: contributor docs describe the receipt contract, capability installs, module_state view and hot-reload anchors.
+
 ## [4.2.2] - 2026-10-10
 
 ### Added
