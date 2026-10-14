@@ -107,7 +107,7 @@ function TestWidgets_Nav:testDrawNavUsesCurrentImguiForVerticalTabs()
     for key, value in pairs(imgui) do
         self.h.rom.ImGui[key] = value
     end
-    local drawNav = self.h.uiDraw.get().nav
+    local drawNav = self.h.draw.nav
 
     local selected = InDraw(self.h, function()
         return drawNav.verticalTabs({

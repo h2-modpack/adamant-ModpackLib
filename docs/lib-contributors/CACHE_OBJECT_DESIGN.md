@@ -60,7 +60,7 @@ Keep domain logic in the cache-domain files:
 
 Keep runtime data adapters in:
 
-- `adapters/data_cache.lua`
+- `data_cache.lua`
 
 Do not reintroduce root string dispatchers or host-level cache helpers. If a
 new cache operation is needed, add it to the specific domain facade where the

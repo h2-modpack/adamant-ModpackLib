@@ -319,7 +319,7 @@ function TestControls:testScalarControlCompilesPrivateStorageAndCallbackRefs()
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-controls-scalar")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     capturedRuntimeControl = record.runtime.controls.get("PrioritySlot")
 
     lu.assertEquals(capturedRuntimeControl:read(), {
@@ -397,7 +397,7 @@ function TestControls:testControlsAreCachedPerSurface()
     })
 
     lu.assertTrue(module.activate())
-    local record = self.h.managedModule.getRecord(self.h:liveModule("test-controls-cached"))
+    local record = self.h.moduleRegistry.getRecord(self.h:liveModule("test-controls-cached"))
     lu.assertEquals(record.runtime.controls.get("PrioritySlot"), record.runtime.controls.get("PrioritySlot"))
     self.h:liveModule("test-controls-cached").drawTab()
     lu.assertEquals(uiFirst, uiSecond)
@@ -429,7 +429,7 @@ function TestControls:testRuntimeControlsSkipUiOnlyFields()
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-controls-ui-only-field")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     local runtimeControl = record.runtime.controls.get("Searchable")
     lu.assertEquals(runtimeControl:read(), 1)
     lu.assertErrorMsgContains("controls.unavailable_field", function()
@@ -595,7 +595,7 @@ function TestControls:testDrawControlDispatchesDefaultAndNamedViews()
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-controls-draw-views")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     runtimeControl = record.runtime.controls.get("Rewards")
     liveModule.drawTab()
     lu.assertEquals(results, { "default", "compact:arg" })
@@ -631,7 +631,7 @@ function TestControls:testTableBackedControlUsesSemanticRowMethods()
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-controls-table")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     liveModule.drawTab()
     liveModule.flush()
 
@@ -686,7 +686,7 @@ function TestControls:testUiControlsResetNamedAndAllBoundStorage()
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-controls-reset")
-    local record = self.h.managedModule.getRecord(liveModule)
+    local record = self.h.moduleRegistry.getRecord(liveModule)
     liveModule.drawTab()
     liveModule.flush()
 

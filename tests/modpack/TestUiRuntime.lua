@@ -181,7 +181,9 @@ function TestUiRuntime:testModuleBatchToggleRollsBackTouchedModulesOnFailure()
             return moduleRegistry.snapshot.getLiveModule(entry, snapshot)
         end,
     }
+    local session = ModpackTestApi.createUiSession()
     local runtime = ModpackTestApi.createUIRuntime({
+        session = session,
         moduleRegistry = moduleRegistry,
         hud = hud,
         config = {
@@ -198,7 +200,7 @@ function TestUiRuntime:testModuleBatchToggleRollsBackTouchedModulesOnFailure()
 
     local snapshot = moduleRegistry.live.captureSnapshot()
     local ok, err = runtime.setModulesEnabled({ "Alpha", "Bravo" }, true, snapshot)
-    runtime.flushPendingRunData()
+    session.flushRunData()
 
     local warnings = Warnings
     rom.game.SetupRunData = previousSetupRunData
@@ -251,7 +253,9 @@ function TestUiRuntime:testPackDisableSnapshotsModuleEnabledState()
         debug = {},
     }
     local hudMarkers = {}
+    local session = ModpackTestApi.createUiSession()
     local runtime = ModpackTestApi.createUIRuntime({
+        session = session,
         moduleRegistry = moduleRegistry,
         hud = {
             markHashDirty = function() end,
@@ -328,7 +332,9 @@ function TestUiRuntime:testPackEnableRestoresPersistedPackRestoreMarkers()
         debug = {},
     }
     local hudMarkers = {}
+    local session = ModpackTestApi.createUiSession()
     local runtime = ModpackTestApi.createUIRuntime({
+        session = session,
         moduleRegistry = moduleRegistry,
         hud = {
             markHashDirty = function() end,
@@ -407,7 +413,9 @@ function TestUiRuntime:testRuntimeResetAllModulesCommitsModuleDefaults()
     local snapshotToStagingCalls = 0
     local markHashDirtyCalls = 0
     local updateHashCalls = 0
+    local session = ModpackTestApi.createUiSession()
     local runtime = ModpackTestApi.createUIRuntime({
+        session = session,
         moduleRegistry = moduleRegistry,
         hud = {
             markHashDirty = function()
@@ -445,7 +453,7 @@ function TestUiRuntime:testRuntimeResetAllModulesCommitsModuleDefaults()
     local bravo = moduleRegistry.modulesById.Bravo
 
     local ok, err, resetCount = runtime.resetAllModules()
-    runtime.flushPendingRunData()
+    session.flushRunData()
     rom.game.SetupRunData = previousSetupRunData
 
     lu.assertTrue(ok, tostring(err))

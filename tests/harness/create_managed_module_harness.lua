@@ -9,6 +9,8 @@ local function createManagedModuleHarness(harnessOpts)
         runtime = base.runtime,
         rom = base.rom,
         managedModule = base.managedModule,
+        moduleDefinition = base.moduleDefinition,
+        moduleActivation = base.moduleActivation,
         moduleBundle = base.moduleBundle,
         moduleState = base.moduleState,
         managedModuleLifecycle = base.managedModuleLifecycle,
@@ -16,10 +18,8 @@ local function createManagedModuleHarness(harnessOpts)
         moduleRegistry = base.moduleRegistry,
         coordinator = base.coordinator,
         sharedBundle = base.sharedBundle,
-        shared = base.shared,
         overlays = base.overlays,
         fallbackUi = base.fallbackUi,
-        fallbackUiBundle = base.fallbackUiBundle,
         warnings = {},
     }
 
@@ -39,7 +39,7 @@ local function createManagedModuleHarness(harnessOpts)
     end
 
     function h:prepareDefinition(owner, definition, structuralOpts)
-        return self.managedModule.prepareDefinition(owner or {}, definition, structuralOpts)
+        return self.moduleDefinition.prepareDefinition(owner or {}, definition, structuralOpts)
     end
 
     function h:createModuleState(config, definition)
@@ -96,11 +96,10 @@ local function createManagedModuleHarness(harnessOpts)
 
     function h:createManagedModule(pluginGuid, moduleOpts)
         moduleOpts = moduleOpts or {}
-        local host, store = self.managedModule.create({
+        local host, contexts = self.harness:createManagedInstance({
             pluginGuid = pluginGuid,
             definition = moduleOpts.definition,
-            persistentState = moduleOpts.persistentState,
-            stagedState = moduleOpts.stagedState,
+            state = moduleOpts.state,
             mutationBundle = {
                 patchMutation = adaptPatchMutation(moduleOpts.patchMutation),
             },
@@ -109,7 +108,7 @@ local function createManagedModuleHarness(harnessOpts)
             drawTab = adaptDrawCallback(moduleOpts.drawTab),
             drawQuickContent = adaptDrawCallback(moduleOpts.drawQuickContent),
         })
-        return host, host, store
+        return host, host, contexts.runtime.data
     end
 
     function h:createActivatedManagedModule(pluginGuid, moduleOpts)
@@ -119,7 +118,7 @@ local function createManagedModuleHarness(harnessOpts)
     end
 
     function h:liveModule(pluginGuid)
-        return self.managedModule.getLiveModule(pluginGuid)
+        return self.moduleRegistry.getLiveModule(pluginGuid)
     end
 
     return h

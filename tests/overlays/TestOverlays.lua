@@ -77,6 +77,32 @@ function TestOverlays:testRetainedLineUsesHudComponentAndVisibilityHooks()
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
 end
 
+function TestOverlays.testRendererDefinesGameHooksOncePerImport()
+    local defines = {}
+    local h = createOverlayHarness({
+        importOverrides = {
+            ["core/hooks/adapters/system_declarations.lua"] = {
+                create = function(_, ownerId)
+                    return {
+                        define = function()
+                            defines[ownerId] = (defines[ownerId] or 0) + 1
+                            return true
+                        end,
+                    }
+                end,
+            },
+        },
+    })
+
+    h.createSystem("test.overlay.hooks.once").overlays.define(function(overlays)
+        overlays.createLine("first", { componentName = "HooksOnceFirst" })
+        overlays.createLine("second", { componentName = "HooksOnceSecond" })
+        overlays.createLine("third", { componentName = "HooksOnceThird" })
+    end)
+
+    lu.assertEquals(defines["adamant-lib.overlays.renderer"], 1)
+end
+
 function TestOverlays:testRetainedLineDefaultsToLabelFont()
     local system = self.h.createSystem("test.overlay.default.font")
     system.overlays.define(function(overlays)
@@ -248,21 +274,21 @@ function TestOverlays:testUiSuppressionTokenGloballyHidesAndRestoresRetainedOver
         end)
     end)
 
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
 
     local firstToken = self.h.overlays.suppressForUi()
-    lu.assertTrue(self.h.overlays.isUiSuppressed())
+    lu.assertTrue(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
     local secondToken = self.h.overlays.suppressForUi()
     firstToken.release()
-    lu.assertTrue(self.h.overlays.isUiSuppressed())
+    lu.assertTrue(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 0.0)
 
     secondToken.release()
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
     lu.assertEquals(alphas[#alphas].Fraction, 1.0)
 
     secondToken.release()
-    lu.assertFalse(self.h.overlays.isUiSuppressed())
+    lu.assertFalse(self.h.harness.imports["core/overlays/suppression.lua"].isUiSuppressed())
 end

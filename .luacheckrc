@@ -36,9 +36,11 @@ globals = {
     "TestOverlays",
     "TestOverlays_Retained",
     "TestFallbackUi",
+    "TestUiSession",
     "TestStorageValidation",
     "TestSystemScope",
     "TestValues",
+    "TestReceipt",
     "TestWidgets",
     "TestWidgets_Nav"
     }

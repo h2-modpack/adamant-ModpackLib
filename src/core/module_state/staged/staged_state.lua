@@ -7,7 +7,15 @@ local ClonePersistedValue = values.deepCopy
 local NormalizeStorageValue = storageInternal.NormalizeStorageValue
 local DecodePackedChild = storageInternal.packed.DecodePackedChild
 
-local function createStagedState(storageConfig, storage, committedRoots)
+---Staged UI-owned data over committed roots.
+---Returns the view handed to UI facades/controls and the transaction internals
+---handed only to the module-state transaction.
+---@param storageConfig table
+---@param storage table Prepared storage.
+---@param committed AdamantModpackLib.CommittedRoots
+---@return AdamantModpackLib.StagedState view
+---@return AdamantModpackLib.StagedTxnInternals internals
+local function create(storageConfig, storage, committed)
     local stagedRootNodes = storageInternal.getStagedRoots(storage)
     local aliasNodes = storageInternal.getAliases(storage)
     local staging = {}
@@ -16,7 +24,6 @@ local function createStagedState(storageConfig, storage, committedRoots)
     local configEntries = {}
     local tableHandles = {}
     local fieldHandles = {}
-    local statusFieldHandles = {}
 
     for _, root in ipairs(stagedRootNodes) do
         if root._persist then
@@ -28,46 +35,21 @@ local function createStagedState(storageConfig, storage, committedRoots)
         if not root._persist then
             return nil
         end
-        local entry = configEntries and configEntries[root.alias] or nil
+        local entry = configEntries[root.alias]
         if entry then
             return entry:get()
         end
         return storageConfig.readValue(root._storageKey, root)
     end
 
-    local function readCommittedRoot(root)
-        if committedRoots == nil then
-            return nil
-        end
-        return committedRoots.readRoot(root)
-    end
-
-    local function replaceCommittedRoot(root, value)
-        if committedRoots == nil then
-            return
-        end
-        committedRoots.replaceRoot(root, value)
-    end
-
-    local function reloadCommittedRoots()
-        if committedRoots == nil then
-            return {
-                hadCommittedChanges = false,
-                hadSettingChanges = false,
-                hadStatusChanges = false,
-            }
-        end
-        return committedRoots.reloadFromConfig()
-    end
-
     local function readConfigValue(root)
         if not root._persist then
             if root._mode == "runtime" then
-                return readCommittedRoot(root)
+                return committed.peekRoot(root)
             end
             return nil
         end
-        local committedValue = readCommittedRoot(root)
+        local committedValue = committed.peekRoot(root)
         if committedValue ~= nil then
             return committedValue
         end
@@ -79,11 +61,11 @@ local function createStagedState(storageConfig, storage, committedRoots)
             return
         end
         storageConfig.writeValue(root._storageKey, value, root)
-        replaceCommittedRoot(root, value)
+        committed.replaceRoot(root, value)
     end
 
     local function syncPackedChildren(root, packedValue)
-        for _, child in ipairs(root._bitAliases or {}) do
+        for _, child in ipairs(root._bitAliases) do
             staging[child.alias] = DecodePackedChild(child, packedValue)
         end
     end
@@ -117,18 +99,32 @@ local function createStagedState(storageConfig, storage, committedRoots)
         end
     end
 
+    local function readStagedRoot(root)
+        if staging[root.alias] == nil then
+            loadRootIntoStaging(root)
+        end
+        return staging[root.alias]
+    end
+
+    local function clearDirty()
+        dirty = false
+        dirtyRoots = {}
+    end
+
     local function copyConfigToStaging()
         for _, root in ipairs(stagedRootNodes) do
             loadRootIntoStaging(root)
         end
+        clearDirty()
     end
 
-    local function copyStagingToConfig()
+    local function flushToConfig()
         for _, root in ipairs(stagedRootNodes) do
             if dirtyRoots[root.alias] then
                 writeConfigValue(root, staging[root.alias])
             end
         end
+        clearDirty()
     end
 
     local function captureDirtyConfigSnapshot()
@@ -150,66 +146,37 @@ local function createStagedState(storageConfig, storage, committedRoots)
         end
     end
 
-    local function clearDirty()
-        dirty = false
-        dirtyRoots = {}
+    -- Data-only surface: status aliases belong to status_state.
+    local function resolveDataNode(alias, context)
+        local node = type(alias) == "string" and aliasNodes[alias] or nil
+        if not node then
+            logging.violate("staged_state.unknown_alias", "%s: unknown alias '%s'", context, tostring(alias))
+            return nil
+        end
+        if node._mode == "runtime" then
+            logging.violate("staged_state.invalid_surface", "%s: alias '%s' is status, not data storage",
+                context, tostring(alias))
+            return nil
+        end
+        return node
     end
 
-    local stagedReadBackend = {
+    local readBackend = {
         readRoot = function(root)
             return staging[root.alias]
         end,
-        canRead = function(node, alias)
-            if node._mode == "runtime" then
-                logging.violate(
-                    "staged_state.invalid_surface",
-                    "stagedState.read: alias '%s' is status; use stagedState.status.read",
-                    tostring(alias))
-                return false
-            end
-            return true
+        canRead = function(_, alias)
+            return resolveDataNode(alias, "stagedState.read") ~= nil
         end,
         onUnknownRead = function(alias)
             logging.violate("staged_state.unknown_alias", "stagedState.read: unknown alias '%s'", tostring(alias))
         end,
     }
 
-    local statusReadBackend = {
-        readRoot = function(root)
-            return readCommittedRoot(root)
-        end,
-        canRead = function(node, alias)
-            if node._mode ~= "runtime" then
-                logging.violate(
-                    "staged_state.invalid_surface",
-                    "stagedState.status.read: alias '%s' is not status storage",
-                    tostring(alias))
-                return false
-            end
-            return true
-        end,
-        onUnknownRead = function(alias)
-            logging.violate("staged_state.unknown_alias", "stagedState.status.read: unknown alias '%s'",
-                tostring(alias))
-        end,
-    }
-
-    local stagedWriteBackend = {
-        readRoot = function(root)
-            if staging[root.alias] == nil then
-                loadRootIntoStaging(root)
-            end
-            return staging[root.alias]
-        end,
-        canWrite = function(node, alias)
-            if node._mode == "runtime" then
-                logging.violate(
-                    "staged_state.invalid_surface",
-                    "stagedState.write: alias '%s' is status; use stagedState.status on the read side",
-                    tostring(alias))
-                return false
-            end
-            return true
+    local writeBackend = {
+        readRoot = readStagedRoot,
+        canWrite = function(_, alias)
+            return resolveDataNode(alias, "stagedState.write") ~= nil
         end,
         writeRoot = writeRootToStaging,
         writeAliasValue = function(node, aliasValue)
@@ -221,78 +188,11 @@ local function createStagedState(storageConfig, storage, committedRoots)
     }
 
     local function readStagingValue(alias)
-        return storageInternal.readAlias(aliasNodes, stagedReadBackend, alias)
-    end
-
-    local function readStatusValue(alias)
-        return storageInternal.readAlias(aliasNodes, statusReadBackend, alias)
-    end
-
-    local statusFieldOwner = {
-        read = readStatusValue,
-        getAliasSchema = function(alias)
-            return aliasNodes[alias]
-        end,
-    }
-
-    local function getStatusFieldHandleForNode(alias, node)
-        local cached = statusFieldHandles[alias]
-        if cached then
-            return cached
-        end
-
-        local field = storageInternal.field.createKnown(statusFieldOwner, alias, node, "stagedState.status.get")
-        statusFieldHandles[alias] = field
-        return field
+        return storageInternal.readAlias(aliasNodes, readBackend, alias)
     end
 
     local function writeStagingValue(alias, value)
-        storageInternal.writeAlias(aliasNodes, stagedWriteBackend, alias, value)
-    end
-
-    local function getTableHandleForNode(alias, node)
-        local cached = tableHandles[alias]
-        if cached then
-            return cached
-        end
-
-        local tableOpts = {
-            readRoot = function(root)
-                if root._mode == "runtime" then
-                    return readCommittedRoot(root)
-                end
-                if staging[root.alias] == nil then
-                    loadRootIntoStaging(root)
-                end
-                return staging[root.alias]
-            end,
-            normalizedRoot = true,
-        }
-        if node._mode ~= "runtime" then
-            tableOpts.writeRoot = writeRootToStaging
-        end
-
-        local handle = storageInternal.table.CreateTableHandle(node, tableOpts)
-        tableHandles[alias] = handle
-        return handle
-    end
-
-    local function getTableHandle(alias)
-        local node = type(alias) == "string" and aliasNodes[alias] or nil
-        if not node then
-            logging.violate("staged_state.unknown_alias", "stagedState.table: unknown alias '%s'", tostring(alias))
-            return nil
-        end
-        if node.type ~= "table" or node._isBitAlias then
-            logging.violate("staged_state.invalid_table_alias", "stagedState.table: alias '%s' is not table storage", tostring(alias))
-            return nil
-        end
-        if node._mode == "runtime" then
-            logging.violate("staged_state.invalid_surface",
-                "stagedState.table: alias '%s' is status; use stagedState.status.table", tostring(alias))
-            return nil
-        end
-        return getTableHandleForNode(alias, node)
+        storageInternal.writeAlias(aliasNodes, writeBackend, alias, value)
     end
 
     local function resetAliasValue(alias)
@@ -301,55 +201,38 @@ local function createStagedState(storageConfig, storage, committedRoots)
             logging.violate("staged_state.unknown_alias", "stagedState.reset: unknown alias '%s'", tostring(alias))
             return
         end
-
-        local defaultValue = ClonePersistedValue(node.default)
-        writeStagingValue(alias, defaultValue)
+        writeStagingValue(alias, ClonePersistedValue(node.default))
     end
 
-    local function resetAll(opts)
-        local exclude = type(opts) == "table" and type(opts.exclude) == "table" and opts.exclude or {}
-        local count = 0
-
-        for _, root in ipairs(stagedRootNodes) do
-            local alias = root.alias
-            if root._mode ~= "runtime" and alias ~= nil and not exclude[alias] then
-                local current = readStagingValue(alias)
-                if not storageInternal.valuesEqual(root, current, root.default) then
-                    resetAliasValue(alias)
-                    count = count + 1
-                end
-            end
+    local function getTableHandleForNode(alias, node)
+        local cached = tableHandles[alias]
+        if cached then
+            return cached
         end
-
-        return count > 0, count
+        local handle = storageInternal.table.CreateTableHandle(node, {
+            readRoot = readStagedRoot,
+            writeRoot = writeRootToStaging,
+            normalizedRoot = true,
+        })
+        tableHandles[alias] = handle
+        return handle
     end
 
-    copyConfigToStaging()
-    clearDirty()
+    local view = {}
 
-    local stagedState
     local function getFieldHandleForNode(alias, node)
         local cached = fieldHandles[alias]
         if cached then
             return cached
         end
-
-        local field = storageInternal.field.createKnown(stagedState, alias, node, "stagedState.get")
+        local field = storageInternal.field.create(view, alias, node, "stagedState.get")
         fieldHandles[alias] = field
         return field
     end
 
-    local function getDataObject(alias)
-        local node = type(alias) == "string" and aliasNodes[alias] or nil
+    function view.get(alias, context)
+        local node = resolveDataNode(alias, context or "stagedState.get")
         if not node then
-            logging.violate("staged_state.unknown_alias", "stagedState.get: unknown alias '%s'", tostring(alias))
-            return nil
-        end
-        if node._mode == "runtime" then
-            logging.violate(
-                "staged_state.invalid_surface",
-                "stagedState.get: alias '%s' is status; use stagedState.status.get",
-                tostring(alias))
             return nil
         end
         if node.type == "table" and not node._isBitAlias then
@@ -358,105 +241,65 @@ local function createStagedState(storageConfig, storage, committedRoots)
         return getFieldHandleForNode(alias, node)
     end
 
-    local function getStatusDataObject(alias)
-        local node = type(alias) == "string" and aliasNodes[alias] or nil
-        if not node then
-            logging.violate("staged_state.unknown_alias", "stagedState.status.get: unknown alias '%s'",
-                tostring(alias))
-            return nil
-        end
-        if node._mode ~= "runtime" then
-            logging.violate(
-                "staged_state.invalid_surface",
-                "stagedState.status.get: alias '%s' is not status storage",
-                tostring(alias))
-            return nil
-        end
-        if node.type == "table" and not node._isBitAlias then
-            return getTableHandleForNode(alias, node)
-        end
-        return getStatusFieldHandleForNode(alias, node)
-    end
+    view.read = readStagingValue
+    view.write = writeStagingValue
+    view.reset = resetAliasValue
 
-    local function getStatusTable(alias)
-        local node = type(alias) == "string" and aliasNodes[alias] or nil
+    function view.table(alias)
+        local node = resolveDataNode(alias, "stagedState.table")
         if not node then
-            logging.violate("staged_state.unknown_alias", "stagedState.status.table: unknown alias '%s'",
-                tostring(alias))
-            return nil
-        end
-        if node._mode ~= "runtime" then
-            logging.violate("staged_state.invalid_surface",
-                "stagedState.status.table: alias '%s' is not status storage", tostring(alias))
             return nil
         end
         if node.type ~= "table" or node._isBitAlias then
-            logging.violate("staged_state.invalid_table_alias",
-                "stagedState.status.table: alias '%s' is not table storage", tostring(alias))
+            logging.violate("staged_state.invalid_table_alias", "stagedState.table: alias '%s' is not table storage",
+                tostring(alias))
             return nil
         end
         return getTableHandleForNode(alias, node)
     end
 
-    stagedState = {
-        get = function(alias)
-            return getDataObject(alias)
-        end,
-        read = function(alias)
-            return readStagingValue(alias)
-        end,
-        table = function(alias)
-            return getTableHandle(alias)
-        end,
-        status = {
-            read = readStatusValue,
-            get = getStatusDataObject,
-            table = getStatusTable,
-        },
-        field = function(alias)
-            return storageInternal.field.create(stagedState, alias, "stagedState.field")
-        end,
-        getAliasSchema = function(alias)
-            return aliasNodes[alias]
-        end,
-        write = function(alias, value)
-            writeStagingValue(alias, value)
-        end,
-        reset = function(alias)
-            resetAliasValue(alias)
-        end,
-        resetAll = resetAll,
-        _reloadFromConfig = function()
-            local receipt = reloadCommittedRoots()
-            copyConfigToStaging()
-            clearDirty()
-            return receipt
-        end,
-        _syncFromCommitted = function()
-            copyConfigToStaging()
-            clearDirty()
-        end,
-        _flushToConfig = function()
-            copyStagingToConfig()
-            clearDirty()
-        end,
-        _hasConfigChanges = function()
-            return dirty
-        end,
-        _captureDirtyConfigSnapshot = captureDirtyConfigSnapshot,
-        _restoreConfigSnapshot = restoreConfigSnapshot,
-        isDirty = function()
-            return dirty
-        end,
-        auditMismatches = function()
-            if type(storageConfig.reloadSource) == "function" then
-                storageConfig.reloadSource()
+    function view.getAliasSchema(alias)
+        return aliasNodes[alias]
+    end
+
+    copyConfigToStaging()
+
+    local internals = {}
+
+    function internals.isDirty()
+        return dirty
+    end
+
+    internals.flushToConfig = flushToConfig
+    internals.syncFromCommitted = copyConfigToStaging
+    internals.captureDirtyConfigSnapshot = captureDirtyConfigSnapshot
+    internals.restoreConfigSnapshot = restoreConfigSnapshot
+
+    function internals.reloadFromConfig()
+        local receipt = committed.reload()
+        copyConfigToStaging()
+        return receipt
+    end
+
+    ---@param exclude table<string, boolean> Root aliases to skip (validated by the txn).
+    function internals.resetAll(exclude)
+        local count = 0
+        for _, root in ipairs(stagedRootNodes) do
+            local alias = root.alias
+            if root._mode ~= "runtime" and not exclude[alias]
+                and not storageInternal.valuesEqual(root, readStagingValue(alias), root.default) then
+                resetAliasValue(alias)
+                count = count + 1
             end
-            local mismatches = {}
-            for _, root in ipairs(stagedRootNodes) do
-                if not root._persist or root._mode == "runtime" then
-                    goto continue_root
-                end
+        end
+        return count > 0, count
+    end
+
+    function internals.auditMismatches()
+        storageConfig.reloadSource()
+        local mismatches = {}
+        for _, root in ipairs(stagedRootNodes) do
+            if root._persist and root._mode ~= "runtime" then
                 local persistedValue = readPersistedConfigValue(root)
                 if persistedValue == nil then
                     persistedValue = ClonePersistedValue(root.default)
@@ -466,22 +309,21 @@ local function createStagedState(storageConfig, storage, committedRoots)
                     table.insert(mismatches, root.alias)
                 end
                 if root.type == "packedInt" then
-                    for _, child in ipairs(root._bitAliases or {}) do
+                    for _, child in ipairs(root._bitAliases) do
                         local childValue = DecodePackedChild(child, persistedValue)
                         if not storageInternal.valuesEqual(child, childValue, staging[child.alias]) then
                             table.insert(mismatches, child.alias)
                         end
                     end
                 end
-                ::continue_root::
             end
-            return mismatches
-        end,
-    }
+        end
+        return mismatches
+    end
 
-    return stagedState
+    return view, internals
 end
 
 return {
-    createStagedState = createStagedState,
+    create = create,
 }

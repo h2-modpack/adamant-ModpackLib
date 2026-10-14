@@ -14,25 +14,46 @@ UI staging trust that prepared state.
 Every module, coordinated or standalone, enters through the same Lib path:
 
 1. Module code calls `lib.createModule(...)`.
-2. The returned declaration facade collects storage, status, cache, controls,
-   actions, hooks, overlays, shared declarations, mutation, UI callbacks, and
-   optional fallback UI attachment requests.
-3. Module code calls `module.activate()`.
+2. The returned declaration facade (the builder) collects storage, status,
+   cache, controls, actions, hooks, overlays, shared declarations, mutation, UI
+   callbacks, and optional fallback UI attachment requests. Its identity
+   methods come from `identity.lua` built from the create opts.
+3. Module code calls `module.activate()` on the facade.
 4. The activation finalizer compiles controls and status storage.
-5. Lib prepares the definition and structural fingerprint.
-6. `moduleState.create(config, definition)` constructs persistent and staged
-   state.
+5. Lib prepares the definition and structural fingerprint. The baseline is the
+   current live module's definition for the same `pluginGuid`.
+6. `moduleState.create(definition, opts)` constructs persistent, staged, and
+   status state, the action buffer, and the lifecycle transaction.
 7. Persistent state hydrates persisted roots from config exactly once.
 8. Staged state copies from committed roots.
-9. `managedModule.create(...)` builds the live module, runtime context, UI
-   context, action buffer, callback host, and control catalog.
-10. Activation installs and commits capability receipts: shared, hooks,
-    overlays, mutation, and optional fallback UI.
-11. Lib publishes the live module by `pluginGuid`.
+9. `managedModule.create(...)` builds the instance: identity from
+   `identity.lua` over the prepared definition (whose identity fields copy the
+   create opts, so facade and instance agree), the callback host, the runtime
+   and UI contexts (once, through `module_contexts.lua`), the bound mutation,
+   the lifecycle session, and the record with its `capabilityInputs`.
+10. The finalizer calls `managed_module_activation.activateOrThrow(module)`:
+    1. Each install in the capability list composed in `core/init.lua`
+       (shared, hooks, overlays, mutation sync, optional fallback UI) runs with
+       `(pluginGuid, module, record.capabilityInputs)` and returns a receipt or
+       nil.
+    2. Receipts are sorted by phase: `PHASE_GAME_DATA` (mutation) before
+       `PHASE_EFFECTS`, with install order kept within a phase.
+    3. Receipts commit in that order. A failed commit, or any later failure,
+       rolls back the committed receipts in reverse and restores the previous
+       live module.
+11. Lib marks the record activated and publishes the live module by
+    `pluginGuid`.
 12. `module.onActivate(host, runtime)` runs, if declared, against the prepared
-    runtime state.
+    runtime state. A throw here rolls back like a failed commit.
+13. A pending coordinator rebuild, if any, is requested.
+14. The previous live module's receipts are retired, not rolled back, so they
+    remove only what they still own.
 
-Activation does not call `_reloadFromConfig()`. If `onActivate(...)` cannot see
+The facade's `module.activate()` is the only place that reports
+`managed_module.activate_failed`; it returns `false, err` and the module is
+skipped.
+
+Activation does not call the module state's `txn.reload()`. If `onActivate(...)` cannot see
 hydrated runtime data, the bug is in state construction or declaration
 preparation, not in activation ordering.
 
@@ -42,8 +63,9 @@ An uncoordinated module is a normal live module whose pack id has no registered
 coordinator.
 
 1. The shared module creation sequence runs.
-2. If the module called `module.fallbackUi.attachGuiOnce(...)`, Lib records a
-   fallback UI request before activation.
+2. If the module called `module.fallbackUi.attachGuiOnce(...)`, the activation
+   finalizer passes `fallbackUiRequested` to `managedModule.create(...)` and hands
+   the registered callback the owner's stable bridge before activation.
 3. Activation commits the fallback UI receipt.
 4. The fallback receipt installs a hot-reload-stable runtime for the module's
    owner id and refreshes the fallback HUD marker.

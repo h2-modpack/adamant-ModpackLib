@@ -1,7 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
-local overlayOrder = deps.overlayOrder
+local moduleIdentity = deps.moduleIdentity
 local options = deps.options
 local declarationSurface = deps.declarationSurface
 local activationFinalizer = deps.activationFinalizer
@@ -38,97 +38,61 @@ local function createDeclarationState()
     }
 end
 
-local function attachModuleUtilitySurface(module, opts, lifecycle)
+-- The facade is the builder; the managed instance built at activation owns runtime behavior.
+-- Identity comes from the same constructor as the instance's (`identity.lua`); the prepared
+-- definition copies these opts verbatim, so both report the same values.
+local function attachModuleUtilitySurface(module, opts, getActiveModule)
+    local identity = moduleIdentity.create(opts, opts.pluginGuid, function()
+        local activeModule = getActiveModule()
+        return activeModule ~= nil and activeModule.read("DebugMode") == true
+    end)
+    module.getOwnerId = identity.getOwnerId
+    module.getModuleId = identity.getModuleId
+    module.getPackId = identity.getPackId
+    module.getMeta = identity.getMeta
+    module.log = identity.log
+    module.logIf = identity.logIf
+
     function module.isEnabled()
-        local activeModule = lifecycle.getActiveModule()
-        if activeModule then
-            return activeModule.isEnabled()
-        end
-        return false
-    end
-
-    function module.getOwnerId()
-        return opts.pluginGuid
-    end
-
-    function module.getModuleId()
-        return opts.id
-    end
-
-    function module.getPackId()
-        return opts.modpack
-    end
-
-    function module.getMeta()
-        return {
-            name = opts.name,
-            shortName = opts.shortName,
-            tooltip = opts.tooltip,
-            hash = opts.hash,
-        }
-    end
-
-    function module.log(fmt, ...)
-        local activeModule = lifecycle.getActiveModule()
-        if activeModule then
-            return activeModule.log(fmt, ...)
-        end
-        logging.printWithPrefix("[" .. tostring(opts.id or opts.pluginGuid) .. "] ", fmt, ...)
-    end
-
-    function module.logIf(fmt, ...)
-        local activeModule = lifecycle.getActiveModule()
-        if activeModule then
-            return activeModule.logIf(fmt, ...)
-        end
-        return nil
+        local activeModule = getActiveModule()
+        return activeModule ~= nil and activeModule.isEnabled()
     end
 end
 
 function declarationFacade.create(opts)
     options.validateIdentity(opts)
 
-    local activated = false
-    local activating = false
+    -- Activation state: the managed instance's record owns activation proper. The facade only
+    -- tracks `sealing` (finalizer running, no instance yet) and the instance it produced.
+    local sealing = false
     local activeModule = nil
-    local activeRecord = nil
+    local activeContexts = nil
     local declarations = createDeclarationState()
     local module = {}
 
     local lifecycle = {}
 
     function lifecycle.requireOpen(context)
-        if activated or activating then
+        if activeModule ~= nil or sealing then
             logging.violate("module.invalid_create_opts", "%s cannot be called after module activation begins", context)
         end
     end
 
-    function lifecycle.requireActive(context)
-        if not activeModule then
-            logging.violate("managed_module.not_activated", "%s requires module.activate() before it can run", context)
-        end
-        return activeModule
-    end
-
-    function lifecycle.getActiveModule()
-        return activeModule
-    end
-
-    function lifecycle.getActiveRecord()
-        return activeRecord
+    ---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext }?
+    function lifecycle.getActiveContexts()
+        return activeContexts
     end
 
     local function activateOrThrow()
-        if activated then
+        if activeModule ~= nil then
             logging.violate("managed_module.already_activated", "module.activate: module is already activated")
         end
-        if activating then
+        if sealing then
             logging.violate("managed_module.activation_in_progress", "module.activate: module activation is already in progress")
         end
-        activating = true
-        activeModule, activeRecord = activationFinalizer.activate(opts, declarations)
-        activated = true
-        activating = false
+        sealing = true
+        activeModule, activeContexts = activationFinalizer.activate(opts, declarations)
+        sealing = false
         return true, nil
     end
 
@@ -137,14 +101,16 @@ function declarationFacade.create(opts)
         if ok then
             return true, nil
         end
-        activating = false
+        sealing = false
         err = tostring(err)
         logging.violate("managed_module.activate_failed", "module.activate failed; skipping module: %s", err)
         return false, err
     end
 
-    declarationSurface.attach(module, declarations, lifecycle, overlayOrder)
-    attachModuleUtilitySurface(module, opts, lifecycle)
+    declarationSurface.attach(module, declarations, lifecycle)
+    attachModuleUtilitySurface(module, opts, function()
+        return activeModule
+    end)
 
     return module, nil
 end

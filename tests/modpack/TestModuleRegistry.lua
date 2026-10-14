@@ -15,7 +15,7 @@ end
 local function attachModule(pluginGuid, definition, persisted, exports)
     exports = exports or {}
     local patchPlan = definition.patchPlan
-    definition = LibManagedModule.prepareDefinition({}, {
+    definition = LibModuleDefinition.prepareDefinition({}, {
         modpack = definition.modpack,
         id = definition.id,
         name = definition.name,
@@ -23,7 +23,7 @@ local function attachModule(pluginGuid, definition, persisted, exports)
         tooltip = definition.tooltip,
         storage = definition.storage,
     })
-    local persistentState, stagedState = CreateModuleState(persisted or {}, definition)
+    local _, _, moduleState = CreateModuleState(persisted or {}, definition)
     local function adaptDraw(callback)
         if type(callback) ~= "function" then
             return callback
@@ -45,13 +45,12 @@ local function attachModule(pluginGuid, definition, persisted, exports)
     }
     if patchPlan ~= nil then
         local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
-        mutations.lifecycle.declarePatch(mutationBundle, adaptPatch(patchPlan))
+        mutations.declarePatch(mutationBundle, adaptPatch(patchPlan))
     end
-    local liveModule = LibManagedModule.create({
+    local liveModule = CreateLibManagedModule({
         pluginGuid = pluginGuid,
         definition = definition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         mutationBundle = mutationBundle,
         drawTab = adaptDraw(exports.DrawTab),
         drawQuickContent = adaptDraw(exports.DrawQuickContent),

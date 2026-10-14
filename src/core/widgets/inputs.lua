@@ -6,21 +6,10 @@ function widgets.inputText(imgui, field, opts)
     local controlId = opts.id ~= nil and tostring(opts.id) or field:controlId()
     local current = tostring(field:read() or "")
     local maxLen = math.max(math.floor(tonumber(opts.maxLen) or 256), 1)
-    local label = tostring(opts.label or "")
-    local controlWidth = tonumber(opts.controlWidth) or 120
 
-    if label ~= "" then
-        helpers.DrawInlineLabel(imgui, label, opts.tooltip, opts.labelWidth, opts.controlGap)
-    end
-
-    if controlWidth > 0 then
-        imgui.PushItemWidth(controlWidth)
-    end
+    local pushedWidth = helpers.BeginLabeledControl(imgui, opts, 120)
     local nextValue, changed = imgui.InputText("##" .. tostring(controlId), current, maxLen)
-    if controlWidth > 0 then
-        imgui.PopItemWidth()
-    end
-    helpers.ShowTooltip(imgui, opts.tooltip)
+    helpers.EndLabeledControl(imgui, opts, pushedWidth)
     if changed then
         field:write(nextValue)
         helpers.StageAction("draw.widgets.inputText", opts, nextValue)

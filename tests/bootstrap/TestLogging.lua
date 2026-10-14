@@ -197,16 +197,18 @@ function TestLogging.testViolationErrorRaises()
     end)
 end
 
-function TestLogging.testViolationRejectsInvalidSeverity()
-    WithLoggingPolicy({
-        ["test.invalid"] = {
-            severity = "trace",
-            description = "Test invalid policy.",
-        },
-    }, function(activeLogging)
-        lu.assertErrorMsgContains("violation.invalid_severity", function()
-            activeLogging.violate("test.invalid", "broken")
-        end)
+function TestLogging.testViolationPolicyRejectsInvalidSeverityAtImport()
+    lu.assertErrorMsgContains("violation.invalid_severity", function()
+        createLibHarness({
+            importOverrides = {
+                ["core/logging/policies.lua"] = {
+                    ["test.invalid"] = {
+                        severity = "trace",
+                        description = "Test invalid policy.",
+                    },
+                },
+            },
+        })
     end)
 end
 

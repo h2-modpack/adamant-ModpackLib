@@ -2,7 +2,7 @@
 -- Test utilities: load Lib and expose shared modpack test helpers.
 -- =============================================================================
 -- luacheck: globals LibConfig LibTestImports Warnings lib CaptureWarnings RestoreWarnings
--- luacheck: globals GetRuntimeLiveModules SetRuntimeLiveModule LibStorage LibModuleState LibManagedModule LibOverlays
+-- luacheck: globals GetRuntimeLiveModules SetRuntimeLiveModule LibStorage LibModuleState CreateLibManagedModule LibOverlays
 -- luacheck: globals CreateModuleState InstallWindowImGuiStub CreateModpackHudStub import ModpackTestApi CreateModpackHarness
 -- luacheck: globals MockModuleRegistry _originalPrint print
 
@@ -108,14 +108,37 @@ LibModuleState = setmetatable({}, {
         assert(LibTestImports["core/module_state/00_init.lua"], "LibModuleState test service missing")[key] = value
     end,
 })
-LibManagedModule = setmetatable({}, {
+LibModuleDefinition = setmetatable({}, {
     __index = function(_, key)
-        return assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key]
-    end,
-    __newindex = function(_, key, value)
-        assert(LibTestImports["core/module_bootstrap/managed_module.lua"], "LibManagedModule test service missing")[key] = value
+        return assert(LibTestImports["core/module_bootstrap/definition.lua"], "LibModuleDefinition test service missing")[key]
     end,
 })
+LibModuleRegistry = setmetatable({}, {
+    __index = function(_, key)
+        return assert(LibTestImports["core/lib_bootstrap/module_registry.lua"], "LibModuleRegistry test service missing")[key]
+    end,
+})
+-- Direct `managedModule.create(...)` for modpack tests, supplying the empty Lib-built declaration
+-- inputs the activation finalizer always passes in production unless the test provides its own.
+function CreateLibManagedModule(opts)
+    local createOpts = {}
+    for key, value in pairs(opts) do
+        createOpts[key] = value
+    end
+    if createOpts.mutationBundle == nil then
+        createOpts.mutationBundle = { patchMutation = nil }
+    end
+    if createOpts.hookDeclarations == nil then
+        createOpts.hookDeclarations = LibTestImports["core/hooks/00_init.lua"].declarations.create()
+    end
+    if createOpts.sharedDataDeclarations == nil then
+        createOpts.sharedDataDeclarations = LibTestImports["core/shared/00_init.lua"].dataDeclarations.createDeclarations()
+    end
+    if createOpts.controlCatalog == nil then
+        createOpts.controlCatalog = { instances = {}, order = {} }
+    end
+    return LibTestImports["core/module_bootstrap/managed_module.lua"].create(createOpts)
+end
 local function GetLibOverlayService()
     local bundle = assert(LibTestImports["core/overlays/00_init.lua"], "LibOverlays test bundle missing")
     return assert(bundle.service, "LibOverlays test service missing")
@@ -152,7 +175,7 @@ function CreateModuleState(config, definition)
     local state = LibModuleState.create(definition, {
         configPath = configPath,
     })
-    return state.persistentState, state.stagedState
+    return state.persistent, state.staged, state
 end
 
 function InstallWindowImGuiStub(overrides)
@@ -276,6 +299,11 @@ ModpackTestApi = setmetatable({
 })
 
 local logging = import("core/modpack/logging.lua")
+local uiSession = LibTestImports["core/ui/session.lua"]
+local setupRunData = LibTestImports["core/game_deps/game_deps.lua"].runData.SetupRunData
+local createTheme = import("core/ui/theme.lua", nil, {
+    rom = rom,
+})
 
 local function makeModpackImportEnv(importOverrides)
     local env = fakeEngine.addFallback({}, _ENV)
@@ -294,7 +322,6 @@ local function mapConstructorOverrides(constructors)
         createConfigHash = "core/modpack/hash/config_hash.lua",
         createHud = "core/modpack/hud/runtime.lua",
         createUI = "core/modpack/ui/window.lua",
-        createTheme = "core/ui/theme.lua",
     }
 
     for name, path in pairs(constructorPaths) do
@@ -313,15 +340,20 @@ function CreateModpackHarness(opts)
     local harnessRom = opts.rom or rom
     local harnessLibConfig = opts.libConfig or LibConfig
     local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
-    local getLiveModule = opts.getLiveModule or LibManagedModule.getLiveModule
+    local getLiveModule = opts.getLiveModule or LibModuleRegistry.getLiveModule
     local harnessPackRegistry = opts.packRegistry or {}
-    local harnessCoordination = opts.coordination or import("core/modpack/coordination.lua", nil, {
+    local harnessCoordination = opts.coordination or import("core/coordination/coordination.lua", nil, {
         logging = logging,
         coordinationRegistry = opts.coordinationRegistry or {},
     })
     local env = makeModpackImportEnv(mapConstructorOverrides(opts.constructors))
     local modpackCore = assert(loadfile("src/core/modpack/init.lua", "t", env))({
         rom = harnessRom,
+        createTheme = opts.constructors and opts.constructors.createTheme or createTheme,
+        uiSession = uiSession,
+        setupRunData = function()
+            return harnessRom.game.SetupRunData()
+        end,
         libConfig = harnessLibConfig,
         storage = LibStorage,
         coordination = harnessCoordination,
@@ -346,9 +378,6 @@ local createModuleRegistry = import("core/modpack/modules/registry.lua", nil, {
     rom = rom,
     logging = logging,
 })
-local createTheme = import("core/ui/theme.lua", nil, {
-    rom = rom,
-})
 local hashCodec = import("core/modpack/hash/codec.lua")
 local createConfigHash = import("core/modpack/hash/config_hash.lua", nil, {
     rom = rom,
@@ -359,6 +388,8 @@ local createHud = import("core/modpack/hud/runtime.lua")
 local createUI = import("core/modpack/ui/window.lua", nil, {
     rom = rom,
     logging = logging,
+    uiSession = uiSession,
+    setupRunData = setupRunData,
 })
 
 rawset(ModpackTestApi, "createOverlaySurface", function()
@@ -377,9 +408,6 @@ rawset(ModpackTestApi, "createOverlaySurface", function()
                 release = function() end,
             }
         end,
-        isUiSuppressed = function()
-            return false
-        end,
     }
 end)
 
@@ -396,7 +424,7 @@ local function createTestHud(packId, packIndex, configHash, theme, config, hideH
 end
 
 rawset(ModpackTestApi, "createModuleRegistry", function(packId, testConfig, opts)
-    local getLiveModule = opts and opts.getLiveModule or LibManagedModule.getLiveModule
+    local getLiveModule = opts and opts.getLiveModule or LibModuleRegistry.getLiveModule
     return createModuleRegistry(packId, testConfig, getLiveModule)
 end)
 rawset(ModpackTestApi, "createTheme", createTheme)
@@ -412,8 +440,11 @@ rawset(ModpackTestApi, "createUIRuntime", function(ctx)
         runtimeCtx[key] = value
     end
     runtimeCtx.lib = runtimeCtx.lib or lib
-    runtimeCtx.rom = runtimeCtx.rom or rom
+    runtimeCtx.session = runtimeCtx.session or ModpackTestApi.createUiSession()
     return import("core/modpack/ui/runtime.lua", nil, runtimeCtx)
+end)
+rawset(ModpackTestApi, "createUiSession", function()
+    return uiSession.create(setupRunData, ModpackTestApi.createOverlaySurface())
 end)
 local profileTools = import("core/modpack/profiles/audit.lua", nil, {
     hashCodec = hashCodec,
@@ -429,7 +460,7 @@ config = { ModEnabled = true, DebugMode = false }
 MockModuleRegistry = {}
 
 local function prepareDefinition(definition)
-    return LibManagedModule.prepareDefinition({}, definition)
+    return LibModuleDefinition.prepareDefinition({}, definition)
 end
 
 local function makePersistedConfig(storage, overrides)
@@ -481,7 +512,7 @@ function MockModuleRegistry.create(moduleDefs)
             tooltip = def.tooltip,
             hash = def.hash,
         })
-        local persistentState, stagedState = CreateModuleState(persisted, definition)
+        local _, _, moduleState = CreateModuleState(persisted, definition)
         local pluginGuid = def.pluginGuid or ("adamant-" .. def.id)
         local function adaptDraw(callback)
             if type(callback) ~= "function" then
@@ -504,13 +535,12 @@ function MockModuleRegistry.create(moduleDefs)
         }
         if def.patchPlan ~= nil then
             local mutations = assert(LibTestImports["core/mutations/00_init.lua"], "Lib mutation bundle missing")
-            mutations.lifecycle.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
+            mutations.declarePatch(mutationBundle, adaptPatch(def.patchPlan))
         end
-        local liveModule = LibManagedModule.create({
+        local liveModule = CreateLibManagedModule({
             pluginGuid = pluginGuid,
             definition = definition,
-            persistentState = persistentState,
-            stagedState = stagedState,
+            state = moduleState,
             mutationBundle = mutationBundle,
             drawTab = adaptDraw(def.DrawTab or function() end),
             drawQuickContent = adaptDraw(def.DrawQuickContent),
@@ -555,7 +585,7 @@ function MockModuleRegistry.create(moduleDefs)
         }
 
         for _, module in ipairs(moduleRegistry.modules) do
-            local liveModule = LibManagedModule.getLiveModule(module.pluginGuid)
+            local liveModule = LibModuleRegistry.getLiveModule(module.pluginGuid)
             snapshot.liveModules[module] = liveModule or false
         end
 
@@ -563,7 +593,7 @@ function MockModuleRegistry.create(moduleDefs)
     end
 
     function moduleRegistry.live.getLiveModule(entry)
-        return LibManagedModule.getLiveModule(entry.pluginGuid)
+        return LibModuleRegistry.getLiveModule(entry.pluginGuid)
     end
 
     function moduleRegistry.snapshot.getLiveModule(entry, snapshot)

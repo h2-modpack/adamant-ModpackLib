@@ -2,22 +2,9 @@ local deps = ...
 
 local retainedState = deps.state
 local renderer = deps.renderer
-local logging = deps.logging
 local overlayOrder = deps.order
 local rom = deps.rom
-
-local function getRuntimeContext(registry)
-    if registry.runtime ~= nil then
-        return registry.runtime
-    end
-    local store = registry.store
-    return {
-        data = store,
-        cache = store and store.cache or nil,
-        shared = store and store.shared or nil,
-        controls = store and store.controls or nil,
-    }
-end
+local declarations = deps.declarations
 
 local function resolveVisibleValue(registry, visible)
     if type(visible) ~= "function" then
@@ -26,7 +13,7 @@ local function resolveVisibleValue(registry, visible)
     if registry.explicitOwner == true then
         return visible()
     end
-    return visible(registry.host, getRuntimeContext(registry))
+    return visible(registry.host, registry.runtime)
 end
 
 local function copyArray(source)
@@ -43,21 +30,6 @@ local function copyMap(source)
         copy[key] = value
     end
     return copy
-end
-
-local function validateName(apiName, name)
-    if type(name) ~= "string" or name == "" then
-        logging.violate("overlays.invalid_registration", "retained overlays.%s: name must be a non-empty string", apiName)
-    end
-end
-
-local function validateSpec(apiName, spec)
-    if type(spec) ~= "table" then
-        logging.violate("overlays.invalid_registration", "retained overlays.%s: spec must be a table", apiName)
-    end
-    if spec.hudVisibility ~= nil and spec.hudVisibility ~= "follow" and spec.hudVisibility ~= "independent" then
-        logging.violate("overlays.invalid_registration", "retained overlays.%s: hudVisibility must be follow or independent", apiName)
-    end
 end
 
 local function retainedHandleId(registry, name)
@@ -90,54 +62,38 @@ local function ensureRegistryShape(registry, owner, explicitOwner)
     registry.explicitOwner = explicitOwner == true
 end
 
+local function newRegistry(owner, ownerId, explicitOwner)
+    return {
+        owner = owner,
+        ownerId = ownerId,
+        explicitOwner = explicitOwner,
+        refreshPass = 0,
+        refreshing = false,
+        elements = {},
+        events = {
+            commit = {},
+            intervals = {},
+            afterHooks = {},
+        },
+    }
+end
+
+-- String owners are explicit (system/modpack) registries; table owners are module owner tokens.
 local function getRegistry(owner, create)
-    if type(owner) == "string" then
-        local registry = retainedState.explicitRegistries[owner]
-        if not registry and create then
-            registry = {
-                owner = owner,
-                ownerId = owner,
-                explicitOwner = true,
-                refreshPass = 0,
-                refreshing = false,
-                elements = {},
-                events = {
-                    commit = {},
-                    intervals = {},
-                    afterHooks = {},
-                },
-            }
-            retainedState.explicitRegistries[owner] = registry
-        end
-        if registry then
-            ensureRegistryShape(registry, owner, true)
-        end
-        return registry
-    end
-
-    if type(owner) ~= "table" then
-        logging.violate("overlays.invalid_registration", "retained overlays: owner must be a persistent table or string")
-    end
-
-    local registry = retainedState.tableRegistries[owner]
+    local explicitOwner = type(owner) == "string"
+    local registries = explicitOwner and retainedState.explicitRegistries or retainedState.tableRegistries
+    local registry = registries[owner]
     if not registry and create then
-        retainedState.nextOwnerId = retainedState.nextOwnerId + 1
-        registry = {
-            owner = owner,
-            ownerId = "owner" .. tostring(retainedState.nextOwnerId),
-            refreshPass = 0,
-            refreshing = false,
-            elements = {},
-            events = {
-                commit = {},
-                intervals = {},
-                afterHooks = {},
-            },
-        }
-        retainedState.tableRegistries[owner] = registry
+        local ownerId = owner
+        if not explicitOwner then
+            retainedState.nextOwnerId = retainedState.nextOwnerId + 1
+            ownerId = "owner" .. tostring(retainedState.nextOwnerId)
+        end
+        registry = newRegistry(owner, ownerId, explicitOwner)
+        registries[owner] = registry
     end
     if registry then
-        ensureRegistryShape(registry, owner, false)
+        ensureRegistryShape(registry, owner, explicitOwner)
     end
     return registry
 end
@@ -234,7 +190,7 @@ local function readTableCell(slot, rowIndex, column)
 end
 
 local function createTableSlot(registry, name, spec, existingRows, existingRowIndexByKey)
-    local maxRows = math.max(0, math.floor(tonumber(spec.maxRows) or 0))
+    local maxRows = tonumber(spec.maxRows)
     local slot = {
         kind = "table",
         name = name,
@@ -302,7 +258,6 @@ local function snapshotRegistry(registry)
         hidden = registry.hidden,
         host = registry.host,
         runtime = registry.runtime,
-        store = registry.store,
         refreshPass = registry.refreshPass,
         refreshing = registry.refreshing,
         elements = elements,
@@ -314,6 +269,21 @@ local function snapshotRegistry(registry)
     }
 end
 
+-- Recreates element slots (and their renderer rows) from slot snapshots.
+local function rebuildSlots(registry, slotSnapshots)
+    registry.elements = {}
+    for name, slotSnapshot in pairs(slotSnapshots) do
+        local slot
+        if slotSnapshot.kind == "line" then
+            slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values, slotSnapshot.isStamp)
+        else
+            slot = createTableSlot(registry, name, slotSnapshot.spec, slotSnapshot.rows, slotSnapshot.rowIndexByKey)
+        end
+        slot.refreshPass = slotSnapshot.refreshPass
+        registry.elements[name] = slot
+    end
+end
+
 local function restoreRegistry(registry, snapshot)
     for _, slot in pairs(registry.elements) do
         unregisterElement(slot)
@@ -323,7 +293,6 @@ local function restoreRegistry(registry, snapshot)
     registry.hidden = snapshot.hidden == true
     registry.host = snapshot.host
     registry.runtime = snapshot.runtime
-    registry.store = snapshot.store
     registry.refreshPass = snapshot.refreshPass
     registry.refreshing = snapshot.refreshing
     registry.events = {
@@ -331,42 +300,23 @@ local function restoreRegistry(registry, snapshot)
         intervals = copyMap(snapshot.events.intervals),
         afterHooks = copyMap(snapshot.events.afterHooks),
     }
-    registry.elements = {}
-
-    for name, slotSnapshot in pairs(snapshot.elements) do
-        if slotSnapshot.kind == "line" then
-            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values, slotSnapshot.isStamp)
-            slot.refreshPass = slotSnapshot.refreshPass
-            registry.elements[name] = slot
-        elseif slotSnapshot.kind == "table" then
-            local slot = createTableSlot(
-                registry,
-                name,
-                slotSnapshot.spec,
-                slotSnapshot.rows,
-                slotSnapshot.rowIndexByKey
-            )
-            slot.refreshPass = slotSnapshot.refreshPass
-            registry.elements[name] = slot
-        end
-    end
+    rebuildSlots(registry, snapshot.elements)
 end
 
 local function ensureIntervalDriver()
     if retainedState.intervalDriverRegistered then
         return
     end
-    retainedState.intervalDriverRegistered = true
     if rom and rom.gui and type(rom.gui.add_always_draw_imgui) == "function" then
+        -- The ImGui callback outlives Lib re-imports, so it late-reads the current dispatcher.
         rom.gui.add_always_draw_imgui(function()
-            deps.dispatchIntervals(os.clock())
+            retainedState.dispatchIntervals(os.clock())
         end)
+        retainedState.intervalDriverRegistered = true
     end
 end
 
 local function declareLine(registry, name, spec, isStamp)
-    validateName("createLine", name)
-    validateSpec("createLine", spec)
     registry.seenElements[name] = true
 
     local previous = registry.elements[name]
@@ -379,21 +329,6 @@ local function declareLine(registry, name, spec, isStamp)
 end
 
 local function declareTable(registry, name, spec)
-    validateName("createTable", name)
-    validateSpec("createTable", spec)
-    if type(spec.columns) ~= "table" or #spec.columns == 0 then
-        logging.violate(
-            "overlays.invalid_registration",
-            "retained overlays.createTable: columns must be a non-empty array"
-        )
-    end
-    local maxRows = tonumber(spec.maxRows)
-    if not maxRows or maxRows < 1 or math.floor(maxRows) ~= maxRows then
-        logging.violate(
-            "overlays.invalid_registration",
-            "retained overlays.createTable: maxRows must be a positive integer"
-        )
-    end
     registry.seenElements[name] = true
 
     local previous = registry.elements[name]
@@ -413,21 +348,10 @@ local function declareTable(registry, name, spec)
 end
 
 local function registerCommitProjection(registry, callback)
-    if type(callback) ~= "function" then
-        logging.violate("overlays.invalid_registration", "retained overlays.onCommit: callback must be a function")
-    end
     registry.pendingEvents.commit[#registry.pendingEvents.commit + 1] = callback
 end
 
 local function registerIntervalProjection(registry, name, seconds, callback, opts)
-    validateName("onInterval", name)
-    if type(callback) ~= "function" then
-        logging.violate("overlays.invalid_registration", "retained overlays.onInterval: callback must be a function")
-    end
-    seconds = tonumber(seconds)
-    if not seconds or seconds <= 0 then
-        logging.violate("overlays.invalid_registration", "retained overlays.onInterval: seconds must be positive")
-    end
     registry.pendingEvents.intervals[name] = {
         name = name,
         seconds = seconds,
@@ -439,26 +363,27 @@ local function registerIntervalProjection(registry, name, seconds, callback, opt
 end
 
 local function registerAfterHookProjection(registry, path, callback)
-    validateName("afterHook", path)
-    if type(callback) ~= "function" then
-        logging.violate("overlays.invalid_registration", "retained overlays.afterHook: callback must be a function")
-    end
     registry.pendingEvents.afterHooks[path] = {
         path = path,
         callback = callback,
     }
 end
 
+-- System defines hand this surface to author code, so it validates; the module surface only
+-- replays declarations validated when they were declared.
 local function createDeclarationSurface(registry, opts)
     if opts and opts.system == true then
         return {
             createStamp = function(name, spec)
+                declarations.validateLine("system.overlays.createStamp", name, spec)
                 return declareLine(registry, name, spec, true)
             end,
             createLine = function(name, spec)
+                declarations.validateLine("system.overlays.createLine", name, spec)
                 return declareLine(registry, name, spec)
             end,
             onCommit = function(callback)
+                declarations.validateCallback("system.overlays.onCommit", callback)
                 return registerCommitProjection(registry, callback)
             end,
         }
@@ -503,18 +428,11 @@ local function beginTransaction(owner)
 end
 
 local function refresh(owner, ownerId, host, runtime, register, opts)
-    if type(register) ~= "function" then
-        logging.violate("overlays.invalid_registration", "overlay refresh: register must be a function")
-    end
-
     local registry = getRegistry(owner, true)
-    if type(ownerId) == "string" and ownerId ~= "" then
-        registry.ownerId = ownerId
-    end
+    registry.ownerId = ownerId
     registry.hidden = opts and opts.hidden == true
     registry.host = host
     registry.runtime = runtime
-    registry.store = runtime and runtime.data or nil
     registry.refreshPass = registry.refreshPass + 1
     registry.refreshing = true
     registry.seenElements = {}
@@ -548,41 +466,22 @@ local function refresh(owner, ownerId, host, runtime, register, opts)
 end
 
 local function getAfterHookPaths(owner)
-    local registry = getRegistry(owner, false)
     local paths = {}
-    local afterHooks = registry and registry.events and registry.events.afterHooks or nil
-    for path in pairs(afterHooks or {}) do
+    for path in pairs(getRegistry(owner, false).events.afterHooks) do
         paths[#paths + 1] = path
     end
     table.sort(paths)
     return paths
 end
 
+-- Re-registers the registry's rows so their renderer ids follow its (possibly changed) ownerId.
 local function recreateElementSlots(registry)
     local snapshots = {}
     for name, slot in pairs(registry.elements) do
         snapshots[name] = snapshotSlot(slot)
         unregisterElement(slot)
     end
-
-    registry.elements = {}
-    for name, slotSnapshot in pairs(snapshots) do
-        if slotSnapshot.kind == "line" then
-            local slot = createLineSlot(registry, name, slotSnapshot.spec, slotSnapshot.values, slotSnapshot.isStamp)
-            slot.refreshPass = slotSnapshot.refreshPass
-            registry.elements[name] = slot
-        elseif slotSnapshot.kind == "table" then
-            local slot = createTableSlot(
-                registry,
-                name,
-                slotSnapshot.spec,
-                slotSnapshot.rows,
-                slotSnapshot.rowIndexByKey
-            )
-            slot.refreshPass = slotSnapshot.refreshPass
-            registry.elements[name] = slot
-        end
-    end
+    rebuildSlots(registry, snapshots)
 end
 
 local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, runtime)
@@ -601,21 +500,17 @@ local function promoteTableRegistry(sourceOwner, targetOwner, ownerId, host, run
     retainedState.tableRegistries[sourceOwner] = nil
     retainedState.tableRegistries[targetOwner] = registry
     ensureRegistryShape(registry, targetOwner, false)
-    if type(ownerId) == "string" and ownerId ~= "" then
-        registry.ownerId = ownerId
-    end
+    registry.ownerId = ownerId
     registry.hidden = false
     registry.host = host
     registry.runtime = runtime
-    registry.store = runtime and runtime.data or nil
     recreateElementSlots(registry)
 end
 
+-- Clears every table-owned registry promoted under `ownerId` except `exceptOwner`.
+-- Returns the cleared registries' snapshots (also on failure, for what was cleared), so a
+-- caller that later rolls back can hand them to `restoreTableRegistries`.
 local function clearTableRegistriesByOwnerId(ownerId, exceptOwner)
-    if type(ownerId) ~= "string" or ownerId == "" then
-        return true, nil
-    end
-
     local owners = {}
     for owner, registry in pairs(retainedState.tableRegistries) do
         if owner ~= exceptOwner and registry.ownerId == ownerId then
@@ -623,30 +518,43 @@ local function clearTableRegistriesByOwnerId(ownerId, exceptOwner)
         end
     end
 
+    local cleared = {}
     local errors = {}
     for _, owner in ipairs(owners) do
-        local transaction = beginTransaction(owner)
+        local registry = getRegistry(owner, false)
+        local snapshot = snapshotRegistry(registry)
         local ok, err = pcall(refresh, owner, ownerId, nil, nil, function() end)
         if ok then
-            transaction.commit()
+            cleared[#cleared + 1] = {
+                registry = registry,
+                snapshot = snapshot,
+            }
         else
-            transaction.rollback()
+            restoreRegistry(registry, snapshot)
             errors[#errors + 1] = tostring(err)
         end
     end
 
     if #errors > 0 then
-        return false, table.concat(errors, "; ")
+        return false, table.concat(errors, "; "), cleared
     end
-    return true, nil
+    return true, nil, cleared
+end
+
+-- Reinstates registries cleared by `clearTableRegistriesByOwnerId`, newest clear first.
+local function restoreTableRegistries(cleared)
+    for index = #cleared, 1, -1 do
+        restoreRegistry(cleared[index].registry, cleared[index].snapshot)
+    end
 end
 
 local dispatch = import('core/overlays/retained_dispatch.lua', nil, {
     state = retainedState,
     renderer = renderer,
     getRegistry = getRegistry,
-    logging = logging,
 })
+-- Refreshed every import so the persistent interval driver dispatches through current code.
+retainedState.dispatchIntervals = dispatch.dispatchIntervals
 
 return {
     beginTransaction = beginTransaction,
@@ -654,7 +562,7 @@ return {
     getAfterHookPaths = getAfterHookPaths,
     promoteTableRegistry = promoteTableRegistry,
     clearTableRegistriesByOwnerId = clearTableRegistriesByOwnerId,
+    restoreTableRegistries = restoreTableRegistries,
     dispatchCommit = dispatch.dispatchCommit,
-    dispatchIntervals = dispatch.dispatchIntervals,
     dispatchAfterHook = dispatch.dispatchAfterHook,
 }

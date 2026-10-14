@@ -37,11 +37,13 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
     local previousSetupRunData = rom.game.SetupRunData
     local setupRunDataCalls = 0
 
+    local storage = {}
+    LibStorage.validate(storage, "Alpha")
     local entry = {
         id = "Alpha",
         name = "Alpha",
         pluginGuid = "Alpha",
-        storage = {},
+        storage = storage,
         affectsRunData = true,
         definition = {
             id = "Alpha",
@@ -125,28 +127,27 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         setupRunDataCalls = setupRunDataCalls + 1
     end
 
-    local definition = LibManagedModule.prepareDefinition({}, {
+    local definition = LibModuleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
         storage = {},
     })
-    local persistentState, stagedState = CreateModuleState({
+    local _, _, moduleState = CreateModuleState({
         Enabled = true,
         DebugMode = false,
     }, definition)
     local mutationBundle = {
         patchMutation = nil,
     }
-    LibTestImports["core/mutations/00_init.lua"].lifecycle.declarePatch(mutationBundle, function(_, _, plan)
+    LibTestImports["core/mutations/00_init.lua"].declarePatch(mutationBundle, function(_, _, plan)
         buildCalls = buildCalls + 1
         plan:set(target, "Value", "patched")
     end)
-    local liveModule = LibManagedModule.create({
+    local liveModule = CreateLibManagedModule({
         pluginGuid = "test-pack.Alpha",
         definition = definition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         mutationBundle = mutationBundle,
         drawTab = function() end,
     })

@@ -235,11 +235,12 @@ module.activate()
     -> internalStorage
     -> controlCatalog
   prepareDefinitionWithInternalDeclarations(..., internalStorage)
-  moduleState.create(config, definition)
+  moduleState.create(definition, opts)
   managedModule.create(...)
-    runtime.controls = controls.refs.createRuntime(...)
-    ui.controls = controls.refs.createUi(...)
-    ui.draw.control = controls.draw.render
+    moduleContexts.create(...)
+      runtime.controls = controlRefs.createRuntime(state.persistent, controlCatalog)
+      ui.controls = controlRefs.createUi(state.staged, controlCatalog)
+      ui.draw = shared widgets draw (draw.control -> controls.draw.render)
 ```
 
 The important boundary:

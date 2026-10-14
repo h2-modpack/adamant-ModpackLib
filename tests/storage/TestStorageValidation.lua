@@ -4,7 +4,7 @@ local createLibHarness = require('tests/harness/create_lib_harness')
 TestStorageValidation = {}
 
 local function prepareDefinition(harness, definition)
-    return harness.managedModule.prepareDefinition({}, definition)
+    return harness.moduleDefinition.prepareDefinition({}, definition)
 end
 
 local function createModuleState(harness, config, definition)
@@ -150,10 +150,11 @@ function TestStorageValidation:testPublicStorageCannotReachLibInternalAliases()
         { type = "bool", alias = "_PrivateFlag", default = true, hash = false },
         { type = "int", alias = "_PrivateRuntime", mode = "runtime", default = 0, min = 0, max = 10 },
     })
-    local persistentState, stagedState = createModuleState(self.harness, {}, definition)
-    local store = self.harness.moduleState.createStore(persistentState)
-    local status = self.harness.moduleState.createRuntimeStatus(persistentState)
-    local uiState = self.harness.moduleState.uiState.create(stagedState)
+    local _, _, moduleState = createModuleState(self.harness, {}, definition)
+    local lanes = self.harness.moduleState.createLanes(moduleState)
+    local store = lanes.runtimeData
+    local status = lanes.runtimeStatus
+    local uiState = lanes.uiData
 
     lu.assertErrorMsgContains("storage.private_alias", function()
         store.get("_PrivateFlag")

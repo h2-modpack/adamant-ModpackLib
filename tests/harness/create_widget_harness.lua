@@ -103,7 +103,7 @@ end
 
 local function createPackedDefinition(base, fields)
     fields = fields or {}
-    return base.managedModule.prepareDefinition({}, {
+    return base.moduleDefinition.prepareDefinition({}, {
         modpack = fields.modpack or "test-pack",
         id = fields.id or "PackedWidgetTest",
         name = fields.name or "Packed Widget Test",
@@ -127,13 +127,13 @@ local function createWidgetHarness(opts)
         harness = base,
         public = base.public,
         rom = base.rom,
-        widgets = base.widgets,
         nav = base.nav,
-        uiDraw = base.uiDraw,
+        draw = base.draw,
         storage = base.storage,
         managedModule = base.managedModule,
         moduleState = base.moduleState,
         uiActions = base.uiActions,
+        actionBuffer = base.actionBuffer,
 
         createValueStagedState = createValueStagedState,
         createReadOnlyStagedState = createReadOnlyStagedState,
@@ -146,7 +146,7 @@ local function createWidgetHarness(opts)
     end
 
     function h.createField(owner, alias)
-        return base.storage.field.create(owner, alias, "TestWidgets")
+        return base.storage.field.create(owner, alias, owner.getAliasSchema(alias), "TestWidgets")
     end
 
     function h.prepareDefinition(fields)

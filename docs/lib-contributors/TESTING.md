@@ -16,6 +16,26 @@ lua5.2 tests/all.lua
 Use targeted subsystem tests while iterating, then run the full suite before
 finishing a Lib change.
 
+## Lib Harnesses
+
+`tests/harness/create_lib_harness.lua` boots `src/main.lua` in a fake engine and
+exposes the owning services directly from the import table, such as
+`moduleActivation`, `moduleDefinition`, `managedModule`, `moduleRegistry`,
+`moduleState`, `receipt`, `hooksBundle`, `sharedBundle`, and `overlays`. Call
+the owner instead of looking for forwarding re-exports; tests that need a file
+nothing else returns import it with `harness.import(...)`.
+
+- `importOverrides = { ["core/<path>.lua"] = replacement }` replaces one import
+  for the whole boot. The `gameDeps` option is shorthand for overriding
+  `core/game_deps/game_deps.lua`; there is no production test seam for it.
+- `harness:createManagedInstance(opts)` calls `managedModule.create(...)` and
+  fills the declaration inputs the finalizer always passes (mutation bundle,
+  hook and shared-data declarations, control catalog) with empty ones. Modpack
+  tests use the `CreateLibManagedModule(opts)` global from `TestUtils.lua`.
+- Subsystem harnesses (`create_managed_module_harness`, `create_overlay_harness`,
+  `create_fallback_ui_harness`, `create_widget_harness`) wrap the Lib harness
+  and keep it on `h.harness`.
+
 ## Shell Repo Suite
 
 From the shell repo root, run:

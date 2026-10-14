@@ -2,14 +2,9 @@ local deps = ...
 
 local logging = deps.logging
 local storage = deps.storage
+local requireMethodSelf = deps.requireMethodSelf
 
 local storageRefAdapter = {}
-
-local function requireMethodSelf(context, self, expected)
-    if self ~= expected then
-        logging.violate("api.invalid_method_call", "%s must be called with ':' method syntax", context)
-    end
-end
 
 local function rejectPrivateAlias(context, alias)
     if storage.isPrivateAlias(alias) then
@@ -193,38 +188,83 @@ local function wrapTable(rawTable, contextSource, isWritable)
     return handle
 end
 
-function storageRefAdapter.create(opts)
-    local root = opts.root
+---Build one author-facing storage lane over a state-owned root.
+---The root owns alias/mode validation; the lane owns private-alias rejection,
+---method-syntax wrapping, and read-only projection. `fields` are attached to the
+---lane at construction (for example `cache`/`shared`/`controls` on `runtime.data`).
+---@param opts { get: fun(alias: string, context: string): table?, source: string, writable?: boolean,
+---    resetRoot?: fun(alias: string): boolean, fields?: table<string, any> }
+---@return table lane
+function storageRefAdapter.createLane(opts)
+    local rootGet = opts.get
     local source = opts.source
+    local getContext = source .. ".get"
     local isWritable = opts.writable == true
+    local resetRoot = opts.resetRoot
     local refs = {}
+    local lane = {}
+    for key, value in pairs(opts.fields or {}) do
+        lane[key] = value
+    end
 
-    return {
-        get = function(alias)
-            rejectPrivateAlias(source, alias)
+    function lane.get(alias)
+        rejectPrivateAlias(getContext, alias)
 
-            local cached = refs[alias]
-            if cached ~= nil then
-                return cached
-            end
+        local cached = refs[alias]
+        if cached ~= nil then
+            return cached
+        end
 
-            local raw = root.get(alias)
-            if raw == nil then
+        local raw = rootGet(alias, getContext)
+        if raw == nil then
+            return nil
+        end
+
+        local ref
+        if storage.field.is(raw) then
+            ref = wrapField(raw, getContext, isWritable)
+        else
+            ref = wrapTable(raw, getContext .. "(...)", isWritable)
+        end
+        refs[alias] = ref
+        return ref
+    end
+
+    function lane.read(alias, ...)
+        local ref = lane.get(alias)
+        if ref == nil then
+            return nil
+        end
+        return ref:read(...)
+    end
+
+    if isWritable then
+        function lane.write(alias, ...)
+            local ref = lane.get(alias)
+            if ref == nil then
                 return nil
             end
+            return ref:write(...)
+        end
+    end
 
-            local ref
-            if storage.field.is(raw) then
-                ref = wrapField(raw, source, isWritable)
-            else
-                ref = wrapTable(raw, source .. "(...)", isWritable)
+    if resetRoot ~= nil then
+        local resetContext = source .. ".reset"
+        function lane.reset(alias, ...)
+            if select("#", ...) == 0 then
+                -- `resetRoot` resolves and validates the alias itself.
+                rejectPrivateAlias(resetContext, alias)
+                return resetRoot(alias)
             end
-            refs[alias] = ref
-            return ref
-        end,
-    }
-end
+            local ref = lane.get(alias)
+            if ref == nil then
+                return nil
+            end
+            return ref:reset(...)
+        end
+    end
 
-storageRefAdapter.rejectPrivateAlias = rejectPrivateAlias
+    return lane
+end
 
 return storageRefAdapter

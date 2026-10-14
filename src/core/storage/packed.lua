@@ -1,8 +1,9 @@
 local deps = ...
 
 local logging = deps.logging
-local storage = deps.storage
 local StorageTypes = deps.types
+local IsInteger = deps.IsInteger
+local nodeOps = deps.nodeOps
 local EMPTY_LIST = {}
 
 local PackedBitFields = {
@@ -17,13 +18,9 @@ local PackedBitFields = {
     width = true,
 }
 
-local function IsInternalField(key)
-    return type(key) == "string" and string.sub(key, 1, 1) == "_"
-end
-
 local function ValidateKnownPackedBitFields(node, prefix)
     for key in pairs(node) do
-        if not IsInternalField(key) and not PackedBitFields[key] then
+        if not nodeOps.isInternalField(key) and not PackedBitFields[key] then
             logging.violate("storage.unknown_field", "%s: unknown packed bit field '%s'", prefix, tostring(key))
         end
     end
@@ -61,7 +58,7 @@ local function validatePackedBits(node, prefix)
     local seenAliases = {}
     local occupiedBits = {}
     local rootWidth = math.floor(tonumber(node.width) or 0)
-    for index, bitNode in ipairs(node.bits or {}) do
+    for index, bitNode in ipairs(node.bits) do
         local bitPrefix = prefix .. " bits[" .. index .. "]"
         ValidateKnownPackedBitFields(bitNode, bitPrefix)
         if type(bitNode.alias) ~= "string" or bitNode.alias == "" then
@@ -74,14 +71,14 @@ local function validatePackedBits(node, prefix)
         if type(bitNode.offset) ~= "number" or bitNode.offset < 0 then
             logging.violate("storage.invalid_packed_bit", "%s: packed bit offset must be a non-negative number", bitPrefix)
         end
-        if type(bitNode.width) ~= "number" or bitNode.width < 1 or not storage.IsInteger(bitNode.width) then
+        if type(bitNode.width) ~= "number" or bitNode.width < 1 or not IsInteger(bitNode.width) then
             logging.violate("storage.invalid_packed_bit", "%s: packed bit width must be a positive integer", bitPrefix)
         end
 
         if type(bitNode.offset) == "number" and type(bitNode.width) == "number" then
             local offset = math.floor(bitNode.offset)
             local width = math.floor(bitNode.width)
-            if not storage.IsInteger(bitNode.offset) then
+            if not IsInteger(bitNode.offset) then
                 logging.violate("storage.invalid_packed_bit", "%s: packed bit offset must be an integer", bitPrefix)
             end
             if offset + width > rootWidth then
@@ -136,7 +133,16 @@ local function DecodePackedChild(node, packedValue)
     if node.type == "bool" then
         rawValue = rawValue ~= 0
     end
-    return storage.NormalizeStorageValue(node, rawValue)
+    return nodeOps.normalize(node, rawValue)
+end
+
+---Bit pattern for a normalized packed child value.
+---@param node AdamantModpackLib.PackedBitNode
+local function encodeChild(node, value)
+    if node.type == "bool" then
+        return value and 1 or 0
+    end
+    return value
 end
 
 local function getPackedAliases(node)
@@ -149,7 +155,7 @@ local function getPackedAliases(node)
     end
 
     local packedAliases = {}
-    for _, child in ipairs(node._bitAliases or {}) do
+    for _, child in ipairs(node._bitAliases) do
         packedAliases[#packedAliases + 1] = {
             alias = child.alias,
             label = child.label or child.alias,
@@ -166,5 +172,6 @@ return {
     writePackedBits = writePackedBits,
     validatePackedBits = validatePackedBits,
     DecodePackedChild = DecodePackedChild,
+    encodeChild = encodeChild,
     getPackedAliases = getPackedAliases,
 }

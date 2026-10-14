@@ -4,20 +4,17 @@ local coordination = deps.coordination
 local overlays = deps.overlays
 local createSystem = deps.createSystem
 local runtimes = deps.runtimes
-local state = deps.state
 
 local FALLBACK_OWNER = "adamant-lib.fallback-hud"
 local MARKER_TEXT = "Modded"
 
 local fallbackHud = {}
+-- Import-local on purpose: a Lib re-import redefines the marker once, and the system
+-- overlay define replaces the previous import's marker for the fallback owner.
+local markerDefined = false
 
 local function isRuntimeUncoordinated(activeRuntime)
-    local module = activeRuntime and activeRuntime.module
-    if type(module) ~= "table" or type(module.getPackId) ~= "function" then
-        return false
-    end
-
-    local packId = module.getPackId()
+    local packId = activeRuntime.module.getPackId()
     return not (packId and coordination.isRegistered(packId))
 end
 
@@ -35,10 +32,10 @@ function fallbackHud.refreshMarker()
 end
 
 function fallbackHud.createMarker()
-    if state.initialized then
+    if markerDefined then
         return
     end
-    state.initialized = true
+    markerDefined = true
     local system = createSystem(FALLBACK_OWNER)
     system.overlays.define(function(overlay)
         overlay.createStamp("marker", {

@@ -9,6 +9,7 @@ local getLiveModule = deps.getLiveModule
 local profileTools = deps.profileTools
 local constructors = deps.constructors
 local packRegistry = deps.packRegistry
+local uiSession = deps.uiSession
 
 local function disposePack(pack)
     local packUi = pack and pack.ui
@@ -159,7 +160,7 @@ local function createGuiCallbacks(packId)
     assert(type(packId) == "string" and packId ~= "",
         "modpack.createGuiCallbacks: packId must be a non-empty string")
 
-    local wasGuiOpen = rom.gui.is_open() == true
+    local guiState = { wasGuiOpen = rom.gui.is_open() == true }
 
     local function render()
         local pack = packRegistry.packs[packId]
@@ -169,17 +170,15 @@ local function createGuiCallbacks(packId)
         pack.ui.renderWindow()
     end
 
-    local function alwaysDraw()
-        local isGuiOpen = rom.gui.is_open() == true
-
-        if wasGuiOpen and not isGuiOpen then
-            local pack = packRegistry.packs[packId]
-            if pack and pack.ui then
-                pack.ui.handleGuiClosed()
-            end
+    local function handleGuiClosed()
+        local pack = packRegistry.packs[packId]
+        if pack and pack.ui then
+            pack.ui.handleGuiClosed()
         end
+    end
 
-        wasGuiOpen = isGuiOpen
+    local function alwaysDraw()
+        uiSession.trackGuiClose(guiState, rom.gui.is_open() == true, handleGuiClosed)
     end
 
     local function menuBar()

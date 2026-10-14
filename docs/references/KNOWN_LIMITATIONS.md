@@ -44,6 +44,7 @@ What this means in practice:
 - active mutation runtime is durable across module reload, not arbitrary Lib implementation reload
 - a Lib file reload does not update an existing pack object until a coordinator rebuild calls `lib.modpack.createPack(...)` again
 - retained HUD layout changes may require HUD recreation or a game HUD refresh
+- hot reloading from a Lib build whose persistent anchor shapes differ (such as the pre-layering-refactor Lib) is unsupported; restart the game
 
 Why this exists:
 

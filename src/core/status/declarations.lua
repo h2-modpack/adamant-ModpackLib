@@ -2,21 +2,15 @@ local deps = ...
 
 local logging = deps.logging
 local values = deps.values
+local identifiers = deps.identifiers
 
 local declarations = {}
-
-local StableIdentifierPattern = "^[A-Za-z][A-Za-z0-9_]*$"
-local StableIdentifierDescription = "must start with a letter and contain only letters, digits, and underscores"
 
 local RootForbiddenFields = {
     alias = true,
     hash = true,
     mode = true,
 }
-
-local function isStableIdentifier(value)
-    return type(value) == "string" and string.match(value, StableIdentifierPattern) ~= nil
-end
 
 local function sortedKeys(map)
     local keys = {}
@@ -30,9 +24,9 @@ local function sortedKeys(map)
 end
 
 local function validateStatusDeclaration(alias, declaration)
-    if not isStableIdentifier(alias) then
+    if not identifiers.isStable(alias) then
         logging.violate("status.invalid_alias", "module.status.define: status alias '%s' %s",
-            tostring(alias), StableIdentifierDescription)
+            tostring(alias), identifiers.STABLE_DESCRIPTION)
     end
     if type(declaration) ~= "table" then
         logging.violate("status.invalid_declaration", "module.status.define: status '%s' must be a table",

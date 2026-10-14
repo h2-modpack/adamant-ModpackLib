@@ -1,8 +1,9 @@
 local deps = ...
 
 local logging = deps.logging
-local storage = deps.storage
-local values = deps.values
+
+-- Scalar and packedInt storage types. The `table` type lives in table.lua and is
+-- added to this map by storage/00_init.lua.
 local StorageTypes = {}
 
 local function IsInteger(value)
@@ -38,7 +39,6 @@ local function NormalizeString(node, value)
 end
 
 StorageTypes.bool = {
-    valueKind = "bool",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "boolean" then
             logging.violate("storage.invalid_default", "%s: bool default must be boolean, got %s", prefix, type(node.default))
@@ -59,7 +59,6 @@ StorageTypes.bool = {
 }
 
 StorageTypes.int = {
-    valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
             logging.violate("storage.invalid_default", "%s: int default must be number, got %s", prefix, type(node.default))
@@ -95,7 +94,6 @@ StorageTypes.int = {
 }
 
 StorageTypes.string = {
-    valueKind = "string",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "string" then
             logging.violate("storage.invalid_default", "%s: string default must be string, got %s", prefix, type(node.default))
@@ -129,7 +127,6 @@ StorageTypes.string = {
 }
 
 StorageTypes.packedInt = {
-    valueKind = "int",
     validate = function(node, prefix)
         if node.default ~= nil and type(node.default) ~= "number" then
             logging.violate("storage.invalid_default", "%s: packedInt default must be number, got %s", prefix, type(node.default))
@@ -156,48 +153,6 @@ StorageTypes.packedInt = {
     end,
     isHashTokenValid = function(_, str)
         return type(str) == "string" and string.match(str, "^-?%d+$") ~= nil
-    end,
-}
-
-StorageTypes.table = {
-    valueKind = "table",
-    validate = function(node, prefix)
-        if node.default ~= nil and node._tableDefaultPrepared ~= true then
-            logging.violate("storage.invalid_default", "%s: table roots do not support default; use defaultRows", prefix)
-        end
-        if node.minRows ~= nil and (type(node.minRows) ~= "number" or node.minRows < 0) then
-            logging.violate("storage.invalid_axis_type", "%s: table minRows must be a non-negative number", prefix)
-        end
-        if node.maxRows ~= nil and (type(node.maxRows) ~= "number" or node.maxRows < 0) then
-            logging.violate("storage.invalid_axis_type", "%s: table maxRows must be a non-negative number", prefix)
-        end
-        if node.defaultRows ~= nil and (type(node.defaultRows) ~= "number" or node.defaultRows < 0) then
-            logging.violate("storage.invalid_axis_type", "%s: table defaultRows must be a non-negative number", prefix)
-        end
-        if type(node.minRows) == "number" and type(node.maxRows) == "number" and node.minRows > node.maxRows then
-            logging.violate("storage.invalid_axis_type", "%s: table minRows cannot exceed maxRows", prefix)
-        end
-        if type(node.row) ~= "table" or #node.row == 0 then
-            logging.violate("storage.invalid_table_row", "%s: table row must be a non-empty storage schema", prefix)
-        end
-    end,
-    normalize = function(node, value)
-        return storage.table.NormalizeTableValue(node, value)
-    end,
-    equals = function(node, a, b)
-        return values.deepEqual(
-            storage.table.NormalizeTableValue(node, a),
-            storage.table.NormalizeTableValue(node, b)
-        )
-    end,
-    toHash = function(node, value)
-        return storage.table.SerializeTableValue(node, value)
-    end,
-    fromHash = function(node, str)
-        return storage.table.DeserializeTableValue(node, str)
-    end,
-    isHashTokenValid = function(node, str)
-        return storage.table.IsSerializedTableValue(node, str)
     end,
 }
 

@@ -9,16 +9,16 @@ end
 
 local function activateAndEnableModule(harness, module, pluginGuid)
     lu.assertTrue(module.activate())
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
     lu.assertNotNil(liveModule)
     lu.assertTrue(liveModule.setEnabled(true))
     return liveModule
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
-    local record = harness.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
+    local record = harness.moduleRegistry.getRecord(liveModule)
+    return record and record.runtime.data or nil
 end
 
 local function createCacheModule(harness, pluginGuid, opts)
@@ -129,7 +129,7 @@ function TestCache:testDeclaredCurrentRunCacheIsStoreOnly()
     lu.assertTrue(store.cache.currentRun.clear("RunScratch"))
     lu.assertEquals(store.cache.currentRun.get("RunScratch").Count, 0)
 
-    self.harness.managedModule.getLiveModule("test-cache-declared-current-run").drawTab()
+    self.harness.moduleRegistry.getLiveModule("test-cache-declared-current-run").drawTab()
     lu.assertFalse(drawHasCurrentRunCache)
 end
 

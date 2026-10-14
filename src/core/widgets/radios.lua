@@ -1,13 +1,6 @@
 local helpers = ...
 local widgets = {}
 
-local function DrawRadioLabel(imgui, labelText)
-    if labelText ~= "" then
-        imgui.AlignTextToFramePadding()
-        imgui.Text(labelText)
-    end
-end
-
 local function ResolveRadioLayout(imgui, optionCount, optionsPerLine, optionGap)
     local normalizedPerLine = math.floor(tonumber(optionsPerLine) or 0)
     if normalizedPerLine < 1 then
@@ -27,7 +20,7 @@ end
 function widgets.radio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local current = field:read()
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local valueColors = helpers.ValueColors(opts)
     local values = opts.values or helpers.EMPTY_LIST
     local radioId = field:controlId()
     local optionCount = 0
@@ -40,7 +33,7 @@ function widgets.radio(imgui, field, opts)
     local visibleIndex = 0
     local changed = false
 
-    DrawRadioLabel(imgui, tostring(opts.label or ""))
+    helpers.DrawRowLabel(imgui, tostring(opts.label or ""))
     for index, value in ipairs(values) do
         if helpers.IsChoiceVisible(opts, value) then
             visibleIndex = visibleIndex + 1
@@ -68,7 +61,7 @@ end
 function widgets.packedRadio(imgui, field, opts)
     opts = opts or helpers.EMPTY_OPTS
     local children = helpers.ResolvePackedChildren(field)
-    local valueColors = type(opts.valueColors) == "table" and opts.valueColors or nil
+    local valueColors = helpers.ValueColors(opts)
     local selection = helpers.ClassifyPackedChoice(opts, field, children)
     local radioId = field:controlId()
     local optionCount = #children + 1
@@ -76,7 +69,7 @@ function widgets.packedRadio(imgui, field, opts)
     local changed = false
     local selectedChild = selection.selectedChild
 
-    DrawRadioLabel(imgui, tostring(opts.label or ""))
+    helpers.DrawRowLabel(imgui, tostring(opts.label or ""))
     AdvanceRadioOption(imgui, 1, optionsPerLine, optionGap)
     if imgui.RadioButton(
         tostring(opts.noneLabel or "None") .. "##" .. tostring(radioId) .. "_1",

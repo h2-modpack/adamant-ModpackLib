@@ -7,7 +7,9 @@ hookRegistry.dispatchers = hookRegistry.dispatchers or {
     override = {},
     contextWrap = {},
 }
-hookRegistry.modutilOwnerKey = hookRegistry.modutilOwnerKey or "__adamantHooks"
+-- Active system hook receipts by owner id; anchored so a Lib re-import can retire
+-- the previous import's system install instead of leaving its handlers attached.
+hookRegistry.systemReceipts = hookRegistry.systemReceipts or {}
 
 local dispatchers = import('core/hooks/dispatchers.lua', nil, {
     modutil = deps.modutil,
@@ -20,25 +22,19 @@ local declarations = import('core/hooks/declarations.lua', nil, {
 })
 
 local ownerInstall = import('core/hooks/owner_install.lua', nil, {
-    logging = deps.logging,
     dispatchers = dispatchers,
-})
-
-local moduleAdapter = import('core/hooks/adapters/module_install.lua', nil, {
-    logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
-    declarations = declarations,
-    ownerInstall = ownerInstall,
+    receipt = deps.receipt,
 })
 
 local system = import('core/hooks/adapters/system_declarations.lua', nil, {
     logging = deps.logging,
     declarations = declarations,
     ownerInstall = ownerInstall,
+    activeReceipts = hookRegistry.systemReceipts,
 })
 
 local service = {
-    installForModule = moduleAdapter.installForModule,
+    install = ownerInstall.install,
 }
 
 return {

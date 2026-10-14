@@ -109,52 +109,14 @@ local function createPathMock(target)
     return counts, testModUtil
 end
 
-local function createStagedState()
-    local stagedState
-    stagedState = {
-        view = {},
-        get = function(alias)
-            return {
-                read = function()
-                    return stagedState.read(alias)
-                end,
-            }
-        end,
-        read = function() end,
-        write = function() end,
-        reset = function() end,
-        getAliasSchema = function() end,
-        isDirty = function()
-            return false
-        end,
-        _flushToConfig = function() end,
-        _reloadFromConfig = function() end,
-        auditMismatches = function()
-            return {}
-        end,
-    }
-    return stagedState
-end
-
-local function createStore(enabled)
-    local store
-    store = {
-        get = function(alias)
-            return {
-                read = function()
-                    return store.read(alias)
-                end,
-            }
-        end,
-        read = function(key)
-            if key == "Enabled" then
-                return enabled == true
-            end
-            return false
-        end,
-        getAliasSchema = function() end,
-    }
-    return store
+local function createHookModuleState(harness, enabled)
+    local definition = harness.moduleDefinition.prepareDefinition({}, {
+        id = "HookTestState",
+        name = "Hook Test State",
+        storage = {},
+    })
+    local store, _, moduleState = harness:createModuleState({ Enabled = enabled == true }, definition)
+    return moduleState, store
 end
 
 function TestHooks:setUp()
@@ -168,22 +130,24 @@ function TestHooks:setUp()
     self.public = self.harness.public
     self.coordinator = self.harness.coordinator
     self.managedModule = self.harness.managedModule
+    self.moduleDefinition = self.harness.moduleDefinition
+    self.moduleRegistry = self.harness.moduleRegistry
+    self.moduleActivation = self.harness.moduleActivation
     self.mutation = self.harness.mutation
     self.hookRegistry = self.harness.registry.hooks
 end
 
 function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOpts)
     activationOpts = activationOpts or {}
-    local store = createStore(activationOpts.enabled == true)
+    local moduleState, store = createHookModuleState(self.harness, activationOpts.enabled)
     local hookDeclarations = self.harness.hooksBundle.declarations.create()
     local mutationBundle = {
         patchMutation = activationOpts.patchMutation,
     }
-    local host = self.managedModule.create({
+    local host = self.harness:createManagedInstance({
         pluginGuid = pluginGuid,
-        definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        persistentState = store,
-        stagedState = createStagedState(),
+        definition = self.moduleDefinition.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
+        state = moduleState,
         hookDeclarations = hookDeclarations,
         mutationBundle = mutationBundle,
         drawTab = function() end,
@@ -191,7 +155,7 @@ function TestHooks:createModuleWithHooks(pluginGuid, registerHooks, activationOp
     if registerHooks ~= nil then
         registerHooks(self.harness.hooksBundle.declarations.createRegistrar(hookDeclarations, "module.hooks"), store)
     end
-    return self.managedModule.activateOrThrow(host)
+    return self.moduleActivation.activateOrThrow(host)
 end
 
 function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
@@ -210,6 +174,90 @@ function TestHooks:testWrapRegistersOnceAndUpdatesHandler()
 
     lu.assertEquals(self.counts.wrap, 1)
     lu.assertEquals(self.env.AdamantHookTestWrap("x"), "second:base:x")
+end
+
+-- Reload boundary: the ModUtil adapter is reinstalled only when the hooked target changes.
+function TestHooks:testWrapReinstallsOnlyWhenModUtilTargetIsReplaced()
+    local pluginGuid = "hook-test-wrap-target-replaced"
+    local path = "AdamantHookTestWrapTargetReplaced"
+    -- The path mock wraps `env`; Lib reads the hooked target through ModUtil's globals.
+    local modutilGlobals = self.harness.modutilPlugin.globals
+    local function setTarget(fn)
+        self.env[path] = fn
+        modutilGlobals[path] = fn
+    end
+    setTarget(function(value)
+        return "base:" .. value
+    end)
+    local function declare(host)
+        host.wrap(path, function(base, value)
+            return "wrapped:" .. base(value)
+        end)
+    end
+
+    self:createModuleWithHooks(pluginGuid, declare)
+    self:createModuleWithHooks(pluginGuid, declare)
+    lu.assertEquals(self.counts.wrap, 1)
+    lu.assertEquals(self.env[path]("x"), "wrapped:base:x")
+
+    setTarget(function(value)
+        return "fresh:" .. value
+    end)
+    self:createModuleWithHooks(pluginGuid, declare)
+
+    lu.assertEquals(self.counts.wrap, 2)
+    lu.assertEquals(self.env[path]("x"), "wrapped:fresh:x")
+end
+
+function TestHooks.testWrapDispatcherSurvivesLibReimportWithoutReinstall()
+    local runtimeRoot = {}
+    local target = {}
+    local counts, modutil = createPathMock(target)
+    local first = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    target.env = first.env
+    first.env.AdamantHookTestReimportWrap = function(value)
+        return "base:" .. value
+    end
+    first.createSystem("test.system.hooks.reimport").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestReimportWrap", function(base, value)
+            return "first:" .. base(value)
+        end)
+    end)
+    local wrapsAfterFirst = counts.wrap
+
+    local second = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    second.createSystem("test.system.hooks.reimport").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestReimportWrap", function(base, value)
+            return "second:" .. base(value)
+        end)
+    end)
+
+    lu.assertEquals(counts.wrap, wrapsAfterFirst)
+    lu.assertEquals(first.env.AdamantHookTestReimportWrap("x"), "second:base:x")
+end
+
+function TestHooks:testOverrideReinstallsAfterRestoreAndDisablesRestoredAdapter()
+    local pluginGuid = "hook-test-override-reinstall"
+    local path = "AdamantHookTestOverrideReinstall"
+    self.env[path] = function()
+        return "base"
+    end
+    local function declare(host)
+        host.override(path, function()
+            return "override"
+        end)
+    end
+
+    self:createModuleWithHooks(pluginGuid, declare)
+    local restoredAdapter = self.env[path]
+    self:createModuleWithHooks(pluginGuid, function() end)
+    lu.assertEquals(self.env[path](), "base")
+    lu.assertErrorMsgContains("function replacement is inactive", restoredAdapter)
+
+    self:createModuleWithHooks(pluginGuid, declare)
+
+    lu.assertEquals(self.counts.override, 2)
+    lu.assertEquals(self.env[path](), "override")
 end
 
 function TestHooks:testWrapUsesInjectedModUtilWhenGlobalIsMissing()
@@ -305,25 +353,25 @@ function TestHooks:testRetiredHookModulePrunesDeadDispatcherOwnerEntries()
     lu.assertEquals(self.env[path]("x"), "second:base:x")
 end
 
-function TestHooks:testModuleHookDeclarationsAreStoredOnModuleRegistry()
-    local hookDeclarations = self.harness.hooksBundle.declarations.create()
-    local host = self.managedModule.create({
-        pluginGuid = "hook-test-state-declarations",
-        definition = self.managedModule.prepareDefinition({}, { id = "HookTest", name = "Hook Test", storage = {} }),
-        persistentState = createStore(false),
-        stagedState = createStagedState(),
-        hookDeclarations = hookDeclarations,
-        drawTab = function() end,
-    })
-
-    self.harness.hooksBundle.declarations.declareWrap(hookDeclarations, "module.hooks.wrap",
-        "AdamantHookTestStateDeclarations", function(base)
-        return base()
+function TestHooks:testInstallTakesExplicitInputsWithoutModuleRecord()
+    local path = "AdamantHookTestExplicitInstall"
+    self.env[path] = function(value)
+        return "base:" .. value
+    end
+    local declarations = self.harness.hooksBundle.declarations
+    local hookDeclarations = declarations.create()
+    declarations.createRegistrar(hookDeclarations, "test").wrap(path, function(base, value)
+        return "explicit:" .. base(value)
     end)
+    local ownerToken = {}
 
-    local record = self.harness.moduleRegistry.getRecord(host)
-    lu.assertNotNil(record.hookDeclarations)
-    lu.assertNotNil(record.hookDeclarations.wrap.AdamantHookTestStateDeclarations)
+    local receipt = self.harness.hooks.install("hook-test-explicit-install", ownerToken, hookDeclarations)
+    lu.assertTrue(receipt.commit())
+
+    lu.assertNil(self.harness.moduleRegistry.getRecord(ownerToken))
+    lu.assertEquals(self.env[path]("x"), "explicit:base:x")
+    lu.assertTrue(receipt.retire())
+    lu.assertEquals(self.env[path]("x"), "base:x")
 end
 
 function TestHooks:testRetiredOverrideModulePrunesEmptyDispatcherPath()
@@ -370,7 +418,8 @@ end
 function TestHooks:testServiceSurfaceOnlyExposesModuleInstallation()
     local hooks = self.harness.hooks
 
-    lu.assertEquals(type(hooks.installForModule), "function")
+    lu.assertEquals(type(hooks.install), "function")
+    lu.assertNil(hooks.installForModule)
     lu.assertNil(hooks.installModUtilWrap)
     lu.assertNil(hooks.installModUtilContextWrap)
     lu.assertNil(hooks.installPhysicalWrap)
@@ -411,6 +460,82 @@ function TestHooks:testSystemHooksDefineRemovesOmittedDeclarations()
     system.hooks.define(function() end)
 
     lu.assertEquals(self.env.AdamantHookTestSystemOmit("x"), "base:x")
+end
+
+function TestHooks.testSystemHooksRedefineAfterLibReloadDisposesPreviousInstall()
+    local runtimeRoot = {}
+    local target = {}
+    local _, modutil = createPathMock(target)
+    local first = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    target.env = first.env
+    first.env.AdamantHookTestSystemReload = function(value)
+        return "base:" .. value
+    end
+    first.createSystem("test.system.hooks.reload").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestSystemReload", function(base, value)
+            return "first:" .. base(value)
+        end)
+    end)
+
+    local second = createLibHarness({ runtime = runtimeRoot, modutil = modutil })
+    second.createSystem("test.system.hooks.reload").hooks.define(function(hooks)
+        hooks.wrap("AdamantHookTestSystemReload", function(base, value)
+            return "second:" .. base(value)
+        end)
+    end)
+
+    local dispatcher = second.registry.hooks.dispatchers.wrap.AdamantHookTestSystemReload
+    local ownerCount = 0
+    for _ in pairs(dispatcher.handlers["test.system.hooks.reload"]) do
+        ownerCount = ownerCount + 1
+    end
+    lu.assertEquals(ownerCount, 1)
+    lu.assertEquals(first.env.AdamantHookTestSystemReload("x"), "second:base:x")
+end
+
+local function createOwnerInstallHarness(path)
+    local target = {}
+    local _, modutil = createPathMock(target)
+    local h = createLibHarness({ modutil = modutil })
+    target.env = h.env
+    h.env[path] = function(value)
+        return "base:" .. value
+    end
+    local ownerInstall = h.imports["core/hooks/owner_install.lua"]
+    local declarations = h.hooksBundle.declarations
+    local function createReceipt(ownerId, label)
+        local hookDeclarations = declarations.create()
+        declarations.createRegistrar(hookDeclarations, "test").wrap(path, function(base, value)
+            return label .. ":" .. base(value)
+        end)
+        return ownerInstall.install(ownerId, { label = label }, hookDeclarations)
+    end
+    return h, createReceipt
+end
+
+function TestHooks.testOwnerInstallRollbackRestoresDisplacedOwner()
+    local h, createReceipt = createOwnerInstallHarness("AdamantHookTestOwnerRollback")
+    local first = createReceipt("test.owner.rollback", "first")
+    local second = createReceipt("test.owner.rollback", "second")
+    lu.assertTrue(first.commit())
+    lu.assertTrue(second.commit())
+    lu.assertEquals(h.env.AdamantHookTestOwnerRollback("x"), "second:base:x")
+
+    lu.assertTrue(second.rollback())
+
+    lu.assertEquals(h.env.AdamantHookTestOwnerRollback("x"), "first:base:x")
+end
+
+function TestHooks.testOwnerInstallRetireDoesNotRestoreDisplacedOwner()
+    local h, createReceipt = createOwnerInstallHarness("AdamantHookTestOwnerRetire")
+    local first = createReceipt("test.owner.retire", "first")
+    local second = createReceipt("test.owner.retire", "second")
+    lu.assertTrue(first.commit())
+    lu.assertTrue(second.commit())
+
+    lu.assertTrue(second.retire())
+
+    lu.assertEquals(h.env.AdamantHookTestOwnerRetire("x"), "base:x")
 end
 
 function TestHooks:testModuleHookDeclarationsRejectAfterActivation()
@@ -734,7 +859,7 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
     local target = { Value = "base" }
     self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
-    local definition = self.managedModule.prepareDefinition({}, {
+    local definition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
@@ -746,15 +871,14 @@ function TestHooks:testManagedModuleSyncsCoordinatedRuntimeImmediately()
             plan:set(target, "Value", "patched")
         end,
     }
-    local host = self.managedModule.create({
+    local host = self.harness:createManagedInstance({
         pluginGuid = "hook-pack.Alpha",
         definition = definition,
-        persistentState = createStore(true),
-        stagedState = createStagedState(),
+        state = createHookModuleState(self.harness, true),
         mutationBundle = mutationBundle,
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(host)
+    self.moduleActivation.activateOrThrow(host)
 
     lu.assertEquals(buildCalls, 1)
     lu.assertEquals(target.Value, "patched")
@@ -767,19 +891,18 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
     local target = { Value = "base" }
     self.coordinator.register(packId, "Test Pack", { ModEnabled = true })
 
-    local store = createStore(true)
+    local firstModuleState = createHookModuleState(self.harness, true)
 
-    local firstDefinition = self.managedModule.prepareDefinition({}, {
+    local firstDefinition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
         storage = {},
     })
-    local firstHost = self.managedModule.create({
+    local firstHost = self.harness:createManagedInstance({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = firstDefinition,
-        persistentState = store,
-        stagedState = createStagedState(),
+        state = firstModuleState,
         mutationBundle = {
             patchMutation = function(_, _, plan)
                 firstBuildCalls = firstBuildCalls + 1
@@ -788,19 +911,18 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         },
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(firstHost)
+    self.moduleActivation.activateOrThrow(firstHost)
 
-    local secondDefinition = self.managedModule.prepareDefinition({}, {
+    local secondDefinition = self.moduleDefinition.prepareDefinition({}, {
         modpack = packId,
         id = "Alpha",
         name = "Alpha",
         storage = {},
     })
-    local secondHost = self.managedModule.create({
+    local secondHost = self.harness:createManagedInstance({
         pluginGuid = "hook-reload-pack.Alpha",
         definition = secondDefinition,
-        persistentState = store,
-        stagedState = createStagedState(),
+        state = createHookModuleState(self.harness, true),
         mutationBundle = {
             patchMutation = function(_, _, plan)
                 secondBuildCalls = secondBuildCalls + 1
@@ -809,33 +931,18 @@ function TestHooks:testManagedModuleHotReloadReplacesCoordinatedRuntimeState()
         },
         drawTab = function() end,
     })
-    self.managedModule.activateOrThrow(secondHost)
+    self.moduleActivation.activateOrThrow(secondHost)
 
     lu.assertEquals(firstBuildCalls, 1)
     lu.assertEquals(secondBuildCalls, 1)
     lu.assertEquals(target.Value, "second")
 
-    local mutationHost = {
-        getOwnerId = function()
-            return "hook-reload-pack.Alpha"
+    -- The active plan is keyed by owner id, so any handle bound to that owner can revert it.
+    local reloadedHandle = self.mutation.bind("hook-reload-pack.Alpha", {
+        patchMutation = function(_, _, plan)
+            plan:set(target, "Value", "third")
         end,
-    }
-    self.harness.moduleRegistry.setRecord(mutationHost, {
-        pluginGuid = "hook-reload-pack.Alpha",
-        definition = {
-            modpack = packId,
-            id = "Alpha",
-            name = "Alpha",
-            storage = {},
-        },
-        mutationBundle = {
-            patchMutation = function(_, _, plan)
-                plan:set(target, "Value", "second")
-            end,
-        },
-        store = store,
-    })
-
-    self.mutation.revertForModule(mutationHost)
+    }, secondHost, self.moduleRegistry.getRecord(secondHost).runtime)
+    lu.assertTrue(reloadedHandle.revert())
     lu.assertEquals(target.Value, "base")
 end

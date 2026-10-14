@@ -12,12 +12,11 @@ function TestManagedModule_PrepareDefinition:tearDown()
     self.h:restoreWarnings()
 end
 
-local function createAndActivate(h, pluginGuid, definition, store, stagedState)
-    local module = h.managedModule.create({
+local function createAndActivate(h, pluginGuid, definition, moduleState)
+    local module = h.harness:createManagedInstance({
         pluginGuid = pluginGuid,
         definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
+        state = moduleState,
         drawTab = function() end,
     })
     return module.activate()
@@ -34,7 +33,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionReturnsPrepare
         },
     }
 
-    local prepared = self.h.managedModule.prepareDefinition(owner, raw)
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, raw)
     raw.name = "Changed Name"
     raw.storage[1].alias = "ChangedAlias"
 
@@ -52,7 +51,7 @@ end
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionMarksStructuralReloadMismatch()
     local owner = {}
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -61,7 +60,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionMarksStructura
         },
     })
 
-    local prepared = self.h.managedModule.prepareDefinition(owner, {
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -77,7 +76,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionMarksStructura
 end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionInjectsBuiltInStorage()
-    local prepared = self.h.managedModule.prepareDefinition({}, {
+    local prepared = self.h.moduleDefinition.prepareDefinition({}, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -101,7 +100,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsReservedBuiltInStorageAliases()
     lu.assertErrorMsgContains("storage alias 'Enabled' is reserved by Lib", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             modpack = "test-pack",
             id = "Example",
             name = "Example",
@@ -111,7 +110,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsReserve
         })
     end)
     lu.assertErrorMsgContains("storage alias '__Modpack_PackRestoreMarker' is reserved by Lib", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             modpack = "test-pack",
             id = "Example",
             name = "Example",
@@ -124,7 +123,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsAuthoredInternalStorageAlias()
     lu.assertErrorMsgContains("alias '_PrivateFlag' must start with a letter", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             modpack = "test-pack",
             id = "Example",
             name = "Example",
@@ -137,7 +136,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalidMetadataFieldTypes()
     lu.assertErrorMsgContains("definition.invalid_field_type", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             modpack = "test-pack",
             id = "Example",
             name = 7,
@@ -147,7 +146,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalid
 end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionPreparesActionsInDeterministicOrder()
-    local prepared = self.h.managedModule.prepareDefinition({}, {
+    local prepared = self.h.moduleDefinition.prepareDefinition({}, {
         id = "ActionsModule",
         name = "Actions Module",
         storage = {},
@@ -163,7 +162,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionPreparesAction
 end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionAllowsLibInternalActions()
-    local prepared = self.h.managedModule.prepareDefinitionWithInternalDeclarations({}, {
+    local prepared = self.h.moduleDefinition.prepareDefinitionWithInternalDeclarations({}, {
         id = "InternalActionsModule",
         name = "Internal Actions Module",
         storage = {},
@@ -183,7 +182,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalidInternalActions()
     lu.assertErrorMsgContains("internal action key 'PrivateAction' must start with '_'", function()
-        self.h.managedModule.prepareDefinitionWithInternalDeclarations({}, {
+        self.h.moduleDefinition.prepareDefinitionWithInternalDeclarations({}, {
             id = "InvalidInternalActionsModule",
             name = "Invalid Internal Actions Module",
             storage = {},
@@ -197,7 +196,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalidActions()
     lu.assertErrorMsgContains("action key 'Bad-Key'", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "BadActionsModule",
             name = "Bad Actions Module",
             storage = {},
@@ -207,7 +206,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalid
         })
     end)
     lu.assertErrorMsgContains("action key '_privateAction'", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "PrivateActionModule",
             name = "Private Action Module",
             storage = {},
@@ -217,7 +216,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalid
         })
     end)
     lu.assertErrorMsgContains("actions.reset should be function", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "BadActionHandlerModule",
             name = "Bad Action Handler Module",
             storage = {},
@@ -230,7 +229,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsDefinitionWithoutId()
     lu.assertErrorMsgContains("definition.missing_id", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             name = "Missing ID",
             storage = {},
         })
@@ -239,7 +238,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsInvalidDefinitionId()
     lu.assertErrorMsgContains("definition.id 'Bad.Id' must start with a letter", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "Bad.Id",
             name = "Bad ID",
             storage = {},
@@ -249,7 +248,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsDefinitionWithoutName()
     lu.assertErrorMsgContains("definition.missing_name", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "MissingName",
             storage = {},
         })
@@ -264,14 +263,14 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRequestsCoordinato
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
     self.h.coordinator.registerRebuild("test-pack", function(reason)
         rebuildReason = reason
-        local liveModule = self.h.managedModule.getLiveModule("test-module")
+        local liveModule = self.h.moduleRegistry.getLiveModule("test-module")
         local storage = liveModule and liveModule.getStorage() or nil
         local lastStorage = storage and storage[#storage] or nil
         rebuildStorageAlias = lastStorage and lastStorage.alias or nil
         return true
     end)
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -280,7 +279,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRequestsCoordinato
         },
     })
 
-    local prepared = self.h.managedModule.prepareDefinition(owner, {
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -289,15 +288,15 @@ function TestManagedModule_PrepareDefinition:testManagedModuleRequestsCoordinato
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.managedModule.getLiveModule("test-module"))
+    lu.assertNotNil(self.h.moduleRegistry.getLiveModule("test-module"))
     lu.assertNotNil(rebuildReason)
     lu.assertEquals(rebuildReason.kind, "structural_definition_changed")
     lu.assertEquals(rebuildReason.moduleId, "Example")
@@ -311,7 +310,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordina
 
     self.h.coordinator.register("test-pack", "Test Pack", { ModEnabled = true })
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -320,7 +319,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordina
         },
     })
 
-    local prepared = self.h.managedModule.prepareDefinition(owner, {
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -329,17 +328,17 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsWhenCoordina
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(prepared._pendingCoordinatorRebuild)
 end
 
 function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPendingReasonWhenRebuildRequestIsRejected()
@@ -350,7 +349,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPend
         return false
     end)
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -359,7 +358,7 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPend
         },
     })
 
-    local prepared = self.h.managedModule.prepareDefinition(owner, {
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -368,23 +367,23 @@ function TestManagedModule_PrepareDefinition:testManagedModuleErrorsAndKeepsPend
         },
     })
 
-    local store, stagedState = self.h:createModuleState({
+    local _, _, moduleState = self.h:createModuleState({
         Enabled = false,
         DebugMode = false,
         OtherFlag = false,
     }, prepared)
-    local ok, err = createAndActivate(self.h, "test-module", prepared, store, stagedState)
+    local ok, err = createAndActivate(self.h, "test-module", prepared, moduleState)
 
     lu.assertFalse(ok)
     lu.assertStrContains(err, "managed_module.structural_rebuild_unavailable")
     lu.assertTrue(owner.requiresFullReload)
-    lu.assertNotNil(self.h.moduleRegistry.getPendingCoordinatorRebuild(prepared))
+    lu.assertNotNil(prepared._pendingCoordinatorRebuild)
 end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionKeepsStableStructuralFingerprint()
     local owner = {}
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -393,7 +392,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionKeepsStableStr
         },
     })
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -408,7 +407,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testCreateStoreAcceptsPreparedDefinition()
     local owner = {}
-    local definition = self.h.managedModule.prepareDefinition(owner, {
+    local definition = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -439,32 +438,31 @@ function TestManagedModule_PrepareDefinition:testCreateStoreRejectsRawDefinition
 end
 
 function TestManagedModule_PrepareDefinition:testManagedModuleRejectsRawDefinition()
-    local prepared = self.h.managedModule.prepareDefinition({}, {
+    local prepared = self.h.moduleDefinition.prepareDefinition({}, {
         id = "RejectRawDefinition",
         name = "Reject Raw Definition",
         storage = {
             { type = "bool", alias = "EnabledFlag", default = false },
         },
     })
-    local store, stagedState = self.h:createModuleState({}, prepared)
+    local _, _, moduleState = self.h:createModuleState({}, prepared)
 
     lu.assertErrorMsgContains("prepared definition is required", function()
-        self.h.managedModule.create({
+        self.h.harness:createManagedInstance({
             pluginGuid = "test-raw-host",
             definition = {
                 storage = {
                     { type = "bool", alias = "EnabledFlag", default = false },
                 },
             },
-            persistentState = store,
-            stagedState = stagedState,
+            state = moduleState,
             drawTab = function() end,
         })
     end)
 end
 
 function TestManagedModule_PrepareDefinition:testCreateStoreRequiresStorage()
-    local definition = self.h.managedModule.prepareDefinition({}, {
+    local definition = self.h.moduleDefinition.prepareDefinition({}, {
         id = "NoStorage",
         name = "No Storage",
     })
@@ -477,7 +475,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionUsesStorageDefaultsInFingerprint()
     local owner = {}
-    local prepared = self.h.managedModule.prepareDefinition(owner, {
+    local prepared = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -498,7 +496,7 @@ end
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionTreatsStorageDefaultChangesAsStructural()
     local owner = {}
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -507,7 +505,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionTreatsStorageD
         },
     })
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -523,7 +521,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsUnknownStructuralSurfaceOption()
     lu.assertErrorMsgContains("unknown option 'modpack'", function()
-        self.h.managedModule.prepareDefinition({}, { Count = 1 }, {
+        self.h.moduleDefinition.prepareDefinition({}, { Count = 1 }, {
             modpack = "test-pack",
             id = "Example",
             name = "Example",
@@ -537,7 +535,7 @@ end
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionTracksQuickContentForLowerLevelHosts()
     local owner = {}
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "QuickSurface",
         name = "Quick Surface",
@@ -545,7 +543,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionTracksQuickCon
         hasQuickContent = false,
     })
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "QuickSurface",
         name = "Quick Surface",
@@ -560,7 +558,7 @@ end
 
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionRejectsUnknownStructuralSurfaceOption()
     lu.assertErrorMsgContains("unknown option 'quickContent'", function()
-        self.h.managedModule.prepareDefinition({}, {
+        self.h.moduleDefinition.prepareDefinition({}, {
             id = "UnknownSurface",
             name = "Unknown Surface",
         }, {
@@ -573,7 +571,7 @@ end
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionFingerprintIgnoresExternalTables()
     local owner = {}
 
-    local first = self.h.managedModule.prepareDefinition(owner, {
+    local first = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -581,7 +579,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionFingerprintIgn
             { type = "int", alias = "Count", default = 3, min = 0, max = 10 },
         },
     })
-    local second = self.h.managedModule.prepareDefinition(owner, {
+    local second = self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -598,7 +596,7 @@ end
 function TestManagedModule_PrepareDefinition:testPrepareDefinitionFingerprintTracksTooltipChanges()
     local owner = {}
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",
@@ -606,7 +604,7 @@ function TestManagedModule_PrepareDefinition:testPrepareDefinitionFingerprintTra
         storage = {},
     })
 
-    self.h.managedModule.prepareDefinition(owner, {
+    self.h.moduleDefinition.prepareDefinition(owner, {
         modpack = "test-pack",
         id = "Example",
         name = "Example",

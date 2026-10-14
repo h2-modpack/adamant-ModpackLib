@@ -17,10 +17,10 @@ local function makeStore(harness, definition, config, opts)
     definition.id = definition.id or "DataDefaults"
     definition.name = definition.name or "Data Defaults"
     if not (type(definition) == "table" and rawget(definition, "_preparedDefinition") == true) then
-        definition = harness.managedModule.prepareDefinition({}, definition)
+        definition = harness.moduleDefinition.prepareDefinition({}, definition)
     end
-    local persistentState, stagedState = harness:createModuleState(config, definition, opts)
-    return persistentState, stagedState, config
+    local persistentState, stagedState, moduleState = harness:createModuleState(config, definition, opts)
+    return persistentState, stagedState, config, moduleState
 end
 
 local function writeTempConfig(contents)
@@ -133,7 +133,7 @@ Limit = 3
     self.harness.chalk.original = function()
         error("native backend should not call Chalk")
     end
-    local ok, _, stagedState = pcall(function()
+    local ok, _, stagedState, _, moduleState = pcall(function()
         return makeStore(self.harness, definition, {}, {
             configPath = path,
         })
@@ -149,7 +149,7 @@ Limit = 3
     lu.assertEquals(stagedState.table("Rows"):read(2, "Limit"), 3)
 
     stagedState.write("MyFlag", true)
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
 
     local file = assert(io.open(path, "r"))
     local saved = file:read("*a")
@@ -164,17 +164,70 @@ function TestModuleState_DataDefaults:testWarnsWhenNativeBackendPathCannotResolv
         rom = {},
     })
 
+    local backend
     local lines = capturePrints(self.harness.env, function()
-        local backend = backendFactory.create({
+        backend = backendFactory.create({
             pluginGuid = "test-missing-native-path",
         })
-        lu.assertNil(backend)
     end)
 
     lu.assertEquals(#lines, 1)
     lu.assertStrContains(lines[1], "[lib] persistent_backend.unavailable:")
     lu.assertStrContains(lines[1], "test-missing-native-path")
     lu.assertStrContains(lines[1], "will not persist")
+
+    -- Memory-only backend: same interface, values held for the session only.
+    lu.assertNil(backend.read("config", "MyFlag"))
+    lu.assertTrue(backend.write("config", "MyFlag", true))
+    backend.reload()
+    lu.assertTrue(backend.read("config", "MyFlag"))
+end
+
+function TestModuleState_DataDefaults:testModuleStateWithoutConfigPathKeepsValuesInMemory()
+    local definition = self.harness.moduleDefinition.prepareDefinition({}, {
+        id = "MemoryOnly",
+        name = "Memory Only",
+        storage = {
+            { type = "bool", alias = "MyFlag", default = false },
+            { type = "int", alias = "MyCount", default = 1, min = 0, max = 10 },
+            {
+                type = "table",
+                alias = "Rows",
+                defaultRows = 1,
+                maxRows = 5,
+                row = {
+                    { type = "int", alias = "Limit", default = 2, min = 0, max = 5 },
+                },
+            },
+        },
+    })
+
+    local state
+    local lines = capturePrints(self.harness.env, function()
+        state = self.harness.moduleState.create(definition, {})
+    end)
+    lu.assertEquals(#lines, 1)
+    lu.assertStrContains(lines[1], "[lib] persistent_backend.unavailable:")
+
+    lu.assertFalse(state.staged.read("MyFlag"))
+    lu.assertEquals(state.staged.table("Rows"):count(), 1)
+    lu.assertEquals(state.staged.table("Rows"):read(1, "Limit"), 2)
+
+    state.staged.write("MyFlag", true)
+    state.staged.write("MyCount", 7)
+    lu.assertTrue(state.staged.table("Rows"):append({ Limit = 4 }))
+    state.txn.flushWithoutCommit()
+
+    lu.assertTrue(state.persistent.read("MyFlag"))
+    lu.assertEquals(state.persistent.read("MyCount"), 7)
+    lu.assertEquals(state.persistent.table("Rows"):count(), 2)
+    lu.assertEquals(state.persistent.table("Rows"):read(2, "Limit"), 4)
+
+    -- Reloading the memory backend keeps its values: no drift, and a reload keeps them.
+    lu.assertEquals(state.txn.auditMismatches(), {})
+    state.txn.reload()
+    lu.assertTrue(state.staged.read("MyFlag"))
+    lu.assertEquals(state.staged.table("Rows"):count(), 2)
 end
 
 function TestModuleState_DataDefaults:testWarnsWhenNativeBackendCannotSave()
@@ -442,7 +495,7 @@ function TestModuleState_DataDefaults:testMissingAliasUsesStorageDefault()
 end
 
 function TestModuleState_DataDefaults:testPreparedStorageDefaultsAreStableAcrossCreateStoreCalls()
-    local definition = self.harness.managedModule.prepareDefinition({}, {
+    local definition = self.harness.moduleDefinition.prepareDefinition({}, {
         id = "StablePreparedDefaults",
         name = "Stable Prepared Defaults",
         storage = {

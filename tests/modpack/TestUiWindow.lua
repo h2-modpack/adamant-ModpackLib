@@ -262,7 +262,7 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
     local okFirst, errFirst = pcall(builtUi.renderWindow)
 
     local entry = moduleRegistry.modules[1]
-    local replacementDefinition = LibManagedModule.prepareDefinition({}, {
+    local replacementDefinition = LibModuleDefinition.prepareDefinition({}, {
         id = entry.id,
         name = entry.name,
         modpack = entry.modpack,
@@ -270,16 +270,15 @@ function TestUiWindow:testQuickSetupUsesLatestLiveModuleForQuickContent()
             { type = "bool", alias = "FlagA", default = false },
         },
     })
-    local persistentState, stagedState = CreateModuleState({
+    local _, _, moduleState = CreateModuleState({
         Enabled = true,
         DebugMode = false,
         FlagA = false,
     }, replacementDefinition)
-    local replacementLiveModule = LibManagedModule.create({
+    local replacementLiveModule = CreateLibManagedModule({
         pluginGuid = entry.pluginGuid,
         definition = replacementDefinition,
-        persistentState = persistentState,
-        stagedState = stagedState,
+        state = moduleState,
         drawTab = function() end,
         drawQuickContent = function()
             secondQuickRenders = secondQuickRenders + 1

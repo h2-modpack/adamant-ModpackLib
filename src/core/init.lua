@@ -18,16 +18,22 @@ local systemScope = import('core/lib_bootstrap/system_scope.lua', nil, {
     logging = logging,
 })
 
-local gameDeps = externals.gameDeps or import('core/game_deps/game_deps.lua', nil, {
+local gameDeps = import('core/game_deps/game_deps.lua', nil, {
     rom = externals.rom,
     logging = logging,
 })
 
 local values = import('core/helpers/values.lua')
+local receipt = import('core/helpers/receipt.lua')
+local identifiers = import('core/helpers/identifiers.lua')
+local requireMethodSelf = import('core/helpers/method_self.lua', nil, {
+    logging = logging,
+})
 
 local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
     values = values,
+    identifiers = identifiers,
 })
 
 local moduleState = import('core/module_state/00_init.lua', nil, {
@@ -35,6 +41,7 @@ local moduleState = import('core/module_state/00_init.lua', nil, {
     rom = externals.rom,
     storage = storage,
     values = values,
+    requireMethodSelf = requireMethodSelf,
 })
 
 local cacheBundle = import('core/cache/00_init.lua', nil, {
@@ -46,14 +53,17 @@ local controlsBundle = import('core/controls/00_init.lua', nil, {
     logging = logging,
     values = values,
     storage = storage,
+    identifiers = identifiers,
+    requireMethodSelf = requireMethodSelf,
 })
 
 local statusDeclarations = import('core/status/declarations.lua', nil, {
     logging = logging,
     values = values,
+    identifiers = identifiers,
 })
 
-local modpackCoordination = import('core/modpack/coordination.lua', nil, {
+local modpackCoordination = import('core/coordination/coordination.lua', nil, {
     logging = logging,
     coordinationRegistry = registry.coordinators,
 })
@@ -63,22 +73,21 @@ local definition = import('core/module_bootstrap/definition.lua', nil, {
     logging = logging,
     storage = storage,
     values = values,
+    identifiers = identifiers,
     coordinator = modpackCoordination,
-    moduleRegistry = moduleRegistry,
 })
 local sharedBundle = import('core/shared/00_init.lua', nil, {
     logging = logging,
     sharedRegistry = registry.shared,
-    moduleRegistry = moduleRegistry,
     values = values,
+    receipt = receipt,
 })
-local shared = sharedBundle.service
 
 local hooksBundle = import('core/hooks/00_init.lua', nil, {
     modutil = externals.modutil,
     logging = logging,
-    moduleRegistry = moduleRegistry,
     hookRegistry = registry.hooks,
+    receipt = receipt,
 })
 local hooks = hooksBundle.service
 
@@ -90,10 +99,11 @@ local overlaysBundle = import('core/overlays/00_init.lua', nil, {
     rom = externals.rom,
     logging = logging,
     hooks = hooks,
-    moduleRegistry = moduleRegistry,
+    hookDeclarations = hooksBundle.declarations,
     rendererSystem = overlayRendererSystem,
     overlayRegistry = registry.overlays,
     values = values,
+    receipt = receipt,
 })
 local overlays = overlaysBundle.service
 
@@ -104,20 +114,18 @@ local function createSystem(ownerId)
     })
 end
 
-local mutationBundle = import('core/mutations/00_init.lua', nil, {
+local mutation = import('core/mutations/00_init.lua', nil, {
     gameDeps = gameDeps,
     logging = logging,
     values = values,
-    moduleRegistry = moduleRegistry,
-    coordinator = modpackCoordination,
     mutationRegistry = registry.mutations,
+    receipt = receipt,
 })
-local mutation = mutationBundle.service
 
-local widgetsBundle = import('core/widgets/00_init.lua', nil, {
+local draw = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
-    actions = moduleState.actionBuffer,
+    isDrawActionRef = moduleState.isDrawActionRef,
     rom = externals.rom,
     controlsDraw = controlsBundle.draw,
 })
@@ -125,60 +133,94 @@ local widgetsBundle = import('core/widgets/00_init.lua', nil, {
 local createTheme = import('core/ui/theme.lua', nil, {
     rom = externals.rom,
 })
+local uiSession = import('core/ui/session.lua')
 
-local fallbackUiBundle = import('core/fallback/fallback_ui.lua', nil, {
+local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
     createTheme = createTheme,
+    uiSession = uiSession,
     gameDeps = gameDeps,
     rom = externals.rom,
     modutil = externals.modutil,
     logging = logging,
-    moduleRegistry = moduleRegistry,
     coordination = modpackCoordination,
     overlays = overlays,
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
+    receipt = receipt,
+})
+-- Capability installs activation runs for every module, in install order. Commit order comes
+-- from each receipt's phase; an install returns nil when the module declares nothing for it.
+---@type AdamantModpackLib.ModuleCapabilityInstall[]
+local moduleCapabilities = {
+    function(ownerId, _, inputs)
+        return sharedBundle.install(ownerId, inputs.shared)
+    end,
+    function(ownerId, owner, inputs)
+        return hooks.install(ownerId, owner, inputs.hookDeclarations)
+    end,
+    function(ownerId, owner, inputs)
+        return overlays.install(ownerId, {
+            owner = owner,
+            declarations = inputs.overlays.declarations,
+            host = inputs.overlays.host,
+            runtime = inputs.overlays.runtime,
+        })
+    end,
+    function(_, _, inputs)
+        return inputs.mutation.sync()
+    end,
+    function(ownerId, owner, inputs)
+        if not inputs.fallbackUiRequested then
+            return nil
+        end
+        return fallbackUi.install(ownerId, owner)
+    end,
+}
+local moduleActivation = import('core/module_bootstrap/managed_module_activation.lua', nil, {
+    logging = logging,
+    coordinator = modpackCoordination,
+    moduleRegistry = moduleRegistry,
+    capabilities = moduleCapabilities,
 })
 local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     logging = logging,
-    definition = definition,
     moduleRegistry = moduleRegistry,
+    moduleActivation = moduleActivation,
     moduleState = moduleState,
-    shared = shared,
-    cache = cacheBundle.service,
-    sharedData = sharedBundle.data,
-    hooks = hooks,
+    shared = sharedBundle,
+    cache = cacheBundle,
     overlays = overlays,
     mutation = mutation,
-    fallbackUi = fallbackUiBundle.service,
-    coordinator = modpackCoordination,
-    storage = storage,
-    uiDraw = widgetsBundle.uiDraw,
-    controls = controlsBundle,
+    draw = draw,
+    controlRefs = controlsBundle.refs,
 })
 
 public.modpack = import('core/modpack/init.lua', nil, {
     rom = externals.rom,
+    createTheme = createTheme,
+    uiSession = uiSession,
+    setupRunData = gameDeps.runData.SetupRunData,
     libConfig = deps.config,
     storage = storage,
     coordination = modpackCoordination,
-    overlaySurface = overlaysBundle.modpack.create(),
-    getLiveModule = managedModule.getLiveModule,
+    overlaySurface = overlaysBundle.modpack,
+    getLiveModule = moduleRegistry.getLiveModule,
     packRegistry = registry.modpacks,
 })
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
     managedModule = managedModule,
+    definition = definition,
+    moduleRegistry = moduleRegistry,
+    moduleActivation = moduleActivation,
     moduleState = moduleState,
-    overlayOrder = overlaysBundle.order,
-    overlayRegions = overlaysBundle.regions,
-    overlayFonts = overlaysBundle.fonts,
+    overlayAuthoring = overlaysBundle.authoring,
     hookDeclarations = hooksBundle.declarations,
     hookContext = hooksBundle.context,
-    overlayDeclarations = overlaysBundle.declarations,
     sharedDataDeclarations = sharedBundle.dataDeclarations,
     sharedRegistrations = sharedBundle.registrations,
-    mutationLifecycle = mutationBundle.lifecycle,
-    fallbackUi = fallbackUiBundle.service,
+    mutationLifecycle = mutation,
+    fallbackUi = fallbackUi,
     controlDeclarations = controlsBundle.declarations,
     controlCompiler = controlsBundle.compiler,
     statusDeclarations = statusDeclarations,

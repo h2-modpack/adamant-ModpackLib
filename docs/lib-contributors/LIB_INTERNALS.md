@@ -37,8 +37,68 @@ end
 - Runtime tables closed over by installed game/ModUtil callbacks are legitimate hot-reload anchors, but should still be owned by a scoped registry bucket rather than a broad dependency bus.
 - Runtime tables that keep active plans/receipts revertible across Lib re-imports are also real anchors; keep them under the scoped registry bucket and comment the reason.
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
-- Live-module, pending-rebuild, and weak module-record tables are activation anchors; keep the tables under `AdamantModpackLib_Runtime.registry.modules`, but keep lifecycle behavior on the returned `managedModule` service.
+- Live-module and weak module-record tables are activation anchors under `AdamantModpackLib_Runtime.registry.modules`. `module_registry` is their only surface: `getRecord`/`setRecord` and `getLiveModule`/`setLiveModule`.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
+
+## Composition Root
+
+`core/init.lua` imports every subsystem once, in dependency order, and passes
+each one the named services it needs. It also composes the module capability
+list and hands it to `managed_module_activation.lua`; add a capability by adding
+an install function there, not by editing activation.
+
+Stateless helpers shared across subsystems live in `core/helpers/` and are
+imported once by `init.lua`, then passed down:
+
+- `values.lua`: deep copy and value equality.
+- `receipt.lua`: capability install receipts (below).
+- `identifiers.lua`: stable identifier validation shared by storage, controls, status, and shared declarations.
+- `method_self.lua`: `requireMethodSelf` for `ref:method()` misuse checks.
+
+`core/ui/` holds UI pieces shared by the fallback window and the modpack window:
+`theme.lua` and `session.lua` (deferred run-data rebuild, overlay suppression
+token, GUI-close edge).
+
+## Capability Installs And Receipts
+
+Every capability install takes explicit inputs and returns a receipt built by
+`helpers/receipt.lua` (`receipt.create`, `receipt.noop`, `receipt.composite`),
+or nil when the module declares nothing for it:
+
+- `hooks.install(ownerId, ownerToken, declarations)`
+- `shared.install(ownerId, { data, events })`
+- `overlays.install(ownerId, { owner, declarations, host, runtime })`
+- `mutation.bind(ownerId, bundle, host, runtime).sync()`
+- `fallbackUi.install(ownerId, owner)`
+
+Receipt contract:
+
+- `commit()` applies the install once; repeating it after success is a no-op.
+- `rollback()` undoes the install and restores what it replaced. Activation uses it when a later step fails.
+- `retire()` removes only what this install still owns and never restores replaced state. Activation uses it on the previous module after its successor committed.
+- An optional `discard` runs instead of rollback/retire when the receipt never committed, to drop install-time staging.
+- Rollback and retire run at most once; callbacks are pcall-wrapped and report `ok, err`.
+- `phase` orders commits: `receipt.PHASE_GAME_DATA` (mutations) before `receipt.PHASE_EFFECTS` (everything else). Release runs in reverse commit order.
+
+Capabilities never read the module record.
+
+## Module Layer
+
+- The declaration facade (`module/declaration_facade.lua`) is the builder: it collects declarations and tracks only `sealing` plus the instance it produced. `module/activation_finalizer.lua` compiles the declarations, prepares the definition, builds module state, creates the instance, and activates it.
+- `managedModule.create` builds the instance from Lib-built inputs only (finalizer or test harness), so it asserts invariants instead of re-validating options. Identity on both the facade and the instance comes from `identity.lua`.
+- The record (`module_registry.getRecord(module)`) holds activation state (`activated`, `activating`, `effectReceipts`), `definition`, `host`, `runtime`, `onActivate`, and `capabilityInputs`, the slices activation hands each install. Only `module_bootstrap` reads it (tests also inspect it). Its `activated`/`activating` flags are the one activation state machine. A pending coordinator rebuild travels on the prepared definition (`_pendingCoordinatorRebuild`).
+- `module_contexts.lua` builds the runtime and UI contexts once; lane fields are attached at construction through `moduleState.createLanes`.
+- `managed_module_lifecycle.bind(session)` returns the commit, reload, enable, and pack-transition operations. Each one is exposed as an activation-gated module method of the same name.
+
+## Module State
+
+`moduleState.create(definition, opts)` returns one object per module:
+`{ persistent, staged, status, actionBuffer, txn }`.
+
+- `staged` is the view (`get/read/write/reset/table/getAliasSchema`), handed to UI lanes and controls.
+- `txn` is the transaction (stage, dirty and pending checks, `beginCommit`/`rollback`/`finish`, `reload`, `queueResetAll`, the queued status reset), handed only to the lifecycle.
+- `status` holds status semantics (`module_state/status_state.lua`). A status reset is queued on the txn and applied during a successful commit.
+- `moduleState.createLanes(state, fields)` builds the author lanes (`runtime.data`, `runtime.status`, `ui.data`, `ui.status`) on one `storage_ref_adapter` lane builder. Private-alias rejection happens once, in that builder.
 
 ## Temporary Internal Bridges
 

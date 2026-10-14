@@ -2,99 +2,66 @@ local deps = ...
 
 local logging = deps.logging
 local setupRunData = deps.setupRunData
-local mutationRegistry = deps.mutationRegistry
+local ownerSlots = deps.ownerSlots
 local plan = deps.plan
+local receipt = deps.receipt
 
-local lifecycle = {
-    createBackup = plan.createBackup,
-    createPlan = plan.createPlan,
-    applyPlan = plan.applyPlan,
-    revertPlan = plan.revertPlan,
-}
+local lifecycle = {}
 
-local function getMutationSlotKey(ownerId)
-    if type(ownerId) ~= "string" or ownerId == "" then
-        logging.violate("mutation.invalid_runtime_key", "mutation lifecycle requires ownerId")
-    end
-    return "owner:" .. ownerId, mutationRegistry.ownerSlots
+-- `ownerSlots` is a hot-reload anchor: a Lib re-import must find (and be able to revert) plans
+-- the previous import applied. Keep its key format (`"owner:" .. ownerId`) and slot shape
+-- (`{ plan = activePlan }`) stable, or a reload orphans an applied plan.
+local function slotKey(ownerId)
+    return "owner:" .. ownerId
 end
 
-local function getMutationSlot(ownerId)
-    local key, bucket = getMutationSlotKey(ownerId)
-    return bucket[key], key, bucket
+local function getActivePlan(ownerId)
+    local slot = ownerSlots[slotKey(ownerId)]
+    return slot and slot.plan or nil
 end
 
-local function setMutationSlot(ownerId, slot)
-    local key, bucket = getMutationSlotKey(ownerId)
-    if slot == nil or slot.plan == nil then
-        bucket[key] = nil
-        return
-    end
-    bucket[key] = slot
+local function setActivePlan(ownerId, activePlan)
+    ownerSlots[slotKey(ownerId)] = activePlan and { plan = activePlan } or nil
 end
 
-local function setActiveMutationPlan(ownerId, activePlan)
-    local slot = getMutationSlot(ownerId) or {}
-    slot.plan = activePlan
-    setMutationSlot(ownerId, slot)
-end
-
-local function captureActiveMutation(ownerId)
-    local slot = getMutationSlot(ownerId)
-    if not slot then
-        return nil
-    end
-    return {
-        plan = slot.plan,
-    }
-end
-
-local function hasActiveMutationSnapshot(snapshot)
-    return snapshot and snapshot.plan ~= nil
-end
-
-local function restoreActiveMutation(ownerId, snapshot)
-    if not hasActiveMutationSnapshot(snapshot) then
+-- Re-applies a plan captured before a failed change and makes it active again.
+local function restoreActivePlan(ownerId, previousPlan)
+    if previousPlan == nil then
         return true, nil
     end
 
-    local okPlan, errPlan = pcall(lifecycle.applyPlan, snapshot.plan)
+    local okPlan, errPlan = pcall(plan.applyPlan, previousPlan)
     if not okPlan then
         return false, errPlan
     end
 
-    setActiveMutationPlan(ownerId, snapshot.plan)
+    setActivePlan(ownerId, previousPlan)
     return true, nil
 end
 
 local function buildMutationPlan(mutationBundle, runtime, host)
-    local builder = mutationBundle and mutationBundle.patchMutation
+    local builder = mutationBundle.patchMutation
     if builder == nil then
         return nil
     end
 
-    local mutationPlan = lifecycle.createPlan()
+    local mutationPlan = plan.createPlan()
     builder(host, runtime, mutationPlan)
     return mutationPlan
 end
 
 local function isEnabledForSync(runtime)
-    if not (runtime and runtime.data) then
-        return false
-    end
     return runtime.data.read("Enabled") == true
 end
 
 local function revertActivePlan(ownerId)
-    local slot = getMutationSlot(ownerId)
-    local activePlan = slot and slot.plan or nil
+    local activePlan = getActivePlan(ownerId)
     if not activePlan then
         return true, nil, false
     end
 
-    local okPlan, errPlan = pcall(lifecycle.revertPlan, activePlan)
-    slot.plan = nil
-    setMutationSlot(ownerId, slot)
+    local okPlan, errPlan = pcall(plan.revertPlan, activePlan)
+    setActivePlan(ownerId, nil)
     if not okPlan then
         return false, errPlan, true
     end
@@ -102,15 +69,12 @@ local function revertActivePlan(ownerId)
 end
 
 local function hasPatchMutation(mutationBundle)
-    return mutationBundle and type(mutationBundle.patchMutation) == "function" or false
+    return mutationBundle.patchMutation ~= nil
 end
 
 function lifecycle.declarePatch(mutationBundle, callback)
     if type(callback) ~= "function" then
         logging.violate("mutation.invalid_registration", "module.mutation.patch: callback must be a function")
-    end
-    if type(mutationBundle) ~= "table" then
-        logging.violate("mutation.invalid_registration", "module.mutation.patch: expected managed mutation bundle")
     end
     if mutationBundle.patchMutation ~= nil then
         logging.violate("mutation.invalid_registration", "module.mutation.patch: patch mutation already declared")
@@ -118,13 +82,9 @@ function lifecycle.declarePatch(mutationBundle, callback)
     mutationBundle.patchMutation = callback
 end
 
-function lifecycle.affectsRunData(mutationBundle)
-    return hasPatchMutation(mutationBundle)
-end
-
-function lifecycle.apply(ownerId, mutationBundle, runtime, host)
+local function apply(ownerId, mutationBundle, runtime, host)
     local hasPatch = hasPatchMutation(mutationBundle)
-    local previousMutation = captureActiveMutation(ownerId)
+    local previousPlan = getActivePlan(ownerId)
 
     local okActive, errActive = revertActivePlan(ownerId)
     if not okActive then
@@ -132,11 +92,9 @@ function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     end
 
     local function failApply(err)
-        if hasActiveMutationSnapshot(previousMutation) then
-            local okRestore, restoreErr = restoreActiveMutation(ownerId, previousMutation)
-            if not okRestore then
-                return false, tostring(err) .. " (previous mutation restore failed: " .. tostring(restoreErr) .. ")"
-            end
+        local okRestore, restoreErr = restoreActivePlan(ownerId, previousPlan)
+        if not okRestore then
+            return false, tostring(err) .. " (previous mutation restore failed: " .. tostring(restoreErr) .. ")"
         end
         return false, err
     end
@@ -151,18 +109,17 @@ function lifecycle.apply(ownerId, mutationBundle, runtime, host)
     end
     local builtPlan = result
     if builtPlan then
-        local okApply, errApply = pcall(lifecycle.applyPlan, builtPlan)
+        local okApply, errApply = pcall(plan.applyPlan, builtPlan)
         if not okApply then
             return failApply(errApply)
         end
-        setActiveMutationPlan(ownerId, builtPlan)
+        setActivePlan(ownerId, builtPlan)
     end
 
     return true, nil
 end
 
-function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
-    local _ = def
+local function sync(ownerId, mutationBundle, runtime, host)
     local enabled = isEnabledForSync(runtime)
     local hasPatch = hasPatchMutation(mutationBundle)
     local candidatePlan = nil
@@ -171,9 +128,7 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
         candidatePlan = buildMutationPlan(mutationBundle, runtime, host)
     end
 
-    local previousMutation = captureActiveMutation(ownerId)
-    local committed = false
-    local disposed = false
+    local previousPlan = getActivePlan(ownerId)
     local revertedPrevious = false
     local appliedCandidate = false
     local setupRan = false
@@ -182,19 +137,17 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
         local rollbackErrors = {}
 
         if appliedCandidate and candidatePlan then
-            local okRevert, errRevert = pcall(lifecycle.revertPlan, candidatePlan)
+            local okRevert, errRevert = pcall(plan.revertPlan, candidatePlan)
             if not okRevert then
                 rollbackErrors[#rollbackErrors + 1] = "candidate revert failed: " .. tostring(errRevert)
             end
-            setActiveMutationPlan(ownerId, nil)
+            setActivePlan(ownerId, nil)
             appliedCandidate = false
         end
 
-        if hasActiveMutationSnapshot(previousMutation) then
-            local okRestore, errRestore = restoreActiveMutation(ownerId, previousMutation)
-            if not okRestore then
-                rollbackErrors[#rollbackErrors + 1] = "previous mutation restore failed: " .. tostring(errRestore)
-            end
+        local okRestore, errRestore = restoreActivePlan(ownerId, previousPlan)
+        if not okRestore then
+            rollbackErrors[#rollbackErrors + 1] = "previous mutation restore failed: " .. tostring(errRestore)
         end
 
         if recompute then
@@ -216,12 +169,11 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
         return true, nil
     end
 
-    return {
+    return receipt.create({
+        name = "mutation",
+        phase = receipt.PHASE_GAME_DATA,
+        -- A failed commit restores the previous plan itself, so no discard is needed.
         commit = function()
-            if disposed or committed then
-                return true, nil
-            end
-
             local okRevert, errRevert, didRevert = revertActivePlan(ownerId)
             if not okRevert then
                 return false, errRevert
@@ -229,11 +181,11 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
             revertedPrevious = didRevert == true
 
             if candidatePlan then
-                local okApply, errApply = pcall(lifecycle.applyPlan, candidatePlan)
+                local okApply, errApply = pcall(plan.applyPlan, candidatePlan)
                 if not okApply then
                     return restorePrevious(errApply, revertedPrevious)
                 end
-                setActiveMutationPlan(ownerId, candidatePlan)
+                setActivePlan(ownerId, candidatePlan)
                 appliedCandidate = true
             end
 
@@ -245,35 +197,55 @@ function lifecycle.sync(ownerId, def, mutationBundle, runtime, host)
                 setupRan = true
             end
 
-            committed = true
             return true, nil
         end,
-        dispose = function()
-            if disposed then
-                return true, nil
-            end
-            if committed then
-                local okRestore, errRestore = restorePrevious(nil, setupRan or revertedPrevious or appliedCandidate)
-                disposed = true
-                if not okRestore then
-                    return false, errRestore
-                end
-                return true, nil
-            end
-
-            disposed = true
+        rollback = function()
+            return restorePrevious(nil, setupRan or revertedPrevious or appliedCandidate)
+        end,
+        -- The owner's active-plan slot is process-global: a successor's sync commit already
+        -- reverted this install's plan and replaced the slot, so there is nothing left to retire.
+        retire = function()
             return true, nil
         end,
-    }
+    })
 end
 
-function lifecycle.revert(ownerId)
+local function revert(ownerId)
     local okPlan, errPlan = revertActivePlan(ownerId)
     if not okPlan then
         return false, errPlan
     end
 
     return true, nil
+end
+
+--- Binds one owner's mutation bundle to the host/runtime its patch builder receives.
+---
+--- Ownership of the run-data recompute (`SetupRunData`):
+--- - `sync()` returns an activation receipt that recomputes run data itself on commit, and on
+---   rollback whenever it changed the active plan.
+--- - `apply()` / `revert()` change the active plan only; the caller owns the recompute
+---   (commit flows mark run data dirty and the pack/fallback UI flushes it).
+---@param ownerId string
+---@param mutationBundle AdamantModpackLib.MutationBundle
+---@param host AdamantModpackLib.Host
+---@param runtime AdamantModpackLib.RuntimeContext
+---@return AdamantModpackLib.BoundMutation
+function lifecycle.bind(ownerId, mutationBundle, host, runtime)
+    return {
+        apply = function()
+            return apply(ownerId, mutationBundle, runtime, host)
+        end,
+        revert = function()
+            return revert(ownerId)
+        end,
+        sync = function()
+            return sync(ownerId, mutationBundle, runtime, host)
+        end,
+        affectsRunData = function()
+            return hasPatchMutation(mutationBundle)
+        end,
+    }
 end
 
 return lifecycle

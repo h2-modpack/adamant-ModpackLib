@@ -1,24 +1,31 @@
 local deps = ...
 
 local logging = deps.logging
-local storageInternal = deps.storage
-local StorageTypes = deps.types
 local values = deps.values
+local nodeOps = deps.nodeOps
+local aliasAccess = deps.aliasAccess
+local storageField = deps.field
 
-local function ClampRowCount(node, count)
+local function NonNegativeCount(count)
     count = math.floor(tonumber(count) or 0)
     if count < 0 then count = 0 end
+    return count
+end
+
+local function ClampRowCount(node, count)
+    count = NonNegativeCount(count)
     if node.minRows ~= nil and count < node.minRows then count = node.minRows end
     if node.maxRows ~= nil and count > node.maxRows then count = node.maxRows end
     return count
 end
 
+-- Row schemas are prepared by schema.validate before the table root is prepared.
 local function GetRowAliasNodes(node)
-    return node and node.row and storageInternal.getAliases(node.row) or {}
+    return node.row._aliasNodes
 end
 
 local function GetRowRootNodes(node)
-    return node and node.row and storageInternal.getRoots(node.row) or {}
+    return node.row._rootNodes
 end
 
 local function CreateDefaultTableRow(node)
@@ -40,11 +47,11 @@ local function readRowRootValue(root, row, normalizedRoot)
     if normalizedRoot == true then
         return value
     end
-    return storageInternal.NormalizeStorageValue(root, value)
+    return nodeOps.normalize(root, value)
 end
 
 local function writeRowRootValue(root, row, value)
-    row[root.alias] = storageInternal.NormalizeStorageValue(root, value)
+    row[root.alias] = nodeOps.normalize(root, value)
     return true
 end
 
@@ -111,19 +118,8 @@ local function validateRowAlias(node, alias, methodName)
     end
 end
 
-local function getAliasNodeOrError(node, aliasNodes, alias)
-    local aliasNode = aliasNodes[alias]
-    if not aliasNode then
-        unknownRowAlias(node, alias)
-    end
-    return aliasNode
-end
-
-local function PrepareTableNode(node, prefix, validateOpts)
-    if type(node.row) ~= "table" then
-        return
-    end
-
+-- Contact-point checks for row declarations; runs before schema.validate prepares node.row.
+local function ValidateRowDeclarations(node, prefix)
     for index, rowNode in ipairs(node.row) do
         local rowPrefix = prefix .. " row[" .. index .. "]"
         if type(rowNode) == "table" then
@@ -145,11 +141,12 @@ local function PrepareTableNode(node, prefix, validateOpts)
             end
         end
     end
+end
 
-    storageInternal.validate(node.row, prefix .. " row", validateOpts)
-
-    node.minRows = ClampRowCount({ minRows = 0 }, node.minRows or 0)
-    node.maxRows = node.maxRows ~= nil and ClampRowCount({ minRows = 0 }, node.maxRows) or nil
+-- Normalizes row-count axes and the default value once node.row is prepared.
+local function PrepareTableNode(node)
+    node.minRows = NonNegativeCount(node.minRows or 0)
+    node.maxRows = node.maxRows ~= nil and NonNegativeCount(node.maxRows) or nil
     if node.maxRows ~= nil and node.minRows > node.maxRows then
         node.minRows = node.maxRows
     end
@@ -163,20 +160,21 @@ NormalizeTableRow = function(node, rowValue)
     if type(rowValue) ~= "table" then
         return row
     end
-    local aliasNodes = GetRowAliasNodes(node)
 
     for _, root in ipairs(GetRowRootNodes(node)) do
         if rowValue[root.alias] ~= nil then
-            row[root.alias] = storageInternal.NormalizeStorageValue(root, rowValue[root.alias])
+            row[root.alias] = nodeOps.normalize(root, rowValue[root.alias])
         end
     end
 
+    -- Packed child values apply on top of their (already normalized) packed roots.
+    local aliasNodes = GetRowAliasNodes(node)
     local rowBackend = createRowBackend(node, false)
     rowBackend.bindRow(row)
-
     for alias, value in pairs(rowValue) do
-        if aliasNodes[alias] ~= nil then
-            storageInternal.writeAlias(aliasNodes, rowBackend, alias, value)
+        local aliasNode = aliasNodes[alias]
+        if aliasNode ~= nil and aliasNode._isBitAlias then
+            aliasAccess.writeAlias(aliasNodes, rowBackend, alias, value)
         end
     end
 
@@ -227,9 +225,7 @@ end
 local function SerializeTableValue(node, value)
     local parts = {}
     local rows = ForEachNormalizedTableCell(node, value, function(_, root, cellValue)
-        local storageType = StorageTypes[root.type]
-        local encoded = storageType.toHash(root, cellValue)
-        parts[#parts + 1] = EncodeLengthPrefixed(encoded)
+        parts[#parts + 1] = EncodeLengthPrefixed(nodeOps.toHash(root, cellValue))
     end)
     table.insert(parts, 1, tostring(#rows) .. ":")
     return table.concat(parts)
@@ -256,12 +252,11 @@ local function DeserializeTableValue(node, str)
             if encoded == nil then
                 return NormalizeTableValue(node, nil)
             end
-            local storageType = StorageTypes[root.type]
-            row[root.alias] = storageType.fromHash(root, encoded)
+            row[root.alias] = nodeOps.fromHash(root, encoded)
         end
         rows[rowIndex] = NormalizeTableRow(node, row)
     end
-    return NormalizeTableValue(node, rows)
+    return rows
 end
 
 local function IsSerializedTableValue(node, str)
@@ -287,7 +282,7 @@ local function IsSerializedTableValue(node, str)
             if encoded == nil then
                 return false
             end
-            if not storageInternal.isHashTokenValid(root, encoded) then
+            if not nodeOps.isHashTokenValid(root, encoded) then
                 return false
             end
         end
@@ -297,7 +292,6 @@ local function IsSerializedTableValue(node, str)
 end
 
 local function CreateTableHandle(node, opts)
-    opts = opts or {}
     local aliasNodes = GetRowAliasNodes(node)
     local rowOwners = {}
     local rowControlIds = {}
@@ -341,12 +335,12 @@ local function CreateTableHandle(node, opts)
 
     local function readRowAlias(row, alias)
         rowBackend.bindRow(row)
-        return storageInternal.readAlias(aliasNodes, rowBackend, alias)
+        return aliasAccess.readAlias(aliasNodes, rowBackend, alias)
     end
 
     local function writeRowAlias(row, alias, value)
         rowBackend.bindRow(row)
-        return storageInternal.writeAlias(aliasNodes, rowBackend, alias, value)
+        return aliasAccess.writeAlias(aliasNodes, rowBackend, alias, value)
     end
 
     local handle = {}
@@ -390,6 +384,37 @@ local function CreateTableHandle(node, opts)
         return changed
     end
 
+    local function readRowCell(rowIndex, alias)
+        local row = readRow(readRows(), rowIndex)
+        if not row then
+            return nil
+        end
+        return readRowAlias(row, alias)
+    end
+
+    -- Writes one cell (or resets it to its row-schema default) and stores the rows on change.
+    local function updateRowCell(rowIndex, alias, value, reset)
+        local rows = copyRows()
+        local row = readRow(rows, rowIndex)
+        if not row then
+            return false
+        end
+        if reset then
+            local aliasNode = getRowAliasNodeOrNil(alias)
+            if not aliasNode then
+                return false
+            end
+            value = values.deepCopy(aliasNode.default)
+        end
+        local changed = writeRowAlias(row, alias, value)
+        if changed then
+            writeRows(rows)
+        end
+        return changed
+    end
+
+    -- Row owners back StorageFields created by handle.get; fields pass their own (known)
+    -- alias or one checked by StorageField.readAlias/writeAlias.
     local function getRowOwnerForIndex(rowIndex)
         rowIndex = math.floor(tonumber(rowIndex) or 0)
         local cached = rowOwners[rowIndex]
@@ -399,51 +424,23 @@ local function CreateTableHandle(node, opts)
 
         local rowOwner = {
             read = function(alias)
-                validateRowAlias(node, alias, "rowOwner.read")
-                local row = readRow(readRows(), rowIndex)
-                if not row then
-                    return nil
-                end
-                return readRowAlias(row, alias)
+                return readRowCell(rowIndex, alias)
             end,
             getAliasSchema = function(alias)
-                validateRowAlias(node, alias, "rowOwner.getAliasSchema")
                 return aliasNodes[alias]
             end,
             getFieldControlId = function(alias)
-                validateRowAlias(node, alias, "rowOwner.getFieldControlId")
                 return getRowFieldControlId(rowIndex, alias)
             end,
         }
 
         if opts.writeRoot ~= nil then
             rowOwner.write = function(alias, value)
-                validateRowAlias(node, alias, "rowOwner.write")
-                local rows = copyRows()
-                local row = readRow(rows, rowIndex)
-                if not row then
-                    return false
-                end
-                local changed = writeRowAlias(row, alias, value)
-                if changed then
-                    writeRows(rows)
-                end
-                return changed
+                return updateRowCell(rowIndex, alias, value, false)
             end
 
             rowOwner.reset = function(alias)
-                validateRowAlias(node, alias, "rowOwner.reset")
-                local rows = copyRows()
-                local row = readRow(rows, rowIndex)
-                if not row then
-                    return false
-                end
-                local aliasNode = getAliasNodeOrError(node, aliasNodes, alias)
-                local changed = writeRowAlias(row, alias, values.deepCopy(aliasNode.default))
-                if changed then
-                    writeRows(rows)
-                end
-                return changed
+                return updateRowCell(rowIndex, alias, nil, true)
             end
         end
 
@@ -460,11 +457,7 @@ local function CreateTableHandle(node, opts)
         validateTableReceiver(node, handle, self, "read")
         validateRowIndex(node, rowIndex, "read")
         validateRowAlias(node, alias, "read")
-        local row = readRow(readRows(), rowIndex)
-        if not row then
-            return nil
-        end
-        return readRowAlias(row, alias)
+        return readRowCell(rowIndex, alias)
     end
 
     function handle.snapshot(self, rowIndex)
@@ -500,7 +493,7 @@ local function CreateTableHandle(node, opts)
             return cached
         end
 
-        local field = storageInternal.field.createKnown(getRowOwnerForIndex(rowIndex), alias, aliasNode, "table.get")
+        local field = storageField.create(getRowOwnerForIndex(rowIndex), alias, aliasNode, "table.get")
         rowCache[alias] = field
         return field
     end
@@ -510,33 +503,14 @@ local function CreateTableHandle(node, opts)
             validateTableReceiver(node, handle, self, "write")
             validateRowIndex(node, rowIndex, "write")
             validateRowAlias(node, alias, "write")
-            local rows = copyRows()
-            local row = readRow(rows, rowIndex)
-            if not row then
-                return false
-            end
-            local changed = writeRowAlias(row, alias, value)
-            if changed then
-                writeRows(rows)
-            end
-            return changed
+            return updateRowCell(rowIndex, alias, value, false)
         end
 
         function handle.reset(self, rowIndex, alias)
             validateTableReceiver(node, handle, self, "reset")
             validateRowIndex(node, rowIndex, "reset")
             validateRowAlias(node, alias, "reset")
-            local rows = copyRows()
-            local row = readRow(rows, rowIndex)
-            if not row then
-                return false
-            end
-            local aliasNode = getAliasNodeOrError(node, aliasNodes, alias)
-            local changed = writeRowAlias(row, alias, values.deepCopy(aliasNode.default))
-            if changed then
-                writeRows(rows)
-            end
-            return changed
+            return updateRowCell(rowIndex, alias, nil, true)
         end
 
         function handle.append(self, rowValues)
@@ -584,13 +558,41 @@ local function CreateTableHandle(node, opts)
     return handle
 end
 
+-- Storage type descriptor for `table` roots; storage/00_init.lua registers it in the type map.
+local tableType = {
+    validate = function(node, prefix)
+        if node.default ~= nil and node._tableDefaultPrepared ~= true then
+            logging.violate("storage.invalid_default", "%s: table roots do not support default; use defaultRows", prefix)
+        end
+        if node.minRows ~= nil and (type(node.minRows) ~= "number" or node.minRows < 0) then
+            logging.violate("storage.invalid_axis_type", "%s: table minRows must be a non-negative number", prefix)
+        end
+        if node.maxRows ~= nil and (type(node.maxRows) ~= "number" or node.maxRows < 0) then
+            logging.violate("storage.invalid_axis_type", "%s: table maxRows must be a non-negative number", prefix)
+        end
+        if node.defaultRows ~= nil and (type(node.defaultRows) ~= "number" or node.defaultRows < 0) then
+            logging.violate("storage.invalid_axis_type", "%s: table defaultRows must be a non-negative number", prefix)
+        end
+        if type(node.minRows) == "number" and type(node.maxRows) == "number" and node.minRows > node.maxRows then
+            logging.violate("storage.invalid_axis_type", "%s: table minRows cannot exceed maxRows", prefix)
+        end
+        if type(node.row) ~= "table" or #node.row == 0 then
+            logging.violate("storage.invalid_table_row", "%s: table row must be a non-empty storage schema", prefix)
+        end
+    end,
+    normalize = NormalizeTableValue,
+    equals = function(node, a, b)
+        return values.deepEqual(NormalizeTableValue(node, a), NormalizeTableValue(node, b))
+    end,
+    toHash = SerializeTableValue,
+    fromHash = DeserializeTableValue,
+    isHashTokenValid = IsSerializedTableValue,
+}
+
 return {
+    tableType = tableType,
+    ValidateRowDeclarations = ValidateRowDeclarations,
     PrepareTableNode = PrepareTableNode,
-    NormalizeTableRow = NormalizeTableRow,
-    NormalizeTableValue = NormalizeTableValue,
     ForEachNormalizedTableCell = ForEachNormalizedTableCell,
-    SerializeTableValue = SerializeTableValue,
-    DeserializeTableValue = DeserializeTableValue,
-    IsSerializedTableValue = IsSerializedTableValue,
     CreateTableHandle = CreateTableHandle,
 }

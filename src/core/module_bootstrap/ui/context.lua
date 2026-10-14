@@ -1,7 +1,6 @@
 local deps = ...
 
-local uiDraw = deps.uiDraw
-local moduleState = deps.moduleState
+local draw = deps.draw
 
 local uiContext = {}
 
@@ -30,19 +29,20 @@ local function runCallback(callback, ...)
     return table.unpack(results, 2, results.n)
 end
 
+---@param opts { lanes: AdamantModpackLib.ModuleStateLanes, shared: table, host: table, controls: table,
+---    resetAll: fun(opts?: table): boolean, integer }
 function uiContext.create(opts)
+    local lanes = opts.lanes
     local objects = {
-        draw = uiDraw.get(),
-        state = moduleState.uiState.create(opts.stagedState, opts.shared),
-        actions = moduleState.uiActions.create(opts.actionBuffer),
+        draw = draw,
     }
     objects.ui = {
         draw = objects.draw,
-        data = objects.state,
-        actions = objects.actions,
+        data = lanes.uiData,
+        actions = lanes.uiActions,
         shared = opts.shared,
         controls = opts.controls,
-        status = opts.status,
+        status = lanes.uiStatus,
         resetAll = function(resetOpts)
             return opts.resetAll(resetOpts)
         end,

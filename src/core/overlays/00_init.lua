@@ -1,7 +1,5 @@
 local deps = ...
 
-local service = {}
-
 -- Shared overlay order bands used by module and system retained overlays.
 local overlayOrder = {
     system = 0,
@@ -14,43 +12,61 @@ local overlayRegistry = import('core/overlays/registry.lua', nil, {
     overlayRegistry = deps.overlayRegistry,
 })
 
--- Shared overlay visibility gate. UI suppression is global because foreground
--- configuration UI and gameplay overlays should not compete for screen space.
-local function isUiSuppressed()
-    return next(overlayRegistry.uiSuppressors) ~= nil
-end
+local suppression = import('core/overlays/suppression.lua', nil, {
+    state = overlayRegistry,
+})
+
+local layout = import('core/overlays/layout.lua', nil, {
+    gameDeps = deps.gameDeps.overlays,
+    order = overlayOrder,
+    values = deps.values,
+})
+
+local hudComponents = import('core/overlays/hud_components.lua', nil, {
+    gameDeps = deps.gameDeps.overlays,
+    values = deps.values,
+    groupDestinations = layout.GROUP_DESTINATIONS,
+})
 
 local renderer = import('core/overlays/renderer.lua', nil, {
     gameDeps = deps.gameDeps.overlays,
     state = overlayRegistry.renderer,
-    isUiSuppressed = isUiSuppressed,
-    logging = deps.logging,
+    isUiSuppressed = suppression.isUiSuppressed,
     values = deps.values,
     order = overlayOrder,
     system = deps.rendererSystem,
+    layout = layout,
+    hudComponents = hudComponents,
+    victoryStamp = import('core/overlays/victory_stamp.lua', nil, {
+        gameDeps = deps.gameDeps.overlays,
+        values = deps.values,
+        hudComponents = hudComponents,
+        stampLayout = layout.VICTORY_STAMP_LAYOUT,
+        state = overlayRegistry.renderer,
+    }),
+})
+local suppressForUi = suppression.bindSuppressForUi(renderer.refreshAll)
+
+local declarations = import('core/overlays/declarations.lua', nil, {
+    logging = deps.logging,
+    regions = layout.REGIONS,
+    fonts = hudComponents.FONTS,
 })
 
 local retained = import('core/overlays/retained.lua', nil, {
     state = overlayRegistry.retained,
     renderer = renderer,
-    logging = deps.logging,
+    declarations = declarations,
     order = overlayOrder,
     rom = deps.rom,
-    dispatchIntervals = function(now)
-        return service.dispatchIntervals(now)
-    end,
 })
 
-local declarations = import('core/overlays/declarations.lua', nil, {
-    logging = deps.logging,
-})
-
-local moduleAdapter = import('core/overlays/adapters/module_install.lua', nil, {
-    logging = deps.logging,
-    moduleRegistry = deps.moduleRegistry,
+local ownerInstall = import('core/overlays/owner_install.lua', nil, {
     hooks = deps.hooks,
+    hookDeclarations = deps.hookDeclarations,
     retained = retained,
     declarations = declarations,
+    receipt = deps.receipt,
 })
 
 local system = import('core/overlays/adapters/system_retained.lua', nil, {
@@ -59,44 +75,24 @@ local system = import('core/overlays/adapters/system_retained.lua', nil, {
     order = overlayOrder,
 })
 
-local suppression = import('core/overlays/suppression.lua', nil, {
-    state = overlayRegistry,
-    renderer = renderer,
-    isUiSuppressed = isUiSuppressed,
-})
-
-service.installForModule = moduleAdapter.installForModule
-service.suppressForUi = suppression.suppressForUi
-service.isUiSuppressed = suppression.isUiSuppressed
-
-local modpack = import('core/overlays/adapters/modpack_overlays.lua', nil, {
-    logging = deps.logging,
-    suppression = suppression,
-    system = system,
-    order = overlayOrder,
-})
-
--- Internal API: dispatch overlay projections after settings commit.
-function service.dispatchCommit(owner, commit)
-    return retained.dispatchCommit(owner, commit)
-end
-
--- Internal API: dispatch retained interval projections from the ImGui tick driver.
-function service.dispatchIntervals(now)
-    return retained.dispatchIntervals(now)
-end
-
--- Internal API: dispatch an overlay after-hook projection registered by a retained owner.
-function service.dispatchAfterHook(owner, path, args, results)
-    return retained.dispatchAfterHook(owner, path, args, results)
-end
-
 return {
-    service = service,
-    declarations = declarations,
+    service = {
+        install = ownerInstall.install,
+        suppressForUi = suppressForUi,
+        -- Internal API: dispatch overlay projections after settings commit.
+        dispatchCommit = retained.dispatchCommit,
+    },
     system = system,
-    modpack = modpack,
-    order = overlayOrder,
-    regions = renderer.regions,
-    fonts = renderer.fonts,
+    modpack = import('core/overlays/adapters/modpack_overlays.lua', nil, {
+        logging = deps.logging,
+        suppressForUi = suppressForUi,
+        system = system,
+        order = overlayOrder,
+    }),
+    authoring = {
+        declarations = declarations,
+        order = overlayOrder,
+        regions = declarations.regions,
+        fonts = declarations.fonts,
+    },
 }

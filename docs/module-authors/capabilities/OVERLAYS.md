@@ -44,6 +44,11 @@ module.activate()
 `module.overlays` is bound to the module, so overlay declarations do not need
 a separate owner argument or a construction-time callback.
 
+Declarations are validated when called. An unknown `region`, malformed
+`columns` or `maxRows`, a non-positive `onInterval` period, or bad
+`onInterval` opts fails that call with `overlays.invalid_registration`, not
+`module.activate()`.
+
 ## Retained Elements
 
 Use:

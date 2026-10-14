@@ -3,10 +3,6 @@ local createLibHarness = require('tests/harness/create_lib_harness')
 
 TestMutation = {}
 
-local function createModuleState(harness, config, definition)
-    return harness:createModuleState(config, definition)
-end
-
 function TestMutation:setUp()
     self.harness = createLibHarness()
     self.mutation = self.harness.mutation
@@ -26,7 +22,7 @@ function TestMutation:testBackupRestoresChangedAndRemovedValues()
         Count = 1,
         Nested = { Value = "before" },
     }
-    local backup, restore = self.mutationPlan.createBackup()
+    local backup, restore = self.harness.createMutationBackup()
 
     backup(tbl, "Count", "Nested", "Missing")
     tbl.Count = 7
@@ -331,28 +327,90 @@ function TestMutation:testFailedPlanRetryRestoresToLatestSnapshot()
     })
 end
 
-function TestMutation:testCommittedNoopSyncReceiptDisposesSuccessfully()
-    local definition = self.harness.managedModule.prepareDefinition({}, {
-        id = "NoopMutationReceipt",
-        name = "Noop Mutation Receipt",
-        storage = {},
-    })
-    local store, stagedState = createModuleState(self.harness, {
-        Enabled = true,
-        DebugMode = false,
-    }, definition)
-    local host = self.harness.managedModule.create({
-        pluginGuid = "test-noop-mutation-receipt",
-        definition = definition,
-        persistentState = store,
-        stagedState = stagedState,
-        drawTab = function() end,
-    })
-    local receipt = self.mutation.syncForModule(host)
+local function createRuntime(enabled)
+    return {
+        data = {
+            read = function(alias)
+                if alias == "Enabled" then
+                    return enabled
+                end
+                return nil
+            end,
+        },
+    }
+end
+
+function TestMutation:testCommittedNoopSyncReceiptRollsBackSuccessfully()
+    local bound = self.mutation.bind("test-noop-mutation-receipt", { patchMutation = nil }, {}, createRuntime(true))
+    local receipt = bound.sync()
 
     local ok, err = receipt.commit()
     lu.assertTrue(ok, tostring(err))
 
-    ok, err = receipt.dispose()
+    ok, err = receipt.rollback()
     lu.assertTrue(ok, tostring(err))
+end
+
+function TestMutation:bindPatched(pluginGuid, tbl, value)
+    return self.mutation.bind(pluginGuid, {
+        patchMutation = function(_, _, plan)
+            plan:set(tbl, "Value", value)
+        end,
+    }, {}, createRuntime(true))
+end
+
+function TestMutation:testBindHandleUsesExplicitInputsWithoutModuleRecord()
+    local tbl = { Value = "base" }
+    local host = { label = "host" }
+    local runtime = createRuntime(false)
+    local seen = nil
+    local bundle = { patchMutation = nil }
+    local bound = self.mutation.bind("test-mutation-bind-handle", bundle, host, runtime)
+
+    lu.assertFalse(bound.affectsRunData())
+    self.mutation.declarePatch(bundle, function(patchHost, patchRuntime, plan)
+        seen = { host = patchHost, runtime = patchRuntime }
+        plan:set(tbl, "Value", "patched")
+    end)
+    lu.assertTrue(bound.affectsRunData())
+
+    lu.assertTrue(bound.apply())
+    lu.assertEquals(tbl.Value, "patched")
+    lu.assertIs(seen.host, host)
+    lu.assertIs(seen.runtime, runtime)
+
+    lu.assertTrue(bound.revert())
+    lu.assertEquals(tbl.Value, "base")
+
+    -- Sync follows the runtime's committed Enabled state: disabled builds no plan.
+    local receipt = bound.sync()
+    lu.assertTrue(receipt.commit())
+    lu.assertEquals(tbl.Value, "base")
+end
+
+function TestMutation:testSyncReceiptRollbackRestoresPreviousPlan()
+    local pluginGuid = "test-mutation-receipt-rollback"
+    local tbl = { Value = "base" }
+    local first = self:bindPatched(pluginGuid, tbl, "first").sync()
+    lu.assertTrue(first.commit())
+    local second = self:bindPatched(pluginGuid, tbl, "second").sync()
+    lu.assertTrue(second.commit())
+    lu.assertEquals(tbl.Value, "second")
+
+    lu.assertTrue(second.rollback())
+
+    lu.assertEquals(tbl.Value, "first")
+end
+
+function TestMutation:testSyncReceiptRetireLeavesSuccessorPlanApplied()
+    local pluginGuid = "test-mutation-receipt-retire"
+    local tbl = { Value = "base" }
+    local first = self:bindPatched(pluginGuid, tbl, "first").sync()
+    lu.assertTrue(first.commit())
+    local second = self:bindPatched(pluginGuid, tbl, "second").sync()
+    lu.assertTrue(second.commit())
+
+    lu.assertTrue(first.retire())
+
+    lu.assertEquals(tbl.Value, "second")
 end

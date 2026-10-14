@@ -439,7 +439,7 @@ Rules:
 - status cannot participate in hashes
 - enabled toggles should write through the module host flow
 - debug toggles should write through the module host flow
-- profile/hash plumbing should stage values through `stagedState.write(...)` and flush them through `stagedState._flushToConfig()`
+- profile/hash plumbing should stage values through `module.stage(...)` and commit them through `module.flush()`
 - transient aliases are read from `ui.data` in draw code or internal `stagedState` plumbing
 - transient aliases declare `persist = false, hash = false` and stay out of persisted config
 
@@ -533,23 +533,17 @@ Reserved aliases:
 Managed staged UI state for the module. This is Lib-owned plumbing
 object; module draw callbacks receive the narrower `ui.data` adapter below.
 
-Internal surface:
+Internal view surface (the `staged` field of the per-module state object):
 - `stagedState.get(alias)`
 - `stagedState.read(alias)`
 - `stagedState.table(alias)`
-- `stagedState.field(alias)`
 - `stagedState.getAliasSchema(alias)`
 - `stagedState.write(alias, value)`
 - `stagedState.reset(alias)`
-- `stagedState.resetAll(opts?)`
-- `stagedState.isDirty()`
-- `stagedState.auditMismatches()`
 
-Internal plumbing methods:
-- `stagedState._flushToConfig()`
-- `stagedState._reloadFromConfig()`
-- `stagedState._captureDirtyConfigSnapshot()`
-- `stagedState._restoreConfigSnapshot(snapshot)`
+The view has no transaction powers. Dirty tracking, flush, reload, drift audit,
+whole-module reset, and the queued status reset live on the module state's
+lifecycle-only transaction (`state.txn`).
 
 When a module is rendered through a live module, draw callbacks receive a
 restricted author-facing `ui.data` view with:
@@ -603,6 +597,8 @@ is hidden from `commit.actions`.
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
+- `opts` must be `nil` or a table, and `exclude` must be `nil` or a table;
+  anything else fails with `lifecycle.invalid_reset_opts`.
 
 ### Live module `resetAll(opts?)`
 
@@ -619,6 +615,8 @@ Returns:
 
 Options:
 - `exclude = { Alias = true }` skips specific root aliases.
+- `opts` must be `nil` or a table, and `exclude` must be `nil` or a table;
+  anything else fails with `lifecycle.invalid_reset_opts`.
 
 ## `module.hooks`
 
@@ -803,6 +801,11 @@ module.activate()
 Retained element names are local to the module owner id derived from
 `pluginGuid` and do not collide across modules.
 
+Overlay declarations are validated when declared: an unknown `region`, a
+malformed `columns` list or `maxRows`, a non-positive `onInterval` period, or
+bad `onInterval` opts (`opts.when` must be a function) fails the declaration
+call with `overlays.invalid_registration`, not `module.activate()`.
+
 ### `module.overlays.createLine(name, spec)`
 
 Declares one retained display line. Lines can use a one-column convenience shape:
@@ -884,7 +887,8 @@ not being coordinated by Lib modpack.
 ### `module.fallbackUi.attachGuiOnce(register)`
 
 Registers stable no-op-safe fallback UI callbacks once for the module's plugin
-guid. Call this before `module.activate()`.
+guid. Call this before `module.activate()`. `register` must be a function; any
+other value fails the call with `fallback_ui.invalid_args`.
 
 The callback still owns the actual ROM registration, so it runs from the module
 context:

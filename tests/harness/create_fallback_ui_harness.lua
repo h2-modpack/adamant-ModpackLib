@@ -106,6 +106,7 @@ local function createFallbackUiHarness(opts)
         fallbackUi = base.fallbackUi,
         overlays = base.overlays,
         managedModule = base.managedModule,
+        moduleDefinition = base.moduleDefinition,
         moduleState = base.moduleState,
         registry = base.registry,
         moduleRegistry = base.moduleRegistry,
@@ -144,21 +145,21 @@ local function createFallbackUiHarness(opts)
 
     function h:createLibModule(pluginGuid, moduleOpts)
         moduleOpts = moduleOpts or {}
-        local definition = self.managedModule.prepareDefinition({}, {
+        local definition = self.moduleDefinition.prepareDefinition({}, {
             modpack = moduleOpts.modpack or "fallback-pack",
             id = moduleOpts.id or "FallbackUiTest",
             name = moduleOpts.name or "Fallback UI Test",
             storage = {},
         })
-        local store, stagedState = self:createModuleState({
+        local _, _, moduleState = self:createModuleState({
             Enabled = moduleOpts.enabled ~= false,
             DebugMode = moduleOpts.debugMode == true,
         }, definition)
-        local host = self.managedModule.create({
+        local host = self.harness:createManagedInstance({
             pluginGuid = pluginGuid,
             definition = definition,
-            persistentState = store,
-            stagedState = stagedState,
+            state = moduleState,
+            fallbackUiRequested = moduleOpts.attachFallbackUi == true,
             drawTab = function() end,
         })
         return host, host
@@ -168,11 +169,11 @@ local function createFallbackUiHarness(opts)
         moduleOpts = moduleOpts or {}
         local host = self:createLibModule(pluginGuid, moduleOpts)
         if moduleOpts.attachFallbackUi == true then
-            self.fallbackUi.attachGuiOnce(host, moduleOpts.registerGui or function() end)
+            self.fallbackUi.attachGuiOnce(pluginGuid, moduleOpts.registerGui or function() end)
         end
         local ok, err = host.activate()
         assert(ok, tostring(err))
-        return self.managedModule.getLiveModule(pluginGuid), host
+        return self.moduleRegistry.getLiveModule(pluginGuid), host
     end
 
     function h:getFallbackUiRuntime(pluginGuid)
@@ -180,7 +181,7 @@ local function createFallbackUiHarness(opts)
     end
 
     function h:installFallbackRuntime(module)
-        local receipt = self.fallbackUi.installForModule(module)
+        local receipt = self.fallbackUi.install(module.getOwnerId(), module)
         local ok, err = receipt.commit()
         assert(ok, tostring(err))
         return self:getFallbackUiRuntime(module.getOwnerId())

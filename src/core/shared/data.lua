@@ -2,6 +2,7 @@ local deps = ...
 
 local logging = deps.logging
 local values = deps.values
+local receipt = deps.receipt
 local sharedRegistry = deps.sharedRegistry
 
 sharedRegistry.records = sharedRegistry.records or {}
@@ -117,24 +118,6 @@ local function protectOptional(value)
     return buildReadOnlyView(value)
 end
 
-local function ensureDataDeclarations(record)
-    if not record.sharedDataDeclarations then
-        record.sharedDataDeclarations = sharedData.createDeclarations()
-    end
-    return record.sharedDataDeclarations
-end
-
-local function makeNoopReceipt()
-    return {
-        commit = function()
-            return true, nil
-        end,
-        dispose = function()
-            return true, nil
-        end,
-    }
-end
-
 local function hasOwnerDeclarations(declarations)
     if not declarations then
         return false
@@ -211,62 +194,63 @@ function sharedData.stageReaderDeclaration(declarations, getModule, name, opts)
     return stageDataDeclaration("module.shared.data.reader", "reader", declarations, getModule, name, opts)
 end
 
-function sharedData.stageOwner(record, host, name, opts)
-    return sharedData.stageOwnerDeclaration(ensureDataDeclarations(record), function()
-        return host
-    end, name, opts)
-end
-
-function sharedData.stageReader(record, host, name, opts)
-    return sharedData.stageReaderDeclaration(ensureDataDeclarations(record), function()
-        return host
-    end, name, opts)
-end
-
+-- The receipt-private `ownerToken` scopes rollback/retire to the records this install wrote.
+-- Each published record also carries its `declaration`, so refs created from the same
+-- declarations recognize their own generation's record without a token side channel.
 function sharedData.install(ownerId, declarations)
     validateOwnerId("shared.data.install", ownerId)
     if not hasOwnerDeclarations(declarations) then
-        return makeNoopReceipt()
+        return receipt.noop("shared.data", receipt.PHASE_EFFECTS)
     end
 
-    local install = {
-        ownerId = ownerId,
-        ownerToken = {},
-        entries = {},
-        previous = {},
-        committed = false,
-        disposed = false,
-    }
+    local ownerToken = {}
+    local entries = {}
+    local previous = {}
 
     for _, entry in ipairs(declarations.entries) do
         if entry.access == "owner" then
-            install.entries[#install.entries + 1] = entry
+            entries[#entries + 1] = entry
         end
     end
 
-    return {
-        commit = function()
-            if install.disposed or install.committed then
-                return true, nil
+    -- Clears every record this install still owns, replacing each with what
+    -- `replacementFor(id)` returns.
+    local function release(replacementFor)
+        for index = #entries, 1, -1 do
+            local id = entries[index].id
+            local current = records[id]
+            if current
+                and current.ownerId == ownerId
+                and current.ownerToken == ownerToken
+            then
+                records[id] = replacementFor(id)
             end
+        end
+        return true, nil
+    end
 
-            for _, entry in ipairs(install.entries) do
-                local previous = records[entry.id]
-                if previous and previous.ownerId ~= ownerId then
+    return receipt.create({
+        name = "shared.data",
+        phase = receipt.PHASE_EFFECTS,
+        commit = function()
+            for _, entry in ipairs(entries) do
+                local existing = records[entry.id]
+                if existing and existing.ownerId ~= ownerId then
                     logging.violate(
                         "shared.duplicate_publisher",
                         "shared.data '%s' is already published by '%s'",
                         tostring(entry.id),
-                        tostring(previous.ownerId))
+                        tostring(existing.ownerId))
                 end
-                install.previous[entry.id] = previous
+                previous[entry.id] = existing
             end
 
-            for _, entry in ipairs(install.entries) do
+            for _, entry in ipairs(entries) do
                 records[entry.id] = {
                     id = entry.id,
                     ownerId = ownerId,
-                    ownerToken = install.ownerToken,
+                    ownerToken = ownerToken,
+                    declaration = entry,
                     default = copyOptional(entry.default),
                     defaultView = protectOptional(entry.default),
                     hasDefault = entry.hasDefault == true,
@@ -277,41 +261,30 @@ function sharedData.install(ownerId, declarations)
                 }
             end
 
-            install.committed = true
-            declarations.ownerToken = install.ownerToken
             return true, nil
         end,
-        dispose = function()
-            if install.disposed then
-                return true, nil
-            end
-            if install.committed then
-                for index = #install.entries, 1, -1 do
-                    local entry = install.entries[index]
-                    local current = records[entry.id]
-                    if current
-                        and current.ownerId == ownerId
-                        and current.ownerToken == install.ownerToken
-                    then
-                        records[entry.id] = install.previous[entry.id]
-                    end
-                end
-                if declarations.ownerToken == install.ownerToken then
-                    declarations.ownerToken = nil
-                end
-            end
-            install.disposed = true
-            return true, nil
+        rollback = function()
+            return release(function(id)
+                return previous[id]
+            end)
         end,
-    }
+        -- Retire never restores the record it replaced, which belongs to a retired generation.
+        retire = function()
+            return release(function()
+                return nil
+            end)
+        end,
+    })
 end
 
-local function requireOwnerRecord(context, ownerId, ownerToken, id)
-    validateOwnerId(context, ownerId)
-    validateId(context, id)
+local function isOwnRecord(record, ownerId, declaration)
+    return record ~= nil and record.ownerId == ownerId and record.declaration == declaration
+end
 
+local function requireOwnerRecord(context, ownerId, declaration)
+    local id = declaration.id
     local record = records[id]
-    if not record or record.ownerId ~= ownerId or record.ownerToken ~= ownerToken then
+    if not isOwnRecord(record, ownerId, declaration) then
         logging.violate("shared.not_owner", "%s '%s' requires the active publishing owner", context, id)
     end
     return record
@@ -332,32 +305,28 @@ local function readView(id, fallbackView)
     return fallbackView
 end
 
-local function requireDataDeclaration(record, name, source)
-    local declarations = record and record.sharedDataDeclarations or nil
-    local declaration = declarations and declarations.byName and declarations.byName[name] or nil
+local function requireDataDeclaration(declarations, name, source)
+    local declaration = declarations.byName[name]
     if not declaration then
         logging.violate("shared.invalid_args", "%s: unknown shared declaration '%s'", source, tostring(name))
     end
-    return declarations, declaration
+    return declaration
 end
 
-local function createOwnerRef(context, declarations, declaration, host)
+local function createOwnerRef(context, ownerId, declaration)
     local snapshotValue = copyOptional(declaration.default)
     local snapshot = protectOptional(snapshotValue)
     local id = declaration.id
     local ref = {}
     ref.get = function()
-        local ownerRecord = records[id]
-        if ownerRecord and ownerRecord.ownerId == host.getOwnerId()
-            and ownerRecord.ownerToken == declarations.ownerToken
-        then
+        if isOwnRecord(records[id], ownerId, declaration) then
             return readView(id, snapshot)
         end
         return snapshot
     end
     ref.set = function(_, value)
         validateValue(context .. ".set", value)
-        local ownerRecord = requireOwnerRecord(context .. ".set", host.getOwnerId(), declarations.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".set", ownerId, declaration)
         ownerRecord.value = values.deepCopy(value)
         ownerRecord.valueView = protectOptional(ownerRecord.value)
         ownerRecord.hasValue = true
@@ -365,7 +334,7 @@ local function createOwnerRef(context, declarations, declaration, host)
         return true
     end
     ref.clear = function()
-        local ownerRecord = requireOwnerRecord(context .. ".clear", host.getOwnerId(), declarations.ownerToken, id)
+        local ownerRecord = requireOwnerRecord(context .. ".clear", ownerId, declaration)
         ownerRecord.value = nil
         ownerRecord.valueView = nil
         ownerRecord.hasValue = false
@@ -375,10 +344,14 @@ local function createOwnerRef(context, declarations, declaration, host)
     return ref
 end
 
-function sharedData.createDeclaredRef(record, host, name, source)
-    local declarations, declaration = requireDataDeclaration(record, name, source)
+---@param declarations table Module shared data declarations.
+---@param ownerId string
+---@param name string Author-supplied declaration name.
+---@param source string
+function sharedData.createDeclaredRef(declarations, ownerId, name, source)
+    local declaration = requireDataDeclaration(declarations, name, source)
     if declaration.access == "owner" then
-        return createOwnerRef("shared.data.declared", declarations, declaration, host)
+        return createOwnerRef("shared.data.declared", ownerId, declaration)
     end
 
     local fallbackValue = copyOptional(declaration.fallback)

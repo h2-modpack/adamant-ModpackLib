@@ -36,21 +36,21 @@ end
 
 local function activateAndEnableModule(harness, module, pluginGuid)
     lu.assertTrue(module.activate())
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
     lu.assertNotNil(liveModule)
     lu.assertTrue(liveModule.setEnabled(true))
     return liveModule
 end
 
 local function getLiveStore(harness, pluginGuid)
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
-    local record = harness.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
+    local record = harness.moduleRegistry.getRecord(liveModule)
+    return record and record.runtime.data or nil
 end
 
 local function getLiveRuntime(harness, pluginGuid)
-    local liveModule = harness.managedModule.getLiveModule(pluginGuid)
-    local record = harness.managedModule.getRecord(liveModule)
+    local liveModule = harness.moduleRegistry.getLiveModule(pluginGuid)
+    local record = harness.moduleRegistry.getRecord(liveModule)
     return record and record.runtime or nil
 end
 
@@ -99,7 +99,7 @@ end
 
 function TestShared:setUp()
     self.harness = createLibHarness()
-    self.shared = self.harness.shared
+    self.shared = self.harness.sharedBundle
 end
 
 function TestShared:testPublicSurfaceIsClosed()
@@ -107,8 +107,65 @@ function TestShared:testPublicSurfaceIsClosed()
 end
 
 function TestShared:testServiceSurfaceExposesInstallAndData()
-    lu.assertEquals(type(self.shared.installForModule), "function")
-    lu.assertEquals(type(self.shared.data), "table")
+    lu.assertEquals(type(self.shared.install), "function")
+    lu.assertEquals(type(self.shared.refs.create), "function")
+    lu.assertEquals(type(self.shared.events.emit), "function")
+    lu.assertNil(self.shared.installForModule)
+    lu.assertNil(self.shared.emitForModule)
+end
+
+function TestShared:testInstallAndRefsTakeExplicitInputsWithoutModuleRecord()
+    local ownerId = "shared-explicit-install"
+    local enabled = true
+    local function getHost()
+        return { isEnabled = function() return enabled end }
+    end
+    local dataDeclarations = self.shared.dataDeclarations.createDeclarations()
+    self.shared.dataDeclarations.stageOwnerDeclaration(dataDeclarations, getHost, "status", {
+        id = "test.shared.explicit.status",
+        default = { value = "default" },
+    })
+    local delivered = {}
+    local registrations = self.shared.registrations.create()
+    self.shared.registrations.stageListener(registrations, getHost, "test.shared.explicit.events", "changed",
+        function(payload)
+            delivered[#delivered + 1] = payload
+        end)
+    local emitted = {}
+    local refs = self.shared.refs.create({
+        ownerId = ownerId,
+        declarations = dataDeclarations,
+        emit = function(id, eventName, payload)
+            emitted[#emitted + 1] = { id = id, eventName = eventName }
+            return self.shared.events.emit("test", id, eventName, payload)
+        end,
+        source = "test.shared",
+    })
+
+    local receipt = self.shared.install(ownerId, { data = dataDeclarations, events = registrations })
+    local ok, err = receipt.commit()
+    lu.assertTrue(ok, tostring(err))
+
+    lu.assertTrue(refs.set("status", { value = "published" }))
+    lu.assertEquals(refs.read("status").value, "published")
+    lu.assertTrue(refs.emit("test.shared.explicit.events", "changed", { value = 1 }))
+    lu.assertEquals(#delivered, 1)
+    lu.assertEquals(emitted, { { id = "test.shared.explicit.events", eventName = "changed" } })
+
+    -- A second generation with its own declarations owns the record; the first's refs lose write access.
+    local nextDeclarations = self.shared.dataDeclarations.createDeclarations()
+    self.shared.dataDeclarations.stageOwnerDeclaration(nextDeclarations, getHost, "status", {
+        id = "test.shared.explicit.status",
+    })
+    local nextReceipt = self.shared.install(ownerId, { data = nextDeclarations })
+    lu.assertTrue(nextReceipt.commit())
+    lu.assertErrorMsgContains("shared.not_owner", function()
+        refs.set("status", { value = "stale" })
+    end)
+
+    lu.assertTrue(nextReceipt.rollback())
+    lu.assertTrue(refs.set("status", { value = "restored" }))
+    lu.assertEquals(refs.read("status").value, "restored")
 end
 
 function TestShared:testAuthorSurfaceExposesDataAndEvents()
@@ -143,19 +200,19 @@ function TestShared:testSharedDataDeclarationsDoNotAffectStructuralFingerprint()
     })
     lu.assertTrue(secondAuthorModule.activate())
 
-    local firstRecord = self.harness.managedModule.getRecord(self.harness.managedModule.getLiveModule("shared-structural-a"))
-    local secondRecord = self.harness.managedModule.getRecord(self.harness.managedModule.getLiveModule("shared-structural-b"))
+    local firstRecord = self.harness.moduleRegistry.getRecord(self.harness.moduleRegistry.getLiveModule("shared-structural-a"))
+    local secondRecord = self.harness.moduleRegistry.getRecord(self.harness.moduleRegistry.getLiveModule("shared-structural-b"))
 
     lu.assertEquals(
         firstRecord.definition._structuralFingerprint,
         secondRecord.definition._structuralFingerprint
     )
 
-    self.harness.managedModule.prepareDefinition(owner, {
+    self.harness.moduleDefinition.prepareDefinition(owner, {
         id = "SharedStructural",
         name = "Shared Structural",
     })
-    self.harness.managedModule.prepareDefinition(owner, {
+    self.harness.moduleDefinition.prepareDefinition(owner, {
         id = "SharedStructural",
         name = "Shared Structural",
     })
@@ -373,7 +430,7 @@ function TestShared:testDeclaredDataPublishesOwnerAndDrawWrites()
     activateAndEnableModule(self.harness, reader, "test-shared-data-reader")
     lu.assertFalse(readerStore.shared.read("Active"))
 
-    self.harness.managedModule.getLiveModule("test-shared-data-publisher").drawTab()
+    self.harness.moduleRegistry.getLiveModule("test-shared-data-publisher").drawTab()
     lu.assertTrue(readerStore.shared.read("Active"))
     lu.assertErrorMsgContains("does not support set", function()
         readerStore.shared.set("Active", false)
@@ -455,7 +512,7 @@ function TestShared:testDeclaredDataReadsTableViews()
     activateAndEnableModule(self.harness, reader, "test-shared-data-table-reader")
     lu.assertFalse(readerStore.shared.read("Availability").active)
 
-    self.harness.managedModule.getLiveModule("test-shared-data-table-publisher").drawTab()
+    self.harness.moduleRegistry.getLiveModule("test-shared-data-table-publisher").drawTab()
     local availability = readerStore.shared.read("Availability")
     lu.assertTrue(availability.active)
     lu.assertFalse(availability.available.Apollo)
@@ -697,6 +754,67 @@ function TestShared:testDeclaredDataSameOwnerHotReloadReplacesPublication()
     end)
 end
 
+function TestShared:testHotReloadRetireDoesNotResurrectOlderListener()
+    local received = {}
+    local function activateGeneration(label)
+        activateModule(self.harness, "shared-retire-listener", {
+            id = "SharedRetireListener",
+            name = "Shared Retire Listener",
+            configureModule = function(authorModule)
+                if label then
+                    authorModule.shared.listen("test.retire", "changed", function()
+                        received[#received + 1] = label
+                    end)
+                end
+            end,
+        })
+    end
+    activateGeneration("first")
+    activateGeneration("second")
+    activateGeneration(nil)
+    activateModule(self.harness, "shared-retire-emitter")
+
+    local ok, delivered = getLiveRuntime(self.harness, "shared-retire-emitter").shared.emit("test.retire", "changed", {})
+
+    lu.assertTrue(ok)
+    lu.assertEquals(delivered, 0)
+    lu.assertEquals(received, {})
+end
+
+function TestShared:testHotReloadRetireDoesNotResurrectOlderPublication()
+    local function activateGeneration(default)
+        local module = createSharedModule(self.harness, "test-shared-data-retire", {
+            id = "SharedRetire",
+            name = "Shared Retire",
+            shared = default and {
+                Snapshot = {
+                    id = "test.shared.retire",
+                    access = "owner",
+                    default = default,
+                },
+            } or nil,
+        })
+        activateAndEnableModule(self.harness, module, "test-shared-data-retire")
+    end
+    local reader, readerStore = createSharedModule(self.harness, "test-shared-data-retire-reader", {
+        shared = {
+            Snapshot = {
+                id = "test.shared.retire",
+                access = "reader",
+                fallback = "fallback",
+            },
+        },
+    })
+    activateAndEnableModule(self.harness, reader, "test-shared-data-retire-reader")
+    activateGeneration("first")
+    activateGeneration("second")
+    lu.assertEquals(readerStore.shared.read("Snapshot"), "second")
+
+    activateGeneration(nil)
+
+    lu.assertEquals(readerStore.shared.read("Snapshot"), "fallback")
+end
+
 function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
     local publisher, publisherStore = createSharedModule(self.harness, "test-shared-data-disabled", {
         shared = {
@@ -720,7 +838,7 @@ function TestShared:testDeclaredDataDisabledOwnerIsInvisibleToReads()
     activateAndEnableModule(self.harness, publisher, "test-shared-data-disabled")
     publisherStore.shared.set("Snapshot", "visible")
 
-    local liveModule = self.harness.managedModule.getLiveModule("test-shared-data-disabled")
+    local liveModule = self.harness.moduleRegistry.getLiveModule("test-shared-data-disabled")
     lu.assertEquals(readerStore.shared.read("Snapshot"), "visible")
     lu.assertTrue(liveModule.setEnabled(false))
     lu.assertEquals(readerStore.shared.read("Snapshot"), "fallback")

@@ -15,6 +15,7 @@ local function define(ownerId, register)
     return true
 end
 
+--- Builds a system scope's overlay surface. System overlays key off `ownerId` alone.
 function systemAdapter.create(_, ownerId)
     return {
         order = overlayOrder,

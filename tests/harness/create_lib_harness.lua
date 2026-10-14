@@ -12,7 +12,13 @@ local function createLibHarness(opts)
     local nativeConfigRoot = opts.nativeConfigRoot
         or ("/tmp/adamant-modpacklib-tests-" .. tostring(os.clock()):gsub("[^%d]", ""))
     local imports = {}
-    local importOverrides = opts.importOverrides or {}
+    local importOverrides = {}
+    for path, override in pairs(opts.importOverrides or {}) do
+        importOverrides[path] = override
+    end
+    if opts.gameDeps ~= nil then
+        importOverrides["core/game_deps/game_deps.lua"] = opts.gameDeps
+    end
     local callbacks = opts.callbacks or fakeEngine.createCallbacks()
     local env = fakeEngine.createBaseEnv({
         callbacks = callbacks,
@@ -49,7 +55,6 @@ local function createLibHarness(opts)
         chalk = opts.chalk or rom.mods['SGG_Modding-Chalk'],
         plugin = plugin,
         modutil = rom.mods['SGG_Modding-ModUtil'],
-        gameDeps = opts.gameDeps,
     }
 
     local core = env.import('core/init.lua', nil, {
@@ -77,37 +82,34 @@ local function createLibHarness(opts)
 
         logging = imports["core/logging/logging.lua"],
         values = imports["core/helpers/values.lua"],
-        gameDeps = externals.gameDeps or imports["core/game_deps/game_deps.lua"],
+        receipt = imports["core/helpers/receipt.lua"],
+        gameDeps = imports["core/game_deps/game_deps.lua"],
         cacheBundle = imports["core/cache/00_init.lua"],
-        cache = imports["core/cache/00_init.lua"].service,
         storage = imports["core/storage/00_init.lua"],
         registry = imports["core/lib_bootstrap/registry.lua"],
         moduleRegistry = imports["core/lib_bootstrap/module_registry.lua"],
         systemScope = imports["core/lib_bootstrap/system_scope.lua"],
         moduleState = imports["core/module_state/00_init.lua"],
         uiActions = imports["core/module_state/actions/ui_actions.lua"],
-        coordinator = imports["core/modpack/coordination.lua"],
+        actionBuffer = imports["core/module_state/actions/action_buffer.lua"],
+        coordinator = imports["core/coordination/coordination.lua"],
         sharedBundle = imports["core/shared/00_init.lua"],
-        shared = imports["core/shared/00_init.lua"].service,
         hooksBundle = imports["core/hooks/00_init.lua"],
         hooks = imports["core/hooks/00_init.lua"].service,
         overlaysBundle = imports["core/overlays/00_init.lua"],
         overlays = imports["core/overlays/00_init.lua"].service,
-        mutationBundle = imports["core/mutations/00_init.lua"],
-        mutation = imports["core/mutations/00_init.lua"].service,
-        mutationPlan = imports["core/mutations/00_init.lua"].plan,
-        widgetsBundle = imports["core/widgets/00_init.lua"],
-        widgets = imports["core/widgets/00_init.lua"].widgets,
-        nav = imports["core/widgets/00_init.lua"].nav,
-        uiDraw = imports["core/widgets/00_init.lua"].uiDraw,
+        mutation = imports["core/mutations/00_init.lua"],
+        mutationPlan = imports["core/mutations/plan.lua"],
+        createMutationBackup = imports["core/mutations/backup.lua"],
+        draw = imports["core/widgets/00_init.lua"],
+        nav = imports["core/widgets/nav.lua"],
         moduleDefinition = imports["core/module_bootstrap/definition.lua"],
         managedModuleLifecycle = imports["core/module_bootstrap/managed_module_lifecycle.lua"],
         managedModule = imports["core/module_bootstrap/managed_module.lua"],
+        moduleActivation = imports["core/module_bootstrap/managed_module_activation.lua"],
         moduleBundle = imports["core/module_bootstrap/module.lua"],
-        fallbackUiBundle = imports["core/fallback/fallback_ui.lua"],
-        fallbackUi = imports["core/fallback/fallback_ui.lua"].service,
+        fallbackUi = imports["core/fallback/fallback_ui.lua"],
     }
-    harness.externals.gameDeps = harness.gameDeps
     function harness:writeNativeConfig(pluginGuid, values)
         nativeConfigFixture.write(self.nativeConfigRoot, pluginGuid, values)
     end
@@ -132,7 +134,28 @@ local function createLibHarness(opts)
         end
         createOpts.configPath = configPath
         local state = self.moduleState.create(definition, createOpts)
-        return state.persistentState, state.stagedState, configPath
+        return state.persistent, state.staged, state
+    end
+    -- Direct `managedModule.create(...)` callers: supply the empty Lib-built declaration inputs the
+    -- activation finalizer always passes in production, unless the test provides its own.
+    function harness:createManagedInstance(instanceOpts)
+        local createOpts = {}
+        for key, value in pairs(instanceOpts) do
+            createOpts[key] = value
+        end
+        if createOpts.mutationBundle == nil then
+            createOpts.mutationBundle = { patchMutation = nil }
+        end
+        if createOpts.hookDeclarations == nil then
+            createOpts.hookDeclarations = self.hooksBundle.declarations.create()
+        end
+        if createOpts.sharedDataDeclarations == nil then
+            createOpts.sharedDataDeclarations = self.sharedBundle.dataDeclarations.createDeclarations()
+        end
+        if createOpts.controlCatalog == nil then
+            createOpts.controlCatalog = { instances = {}, order = {} }
+        end
+        return self.managedModule.create(createOpts)
     end
     function harness.createSystem(ownerId)
         return harness.systemScope.create(ownerId, {

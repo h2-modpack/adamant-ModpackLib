@@ -51,8 +51,8 @@ end
 
 local function getLiveStore(h, pluginGuid)
     local liveModule = h:liveModule(pluginGuid)
-    local record = h.managedModule.getRecord(liveModule)
-    return record and record.store or nil
+    local record = h.moduleRegistry.getRecord(liveModule)
+    return record and record.runtime.data or nil
 end
 
 function TestCreateModule:setUp()
@@ -207,12 +207,9 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     liveModule.flush()
     lu.assertEquals(store.read("Flag"), true)
     lu.assertEquals(runtimeField:read(), true)
-    lu.assertEquals(self.h.moduleRegistry.getPluginInfo("test-create-module"), {
-        pluginGuid = "test-create-module",
-        packId = "create-module-pack",
-        moduleId = "CreateModule",
-        name = "Create Module",
-    })
+    lu.assertEquals(liveModule.getPackId(), "create-module-pack")
+    lu.assertEquals(liveModule.getModuleId(), "CreateModule")
+    lu.assertEquals(liveModule.getMeta().name, "Create Module")
     lu.assertNotNil(authorSchemaNode)
     lu.assertEquals(authorSchemaNode.alias, "Flag")
     lu.assertEquals(authorSchemaNode.type, "bool")
@@ -226,7 +223,7 @@ function TestCreateModule:testCreateModuleRunsCanonicalPipeline()
     lu.assertEquals(authorRows:read(1, "Limit"), 3)
     lu.assertEquals(authorRows:get(1, "Limit"):read(), 3)
     lu.assertEquals(authorRowField:read(), 3)
-    local liveRecord = self.h.managedModule.getRecord(liveModule)
+    local liveRecord = self.h.moduleRegistry.getRecord(liveModule)
     lu.assertEquals(type(liveRecord.definition._structuralFingerprint), "string")
 end
 
@@ -636,7 +633,7 @@ function TestCreateModule:testDeclarativeModuleSharedListenerReceivesRuntimeHost
     lu.assertTrue(emitter.activate())
 
     local liveEmitter = self.h:liveModule("test-create-module-declarative-emitter")
-    local emitterRecord = self.h.managedModule.getRecord(liveEmitter)
+    local emitterRecord = self.h.moduleRegistry.getRecord(liveEmitter)
     local ok, count = emitterRecord.runtime.shared.emit("test.declarative-event", "changed", { value = 7 })
 
     lu.assertTrue(ok)
@@ -673,8 +670,8 @@ function TestCreateModule:testDeclarativeModuleHooksReceiveHostRuntimeAndGameArg
 
     lu.assertTrue(module.activate())
     local liveModule = self.h:liveModule("test-create-module-declarative-hooks")
-    local record = self.h.managedModule.getRecord(liveModule)
-    local slot = record.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
+    local record = self.h.moduleRegistry.getRecord(liveModule)
+    local slot = record.capabilityInputs.hookDeclarations.wrap.AdamantCreateModuleHookTarget.slots.bonus
     local result = slot.value(function(value)
         return value + 1
     end, 4)
@@ -729,6 +726,30 @@ function TestCreateModule:testModuleMutationPatchDeclaresActivationMutation()
     lu.assertEquals(patchCallbackHost.getOwnerId(), "test-create-module-module-mutation-patch")
     lu.assertNil(patchRuntime.data.table)
     lu.assertNil(patchRuntime.data.getAliasSchema)
+end
+
+function TestCreateModule:testFacadeActivationFailureReportsOnce()
+    local host = createTestModule(self.h, {
+        pluginGuid = "test-create-module-activation-failure-once",
+        config = {
+            Enabled = true,
+        },
+        id = "ActivationFailureOnce",
+        name = "Activation Failure Once",
+        drawTab = function() end,
+    })
+    host.mutation.patch(function()
+        error("facade activate boom")
+    end)
+
+    local ok, err = host.activate()
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "facade activate boom")
+    lu.assertEquals(#self.h.warnings, 1)
+    lu.assertStrContains(self.h.warnings[1], "managed_module.activate_failed")
+    lu.assertStrContains(self.h.warnings[1], "module.activate failed; skipping module:")
+    lu.assertStrContains(self.h.warnings[1], "facade activate boom")
 end
 
 function TestCreateModule:testModuleMutationPatchRejectsAfterActivation()

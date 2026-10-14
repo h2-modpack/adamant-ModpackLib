@@ -2,7 +2,6 @@ local ctx = ...
 
 local function createUIRuntime()
     local moduleRegistry = ctx.moduleRegistry
-    local rom = ctx.rom
     local hud = ctx.hud
     local config = ctx.config
     local packId = ctx.packId
@@ -12,28 +11,16 @@ local function createUIRuntime()
     local snapshotToStaging = ctx.snapshotToStaging
     local logging = ctx.logging
     local onProfileLoaded = ctx.onProfileLoaded
+    local session = ctx.session
 
     local cachedHash = nil
     local cachedFingerprint = nil
-    local runDataDirty = false
 
     local Runtime = {}
 
     function Runtime.invalidateHash()
         cachedHash = nil
         cachedFingerprint = nil
-    end
-
-    function Runtime.markRunDataDirty()
-        runDataDirty = true
-    end
-
-    function Runtime.flushPendingRunData()
-        if not runDataDirty then
-            return
-        end
-        rom.game.SetupRunData()
-        runDataDirty = false
     end
 
     function Runtime.getCachedHash()
@@ -46,7 +33,7 @@ local function createUIRuntime()
     function Runtime.finishUiChange(entry, snapshot)
         snapshot = snapshot or snapshotAccess.get() or snapshotAccess.capture()
         if entry and moduleRegistry.snapshot.affectsRunData(entry, snapshot) then
-            Runtime.markRunDataDirty()
+            session.markRunDataDirty()
         end
         Runtime.invalidateHash()
         hud.markHashDirty()
@@ -147,7 +134,7 @@ local function createUIRuntime()
         end
 
         if needsRunData then
-            Runtime.markRunDataDirty()
+            session.markRunDataDirty()
         end
         Runtime.invalidateHash()
         hud.markHashDirty()
@@ -321,14 +308,14 @@ local function createUIRuntime()
 
         staging.ModEnabled = state == true
         config.ModEnabled = state == true
-        Runtime.markRunDataDirty()
+        session.markRunDataDirty()
         hud.setModMarker(state)
         return true, nil
     end
 
     function Runtime.loadProfile(profileHash)
         if hud.applyConfigHash(profileHash) then
-            Runtime.markRunDataDirty()
+            session.markRunDataDirty()
             snapshotToStaging()
             Runtime.invalidateHash()
             if type(onProfileLoaded) == "function" then
@@ -363,7 +350,7 @@ local function createUIRuntime()
                             tostring(entry.name or entry.id or entry.pluginGuid or "module"),
                             tostring(err))
                     elseif moduleRegistry.snapshot.affectsRunData(entry, snapshot) then
-                        Runtime.markRunDataDirty()
+                        session.markRunDataDirty()
                     end
                 end
             end

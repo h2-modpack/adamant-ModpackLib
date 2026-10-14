@@ -73,16 +73,8 @@ function backendMetrics.create(backendName)
     local metrics = {}
     local counters = {}
 
-    function metrics.isEnabled()
-        return isEnabled()
-    end
-
     function metrics.count(key, amount)
         counters[key] = (counters[key] or 0) + (amount or 1)
-    end
-
-    function metrics.diagnose(fmt, ...)
-        return logging.diagnose(DIAGNOSTIC_SUBSYSTEM, fmt, ...)
     end
 
     function metrics.beginScope()

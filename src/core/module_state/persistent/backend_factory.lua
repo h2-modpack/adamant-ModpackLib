@@ -35,12 +35,14 @@ local function resolveNativeConfigPath(pluginGuid)
     return nil
 end
 
+---Native backend for the module's config file; memory-only (with a warning) when no
+---config path resolves.
+---@param opts { configPath: string?, pluginGuid: string? }
 function backendFactory.create(opts)
-    opts = opts or {}
     local nativeConfigPath = type(opts.configPath) == "string" and opts.configPath ~= ""
         and opts.configPath
         or resolveNativeConfigPath(opts.pluginGuid)
-    if type(nativeConfigPath) ~= "string" or nativeConfigPath == "" then
+    if nativeConfigPath == nil then
         logging.violate(
             "persistent_backend.unavailable",
             "native config path unavailable for %s; module settings will not persist",

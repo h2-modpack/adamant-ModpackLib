@@ -2,6 +2,9 @@ local deps = ...
 
 local logging = deps.logging
 local managedModule = deps.managedModule
+local moduleActivation = deps.moduleActivation
+local definitionApi = deps.definition
+local moduleRegistry = deps.moduleRegistry
 local moduleState = deps.moduleState
 local fallbackUi = deps.fallbackUi
 local controlCompiler = deps.controlCompiler
@@ -10,8 +13,8 @@ local statusDeclarations = deps.statusDeclarations
 local activationFinalizer = {}
 
 local function getStructuralBaseline(pluginGuid)
-    local previousModule = managedModule.getLiveModule(pluginGuid)
-    local previousRecord = managedModule.getRecord(previousModule)
+    local previousModule = moduleRegistry.getLiveModule(pluginGuid)
+    local previousRecord = moduleRegistry.getRecord(previousModule)
     local previousDefinition = previousRecord and previousRecord.definition or nil
     local previousFingerprint = previousDefinition and previousDefinition._structuralFingerprint or nil
     if previousFingerprint == nil then
@@ -22,9 +25,9 @@ local function getStructuralBaseline(pluginGuid)
     }
 end
 
-local function attachFallbackUi(declarations, module)
-    for _, args in ipairs(declarations.fallbackUi) do
-        fallbackUi.attachGuiOnce(module, table.unpack(args, 1, args.n))
+local function attachFallbackUi(declarations, pluginGuid)
+    for _, register in ipairs(declarations.fallbackUi) do
+        fallbackUi.attachGuiOnce(pluginGuid, register)
     end
 end
 
@@ -64,6 +67,10 @@ local function mergeMaps(target, source)
     end
 end
 
+---Seals the facade's declarations into a prepared definition, module state, and an activated
+---managed module instance.
+---@return AdamantModpackLib.ManagedModule module
+---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext } contexts
 function activationFinalizer.activate(opts, declarations)
     if type(declarations.drawTab) ~= "function" then
         logging.violate("module.invalid_create_opts", "module.ui.tab must be declared before module.activate")
@@ -77,7 +84,7 @@ function activationFinalizer.activate(opts, declarations)
     appendList(internalStorage, compiledControls.storage)
     mergeMaps(internalActions, declarations.internalActions)
 
-    local definition = managedModule.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
+    local definition = definitionApi.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
         createDefinitionInput(opts, declarations, statusStorage), {
             hasQuickContent = type(declarations.drawQuickContent) == "function",
         }, {
@@ -87,16 +94,16 @@ function activationFinalizer.activate(opts, declarations)
     local state = moduleState.create(definition, {
         pluginGuid = opts.pluginGuid,
     })
-    local module = managedModule.create({
+    local module, contexts = managedModule.create({
         definition = definition,
         pluginGuid = opts.pluginGuid,
-        persistentState = state.persistentState,
-        stagedState = state.stagedState,
+        state = state,
         mutationBundle = declarations.mutationBundle,
         hookDeclarations = declarations.hookDeclarations,
         sharedDataDeclarations = declarations.sharedDataDeclarations,
         sharedEventRegistrations = declarations.sharedEventRegistrations,
         overlayDeclarations = declarations.overlayDeclarations,
+        fallbackUiRequested = #declarations.fallbackUi > 0,
         onActivate = declarations.onActivate,
         onCommit = declarations.onCommit,
         onReload = declarations.onReload,
@@ -104,12 +111,10 @@ function activationFinalizer.activate(opts, declarations)
         drawQuickContent = declarations.drawQuickContent,
         controlCatalog = compiledControls.catalog,
     })
-    attachFallbackUi(declarations, module)
-    local ok, err = module.activate()
-    if not ok then
-        error(err, 0)
-    end
-    return module, managedModule.getRecord(module)
+    attachFallbackUi(declarations, opts.pluginGuid)
+    -- Raises on failure; the facade's `module.activate()` owns the single activate_failed report.
+    moduleActivation.activateOrThrow(module)
+    return module, contexts
 end
 
 return activationFinalizer

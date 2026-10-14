@@ -5,6 +5,7 @@ local createLibHarness = helpers.createLibHarness
 local prepareDefinition = helpers.prepareDefinition
 local createModuleState = helpers.createModuleState
 local getManagedModuleLifecycle = helpers.getManagedModuleLifecycle
+local lanesOf = helpers.lanesOf
 local withLoggingPolicy = helpers.withLoggingPolicy
 local withCapturedPrint = helpers.withCapturedPrint
 local makeScalarDefinition = helpers.makeScalarDefinition
@@ -30,44 +31,44 @@ end
 
 function TestModuleState_StagedState:testStagedStateStagesScalarAliases()
     local config = { Enabled = true, MaxGods = 5 }
-    local _, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
     lu.assertTrue(stagedState.read("Enabled"))
     lu.assertEquals(stagedState.read("MaxGods"), 5)
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 
     stagedState.write("Enabled", false)
-    lu.assertTrue(stagedState.isDirty())
+    lu.assertTrue(moduleState.txn.isDirty())
     lu.assertFalse(stagedState.read("Enabled"))
 
-    stagedState._flushToConfig()
-    lu.assertFalse(stagedState.isDirty())
+    moduleState.txn.flushWithoutCommit()
+    lu.assertFalse(moduleState.txn.isDirty())
     lu.assertFalse(config.Enabled)
 end
 
 function TestModuleState_StagedState:testPackedAliasEditReencodesPackedRootOnFlush()
     local config = { Packed = 0 }
-    local _, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     stagedState.write("ModeBits", 2)
 
-    lu.assertTrue(stagedState.isDirty())
+    lu.assertTrue(moduleState.txn.isDirty())
     lu.assertEquals(stagedState.read("ModeBits"), 2)
     lu.assertEquals(stagedState.read("Packed"), 4)
     lu.assertEquals(config.Packed, 0)
 
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
 
     lu.assertEquals(config.Packed, 4)
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 end
 
 function TestModuleState_StagedState:testInternalReloadFromConfigRebuildsPackedChildren()
     local config = { Packed = 0 }
-    local _, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     config.Packed = 5
-    stagedState._reloadFromConfig()
+    moduleState.txn.reload()
 
     lu.assertEquals(stagedState.read("Packed"), 5)
     lu.assertTrue(stagedState.read("EnabledBit"))
@@ -76,26 +77,32 @@ end
 
 function TestModuleState_StagedState:testInternalSyncFromCommittedDoesNotReloadExternalConfig()
     local config = { Enabled = true, MaxGods = 5 }
-    local persistentState, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
-    local enabledRoot = persistentState.getAliasSchema("Enabled")
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
+    stagedState.write("Enabled", false)
+    moduleState.txn.flushWithoutCommit()
     config.Enabled = true
-    persistentState._replaceRoot(enabledRoot, false)
+    stagedState.write("MaxGods", 7)
+    lu.assertTrue(moduleState.txn.isDirty())
 
-    stagedState._syncFromCommitted()
+    moduleState.txn.syncFromCommitted()
 
     lu.assertFalse(stagedState.read("Enabled"))
     lu.assertEquals(stagedState.read("MaxGods"), 5)
     lu.assertTrue(config.Enabled)
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 end
 
 function TestModuleState_StagedState:testResyncStagedStateDetectsPackedDrift()
     local config = { Packed = 0 }
-    local _, stagedState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makePackedDefinition(self.harness))
 
     config.Packed = 5
-    local mismatches = getManagedModuleLifecycle(self.harness).resyncStagedState({ name = "PackedStagedState" }, stagedState)
+    local mismatches = getManagedModuleLifecycle(self.harness).bind({
+        def = { name = "PackedStagedState" },
+        txn = moduleState.txn,
+        notifyReload = function() end,
+    }).resync()
 
     table.sort(mismatches)
     lu.assertEquals(mismatches, { "EnabledBit", "ModeBits", "Packed" })
@@ -106,32 +113,32 @@ end
 
 function TestModuleState_StagedState:testTransientAliasesLiveOnlyInStagedState()
     local config = { Enabled = false }
-    local _, stagedState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
 
     lu.assertEquals(stagedState.read("FilterText"), "")
     lu.assertEquals(stagedState.read("FilterMode"), "all")
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 
     stagedState.write("FilterText", "Poseidon")
     stagedState.write("FilterMode", "allowed")
 
     lu.assertEquals(stagedState.read("FilterText"), "Poseidon")
     lu.assertEquals(stagedState.read("FilterMode"), "allowed")
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 
-    stagedState._flushToConfig()
-    lu.assertFalse(stagedState.isDirty())
+    moduleState.txn.flushWithoutCommit()
+    lu.assertFalse(moduleState.txn.isDirty())
     lu.assertNil(config.FilterText)
 end
 
 function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState()
-    local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
 
-    lu.assertFalse(stagedState.status.read("RuntimeFlag"))
-    lu.assertTrue(persistentState.status.write("RuntimeFlag", true))
-    lu.assertTrue(stagedState.status.read("RuntimeFlag"))
-    lu.assertTrue(stagedState.status.read("RuntimeFlag"))
-    lu.assertTrue(stagedState.status.get("RuntimeFlag"):read())
+    lu.assertFalse(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.get("RuntimeFlag"):read())
     lu.assertErrorMsgContains("status", function()
         stagedState.read("RuntimeFlag")
     end)
@@ -144,9 +151,9 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
     lu.assertErrorMsgContains("status", function()
         stagedState.write("RuntimeBit", true)
     end)
-    lu.assertTrue(stagedState.status.read("RuntimeFlag"))
+    lu.assertTrue(lanesOf(self.harness, moduleState).uiStatus.read("RuntimeFlag"))
 
-    local runtimeRows = stagedState.status.get("RuntimeRows")
+    local runtimeRows = lanesOf(self.harness, moduleState).uiStatus.get("RuntimeRows")
     lu.assertEquals(runtimeRows:count(), 1)
     lu.assertFalse(runtimeRows:read(1, "Enabled"))
     lu.assertNil(runtimeRows.write)
@@ -154,10 +161,10 @@ function TestModuleState_StagedState:testRuntimeStorageIsReadOnlyFromStagedState
 end
 
 function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsSemantically()
-    local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
-    local state = self.harness.moduleState.uiState.create(stagedState)
-    local status = self.harness.moduleState.createUiStatus(stagedState)
-    persistentState.status.write("RuntimeFlag", true)
+    local _, _, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local state = lanesOf(self.harness, moduleState).uiData
+    local status = lanesOf(self.harness, moduleState).uiStatus
+    moduleState.status.write("RuntimeFlag", true)
 
     inDraw(self.harness, function()
         lu.assertTrue(status.read("RuntimeFlag"))
@@ -178,9 +185,9 @@ function TestModuleState_StagedState:testRuntimeTableWriteThroughDrawStateFailsS
 end
 
 function TestModuleState_StagedState:testStatusSurfacesUseStatusDiagnostics()
-    local persistentState, stagedState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
-    local runtimeStatus = self.harness.moduleState.createRuntimeStatus(persistentState)
-    local uiStatus = self.harness.moduleState.createUiStatus(stagedState)
+    local _, _, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local runtimeStatus = lanesOf(self.harness, moduleState).runtimeStatus
+    local uiStatus = lanesOf(self.harness, moduleState).uiStatus
 
     lu.assertErrorMsgContains("runtime.status.get: unknown status alias 'MissingStatus'", function()
         runtimeStatus.read("MissingStatus")
@@ -201,13 +208,13 @@ end
 
 function TestModuleState_StagedState:testInternalReloadFromConfigResetsTransientAliasesToDefaults()
     local config = { Enabled = true }
-    local _, stagedState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
 
     stagedState.write("FilterText", "Hera")
     stagedState.write("FilterMode", "banned")
     config.Enabled = false
 
-    stagedState._reloadFromConfig()
+    moduleState.txn.reload()
 
     lu.assertFalse(stagedState.read("Enabled"))
     lu.assertEquals(stagedState.read("FilterText"), "")
@@ -216,25 +223,25 @@ end
 
 function TestModuleState_StagedState:testResetRestoresTransientAliasDefault()
     local config = { Enabled = true }
-    local _, stagedState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeTransientDefinition(self.harness))
 
     stagedState.write("FilterText", "Hermes")
     stagedState.reset("FilterText")
 
     lu.assertEquals(stagedState.read("FilterText"), "")
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 end
 
 function TestModuleState_StagedState:testResetRestoresPersistedAliasDefaultAndMarksDirty()
     local config = { Enabled = true, MaxGods = 5 }
-    local _, stagedState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, config, makeScalarDefinition(self.harness))
 
     stagedState.reset("Enabled")
 
     lu.assertFalse(stagedState.read("Enabled"))
-    lu.assertTrue(stagedState.isDirty())
+    lu.assertTrue(moduleState.txn.isDirty())
 
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
     lu.assertFalse(config.Enabled)
 end
 
@@ -258,24 +265,24 @@ function TestModuleState_StagedState:testResetAllRestoresAllNonRuntimeRoots()
             { type = "string", alias = "FilterText", persist = false, hash = false, default = "", maxLen = 64 },
         },
     })
-    local _, stagedState = createModuleState(self.harness, { MaxGods = 7 }, definition)
+    local _, stagedState, moduleState = createModuleState(self.harness, { MaxGods = 7 }, definition)
 
     stagedState.write("MaxGods", 5)
     stagedState.write("FilterText", "Hermes")
-    local changed, count = stagedState.resetAll()
+    local changed, count = moduleState.txn.queueResetAll()
 
     lu.assertTrue(changed)
     lu.assertEquals(count, 2)
     lu.assertEquals(stagedState.read("MaxGods"), 3)
     lu.assertEquals(stagedState.read("FilterText"), "")
-    lu.assertTrue(stagedState.isDirty())
+    lu.assertTrue(moduleState.txn.isDirty())
 end
 
 function TestModuleState_StagedState:testResetAllHonorsExcludedRoots()
-    local _, stagedState = createModuleState(self.harness, { MaxGods = 7 }, makeScalarDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, { MaxGods = 7 }, makeScalarDefinition(self.harness))
 
     stagedState.write("MaxGods", 5)
-    local changed, count = stagedState.resetAll({
+    local changed, count = moduleState.txn.queueResetAll({
         exclude = {
             MaxGods = true,
         },
@@ -299,7 +306,7 @@ end
 
 function TestModuleState_StagedState:testTableStorageStagesRowWritesAndFlushesRoot()
     local config = {}
-    local store, stagedState = createModuleState(self.harness, config, makeTableDefinition(self.harness))
+    local store, stagedState, moduleState = createModuleState(self.harness, config, makeTableDefinition(self.harness))
     local tiers = stagedState.table("Tiers")
 
     lu.assertTrue(tiers:append({ Enabled = false, Limit = 4, ChoiceA = true }))
@@ -314,7 +321,7 @@ function TestModuleState_StagedState:testTableStorageStagesRowWritesAndFlushesRo
     lu.assertEquals(tiers:read(2, "Limit"), 5)
     lu.assertEquals(#config.Tiers, 1)
 
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
 
     lu.assertEquals(#config.Tiers, 2)
     lu.assertEquals(config.Tiers[2].PackedChoices, 7)
@@ -324,7 +331,7 @@ end
 
 function TestModuleState_StagedState:testTableHandleReadsWritesAndCreatesCellFields()
     local config = {}
-    local store, stagedState = createModuleState(self.harness, config, makeTableDefinition(self.harness))
+    local store, stagedState, moduleState = createModuleState(self.harness, config, makeTableDefinition(self.harness))
     local tiers = stagedState.table("Tiers")
 
     tiers:append({ Limit = 3, ChoiceA = true })
@@ -338,9 +345,9 @@ function TestModuleState_StagedState:testTableHandleReadsWritesAndCreatesCellFie
     lu.assertTrue(tiers:reset(2, "ChoiceA"))
     lu.assertFalse(tiers:read(2, "ChoiceA"))
 
-    stagedState._flushToConfig()
+    moduleState.txn.flushWithoutCommit()
     local storeTiers = store.table("Tiers")
-    local publicStore = self.harness.moduleState.createStore(store)
+    local publicStore = lanesOf(self.harness, moduleState).runtimeData
     local publicStoreTiers = publicStore.get("Tiers")
     local publicStoreChoiceMode = publicStoreTiers:get(2, "ChoiceMode")
 
@@ -351,7 +358,7 @@ end
 
 function TestModuleState_StagedState:testStagedStateAndRowsCreateStorageFields()
     local _, stagedState = createModuleState(self.harness, { Enabled = true, MaxGods = 5 }, makeScalarDefinition(self.harness))
-    local rootField = stagedState.field("MaxGods")
+    local rootField = stagedState.get("MaxGods")
 
     lu.assertEquals(rootField:alias(), "MaxGods")
     lu.assertEquals(rootField:controlId(), "MaxGods")
@@ -469,13 +476,13 @@ function TestModuleState_StagedState:testTableStorageMutatesRowsAsCompactList()
 end
 
 function TestModuleState_StagedState:testTableStorageClearReportsNoChangeWhenAlreadyDefault()
-    local _, stagedState = createModuleState(self.harness, {}, makeMinRowsTableDefinition(self.harness))
+    local _, stagedState, moduleState = createModuleState(self.harness, {}, makeMinRowsTableDefinition(self.harness))
     local rows = stagedState.table("Rows")
 
     lu.assertEquals(rows:count(), 1)
     lu.assertFalse(rows:clear())
     lu.assertEquals(rows:count(), 1)
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
 end
 
 function TestModuleState_StagedState:testTableStorageUnknownRowAliasFails()
@@ -572,11 +579,11 @@ function TestModuleState_StagedState.testDowngradedStagedStateResetUnknownAliasR
         },
     }, function(harness)
         withCapturedPrint(harness, function(lines)
-            local _, stagedState = createModuleState(harness, {}, makeScalarDefinition(harness))
+            local _, stagedState, moduleState = createModuleState(harness, {}, makeScalarDefinition(harness))
 
             stagedState.reset("Nope")
 
-            lu.assertFalse(stagedState.isDirty())
+            lu.assertFalse(moduleState.txn.isDirty())
             lu.assertEquals(#lines, 1)
         end)
     end)
@@ -640,8 +647,11 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
         name = "Draw Action Test",
         storage = {},
     })
-    local _, stagedState = createModuleState(self.harness, {}, definition)
-    local actionBuffer = self.harness.moduleState.createActionBuffer()
+    local _, _, moduleState = createModuleState(self.harness, {}, definition)
+    local actionBuffer = self.harness.actionBuffer.createBuffer({
+        actions = { recording = function() end },
+        order = { "recording" },
+    })
     local actions = self.harness.uiActions.create(actionBuffer)
     local recording = inDraw(self.harness, function()
         return actions.get("recording")
@@ -654,7 +664,7 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
         actions.trigger("recording", { kind = "start" })
 
         lu.assertTrue(actionBuffer.hasAny())
-        lu.assertFalse(stagedState.isDirty())
+        lu.assertFalse(moduleState.txn.isDirty())
         lu.assertTrue(recording:has())
         lu.assertEquals(recording:read(), { kind = "start" })
 
@@ -663,12 +673,15 @@ function TestModuleState_StagedState:testDrawActionsAreSeparateFromStagedStateDi
         lu.assertFalse(actionBuffer.hasAny())
     end)
 
-    lu.assertFalse(stagedState.isDirty())
+    lu.assertFalse(moduleState.txn.isDirty())
     lu.assertFalse(actionBuffer.hasAny())
 end
 
 function TestModuleState_StagedState:testActionRefsRequireMethodCallSyntax()
-    local actionBuffer = self.harness.moduleState.createActionBuffer()
+    local actionBuffer = self.harness.actionBuffer.createBuffer({
+        actions = { recording = function() end },
+        order = { "recording" },
+    })
     local actions = self.harness.uiActions.create(actionBuffer)
     local drawAction = inDraw(self.harness, function()
         return actions.get("recording")
@@ -683,4 +696,90 @@ function TestModuleState_StagedState:testActionRefsRequireMethodCallSyntax()
     lu.assertErrorMsgContains("api.invalid_method_call", function()
         commitAction.read()
     end)
+end
+
+function TestModuleState_StagedState:testStagedViewAndLanesLackTransactionPowers()
+    local persistentState, stagedState, moduleState = createModuleState(self.harness, {},
+        makeRuntimeDefinition(self.harness))
+    local txnKeys = {
+        "_flushToConfig", "_reloadFromConfig", "_syncFromCommitted", "_hasConfigChanges",
+        "_captureDirtyConfigSnapshot", "_restoreConfigSnapshot", "_readRoot", "_replaceRoot",
+        "isDirty", "hasPending", "auditMismatches", "resetAll", "queueResetAll", "beginCommit",
+        "rollback", "reload", "syncFromCommitted", "flushToConfig", "status",
+    }
+    for _, key in ipairs(txnKeys) do
+        lu.assertNil(stagedState[key], "staged view exposes " .. key)
+        lu.assertNil(persistentState[key], "persistent state exposes " .. key)
+        lu.assertNil(lanesOf(self.harness, moduleState).uiData[key], "ui.data lane exposes " .. key)
+        lu.assertNil(lanesOf(self.harness, moduleState).runtimeData[key], "runtime.data lane exposes " .. key)
+    end
+    lu.assertNil(lanesOf(self.harness, moduleState).uiStatus.write)
+    lu.assertNil(lanesOf(self.harness, moduleState).uiStatus.reset)
+    lu.assertNil(lanesOf(self.harness, moduleState).runtimeData.write)
+end
+
+function TestModuleState_StagedState:testQueuedStatusResetAppliesOnlyDuringCommit()
+    local _, stagedState, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local txn = moduleState.txn
+    lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
+    stagedState.write("SettingFlag", true)
+
+    local changed, count = txn.queueResetAll()
+    lu.assertTrue(changed)
+    lu.assertEquals(count, 2)
+    lu.assertFalse(stagedState.read("SettingFlag"))
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+    lu.assertTrue(txn.hasPending())
+
+    local commit = txn.beginCommit()
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+    txn.applyStatusReset(commit)
+    lu.assertFalse(moduleState.status.read("RuntimeFlag"))
+    txn.finish()
+    lu.assertFalse(txn.hasPending())
+end
+
+function TestModuleState_StagedState:testQueuedStatusResetIsDiscardedByReloadAndRollback()
+    local _, _, moduleState = createModuleState(self.harness, {}, makeRuntimeDefinition(self.harness))
+    local txn = moduleState.txn
+    lu.assertTrue(moduleState.status.write("RuntimeFlag", true))
+
+    lu.assertTrue(txn.queueResetAll())
+    txn.reload()
+    lu.assertFalse(txn.hasPending())
+    local afterReload = txn.beginCommit()
+    lu.assertNil(afterReload.statusReset)
+    txn.applyStatusReset(afterReload)
+    txn.finish()
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+
+    lu.assertTrue(txn.queueResetAll())
+    local rolledBack = txn.beginCommit()
+    txn.rollback(rolledBack)
+    lu.assertFalse(txn.hasPending())
+    lu.assertNil(txn.beginCommit().statusReset)
+    lu.assertTrue(moduleState.status.read("RuntimeFlag"))
+end
+
+function TestModuleState_StagedState:testQueueResetAllClearsPendingIntentAndDropsNoopStatusReset()
+    local definition = prepareDefinition(self.harness, {
+        storage = {
+            { type = "bool", alias = "RuntimeFlag", mode = "runtime", default = false },
+        },
+        actions = {
+            mark = function() end,
+        },
+    })
+    local _, _, moduleState = createModuleState(self.harness, {}, definition)
+    local txn = moduleState.txn
+    moduleState.status.write("RuntimeFlag", true)
+    lu.assertTrue(txn.queueResetAll())
+
+    moduleState.actionBuffer.stage("mark", true)
+    moduleState.status.write("RuntimeFlag", false)
+    local changed, count = txn.queueResetAll()
+    lu.assertFalse(changed)
+    lu.assertEquals(count, 0)
+    lu.assertFalse(moduleState.actionBuffer.hasAny())
+    lu.assertFalse(txn.hasPending())
 end

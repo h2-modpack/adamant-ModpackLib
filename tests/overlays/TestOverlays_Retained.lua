@@ -718,6 +718,57 @@ function TestOverlays_Retained:testRetainedTableRequiresPositiveMaxRows()
     end)
 end
 
+function TestOverlays_Retained:createDeclaringModule(pluginGuid)
+    self.h.harness:writeNativeConfig(pluginGuid, {
+        Enabled = true,
+        DebugMode = false,
+    })
+    return self.h.public.createModule({
+        pluginGuid = pluginGuid,
+        id = "OverlayModule",
+        name = "Overlay Module",
+    })
+end
+
+function TestOverlays_Retained:testModuleOverlayUnknownRegionRejectedAtDeclare()
+    local authorModule = self:createDeclaringModule("test.retained.unknown-region")
+
+    lu.assertErrorMsgContains("module.overlays.createLine: unknown region 'nowhereStack'", function()
+        authorModule.overlays.createLine("line", { region = "nowhereStack" })
+    end)
+    lu.assertErrorMsgContains("module.overlays.createTable: unknown region 'nowhereStack'", function()
+        authorModule.overlays.createTable("runs", {
+            region = "nowhereStack",
+            maxRows = 1,
+            columns = { { key = "label" } },
+        })
+    end)
+    lu.assertErrorMsgContains("column #2 must be a table", function()
+        authorModule.overlays.createLine("columns", { columns = { { key = "label" }, "value" } })
+    end)
+end
+
+function TestOverlays_Retained:testSystemOverlayUnknownRegionRejectedAtDefine()
+    lu.assertErrorMsgContains("system.overlays.createLine: unknown region 'nowhereStack'", function()
+        self.h.createSystem("test.retained.system.unknown-region").overlays.define(function(overlays)
+            overlays.createLine("line", { region = "nowhereStack" })
+        end)
+    end)
+    lu.assertNil(next(self.h.rendererState.stackRows))
+end
+
+function TestOverlays_Retained:testIntervalWhenValidatedAtDeclare()
+    local authorModule = self:createDeclaringModule("test.retained.interval.when-invalid")
+
+    lu.assertErrorMsgContains("module.overlays.onInterval: opts.when must be a function", function()
+        authorModule.overlays.onInterval("tick", 1.0, function() end, { when = true })
+    end)
+    lu.assertErrorMsgContains("module.overlays.onInterval: opts must be a table", function()
+        authorModule.overlays.onInterval("tick", 1.0, function() end, "always")
+    end)
+    authorModule.overlays.onInterval("tick", 1.0, function() end, {})
+end
+
 function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivation()
     self.h.harness:writeNativeConfig("test.retained.after-activation", {
         Enabled = true,
@@ -748,20 +799,94 @@ function TestOverlays_Retained:testModuleOverlayDeclarationsRejectAfterActivatio
     end)
 end
 
-function TestOverlays_Retained:testModuleOverlayDeclarationsAreStoredOnModuleRegistry()
-    local host = self:createModuleWithOverlays("test.retained.state-declarations", function(overlays)
-        overlays.createLine("line", {
-            region = "middleRightStack",
-            columns = {
-                { key = "text", minWidth = 40 },
-            },
-        })
-    end)
-
+function TestOverlays_Retained:installOverlays(host)
     local record = self.h.harness.moduleRegistry.getRecord(host)
-    lu.assertNotNil(record.overlayDeclarations)
-    lu.assertEquals(record.overlayDeclarations.entries[1].kind, "createLine")
-    lu.assertEquals(record.overlayDeclarations.entries[1].name, "line")
+    return self.h.overlays.install(host.getOwnerId(), {
+        owner = host,
+        declarations = record.capabilityInputs.overlays.declarations,
+        host = record.host,
+        runtime = record.runtime,
+    })
+end
+
+function TestOverlays_Retained:testInstallTakesExplicitInputsWithoutModuleRecord()
+    local ownerId = "test.retained.explicit-install"
+    local declarations = self.h.harness.overlaysBundle.authoring.declarations
+    local overlayDeclarations = declarations.create()
+    declarations.declareLine(overlayDeclarations, "test", "line", {
+        region = "middleRightStack",
+        columns = {
+            { key = "text", minWidth = 40 },
+        },
+    })
+    local seen = nil
+    declarations.declareCommit(overlayDeclarations, "test", function(host, runtime, overlay)
+        seen = { host = host, runtime = runtime }
+        overlay.setLine("line", { text = "explicit" })
+    end)
+    local owner = {}
+    local host = { label = "host" }
+    local runtime = { label = "runtime" }
+
+    local receipt = self.h.overlays.install(ownerId, {
+        owner = owner,
+        declarations = overlayDeclarations,
+        host = host,
+        runtime = runtime,
+    })
+    local ok, err = receipt.commit()
+    lu.assertTrue(ok, tostring(err))
+    self.h.overlays.dispatchCommit(owner, {})
+
+    lu.assertNil(self.h.harness.moduleRegistry.getRecord(owner))
+    lu.assertNotNil(self.h.rendererState.stackRows["middleRightStack\0" .. ownerId .. ":current:line"])
+    lu.assertIs(seen.host, host)
+    lu.assertIs(seen.runtime, runtime)
+    lu.assertTrue(receipt.retire())
+    lu.assertNil(self.h.rendererState.stackRows["middleRightStack\0" .. ownerId .. ":current:line"])
+end
+
+-- Reload boundary: a successor whose activation fails after the overlay receipt committed
+-- must hand the previous generation its overlays back, not leave the live module bare.
+function TestOverlays_Retained:testActivationFailureRestoresPreviousGenerationOverlays()
+    local pluginGuid = "test-retained-rollback-restores-previous"
+    local rowKey = "middleRightStack\0" .. pluginGuid .. ":current:shared"
+    local function declare(label)
+        return function(overlays)
+            overlays.createLine("shared", {
+                region = "middleRightStack",
+                columns = {
+                    { key = "text", minWidth = 40 },
+                },
+            })
+            overlays.onCommit(function(_, _, overlay)
+                overlay.setLine("shared", { text = label })
+            end)
+        end
+    end
+    local firstHost, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, declare("first"))
+    local ok, err = firstAuthorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertNotNil(self.h.rendererState.stackRows[rowKey])
+
+    local _, secondAuthorModule = self:createModuleWithOverlays(pluginGuid, declare("second"), {
+        onActivate = function()
+            error("second onActivate boom")
+        end,
+    })
+    ok, err = secondAuthorModule.activate()
+
+    lu.assertFalse(ok)
+    lu.assertStrContains(err, "second onActivate boom")
+    lu.assertIs(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), firstHost)
+    local row = self.h.rendererState.stackRows[rowKey]
+    lu.assertNotNil(row)
+    lu.assertTrue(row.visible())
+    local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
+    lu.assertNotNil(firstRegistry.elements.shared)
+
+    self.h.overlays.dispatchCommit(firstHost, {})
+    lu.assertEquals(firstRegistry.elements.shared.values, { text = "first" })
 end
 
 function TestOverlays_Retained:testSystemOverlayProjectionDoesNotExposeOwner()
@@ -863,7 +988,7 @@ function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit
     local pendingRowKey = "middleRightStack\0" .. ownerId .. ":pending:candidate"
     local currentRowKey = "middleRightStack\0" .. ownerId .. ":current:candidate"
 
-    local receipt = self.h.overlays.installForModule(host)
+    local receipt = self:installOverlays(host)
 
     lu.assertNil(self.h.rendererState.stackRows[currentRowKey])
     lu.assertNotNil(self.h.rendererState.stackRows[pendingRowKey])
@@ -881,7 +1006,7 @@ function TestOverlays_Retained:testHostInstallStagesOverlayRowsHiddenUntilCommit
     lu.assertNotNil(self.h.rendererState.stackRows[currentRowKey])
     lu.assertTrue(self.h.rendererState.stackRows[currentRowKey].visible())
 
-    ok, err = receipt.dispose()
+    ok, err = receipt.rollback()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(self.h.rendererState.stackRows[currentRowKey])
@@ -924,7 +1049,7 @@ function TestOverlays_Retained:testHotReloadSameOverlayNameSurvivesOldHostRetire
     local firstRegistry = self.h.retainedState.tableRegistries[firstHost]
     local secondRegistry = self.h.retainedState.tableRegistries[secondHost]
 
-    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), secondHost)
+    lu.assertEquals(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), secondHost)
     lu.assertNotNil(secondRow)
     lu.assertNotEquals(firstRow, secondRow)
     lu.assertTrue(firstRegistry == nil or firstRegistry.elements.shared == nil)
@@ -941,9 +1066,9 @@ function TestOverlays_Retained:testRetainedIntervalDispatchesWhenDue()
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(0)
-    self.h.overlays.dispatchIntervals(0.5)
-    self.h.overlays.dispatchIntervals(1.1)
+    self.h.retainedState.dispatchIntervals(0)
+    self.h.retainedState.dispatchIntervals(0.5)
+    self.h.retainedState.dispatchIntervals(1.1)
 
     lu.assertEquals(calls, 2)
 end
@@ -986,7 +1111,7 @@ function TestOverlays_Retained:testHostIntervalPredicateReceivesEndpointContext(
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(2.5)
+    self.h.retainedState.dispatchIntervals(2.5)
 
     lu.assertEquals(calls, 1)
     lu.assertEquals(seen, {
@@ -1031,6 +1156,51 @@ function TestOverlays_Retained.testRetainedIntervalDriverUsesInjectedRom()
     lu.assertEquals(calls, 1)
 end
 
+function TestOverlays_Retained.testRetainedIntervalDriverDispatchesThroughReimportedLib()
+    local runtimeRoot = {}
+    local alwaysDrawCallbacks = {}
+    local rom = {
+        gui = {
+            add_always_draw_imgui = function(callback)
+                alwaysDrawCallbacks[#alwaysDrawCallbacks + 1] = callback
+            end,
+        },
+    }
+    local first = createOverlayHarness({ runtime = runtimeRoot, rom = rom })
+    local baselineCallbacks = #alwaysDrawCallbacks
+    local _, authorModule = first.createModuleWithOverlays("test.retained.interval.reload", function(overlays)
+        overlays.onInterval("tick", 1.0, function() end)
+    end)
+    local ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+    lu.assertEquals(#alwaysDrawCallbacks, baselineCallbacks + 1)
+    local intervalDriver = alwaysDrawCallbacks[#alwaysDrawCallbacks]
+
+    local reloadedDispatches = {}
+    local second = createOverlayHarness({
+        runtime = runtimeRoot,
+        rom = rom,
+        importOverrides = {
+            ["core/overlays/retained_dispatch.lua"] = {
+                dispatchCommit = function() end,
+                dispatchAfterHook = function() end,
+                dispatchIntervals = function(now)
+                    reloadedDispatches[#reloadedDispatches + 1] = now
+                end,
+            },
+        },
+    })
+    _, authorModule = second.createModuleWithOverlays("test.retained.interval.reload", function(overlays)
+        overlays.onInterval("tick", 1.0, function() end)
+    end)
+    ok, err = authorModule.activate()
+    lu.assertTrue(ok, tostring(err))
+
+    lu.assertEquals(#alwaysDrawCallbacks, baselineCallbacks + 1)
+    intervalDriver()
+    lu.assertEquals(#reloadedDispatches, 1)
+end
+
 function TestOverlays_Retained:testExplicitOwnerIntervalPredicateRunsOncePerDispatch()
     local whenCalls = 0
     local _, authorModule = self:createModuleWithOverlays("test.retained.interval.once", function(overlays)
@@ -1044,7 +1214,7 @@ function TestOverlays_Retained:testExplicitOwnerIntervalPredicateRunsOncePerDisp
     local ok, err = authorModule.activate()
     lu.assertTrue(ok, tostring(err))
 
-    self.h.overlays.dispatchIntervals(0)
+    self.h.retainedState.dispatchIntervals(0)
 
     lu.assertEquals(whenCalls, 1)
 end
@@ -1187,6 +1357,60 @@ function TestOverlays_Retained:testHostAfterHookRollsBackOnActivationFailure()
     lu.assertEquals(observed, "first")
 end
 
+function TestOverlays_Retained:installAfterHookGenerations(pluginGuid, path)
+    local wrapped = nil
+    local observed = {}
+    self.h.modutil.Path.Wrap = function(_, handler)
+        wrapped = handler
+    end
+    local hosts, receipts = {}, {}
+    for _, label in ipairs({ "first", "second" }) do
+        hosts[label] = self:createModuleWithOverlays(pluginGuid, function(overlays)
+            overlays.afterHook(path, function()
+                observed[#observed + 1] = label
+            end)
+        end)
+        receipts[label] = self:installOverlays(hosts[label])
+        local ok, err = receipts[label].commit()
+        lu.assertTrue(ok, tostring(err))
+    end
+    local function call()
+        wrapped(function(value)
+            return value
+        end, "run")
+    end
+    return hosts, receipts, observed, call
+end
+
+function TestOverlays_Retained:getHookOwner(pluginGuid)
+    return self.h.harness.imports["core/hooks/dispatchers.lua"].getCurrentOwner(pluginGuid)
+end
+
+-- Overlay rollback hands the after-hook owner slot back to the displaced generation;
+-- retire never does.
+function TestOverlays_Retained:testHostAfterHookReceiptRollbackRestoresDisplacedHookOwner()
+    local pluginGuid = "test-retained-after-receipt-rollback"
+    local hosts, receipts = self:installAfterHookGenerations(pluginGuid, "StartNewRunReceiptRollback")
+    lu.assertIs(self:getHookOwner(pluginGuid), hosts.second)
+
+    local ok, err = receipts.second.rollback()
+
+    lu.assertTrue(ok, tostring(err))
+    lu.assertIs(self:getHookOwner(pluginGuid), hosts.first)
+end
+
+function TestOverlays_Retained:testHostAfterHookReceiptRetireDoesNotRestoreDisplacedHookOwner()
+    local pluginGuid = "test-retained-after-receipt-retire"
+    local _, receipts, observed, call = self:installAfterHookGenerations(pluginGuid, "StartNewRunReceiptRetire")
+
+    local ok, err = receipts.second.retire()
+    lu.assertTrue(ok, tostring(err))
+    call()
+
+    lu.assertNil(self:getHookOwner(pluginGuid))
+    lu.assertEquals(observed, {})
+end
+
 function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations()
     local pluginGuid = "test-retained-rollback"
     local firstHost, firstAuthorModule = self:createModuleWithOverlays(pluginGuid, function(overlays)
@@ -1223,5 +1447,5 @@ function TestOverlays_Retained:testActivationFailureRollsBackOverlayDeclarations
     local retained = self.h.retainedState.tableRegistries[firstHost]
     lu.assertNotNil(retained.elements.stable)
     lu.assertNil(retained.elements.replacement)
-    lu.assertEquals(self.h.harness.managedModule.getLiveModule(pluginGuid), firstHost)
+    lu.assertEquals(self.h.harness.moduleRegistry.getLiveModule(pluginGuid), firstHost)
 end

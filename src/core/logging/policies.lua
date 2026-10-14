@@ -209,10 +209,6 @@ return {
         description = "Fallback UI attachment requires a managed module and one-time registration callback.",
     },
 
-    ["mutation.invalid_runtime_key"] = {
-        severity = "error",
-        description = "Mutation lifecycle operations require a stable plugin guid runtime key.",
-    },
     ["mutation.invalid_registration"] = {
         severity = "error",
         description = "Mutation declarations require a managed module and a patch callback before activation.",
@@ -237,6 +233,10 @@ return {
     ["lifecycle.invalid_reload_reason"] = {
         severity = "error",
         description = "A configuration reload used an unknown lifecycle reason.",
+    },
+    ["lifecycle.invalid_reset_opts"] = {
+        severity = "error",
+        description = "resetAll accepts only nil or { exclude = { [alias] = true } } options.",
     },
     ["lifecycle.staged_state_drift_detected"] = {
         severity = "warn",
@@ -341,14 +341,6 @@ return {
     ["storage.private_alias"] = {
         severity = "error",
         description = "Private Lib storage aliases are not accessible through author-facing storage refs.",
-    },
-    ["storage.invalid_field_owner"] = {
-        severity = "error",
-        description = "Storage fields require a storage owner exposing read and schema access.",
-    },
-    ["storage.unknown_field_alias"] = {
-        severity = "error",
-        description = "Storage fields can only target prepared storage aliases.",
     },
     ["storage.invalid_field_args"] = {
         severity = "error",

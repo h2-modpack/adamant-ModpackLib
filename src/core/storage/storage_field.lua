@@ -15,35 +15,14 @@ local function NormalizeAlias(alias, methodName)
     return alias
 end
 
-local function ValidateOwner(owner, methodName)
-    if type(owner) ~= "table" or type(owner.read) ~= "function" or type(owner.getAliasSchema) ~= "function" then
-        logging.violate("storage.invalid_field_owner",
-            "%s: expected storage field owner with read(alias) and getAliasSchema(alias)",
-            tostring(methodName or "StorageField")
-        )
-    end
-end
-
 local function GetControlId(owner, alias)
-    if type(owner.getFieldControlId) == "function" then
+    if owner.getFieldControlId ~= nil then
         local id = owner.getFieldControlId(alias)
         if id ~= nil then
             return tostring(id)
         end
     end
     return alias
-end
-
-local function CreateField(owner, alias, schema, methodName)
-    return setmetatable({
-        _kind = FIELD_KIND,
-        _owner = owner,
-        _alias = alias,
-        _schema = schema,
-        _source = methodName,
-    }, {
-        __index = StorageFieldMethods,
-    })
 end
 
 function StorageFieldMethods:read(...)
@@ -62,7 +41,7 @@ function StorageFieldMethods:readAlias(alias)
 end
 
 function StorageFieldMethods:write(value)
-    if type(self._owner.write) ~= "function" then
+    if self._owner.write == nil then
         logging.violate("storage.readonly_field",
             "%s: storage field '%s' is read-only",
             tostring(self._source or "StorageField.write"),
@@ -74,7 +53,7 @@ function StorageFieldMethods:write(value)
 end
 
 function StorageFieldMethods:writeAlias(alias, value)
-    if type(self._owner.write) ~= "function" then
+    if self._owner.write == nil then
         logging.violate("storage.readonly_field",
             "%s: storage field '%s' is read-only",
             tostring(self._source or "StorageField.writeAlias"),
@@ -86,7 +65,7 @@ function StorageFieldMethods:writeAlias(alias, value)
 end
 
 function StorageFieldMethods:reset()
-    if type(self._owner.reset) ~= "function" then
+    if self._owner.reset == nil then
         logging.violate("storage.readonly_field",
             "%s: storage field '%s' cannot be reset",
             tostring(self._source or "StorageField.reset"),
@@ -115,39 +94,23 @@ function storageField.is(value)
     return type(value) == "table" and rawget(value, "_kind") == FIELD_KIND
 end
 
-function storageField.create(owner, alias, methodName)
-    methodName = methodName or "StorageField"
-    ValidateOwner(owner, methodName)
-    alias = NormalizeAlias(alias, methodName)
-
-    local schema = owner.getAliasSchema(alias)
-    if not schema then
-        logging.violate("storage.unknown_field_alias",
-            "%s: unknown storage field alias '%s'",
-            tostring(methodName),
-            tostring(alias)
-        )
-        return nil
-    end
-
-    return CreateField(owner, alias, schema, methodName)
-end
-
-function storageField.createKnown(owner, alias, schema, methodName)
-    methodName = methodName or "StorageField"
-    ValidateOwner(owner, methodName)
-    alias = NormalizeAlias(alias, methodName)
-
-    if not schema then
-        logging.violate("storage.unknown_field_alias",
-            "%s: unknown storage field alias '%s'",
-            tostring(methodName),
-            tostring(alias)
-        )
-        return nil
-    end
-
-    return CreateField(owner, alias, schema, methodName)
+---Create a field over a Lib-built owner (`read`, `getAliasSchema`, optional `write`/`reset`/
+---`getFieldControlId`) for an alias the caller already resolved to `schema`.
+---@param owner table
+---@param alias string
+---@param schema AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode
+---@param methodName string
+---@return AdamantModpackLib.StorageField
+function storageField.create(owner, alias, schema, methodName)
+    return setmetatable({
+        _kind = FIELD_KIND,
+        _owner = owner,
+        _alias = alias,
+        _schema = schema,
+        _source = methodName,
+    }, {
+        __index = StorageFieldMethods,
+    })
 end
 
 return storageField

@@ -95,11 +95,11 @@ local lib = {}
 ---@alias AdamantModpackLib.WidgetTarget AdamantModpackLib.StorageField
 ---@alias AdamantModpackLib.PackedChoiceOpts AdamantModpackLib.PackedDropdownOpts|AdamantModpackLib.PackedRadioOpts
 
----Internal trusted persistent state. Module authors access this through `runtime.data`.
+---Internal trusted committed setting data. Module authors access this through `runtime.data`.
+---Status aliases live on `AdamantModpackLib.StatusState`.
 ---@class AdamantModpackLib.PersistentState
----@field get fun(alias: string): AdamantModpackLib.StoreDataRef? Return committed setting storage object.
+---@field get fun(alias: string, context?: string): AdamantModpackLib.StoreDataRef? Return committed setting storage object.
 ---@field read fun(alias: string): any
----@field status AdamantModpackLib.StatusState
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableReadOnly?
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 
@@ -116,26 +116,77 @@ local lib = {}
 ---@field write fun(alias: string, ...): boolean Write a declared status alias or table cell.
 ---@field reset fun(alias: string, ...): boolean Reset a declared status alias or table cell.
 
----@class AdamantModpackLib.StatusState: AdamantModpackLib.RuntimeStatus
----@field countResettable fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
----@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---Internal trusted status storage over committed runtime-mode roots.
+---@class AdamantModpackLib.StatusState
+---@field get fun(alias: string, context?: string): AdamantModpackLib.StatusDataRef?
+---@field read fun(alias: string, ...): any
+---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
+---@field write fun(alias: string, ...): boolean?
+---@field reset fun(alias: string, ...): boolean?
+---@field countResettable fun(exclude: table<string, boolean>): boolean, integer
+---@field resetAll fun(exclude: table<string, boolean>): boolean, integer
 
----Internal trusted staged state. Module authors access this through `ui.data`.
+---Committed-root internals returned by persistent state for staged/status state. Not handed to lanes.
+---@class AdamantModpackLib.CommittedRoots
+---@field aliasNodes table<string, AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode>
+---@field allRoots AdamantModpackLib.StorageNode[]
+---@field readRoot fun(root: AdamantModpackLib.StorageNode): any Committed value, or a default copy.
+---@field peekRoot fun(root: AdamantModpackLib.StorageNode): any Committed value, or nil for transient roots.
+---@field replaceRoot fun(root: AdamantModpackLib.StorageNode, value: any)
+---@field writeRoot fun(root: AdamantModpackLib.StorageNode, value: any): boolean Write-through committed root.
+---@field reload fun(): AdamantModpackLib.ReloadReceipt
+
+---Internal staged data view. UI lanes and controls receive this; it has no transaction powers.
 ---@class AdamantModpackLib.StagedState
----@field get fun(alias: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
+---@field get fun(alias: string, context?: string): AdamantModpackLib.DrawStateRef? Return a storage object for a staged alias.
 ---@field read fun(alias: string): any
 ---@field table fun(alias: string): AdamantModpackLib.StorageTableStagedState?
----@field field fun(alias: string): AdamantModpackLib.StorageField
 ---@field getAliasSchema fun(alias: string): AdamantModpackLib.StorageNode|AdamantModpackLib.PackedBitNode|nil Read-only schema metadata.
 ---@field write fun(alias: string, value: any)
 ---@field reset fun(alias: string)
----@field _flushToConfig fun()
----@field _hasConfigChanges fun(): boolean
----@field _reloadFromConfig fun(): AdamantModpackLib.ReloadReceipt
----@field _captureDirtyConfigSnapshot fun(): table[]
----@field _restoreConfigSnapshot fun(snapshot: table[]?)
+
+---Staged-state transaction internals; consumed only by the module-state transaction.
+---@class AdamantModpackLib.StagedTxnInternals
 ---@field isDirty fun(): boolean
+---@field flushToConfig fun()
+---@field syncFromCommitted fun()
+---@field reloadFromConfig fun(): AdamantModpackLib.ReloadReceipt
+---@field captureDirtyConfigSnapshot fun(): table[]
+---@field restoreConfigSnapshot fun(snapshot: table[]?)
+---@field resetAll fun(exclude: table<string, boolean>): boolean, integer
 ---@field auditMismatches fun(): string[]
+
+---One in-flight commit; also the rollback token.
+---@class AdamantModpackLib.ModuleStateCommit
+---@field actionSnapshot table<string, any>
+---@field hadConfigChanges boolean
+---@field configSnapshot table[]?
+---@field statusReset { exclude: table<string, boolean> }? Queued status reset taken by this commit.
+
+---Lifecycle-only transaction surface over staged state, action buffer, and queued status reset.
+---@class AdamantModpackLib.ModuleStateTxn
+---@field readCommitted fun(alias: string): any
+---@field stage fun(alias: string, value: any)
+---@field isDirty fun(): boolean Staged settings differ from committed.
+---@field hasPending fun(): boolean Dirty settings, staged actions/events, or a queued status reset.
+---@field syncFromCommitted fun()
+---@field auditMismatches fun(): string[]
+---@field queueResetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean, integer
+---@field beginCommit fun(): AdamantModpackLib.ModuleStateCommit
+---@field applyStatusReset fun(commit: AdamantModpackLib.ModuleStateCommit)
+---@field finish fun()
+---@field rollback fun(commit: AdamantModpackLib.ModuleStateCommit)
+---@field flushWithoutCommit fun()
+---@field reload fun(): AdamantModpackLib.ReloadReceipt
+
+---Author-facing lanes built over one module's state by `moduleState.createLanes(state, fields)`.
+---`runtimeData` and `uiData` carry the `fields` (`cache`/`shared`/`controls`, `shared`) from construction.
+---@class AdamantModpackLib.ModuleStateLanes
+---@field runtimeData AdamantModpackLib.Store
+---@field runtimeStatus AdamantModpackLib.RuntimeStatus
+---@field uiData AdamantModpackLib.DrawState
+---@field uiStatus AdamantModpackLib.UiStatus
+---@field uiActions AdamantModpackLib.DrawActions
 
 ---Staged UI state facade provided to draw callbacks.
 ---@class AdamantModpackLib.DrawState
@@ -424,6 +475,9 @@ local lib = {}
 ---@alias AdamantModpackLib.DrawActionHandler AdamantModpackLib.ModuleActionHandler
 
 ---@class AdamantModpackLib.PreparedDefinition: AdamantModpackLib.ModuleDefinition
+---@field _preparedDefinition true
+---@field _structuralFingerprint string
+---@field _pendingCoordinatorRebuild? table Structural change awaiting a coordinator rebuild; activation requests and clears it.
 
 ---@class AdamantModpackLib.MutationBundle
 ---@field patchMutation? fun(
@@ -431,6 +485,98 @@ local lib = {}
 ---    runtime: AdamantModpackLib.RuntimeContext,
 ---    plan: AdamantModpackLib.MutationPlan
 ---)
+
+---Internal: mutation bundle bound to its owner, host, and runtime (`mutation.bind`).
+---`sync()` owns its run-data recompute; `apply()`/`revert()` leave the recompute to the caller.
+---@class AdamantModpackLib.BoundMutation
+---@field apply fun(): boolean, string?
+---@field revert fun(): boolean, string?
+---@field sync fun(): AdamantModpackLib.Receipt
+---@field affectsRunData fun(): boolean
+
+---Internal: inputs for one lane's shared surface (`shared.refs.create`).
+---@class AdamantModpackLib.SharedRefsOpts
+---@field ownerId string
+---@field declarations table Module shared data declarations.
+---@field emit fun(id: string, eventName: string, payload: any): boolean, integer? Lane emit policy.
+---@field source string Error-message prefix, such as `store.shared`.
+
+---Internal: explicit slices activation hands each capability install.
+---@class AdamantModpackLib.CapabilityInputs
+---@field hookDeclarations table
+---@field shared { data: table, events: table? }
+---@field overlays { declarations: table?, host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext }
+---@field mutation AdamantModpackLib.BoundMutation
+---@field fallbackUiRequested boolean
+
+---Internal: one capability install activation runs (composed in `core/init.lua`). Returns the
+---capability's receipt, or nil when the module declares nothing for it; commit order is the receipt phase.
+---@alias AdamantModpackLib.ModuleCapabilityInstall
+---| fun(ownerId: string, owner: table, inputs: AdamantModpackLib.CapabilityInputs): AdamantModpackLib.Receipt?
+
+---Internal: Lib-built inputs for `managedModule.create(...)` (finalizer or test harness only).
+---@class AdamantModpackLib.ManagedModuleCreateOpts
+---@field definition AdamantModpackLib.PreparedDefinition
+---@field pluginGuid string
+---@field state AdamantModpackLib.ModuleState
+---@field drawTab AdamantModpackLib.UiCallback
+---@field drawQuickContent? AdamantModpackLib.UiCallback
+---@field mutationBundle table
+---@field hookDeclarations table
+---@field sharedDataDeclarations table
+---@field sharedEventRegistrations? table
+---@field overlayDeclarations? table
+---@field fallbackUiRequested? boolean
+---@field controlCatalog table
+---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
+---@field onCommit? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, commit: table): any
+---@field onReload? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, reload: table): any
+
+---Internal: inputs for `moduleContexts.create(...)`, which builds the runtime and UI contexts once.
+---@class AdamantModpackLib.ModuleContextInputs
+---@field state AdamantModpackLib.ModuleState
+---@field ownerId string
+---@field cacheDeclarations table?
+---@field sharedDeclarations table
+---@field emitShared fun(id: string, eventName: string, payload: any): boolean, integer? Runtime-lane emit.
+---@field stageShared fun(id: string, eventName: string, payload: any): boolean, integer? UI-lane staged emit.
+---@field controlCatalog table
+---@field host AdamantModpackLib.Host
+
+---Internal: one module's lifecycle session (`managed_module_lifecycle.bind`).
+---@class AdamantModpackLib.LifecycleSession
+---@field def table Prepared definition (log label source).
+---@field txn AdamantModpackLib.ModuleStateTxn
+---@field mutation AdamantModpackLib.BoundMutation
+---@field notifyCommit fun(commit: table): any Raises on failure; failures and `false` are reported, never propagated.
+---@field notifyReload fun(reason: string, receipt: table?): AdamantModpackLib.ReloadContext
+---@field runActions fun(actionSnapshot: table): any
+---@field flushSharedEvents fun(): any
+
+---@class AdamantModpackLib.CommitNotifierOpts
+---@field onCommit? function Author observer `(host, runtime, commit)`.
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+---@field dispatchOverlayCommit fun(commit: table)
+
+---@class AdamantModpackLib.ReloadNotifierOpts
+---@field def table Prepared definition (log label source).
+---@field onReload? function Author observer `(host, runtime, reload)`.
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+
+---Internal: per-module activation record (weak-keyed by module in `registry.modules.records`).
+---Capabilities never read it; activation passes them slices from `capabilityInputs`.
+---@class AdamantModpackLib.ManagedModuleRecord
+---@field definition AdamantModpackLib.PreparedDefinition
+---@field pluginGuid string
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
+---@field capabilityInputs AdamantModpackLib.CapabilityInputs
+---@field effectReceipts AdamantModpackLib.Receipt[]
+---@field activating? boolean Instance activation state; the declaration facade only tracks sealing.
+---@field activated boolean
 
 ---@class AdamantModpackLib.ModuleCreateOpts
 ---@field pluginGuid string Plugin guid captured at module file load time.
@@ -861,10 +1007,13 @@ local lib = {}
 ---@class AdamantModpackLib.DrawNavApi
 ---@field verticalTabs fun(opts?: AdamantModpackLib.VerticalTabsOpts): string|number?
 
----Internal constructed module state bundle.
+---Internal per-module state object built by `moduleState.create(...)`.
 ---@class AdamantModpackLib.ModuleState
----@field persistentState AdamantModpackLib.PersistentState
----@field stagedState AdamantModpackLib.StagedState
+---@field persistent AdamantModpackLib.PersistentState
+---@field staged AdamantModpackLib.StagedState
+---@field status AdamantModpackLib.StatusState
+---@field actionBuffer table
+---@field txn AdamantModpackLib.ModuleStateTxn
 
 ---@type AdamantModpackLib.ModpackApi
 lib.modpack = {}

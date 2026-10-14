@@ -131,40 +131,40 @@ local function createOverlayHarness(opts)
 
         createModuleWithOverlays = function(pluginGuid, declareOverlays, moduleOpts)
             moduleOpts = moduleOpts or {}
-            local definition = base.managedModule.prepareDefinition({}, {
+            local definition = base.moduleDefinition.prepareDefinition({}, {
                 id = moduleOpts.id or "OverlayModule",
                 name = moduleOpts.name or "Overlay Module",
                 storage = moduleOpts.storage or {},
             })
-            local store, stagedState = createModuleState(base, moduleOpts.config or {
+            local store, stagedState, moduleState = createModuleState(base, moduleOpts.config or {
                 Enabled = true,
                 DebugMode = false,
             }, definition)
-            local overlayDeclarations = base.overlaysBundle.declarations.create()
+            local overlayDeclarations = base.overlaysBundle.authoring.declarations.create()
             local overlayRegistrar = {
-                order = base.overlaysBundle.order,
+                order = base.overlaysBundle.authoring.order,
                 createLine = function(name, spec)
-                    return base.overlaysBundle.declarations.declareLine(
+                    return base.overlaysBundle.authoring.declarations.declareLine(
                         overlayDeclarations,
                         "module.overlays.createLine",
                         name,
                         spec)
                 end,
                 createTable = function(name, spec)
-                    return base.overlaysBundle.declarations.declareTable(
+                    return base.overlaysBundle.authoring.declarations.declareTable(
                         overlayDeclarations,
                         "module.overlays.createTable",
                         name,
                         spec)
                 end,
                 onCommit = function(callback)
-                    return base.overlaysBundle.declarations.declareCommit(
+                    return base.overlaysBundle.authoring.declarations.declareCommit(
                         overlayDeclarations,
                         "module.overlays.onCommit",
                         callback)
                 end,
                 onInterval = function(name, seconds, callback, intervalOpts)
-                    return base.overlaysBundle.declarations.declareInterval(
+                    return base.overlaysBundle.authoring.declarations.declareInterval(
                         overlayDeclarations,
                         "module.overlays.onInterval",
                         name,
@@ -173,7 +173,7 @@ local function createOverlayHarness(opts)
                         intervalOpts)
                 end,
                 afterHook = function(path, callback)
-                    return base.overlaysBundle.declarations.declareAfterHook(
+                    return base.overlaysBundle.authoring.declarations.declareAfterHook(
                         overlayDeclarations,
                         "module.overlays.afterHook",
                         path,
@@ -183,15 +183,15 @@ local function createOverlayHarness(opts)
             if type(declareOverlays) == "function" then
                 declareOverlays(overlayRegistrar, nil, store)
             end
-            local host = base.managedModule.create({
+            local host = base:createManagedInstance({
                 pluginGuid = pluginGuid,
                 definition = definition,
-                persistentState = store,
-                stagedState = stagedState,
+                state = moduleState,
                 mutationBundle = {
                     patchMutation = moduleOpts.patchMutation,
                 },
                 overlayDeclarations = overlayDeclarations,
+                onActivate = moduleOpts.onActivate,
                 onCommit = moduleOpts.onCommit,
                 drawTab = function() end,
             })

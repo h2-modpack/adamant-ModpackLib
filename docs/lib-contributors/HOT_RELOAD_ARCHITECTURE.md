@@ -32,8 +32,8 @@ The stack relies on that persistence for stable runtime registries.
 
 The stack deliberately stores reload-sensitive state on `_G` tables:
 
-- `AdamantModpackLib_Runtime`
--- `AdamantModpackLib_Runtime.registry.modpacks`
+- `AdamantModpackLib_Runtime`, with every persistent bucket under
+  `AdamantModpackLib_Runtime.registry.<subsystem>`
 
 These tables are initialized with `X = X or {}` so they survive a file reload in the same game process.
 
@@ -55,6 +55,23 @@ Expected to persist across reloads:
 - Lib modpack registry and stable GUI callbacks
 - module-owned ROM GUI callbacks attached through `module.fallbackUi.attachGuiOnce(...)`
   and backed by Lib fallback UI bridges keyed by owner id
+
+Anchors that exist so a Lib re-import converges on current code:
+- `registry.hooks.systemReceipts`: system-scope hook receipts per owner, so a
+  re-import that redefines an owner retires the previous import's install
+- `registry.overlays.retained`: the interval driver is registered once
+  (flagged only after registration succeeds) and late-reads
+  `dispatchIntervals`, which every import overwrites with its own dispatcher
+- `registry.mutations.ownerSlots`: keyed `"owner:" .. ownerId` holding
+  `{ plan = activePlan }`; keep that key and slot shape stable or a re-import
+  orphans an applied plan
+
+The fallback HUD marker is deliberately not anchored: each Lib import
+redefines it, and the system overlay owner replaces the previous definition.
+
+Anchor shapes changed during the layering refactor (receipts, module records,
+hook and overlay registries). Moving a live process from a pre-refactor Lib to
+the current Lib by hot reload is unsupported; restart the game.
 
 Modules pass `pluginGuid` as their stable lifecycle identity. The live module
 for that plugin is the structural hot-reload baseline and the owner for managed
@@ -152,6 +169,15 @@ During module creation and activation:
 - Lib refreshes hook registrations under the module owner id derived from `pluginGuid`; absent hook registrations for that owner are deactivated
 - Lib refreshes shared event listener registrations under the module owner id derived from `pluginGuid`; absent shared event listeners for that owner are removed
 - if the coordinator for `definition.modpack` is already registered, Lib immediately syncs live mutation state
+- if activation fails after capability receipts committed (for example `onActivate` throws), each receipt rolls back: the previous generation keeps its live-module slot, hook owner slot, shared publications and listeners, mutation plan, and retained overlay elements
+- after the new module commits, the previous module's receipts retire instead of rolling back
+
+Rollback and retire differ on purpose:
+- `rollback` undoes the new install and restores what it replaced. Only the
+  failing activation uses it.
+- `retire` removes only entries the old install still owns and never restores
+  anything. Restoring on retire would resurrect an older generation's
+  listener, published value, or overlay after a newer generation replaced it.
 
 That means one coordinated module reload refreshes its live runtime behavior immediately without forcing a pack rebuild.
 
