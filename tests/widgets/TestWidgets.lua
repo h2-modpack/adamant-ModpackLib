@@ -325,6 +325,118 @@ function TestWidgets:testStepperSupportsCalcTextSizeNumberReturn()
     lu.assertTrue(ok)
 end
 
+function TestWidgets:testSliderWritesTheDraggedValueAndReportsChange()
+    local imgui = self.h.makeDropdownImgui()
+    local call
+    imgui.SliderInt = function(id, value, minValue, maxValue)
+        call = { id = id, value = value, min = minValue, max = maxValue }
+        return 40, true
+    end
+    local stagedState = self.h.createValueStagedState(10)
+
+    local changed = DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), {
+        label = "Speed",
+        min = 0,
+        max = 90,
+    })
+
+    lu.assertTrue(changed)
+    lu.assertEquals(stagedState.read("Speed"), 40)
+    lu.assertEquals(call.id, "##Speed")
+    lu.assertEquals(call.value, 10)
+    lu.assertEquals(call.min, 0)
+    lu.assertEquals(call.max, 90)
+end
+
+function TestWidgets:testSliderDoesNothingWhenUntouchedOrUnchanged()
+    local imgui = self.h.makeDropdownImgui()
+    imgui.SliderInt = function(_, value)
+        return value, false
+    end
+    local stagedState = self.h.createValueStagedState(25)
+
+    lu.assertFalse(DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), { min = 0, max = 90 }))
+    lu.assertEquals(stagedState.read("Speed"), 25)
+
+    imgui.SliderInt = function(_, value)
+        return value, true
+    end
+    lu.assertFalse(DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), { min = 0, max = 90 }))
+end
+
+function TestWidgets:testSliderClampsOutOfRangeValuesBothWays()
+    local imgui = self.h.makeDropdownImgui()
+    local shown
+    imgui.SliderInt = function(_, value)
+        shown = value
+        return 500, true
+    end
+    local stagedState = self.h.createValueStagedState(-20)
+
+    DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), { min = 0, max = 90 })
+
+    lu.assertEquals(shown, 0)
+    lu.assertEquals(stagedState.read("Speed"), 90)
+end
+
+function TestWidgets:testSliderFallsBackToTheDefaultForNonNumbers()
+    local imgui = self.h.makeDropdownImgui()
+    local shown
+    imgui.SliderInt = function(_, value)
+        shown = value
+        return value, false
+    end
+    local stagedState = self.h.createValueStagedState("oops")
+
+    DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), { min = 0, max = 90, default = 30 })
+
+    lu.assertEquals(shown, 30)
+end
+
+function TestWidgets:testSliderPushesControlWidthAndStagesDrawActionRef()
+    local actionBuffer = CreateActionBuffer(self.h, "speed")
+    local action = DrawAction(self.h, actionBuffer, "speed")
+    local widths = {}
+    local imgui = self.h.makeDropdownImgui()
+    imgui.PushItemWidth = function(width)
+        widths[#widths + 1] = width
+    end
+    imgui.SliderInt = function()
+        return 60, true
+    end
+    local stagedState = self.h.createValueStagedState(10)
+
+    DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"), {
+        label = "Speed",
+        min = 0,
+        max = 90,
+        controlWidth = 300,
+        action = action,
+    })
+
+    lu.assertEquals(widths, { 300 })
+    lu.assertEquals(actionBuffer.read("speed"), 60)
+end
+
+function TestWidgets:testSliderDefaultsToZeroToOneHundredAndDefaultWidth()
+    local widths = {}
+    local range = {}
+    local imgui = self.h.makeDropdownImgui()
+    imgui.PushItemWidth = function(width)
+        widths[#widths + 1] = width
+    end
+    imgui.SliderInt = function(_, value, minValue, maxValue)
+        range = { minValue, maxValue }
+        return value, false
+    end
+    local stagedState = self.h.createValueStagedState(5)
+
+    DrawWidgets(self.h, imgui).slider(Field(self.h, stagedState, "Speed"))
+
+    lu.assertEquals(range, { 0, 100 })
+    lu.assertEquals(widths, { 220 })
+end
+
 function TestWidgets:testStepperUsesStableButtonIdsAndWritesIncrement()
     local imgui, clickedButtons = self.h.makeStepperImgui("+##Runs_inc")
     local stagedState = self.h.createValueStagedState(3)

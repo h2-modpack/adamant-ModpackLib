@@ -14,6 +14,7 @@ local dropdownWidgets = import('core/widgets/dropdowns.lua', nil, {
 })
 local radioWidgets = import('core/widgets/radios.lua', nil, widgetHelpers)
 local stepperWidgets = import('core/widgets/steppers.lua', nil, widgetHelpers)
+local sliderWidgets = import('core/widgets/sliders.lua', nil, widgetHelpers)
 local checkboxWidgets = import('core/widgets/checkboxes.lua', nil, widgetHelpers)
 local buttonWidgets = import('core/widgets/buttons.lua', nil, widgetHelpers)
 
@@ -30,6 +31,7 @@ return import('core/widgets/ui_draw.lua', nil, {
         packedRadio = radioWidgets.packedRadio,
         stepper = stepperWidgets.stepper,
         steppedRange = stepperWidgets.steppedRange,
+        slider = sliderWidgets.slider,
         checkbox = checkboxWidgets.checkbox,
         packedCheckboxList = checkboxWidgets.packedCheckboxList,
         button = buttonWidgets.button,

@@ -31,6 +31,7 @@ Built-ins:
 - `radio`
 - `packedRadio`
 - `stepper`
+- `slider`
 - `steppedRange`
 - `checkbox`
 - `packedCheckboxList`
@@ -377,6 +378,35 @@ Use when:
 - the value is small and ordinal
 - button stepping is more readable than typing
 
+### `draw.widgets.slider(target, opts?)`
+
+Integer slider bound to one storage field.
+
+Options:
+- `id`
+- `label`
+- `tooltip`
+- `default`
+- `min` (defaults to 0)
+- `max` (defaults to 100)
+- `labelWidth`
+- `controlWidth` (defaults to 220)
+- `controlGap`
+- `action`
+- `value`
+
+Behavior:
+- normalizes through integer storage rules and clamps against `min` / `max`
+- stages the new value while the handle is dragged, so the field follows the slider
+- stages `opts.action` on every change, with the edited number as the default payload
+
+Use when:
+- the value is a bounded int the user tunes by feel, such as a percentage
+- dragging reads better than stepping with buttons
+
+Use `stepper` instead when the value is small and ordinal, or when each step should be an exact
+click.
+
 ### `draw.widgets.steppedRange(minTarget, maxTarget, opts?)`
 
 Two coupled steppers rendered as:
@@ -474,6 +504,7 @@ Use:
 - `checkbox` for one bool
 - `packedCheckboxList` for many packed bool flags
 - `stepper` for one bounded int
+- `slider` for one bounded int tuned by dragging
 - `steppedRange` for two coupled ints
 
 ## Nav

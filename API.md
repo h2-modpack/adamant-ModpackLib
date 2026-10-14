@@ -984,6 +984,7 @@ Built-ins:
 - `draw.widgets.radio(target, opts?)`
 - `draw.widgets.packedRadio(target, opts?)`
 - `draw.widgets.stepper(target, opts?)`
+- `draw.widgets.slider(target, opts?)`
 - `draw.widgets.steppedRange(minTarget, maxTarget, opts?)`
 - `draw.widgets.checkbox(target, opts?)`
 - `draw.widgets.packedCheckboxList(target, opts?)`

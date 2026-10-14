@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+
+- widgets: add `draw.widgets.slider` for a bounded integer field.
+
 ## [4.3.0] - 2026-10-14
 
 ### Fixed

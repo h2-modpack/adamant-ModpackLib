@@ -841,6 +841,19 @@ local lib = {}
 ---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when value changes.
 ---@field value? any Staged action payload. Defaults to the edited number.
 
+---@class AdamantModpackLib.SliderOpts
+---@field id? string|number
+---@field label? string Inline label drawn before the slider.
+---@field tooltip? string
+---@field default? number Used when the stored value is not a number.
+---@field min? number Defaults to 0.
+---@field max? number Defaults to 100.
+---@field labelWidth? number
+---@field controlWidth? number Slider width in pixels. Defaults to 220.
+---@field controlGap? number
+---@field action? AdamantModpackLib.DrawActionRef Staged action ref to replace when value changes.
+---@field value? any Staged action payload. Defaults to the edited number.
+
 ---@class AdamantModpackLib.SteppedRangeOpts: AdamantModpackLib.StepperOpts
 ---@field defaultMax? number
 ---@field rangeGap? number
@@ -995,6 +1008,7 @@ local lib = {}
 ---@field radio fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.RadioOpts): boolean
 ---@field packedRadio fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedRadioOpts): boolean
 ---@field stepper fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.StepperOpts): boolean
+---@field slider fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.SliderOpts): boolean
 ---@field steppedRange fun(
 ---    minTarget: AdamantModpackLib.WidgetTarget,
 ---    maxTarget: AdamantModpackLib.WidgetTarget,

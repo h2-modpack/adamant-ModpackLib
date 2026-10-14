@@ -27,6 +27,7 @@ local WIDGET_FIELD_ARITY = {
     radio = 1,
     packedRadio = 1,
     stepper = 1,
+    slider = 1,
     checkbox = 1,
     packedCheckboxList = 1,
     steppedRange = 2,
