@@ -9,6 +9,7 @@ local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local mutationLifecycle = deps.mutationLifecycle
 local controlDeclarations = deps.controlDeclarations
+local hotkeyDeclarations = deps.hotkeyDeclarations
 local unpackValues = table.unpack or _G.unpack
 
 local declarationSurface = {}
@@ -126,6 +127,13 @@ function declarationSurface.attach(module, declarations, lifecycle)
         define = function(instances)
             lifecycle.requireOpen("module.controls.define")
             return controlDeclarations.define(declarations.controlDeclarations, instances)
+        end,
+    }
+
+    module.hotkeys = {
+        request = function(id, opts)
+            lifecycle.requireOpen("module.hotkeys.request")
+            hotkeyDeclarations.request(declarations.hotkeys, id, opts)
         end,
     }
 

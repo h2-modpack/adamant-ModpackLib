@@ -38,6 +38,7 @@ end
 - Runtime tables that keep active plans/receipts revertible across Lib re-imports are also real anchors; keep them under the scoped registry bucket and comment the reason.
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
 - Live-module and weak module-record tables are activation anchors under `AdamantModpackLib_Runtime.registry.modules`. `module_registry` is their only surface: `getRecord`/`setRecord` and `getLiveModule`/`setLiveModule`.
+- Hotkey installs, ownership history, pushed pack order, and the shared always-draw tick live under `AdamantModpackLib_Runtime.registry.hotkeys` (`core/hotkeys/00_init.lua`). The tick is registered once and late-reads `dispatch`; the resolved view (status tables, dispatch list, overview rows) is a rebuildable cache local to the import.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
 ## Composition Root
@@ -70,6 +71,7 @@ or nil when the module declares nothing for it:
 - `overlays.install(ownerId, { owner, declarations, host, runtime })`
 - `mutation.bind(ownerId, bundle, host, runtime).sync()`
 - `fallbackUi.install(ownerId, owner)`
+- `hotkeys.install(ownerId, { requests, host, runtime, readCommitted })`
 
 Receipt contract:
 

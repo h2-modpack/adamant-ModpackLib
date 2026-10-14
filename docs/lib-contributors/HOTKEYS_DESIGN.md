@@ -1,6 +1,7 @@
 # Hotkeys Design
 
-Status: agreed design for the `module.hotkeys` capability; implementation in progress.
+Status: implemented (`src/core/hotkeys/`). Author guide:
+[../module-authors/capabilities/HOTKEYS.md](../module-authors/capabilities/HOTKEYS.md).
 
 ## Problem
 
@@ -117,3 +118,22 @@ in their own fallback window.
 Quick Pause (`Hotkey`) and LiveSplit (`PagePrevKey`, `PageNextKey`) drop their own storage,
 ticks and anchors and request through `module.hotkeys` with `alias` set to their old storage
 names. Both then require the Lib release that ships this capability.
+
+## Implementation Notes
+
+- Code: `src/core/hotkeys/` (`bindings.lua` grammar, `declarations.lua` contact point and storage
+  compile, `resolution.lua` pure ownership, `reserved.lua` detection and the manual list,
+  `00_init.lua` registry/receipt/tick, `widget.lua`), and `src/core/modpack/ui/hotkeys.lua` (page).
+- Change signal: a revision on the `registry.hotkeys` anchor (install commit/rollback/retire, pack
+  order) plus a per-frame compare of each request's committed binding, its module's enabled state,
+  and the Lib config reserved string. Resolution runs only when one of those changed; status tables
+  are replaced only when their signature changes, so status text is built once per change.
+- A request whose module is disabled reports state `disabled` (not a candidate), so the overview
+  can tell it apart from an active binding.
+- The Lib config manual list is one comma-separated string, `ReservedHotkeys` (default `""`).
+- A reserved entry without modifiers reserves its key under every modifier combination, because
+  Hell2Modding matches a single key whatever modifiers are held: the detected `VK_F1` reserves
+  `F1`, `Ctrl+F1`, and so on. An entry with modifiers (manual list only) reserves exactly that
+  combination.
+- A new or changed pack order counts as load-time ordering: recorded ownership is dropped and the
+  tie-break decides again. Pushing an unchanged order keeps ownership.

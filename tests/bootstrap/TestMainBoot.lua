@@ -145,7 +145,8 @@ function TestMainBoot.testMainUsesExpectedBootExternals()
     lu.assertEquals(h.envyAutoCalls, 1)
     lu.assertEquals(h.chalkAutoPaths, { "config.lua" })
     lu.assertEquals(#h.menuCallbacks, 1)
-    lu.assertEquals(#h.alwaysDrawCallbacks, 1)
+    -- The fallback GUI-close watcher and the shared hotkey tick.
+    lu.assertEquals(#h.alwaysDrawCallbacks, 2)
     lu.assertEquals(#h.onceLoadedCallbacks, 1)
 end
 

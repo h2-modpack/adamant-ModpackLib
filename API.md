@@ -8,6 +8,7 @@ Preferred usage uses top-level module authoring helpers plus namespaces for spec
 - `module.fallbackUi.*`
 - `module.hooks.*`
 - `module.controls.*`
+- `module.hotkeys.*`
 - `module.overlays.*`
 - `module.shared.*`
 - `module.mutation.*`
@@ -29,6 +30,7 @@ activation:
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
 - `module.controls.define(...)`
+- `module.hotkeys.request(...)`
 - `module.ui.tab(...)`
 - `module.ui.quickContent(...)`
 - `module.onCommit(...)`
@@ -124,6 +126,43 @@ ui.draw.control(ui.controls.get("Priority"), "compact")
 
 Control storage is private. Normal `ui.data` and `runtime.data` cannot access
 generated control aliases.
+
+## `module.hotkeys`
+
+Lib-owned hotkeys: a module requests a key for an event; Lib owns the binding,
+resolves which request owns each key, dispatches presses, and reports a status.
+Guide: [docs/module-authors/capabilities/HOTKEYS.md](docs/module-authors/capabilities/HOTKEYS.md).
+
+### `module.hotkeys.request(id, opts)`
+
+Declare before `module.activate()`.
+
+- `id`: stable identifier, unique in the module.
+- `opts.label`: non-empty string.
+- `opts.onPress(host, runtime)`: runs on the runtime lane when this request
+  owns its key, the module is enabled, and the Hell2Modding overlay is closed.
+  Errors are reported once per request until the binding changes.
+- `opts.default?`: `""` (default, unbound) or `[Ctrl+][Shift+][Alt+]F1`-`F12`.
+- `opts.alias?`: storage alias for the binding, default `"Hotkey_<id>"`. Lib
+  declares it as a persisted `string` data root with `hash = false`; the module
+  must not declare it in `module.data.define`.
+- `opts.tooltip?`: string.
+
+### `ui.hotkeys.get(id)` / `ui.hotkeys.status(id)` / `runtime.hotkeys.status(id)`
+
+`ui.hotkeys.get(id)` returns the hotkey ref `draw.widgets.hotkey(...)` draws.
+`status(id)` returns `{ state, binding, owner?, reason?, text }` with `state`
+one of `"active"`, `"conflict"`, `"reserved"`, `"unbound"`, `"invalid"`,
+`"disabled"`; `owner = { moduleName, label }` on conflicts and `reason` on
+reserved keys. Unknown ids raise `hotkeys.unknown_request`.
+
+### Reserved keys
+
+The Hell2Modding overlay key (`gui_toggle` in
+`Hell2Modding-Hell2Modding-Hotkeys.cfg`, ReturnOfModding config folder) and the
+comma-separated Lib config list `ReservedHotkeys` never dispatch. The modpack
+window's Hotkeys page lists every request (conflicts first) and edits the
+reserved list.
 
 ## `module.shared`
 
@@ -368,13 +407,15 @@ and all declaration namespaces.
 raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
 `imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
 `ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs;
+`ui.hotkeys` exposes hotkey widget refs and statuses;
 `ui.status` reads runtime-authored status; `ui.resetAll(...)` resets staged
 module state and queues status reset for commit.
 
 Runtime callbacks receive `(host, runtime)`. `runtime.data` reads committed
 settings, `runtime.status` reads/writes runtime-authored status,
-`runtime.data.cache` owns current-run cache, and `runtime.shared` /
-`runtime.controls` expose shared/control surfaces.
+`runtime.data.cache` owns current-run cache, `runtime.shared` /
+`runtime.controls` expose shared/control surfaces, and `runtime.hotkeys`
+reports hotkey statuses.
 
 Declare hooks on `module.hooks.*` before `module.activate()`. Runtime helper
 files should receive the needed `runtime` object or narrowed read/access
@@ -988,6 +1029,9 @@ Built-ins:
 - `draw.widgets.steppedRange(minTarget, maxTarget, opts?)`
 - `draw.widgets.checkbox(target, opts?)`
 - `draw.widgets.packedCheckboxList(target, opts?)`
+- `draw.widgets.hotkey(ref, opts?)`: takes `ui.hotkeys.get(id)`, not a
+  `StorageField`; draws modifier and key dropdowns plus the status line.
+  `opts`: `label`, `tooltip`, `modifierWidth`, `keyWidth`, `showStatus`.
 
 These are direct immediate-mode helpers. `draw.widgets` is bound to the current
 `imgui` for the render call. Value widgets accept `StorageField` refs:

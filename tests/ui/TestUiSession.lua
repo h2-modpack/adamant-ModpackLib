@@ -86,17 +86,18 @@ function TestUiSession.testFallbackGuiCloseWatcherLateReadsAnchoredHandler()
         },
     })
     local fallbackRegistry = h.runtime.registry.fallback
-    lu.assertEquals(#callbacks.alwaysDraw, 1)
+    -- The fallback GUI-close watcher and the shared hotkey tick.
+    lu.assertEquals(#callbacks.alwaysDraw, 2)
 
     local closes = 0
     fallbackRegistry.handleGuiClosed = function()
         closes = closes + 1
     end
 
-    callbacks.alwaysDraw[1]()
+    fakeEngine.runAlwaysDraw(callbacks)
     guiOpen = false
-    callbacks.alwaysDraw[1]()
-    callbacks.alwaysDraw[1]()
+    fakeEngine.runAlwaysDraw(callbacks)
+    fakeEngine.runAlwaysDraw(callbacks)
 
     lu.assertEquals(closes, 1)
     lu.assertFalse(fallbackRegistry.wasGuiOpen)

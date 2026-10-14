@@ -144,6 +144,9 @@ Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.
 Use [DATA_LANES.md](DATA_LANES.md) for the overall state ownership model.
 Use [capabilities/CONTROLS.md](capabilities/CONTROLS.md) when a repeated
 domain concept needs its own bundled storage, runtime reader, and draw path.
+Use [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md) for key presses:
+`module.hotkeys.request(...)` declares the binding storage itself, so do not
+also declare its alias in `module.data.define`.
 
 ## Capability Guides
 
@@ -155,3 +158,4 @@ domain concept needs its own bundled storage, runtime reader, and draw path.
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
 - [capabilities/SHARED.md](capabilities/SHARED.md)
 - [capabilities/CACHE.md](capabilities/CACHE.md)
+- [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md)

@@ -21,3 +21,4 @@ Capability guides:
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
 - [capabilities/SHARED.md](capabilities/SHARED.md)
 - [capabilities/CACHE.md](capabilities/CACHE.md)
+- [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md)

@@ -137,6 +137,9 @@ function CreateLibManagedModule(opts)
     if createOpts.controlCatalog == nil then
         createOpts.controlCatalog = { instances = {}, order = {} }
     end
+    if createOpts.hotkeyRequests == nil then
+        createOpts.hotkeyRequests = {}
+    end
     return LibTestImports["core/module_bootstrap/managed_module.lua"].create(createOpts)
 end
 local function GetLibOverlayService()
@@ -360,6 +363,8 @@ function CreateModpackHarness(opts)
         overlaySurface = harnessOverlaySurface,
         getLiveModule = getLiveModule,
         packRegistry = harnessPackRegistry,
+        hotkeys = opts.hotkeys or LibTestImports["core/hotkeys/00_init.lua"],
+        drawHotkeyWidget = LibTestImports["core/hotkeys/widget.lua"].draw,
     })
 
     return {
@@ -390,6 +395,9 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
     uiSession = uiSession,
     setupRunData = setupRunData,
+    hotkeys = LibTestImports["core/hotkeys/00_init.lua"],
+    drawHotkeyWidget = LibTestImports["core/hotkeys/widget.lua"].draw,
+    getLiveModule = LibModuleRegistry.getLiveModule,
 })
 
 rawset(ModpackTestApi, "createOverlaySurface", function()

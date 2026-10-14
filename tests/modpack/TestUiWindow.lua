@@ -416,3 +416,57 @@ function TestUiWindow:testDisablingRunDataModuleFlushesSetupRunDataWhenMenuClose
     lu.assertTrue(quickSetupRan)
     lu.assertEquals(setupRunDataCalls, 1)
 end
+
+function TestUiWindow:testHotkeysPageSitsBetweenProfilesAndDev()
+    local selectables = {}
+    local drawnTexts = {}
+    local restoreImGui = InstallWindowImGuiStub({
+        Selectable = function(label)
+            selectables[#selectables + 1] = label
+            return label == "Hotkeys"
+        end,
+        Text = function(text)
+            drawnTexts[#drawnTexts + 1] = text
+        end,
+    })
+
+    local moduleRegistry = {
+        modules = {},
+        modulesWithQuickContent = {},
+        tabOrder = {},
+        live = {
+            captureSnapshot = function()
+                return { liveModules = {} }
+            end,
+        },
+        snapshot = {
+            getLiveModule = function()
+                return nil
+            end,
+        },
+    }
+    local builtUi = ModpackTestApi.createUI(moduleRegistry, CreateModpackHudStub(), ModpackTestApi.createTheme(), {
+        ModEnabled = true,
+        DebugMode = false,
+        Profiles = {
+            { Name = "", Hash = "", Tooltip = "" },
+        },
+    }, "test-pack", "Test Window", 1, {
+        { Name = "", Hash = "", Tooltip = "" },
+    })
+
+    builtUi.addMenuBar()
+    builtUi.renderWindow()
+    builtUi.renderWindow()
+    restoreImGui()
+
+    lu.assertEquals({ selectables[1], selectables[2], selectables[3], selectables[4] },
+        { "Quick Setup", "Profiles", "Hotkeys", "Dev" })
+    local sawReservedSection = false
+    for _, text in ipairs(drawnTexts) do
+        if string.find(text, "Hell2Modding overlay key", 1, true) then
+            sawReservedSection = true
+        end
+    end
+    lu.assertTrue(sawReservedSection)
+end

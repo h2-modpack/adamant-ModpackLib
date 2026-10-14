@@ -62,6 +62,13 @@ Anchors that exist so a Lib re-import converges on current code:
 - `registry.overlays.retained`: the interval driver is registered once
   (flagged only after registration succeeds) and late-reads
   `dispatchIntervals`, which every import overwrites with its own dispatcher
+- `registry.hotkeys`: `installs` (ownerId -> committed hotkey install, written
+  by activation receipts from any import), `owners` (binding -> owning request,
+  the in-memory ownership history), `packOrders` (pushed by the modpack layer),
+  and `revision` (bumped on install commit/rollback/retire and pack order
+  changes). The always-draw tick is registered once (`tickRegistered`) and
+  late-reads `dispatch`, which every import overwrites; each import rebuilds its
+  resolved view from these anchors on first use
 - `registry.mutations.ownerSlots`: keyed `"owner:" .. ownerId` holding
   `{ plan = activePlan }`; keep that key and slot shape stable or a re-import
   orphans an applied plan

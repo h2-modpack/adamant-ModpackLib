@@ -155,6 +155,9 @@ local function createLibHarness(opts)
         if createOpts.controlCatalog == nil then
             createOpts.controlCatalog = { instances = {}, order = {} }
         end
+        if createOpts.hotkeyRequests == nil then
+            createOpts.hotkeyRequests = {}
+        end
         return self.managedModule.create(createOpts)
     end
     function harness.createSystem(ownerId)

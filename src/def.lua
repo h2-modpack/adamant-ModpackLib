@@ -277,6 +277,54 @@ local lib = {}
 ---@field read fun(name: string, ...): any
 ---@field reset fun(name: string): boolean, integer
 
+---@alias AdamantModpackLib.HotkeyState "active"|"conflict"|"reserved"|"unbound"|"invalid"|"disabled"
+
+---Lib's response to one hotkey request. The table is replaced only when the state changes.
+---@class AdamantModpackLib.HotkeyStatus
+---@field state AdamantModpackLib.HotkeyState
+---@field binding string Committed binding string ("" when unbound).
+---@field owner? { moduleName: string, label: string } Conflict only: the request that owns the key.
+---@field reason? string Reserved only: what reserves the key, such as "Hell2Modding overlay".
+---@field text string Status line the hotkey widget draws.
+
+---@class AdamantModpackLib.HotkeyRequestOpts
+---@field label string Shown in pickers, statuses, and the modpack Hotkeys page.
+---@field onPress fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext) Runtime lane.
+---@field default? string Binding string, or "" (the default) for unbound.
+---@field alias? string Binding storage alias; defaults to "Hotkey_<id>".
+---@field tooltip? string
+
+---@class AdamantModpackLib.AuthorHotkeys
+---@field request fun(id: string, opts: AdamantModpackLib.HotkeyRequestOpts): nil
+
+---Opaque hotkey widget ref returned by `ui.hotkeys.get(id)`.
+---@class AdamantModpackLib.HotkeyRef
+
+---@class AdamantModpackLib.RuntimeHotkeys
+---@field status fun(id: string): AdamantModpackLib.HotkeyStatus?
+
+---@class AdamantModpackLib.UiHotkeys
+---@field get fun(id: string): AdamantModpackLib.HotkeyRef
+---@field status fun(id: string): AdamantModpackLib.HotkeyStatus?
+
+---@class AdamantModpackLib.HotkeyWidgetOpts
+---@field label? string Inline label; defaults to the request label, "" hides it.
+---@field tooltip? string Defaults to the request tooltip.
+---@field modifierWidth? number Modifier dropdown width (default 110).
+---@field keyWidth? number Key dropdown width (default 80).
+---@field showStatus? boolean Set false to hide the status line.
+
+---Internal: one hotkey row on the modpack Hotkeys page (`hotkeys.listRows()`).
+---@class AdamantModpackLib.HotkeyRow
+---@field ownerId string
+---@field id string
+---@field label string
+---@field tooltip string?
+---@field alias string
+---@field request table
+---@field moduleName string
+---@field status AdamantModpackLib.HotkeyStatus
+
 ---@class AdamantModpackLib.Host
 ---@field getOwnerId fun(): string
 ---@field getModuleId fun(): string
@@ -290,6 +338,7 @@ local lib = {}
 ---@field data AdamantModpackLib.Store
 ---@field status AdamantModpackLib.RuntimeStatus
 ---@field controls AdamantModpackLib.RuntimeControls
+---@field hotkeys AdamantModpackLib.RuntimeHotkeys
 ---@field cache AdamantModpackLib.StoreCache?
 ---@field shared AdamantModpackLib.RuntimeSharedData?
 
@@ -299,6 +348,7 @@ local lib = {}
 ---@field status AdamantModpackLib.UiStatus
 ---@field actions AdamantModpackLib.DrawActions
 ---@field controls AdamantModpackLib.UiControls
+---@field hotkeys AdamantModpackLib.UiHotkeys
 ---@field shared AdamantModpackLib.UiSharedData?
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean Queue a full module reset for the current draw commit.
 
@@ -342,6 +392,7 @@ local lib = {}
 ---@field actions { define: fun(actions: table<string, AdamantModpackLib.ModuleActionHandler>): nil }
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
+---@field hotkeys AdamantModpackLib.AuthorHotkeys
 ---@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
 ---@field onActivate fun(callback: fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext): nil): nil
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
@@ -508,6 +559,14 @@ local lib = {}
 ---@field overlays { declarations: table?, host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext }
 ---@field mutation AdamantModpackLib.BoundMutation
 ---@field fallbackUiRequested boolean
+---@field hotkeys AdamantModpackLib.HotkeyCapabilityInputs
+
+---Internal: the hotkey install slice (`hotkeys.install`).
+---@class AdamantModpackLib.HotkeyCapabilityInputs
+---@field requests table[] Compiled hotkey requests, in declaration order.
+---@field host AdamantModpackLib.Host
+---@field runtime AdamantModpackLib.RuntimeContext
+---@field readCommitted fun(alias: string): any Committed binding read.
 
 ---Internal: one capability install activation runs (composed in `core/init.lua`). Returns the
 ---capability's receipt, or nil when the module declares nothing for it; commit order is the receipt phase.
@@ -528,6 +587,7 @@ local lib = {}
 ---@field overlayDeclarations? table
 ---@field fallbackUiRequested? boolean
 ---@field controlCatalog table
+---@field hotkeyRequests table[] Compiled hotkey requests (empty when none).
 ---@field onActivate? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext)
 ---@field onCommit? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, commit: table): any
 ---@field onReload? fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext, reload: table): any
@@ -541,6 +601,7 @@ local lib = {}
 ---@field emitShared fun(id: string, eventName: string, payload: any): boolean, integer? Runtime-lane emit.
 ---@field stageShared fun(id: string, eventName: string, payload: any): boolean, integer? UI-lane staged emit.
 ---@field controlCatalog table
+---@field hotkeyRequests table[]
 ---@field host AdamantModpackLib.Host
 
 ---Internal: one module's lifecycle session (`managed_module_lifecycle.bind`).
@@ -1016,6 +1077,7 @@ local lib = {}
 ---): boolean
 ---@field checkbox fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.CheckboxOpts): boolean
 ---@field packedCheckboxList fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedCheckboxListOpts): boolean
+---@field hotkey fun(ref: AdamantModpackLib.HotkeyRef, opts?: AdamantModpackLib.HotkeyWidgetOpts): boolean
 
 ---Navigation helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawNavApi

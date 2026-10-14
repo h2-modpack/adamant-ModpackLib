@@ -29,6 +29,7 @@ local identifiers = import('core/helpers/identifiers.lua')
 local requireMethodSelf = import('core/helpers/method_self.lua', nil, {
     logging = logging,
 })
+local hotkeyBindings = import('core/hotkeys/bindings.lua')
 
 local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
@@ -122,12 +123,32 @@ local mutation = import('core/mutations/00_init.lua', nil, {
     receipt = receipt,
 })
 
+local hotkeys = import('core/hotkeys/00_init.lua', nil, {
+    logging = logging,
+    receipt = receipt,
+    rom = externals.rom,
+    libConfig = deps.config,
+    bindings = hotkeyBindings,
+    hotkeyRegistry = registry.hotkeys,
+})
+local hotkeyWidget = import('core/hotkeys/widget.lua', nil, {
+    logging = logging,
+    bindings = hotkeyBindings,
+    hotkeys = hotkeys,
+})
+local hotkeyDeclarations = import('core/hotkeys/declarations.lua', nil, {
+    logging = logging,
+    identifiers = identifiers,
+    bindings = hotkeyBindings,
+})
+
 local draw = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
     isDrawActionRef = moduleState.isDrawActionRef,
     rom = externals.rom,
     controlsDraw = controlsBundle.draw,
+    hotkeyWidget = hotkeyWidget.draw,
 })
 
 local createTheme = import('core/ui/theme.lua', nil, {
@@ -169,6 +190,9 @@ local moduleCapabilities = {
     function(_, _, inputs)
         return inputs.mutation.sync()
     end,
+    function(ownerId, _, inputs)
+        return hotkeys.install(ownerId, inputs.hotkeys)
+    end,
     function(ownerId, owner, inputs)
         if not inputs.fallbackUiRequested then
             return nil
@@ -193,6 +217,7 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     mutation = mutation,
     draw = draw,
     controlRefs = controlsBundle.refs,
+    hotkeys = hotkeys,
 })
 
 public.modpack = import('core/modpack/init.lua', nil, {
@@ -206,6 +231,8 @@ public.modpack = import('core/modpack/init.lua', nil, {
     overlaySurface = overlaysBundle.modpack,
     getLiveModule = moduleRegistry.getLiveModule,
     packRegistry = registry.modpacks,
+    hotkeys = hotkeys,
+    drawHotkeyWidget = hotkeyWidget.draw,
 })
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
@@ -224,6 +251,7 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     controlDeclarations = controlsBundle.declarations,
     controlCompiler = controlsBundle.compiler,
     statusDeclarations = statusDeclarations,
+    hotkeyDeclarations = hotkeyDeclarations,
 })
 public.createModule = moduleBundle.public.createModule
 

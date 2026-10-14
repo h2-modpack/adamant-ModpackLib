@@ -61,6 +61,7 @@ function TestPackBootstrap:testInitLeavesStartupMutationSyncToLiveModuleActivati
         createModuleRegistry = function()
             return {
                 modules = { entry },
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()
@@ -170,6 +171,7 @@ function TestPackBootstrap:testModuleActivationOwnsStartupSyncBeforeModpackInit(
         createModuleRegistry = function()
             return {
                 modules = { entry },
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()
@@ -241,6 +243,7 @@ function TestPackBootstrap:testRepeatedInitReplacesPackStateAndKeepsStablePackIn
         createModuleRegistry = function()
             return {
                 modules = {},
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()
@@ -350,6 +353,7 @@ function TestPackBootstrap:testRepeatedInitDisposesPreviousOpenUiSuppression()
                     modulesById = {},
                     tabOrder = {},
                     modulesWithQuickContent = {},
+                    tabOrder = {},
                     refresh = function() end,
                     live = {
                         captureSnapshot = function()
@@ -448,6 +452,7 @@ function TestPackBootstrap:testFailedInitDoesNotRegisterPack()
         createModuleRegistry = function()
             return {
                 modules = {},
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()
@@ -522,6 +527,7 @@ function TestPackBootstrap:testTryInitReturnsPackOnSuccess()
         createModuleRegistry = function()
             return {
                 modules = {},
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()
@@ -582,6 +588,7 @@ function TestPackBootstrap:testTryInitReturnsErrorAndDoesNotRegisterPack()
         createModuleRegistry = function()
             return {
                 modules = {},
+                tabOrder = {},
                 refresh = function() end,
                 live = {
                     captureSnapshot = function()

@@ -286,6 +286,35 @@ return {
         severity = "error",
         description = "Widget action options must be draw action refs.",
     },
+    ["widgets.invalid_hotkey_ref"] = {
+        severity = "error",
+        description = "The hotkey widget requires a hotkey ref from ui.hotkeys.get(...).",
+    },
+
+    ["hotkeys.invalid_declaration"] = {
+        severity = "error",
+        description = "Hotkey requests require a stable id and valid label, default, alias, tooltip, and onPress fields.",
+    },
+    ["hotkeys.duplicate_request"] = {
+        severity = "error",
+        description = "Hotkey request ids and storage aliases must be unique within a module.",
+    },
+    ["hotkeys.alias_collision"] = {
+        severity = "error",
+        description = "A hotkey binding alias is Lib-declared storage and cannot also be declared by the module.",
+    },
+    ["hotkeys.unknown_request"] = {
+        severity = "error",
+        description = "Hotkey surfaces only accept ids the module requested with module.hotkeys.request.",
+    },
+    ["hotkeys.on_press_failed"] = {
+        severity = "warn",
+        description = "A hotkey onPress handler raised; reported once per request until its binding changes.",
+    },
+    ["hotkeys.dispatch_failed"] = {
+        severity = "warn",
+        description = "The shared hotkey tick raised; reported once per Lib import.",
+    },
     ["staged_state.unknown_alias"] = {
         severity = "error",
         description = "Staged state operations only accept declared storage aliases.",

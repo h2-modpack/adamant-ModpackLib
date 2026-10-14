@@ -3,6 +3,9 @@ local rom = deps.rom
 local logging = deps.logging
 local uiSession = deps.uiSession
 local setupRunData = deps.setupRunData
+local hotkeys = deps.hotkeys
+local drawHotkeyWidget = deps.drawHotkeyWidget
+local getLiveModule = deps.getLiveModule
 
 local function TextColored(ui, color, text)
     ui.TextColored(color[1], color[2], color[3], color[4], text)
@@ -124,6 +127,16 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         libConfig = libConfig,
     })
 
+    local drawHotkeys = import("core/modpack/ui/hotkeys.lua", nil, {
+        rom = rom,
+        colors = colors,
+        logging = logging,
+        packId = packId,
+        hotkeys = hotkeys,
+        drawHotkeyWidget = drawHotkeyWidget,
+        getLiveModule = getLiveModule,
+    })
+
     runtime.reconcilePackDisabledState()
     snapshotToStaging({ reloadModules = false })
 
@@ -155,6 +168,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         end
 
         table.insert(cachedTabList, "Profiles")
+        table.insert(cachedTabList, "Hotkeys")
         table.insert(cachedTabList, "Dev")
         return cachedTabList
     end
@@ -203,6 +217,8 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
             drawQuickSetup(cachedQuickList, snapshot)
         elseif selectedTab == "Profiles" then
             drawProfiles()
+        elseif selectedTab == "Hotkeys" then
+            drawHotkeys()
         elseif selectedTab == "Dev" then
             drawDev(snapshot)
         elseif moduleByTabLabel[selectedTab] then

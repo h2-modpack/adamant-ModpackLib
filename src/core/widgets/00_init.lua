@@ -42,4 +42,5 @@ return import('core/widgets/ui_draw.lua', nil, {
     storage = deps.storage,
     rom = deps.rom,
     controlsDraw = deps.controlsDraw,
+    hotkeyWidget = deps.hotkeyWidget,
 })

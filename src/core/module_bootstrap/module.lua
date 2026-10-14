@@ -14,6 +14,7 @@ local declarationSurface = import('core/module_bootstrap/module/declaration_surf
     sharedRegistrations = deps.sharedRegistrations,
     mutationLifecycle = deps.mutationLifecycle,
     controlDeclarations = deps.controlDeclarations,
+    hotkeyDeclarations = deps.hotkeyDeclarations,
 })
 local activationFinalizer = import('core/module_bootstrap/module/activation_finalizer.lua', nil, {
     logging = logging,
@@ -25,6 +26,7 @@ local activationFinalizer = import('core/module_bootstrap/module/activation_fina
     fallbackUi = deps.fallbackUi,
     controlCompiler = deps.controlCompiler,
     statusDeclarations = deps.statusDeclarations,
+    hotkeyDeclarations = deps.hotkeyDeclarations,
 })
 local declarationFacade = import('core/module_bootstrap/module/declaration_facade.lua', nil, {
     logging = logging,
@@ -39,6 +41,7 @@ local declarationFacade = import('core/module_bootstrap/module/declaration_facad
     sharedDataDeclarations = deps.sharedDataDeclarations,
     sharedRegistrations = deps.sharedRegistrations,
     controlDeclarations = deps.controlDeclarations,
+    hotkeyDeclarations = deps.hotkeyDeclarations,
 })
 
 local function createModuleOrThrow(opts)

@@ -20,6 +20,7 @@ local moduleContexts = import('core/module_bootstrap/module_contexts.lua', nil, 
     cache = deps.cache,
     sharedRefs = shared.refs,
     controlRefs = deps.controlRefs,
+    hotkeys = deps.hotkeys,
     uiContext = import('core/module_bootstrap/ui/context.lua', nil, {
         draw = deps.draw,
     }),
@@ -107,6 +108,7 @@ function managedModule.create(opts)
         emitShared = emitSharedEvent,
         stageShared = stageSharedEvent,
         controlCatalog = opts.controlCatalog,
+        hotkeyRequests = opts.hotkeyRequests,
         host = host,
     })
     local boundMutation = mutation.bind(pluginGuid, opts.mutationBundle, host, runtime)
@@ -162,6 +164,12 @@ function managedModule.create(opts)
             },
             mutation = boundMutation,
             fallbackUiRequested = opts.fallbackUiRequested == true,
+            hotkeys = {
+                requests = opts.hotkeyRequests,
+                host = host,
+                runtime = runtime,
+                readCommitted = persistentState.read,
+            },
         },
         effectReceipts = {},
         activated = false,

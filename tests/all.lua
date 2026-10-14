@@ -40,6 +40,7 @@ require('tests/fallback/TestFallbackUi')
 require('tests/ui/TestUiSession')
 require('tests/widgets/TestWidgets')
 require('tests/widgets/TestWidgets_Nav')
+require('tests/hotkeys/TestHotkeys')
 
 require('tests/modpack/TestUtils')
 require('tests/modpack/TestModuleRegistry')
