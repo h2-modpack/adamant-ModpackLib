@@ -31,7 +31,8 @@ activation:
 - `module.controls.defineTemplates(...)`
 - `module.controls.define(...)`
 - `module.hotkeys.request(...)`
-- `module.ui.tab(...)`
+- `module.ui.tab(...)` or `module.ui.tabs(...)`
+- `module.ui.header(...)`
 - `module.ui.quickContent(...)`
 - `module.onCommit(...)`
 - `module.hooks.*`
@@ -41,11 +42,46 @@ activation:
 - `module.fallbackUi.*`
 
 That module owns:
-- `drawTab`
-- optional `drawQuickContent`
+- its tab draw callbacks (`ui.tab` or `ui.tabs`)
+- optional header and `drawQuickContent` callbacks
 - built-in module registry helpers for Lib modpack and fallback UI
 
 Module behavior is hosted through Lib's live module registry.
+
+## `module.ui`
+
+Declare exactly one of `tab` or `tabs` before `module.activate()`; combining
+them, or declaring neither, fails at declaration/activation with
+`module.invalid_create_opts`.
+
+- `module.ui.tab(fn)`: one content tab labelled `Module`.
+- `module.ui.tabs({ { id, label, draw, state? }, ... })`: several top-level
+  tabs in declaration order. `id` is a stable identifier unique in the module,
+  `label` a non-empty string, `draw(host, ui)` draws the tab while it is
+  active. Optional `state(host, ui)` returns `"attention"`, `"muted"`, or nil
+  and colours the tab label; any other value raises `module.invalid_tab_state`.
+  The list is validated when declared.
+- `module.ui.header(fn)`: optional `(host, ui)` callback drawn between Enabled
+  and the tab bar while the module is enabled.
+- `module.ui.quickContent(fn)`: optional Quick Setup content.
+
+Lib hosts every module in one shared frame, in the modpack window module page
+and the standalone fallback window alike:
+
+```text
+[x] Enabled
+(header, when declared)
+[ Module | Hotkeys & Advanced ]               -- ui.tab
+[ <tab> | <tab> | ... | Hotkeys & Advanced ]  -- ui.tabs
+```
+
+A disabled module draws only Enabled. The header and the active tab commit
+once per frame. The last tab is Lib's: `Hotkeys & Advanced` (`Advanced` for a
+module without hotkey requests, `(!)` suffix while a hotkey is conflict,
+reserved, or invalid) with the module's hotkey rows, **All hotkeys...**, Debug
+Mode, and Resync State for this module. Vertical navigation inside a tab
+(`draw.nav.verticalTabs`) is fine; a top-level horizontal tab bar should be
+`ui.tabs` instead.
 
 ## `lib.modpack`
 
@@ -150,30 +186,33 @@ Declare before `module.activate()`.
 
 ### Lib-drawn hotkey UI
 
-Authors only declare requests; Lib draws the controls. Wherever Lib draws a
-module (its modpack window tab and its fallback window), a **Hotkeys** block
-follows the Enabled/Debug row: one row per request with the label, modifier
-and key dropdowns, and the status line. It collapses to a summary line
-(`Hotkeys: Pause hotkey F9`) while every request is active, unbound, or
-disabled, and opens itself on a conflict, reserved, or invalid binding. Edits
+Authors only declare requests; Lib draws the controls. The module frame's
+**Hotkeys & Advanced** tab shows one row per request with the label, modifier
+and key dropdowns, and the short status (`text`, with `detail` as tooltip),
+plus **All hotkeys...**, which opens Lib's window on its Hotkeys tab. Edits
 commit through the module like any staged edit. There is no author hotkey
-widget.
+widget (`draw.widgets.hotkey` and `ui.hotkeys.get` do not exist).
 
 ### `ui.hotkeys.status(id)` / `runtime.hotkeys.status(id)`
 
-`status(id)` returns `{ state, binding, owner?, reason?, text }` with `state`
-one of `"active"`, `"conflict"`, `"reserved"`, `"unbound"`, `"invalid"`,
-`"disabled"`; `owner = { moduleName, label }` on conflicts and `reason` on
-reserved keys. Unknown ids raise `hotkeys.unknown_request`.
+`status(id)` returns `{ state, binding, owner?, reason?, text, detail? }` with
+`state` one of `"active"`, `"conflict"`, `"reserved"`, `"unbound"`,
+`"invalid"`, `"disabled"`; `owner = { moduleName, label }` on conflicts and
+`reason` (`"Hell2Modding overlay"` or `"Lib settings"`) on reserved keys.
+`text` is the short inline status (`"Active"`, `"In use by Quick Pause"`, ...);
+`detail` is the tooltip sentence, nil when `text` says it all. Unknown ids
+raise `hotkeys.unknown_request`.
 
 ### Reserved keys
 
 The Hell2Modding overlay key (`gui_toggle` in
 `Hell2Modding-Hell2Modding-Hotkeys.cfg`, ReturnOfModding config folder) and the
-comma-separated Lib config list `ReservedHotkeys` never dispatch. The Hotkeys
-overview lists every request (conflicts first) and edits the reserved list:
-it is the modpack window's Hotkeys tab, and without a coordinator the
-`adamant-lib` menu's **Hotkeys** item opens it in Lib's own window.
+comma-separated Lib config list `ReservedHotkeys` never dispatch. A bare key
+reserves every modifier combination; an entry with modifiers reserves exactly
+that binding. Lib's window (`adamant-lib` menu > **Settings**, always shown)
+has a **Hotkeys** tab listing every request across every pack and standalone
+module (conflicts first, disabled last) and is the only editor for the
+reserved list.
 
 ## `module.shared`
 
@@ -957,11 +996,10 @@ Behavior:
 - `module.activate()` installs or swaps the active fallback UI runtime
 - callbacks no-op until a runtime is active
 - fallback UI suppresses its window/menu when the module's pack is coordinated
-- the fallback window includes built-in:
-  - `Enabled`
-  - `Debug Mode`
-  - `Resync State`
-- then runs the live module's draw-and-commit lifecycle when the module is enabled
+- the fallback window draws the shared module frame (see `module.ui`):
+  `Enabled`, then, while enabled, the header, the module tabs, and Lib's
+  `Hotkeys & Advanced` tab with `Debug Mode` and `Resync State`
+- the header and active tab commit once per frame through `commitIfDirty()`
 
 ## Draw Actions
 

@@ -31,6 +31,7 @@ module operations such as logging and enabled-state checks.
 | `ui.actions` | stage one-shot runtime actions |
 | `ui.shared` | read shared data and queue shared events |
 | `ui.controls` | get draw refs for declared controls |
+| `ui.hotkeys` | read hotkey request statuses |
 | `ui.resetAll` | queue a full module reset for commit |
 
 Runtime callbacks receive `(host, runtime)` instead. They read committed data
@@ -39,16 +40,19 @@ and read controls through `runtime.controls`.
 
 ## One Draw Commit Cycle
 
-Lib owns the draw and commit timing. For a modpack-rendered module, Lib modpack
-uses the live module's draw-and-commit lifecycle entry point. The normal cycle is:
+Lib owns the draw and commit timing. The module frame (modpack window module
+page and standalone fallback window) draws the header, when declared, and the
+active tab, then commits once for both. Only the active tab's `draw` runs; tab
+`state` callbacks run every frame to colour labels. Quick Setup content commits
+on its own. The normal cycle is:
 
-1. Lib modpack calls the module draw callback.
+1. Lib calls the header callback and the active tab's draw callback.
 2. Draw code renders immediate UI.
 3. Draw code stages storage edits through `ui.data`.
 4. Draw code stages runtime actions through `ui.actions.trigger(...)`.
 5. Draw code may queue shared events through `ui.shared.emit(...)`.
 6. Draw code may reset staged module state and queue status reset through `ui.resetAll(...)`.
-7. The draw callback returns. Shared events are not delivered here.
+7. The draw callbacks return. Shared events are not delivered here.
 8. The live module commit step runs if draw staged work.
 9. Lib flushes dirty staged storage to config.
 10. Lib applies/reverts mutation state if committed UI-owned settings changed.

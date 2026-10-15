@@ -3,7 +3,8 @@
 Reference for writing or auditing module draw code without re-deriving render-path performance analysis from scratch.
 
 This guidance applies to module draw code:
-- `drawTab(host, ui)`
+- the `module.ui.tab` / `module.ui.tabs` draw callbacks (`drawTab(host, ui)`)
+- optional `module.ui.header` and tab `state` callbacks
 - optional `drawQuickContent(host, ui)`
 - `draw.widgets.*`
 - `draw.nav.*`
@@ -13,7 +14,8 @@ This guidance applies to module draw code:
 ## Why Draw Paths Need Care
 
 Module UI is immediate-mode:
-- `drawTab(host, ui)`
+- `drawTab(host, ui)` (the active tab) and the optional header
+- tab `state(host, ui)` callbacks, for every tab that declares one
 - optional `drawQuickContent(host, ui)`
 
 These run every imgui frame.
@@ -109,7 +111,8 @@ inside that draw function and read through it.
 Do not hand-roll flush logic inside draw code.
 
 Ownership:
-- modpack-hosted modules commit after `drawTab` / `drawQuickContent`
+- modpack-hosted and fallback modules commit once after the header and active
+  tab draw, and after `drawQuickContent`
 - fallback UI modules should register GUI callbacks through
   `module.fallbackUi.attachGuiOnce(...)`; activation installs runtime state
 

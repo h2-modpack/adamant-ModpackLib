@@ -39,6 +39,7 @@ end
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
 - Live-module and weak module-record tables are activation anchors under `AdamantModpackLib_Runtime.registry.modules`. `module_registry` is their only surface: `getRecord`/`setRecord` and `getLiveModule`/`setLiveModule`.
 - Hotkey installs, ownership history, pushed pack order, and the shared always-draw tick live under `AdamantModpackLib_Runtime.registry.hotkeys` (`core/hotkeys/00_init.lua`). The tick is registered once and late-reads `dispatch`; the resolved view (status tables, dispatch list, overview rows) is a rebuildable cache local to the import.
+- Lib's settings window callback lives under `AdamantModpackLib_Runtime.registry.ui` (`libWindowRegistered`, `renderLibWindow`); it is registered once and late-reads the renderer.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
 ## Composition Root
@@ -57,8 +58,11 @@ imported once by `init.lua`, then passed down:
 - `method_self.lua`: `requireMethodSelf` for `ref:method()` misuse checks.
 
 `core/ui/` holds UI pieces shared by the fallback window and the modpack window:
-`theme.lua` and `session.lua` (deferred run-data rebuild, overlay suppression
-token, GUI-close edge).
+`theme.lua`, `session.lua` (deferred run-data rebuild, overlay suppression
+token, GUI-close edge), `status_colors.lua`, `module_frame.lua` (the shared
+module frame: Enabled, optional header, module tabs, Lib's Hotkeys & Advanced
+tab; each host passes its own enable/debug/resync/commit paths as `ops`), and
+`lib_window.lua` (Lib's `adamant-lib` settings window: Hotkeys and Debug tabs).
 
 ## Capability Installs And Receipts
 

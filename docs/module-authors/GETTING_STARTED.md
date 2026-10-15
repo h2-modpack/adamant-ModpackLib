@@ -140,6 +140,12 @@ end
 `ui.shared` are draw-callback objects. Use them in the callback that receives
 them. Do not retain them for runtime hooks or later callbacks.
 
+`module.ui.tab(drawTab)` gives the module one tab labelled `Module`. Lib draws
+an Enabled checkbox above the tab bar and its own **Advanced** tab (Debug Mode,
+Resync State, and hotkeys when requested) after yours. Use
+`module.ui.tabs({...})` for several top-level tabs and `module.ui.header(fn)`
+for content above them; see [MODULE_AUTHORING.md](MODULE_AUTHORING.md#module-frame).
+
 ## Runtime Logic
 
 Runtime declarations happen before activation:
@@ -175,7 +181,7 @@ module.fallbackUi.attachGuiOnce(function(fallbackUi)
 end)
 ```
 
-The standalone window uses the same Lib theme as the modpack window, so no per-module styling is needed.
+The standalone window draws the same module frame as the modpack window and uses the same Lib theme, so no per-module styling is needed.
 
 ## Next Reads
 
