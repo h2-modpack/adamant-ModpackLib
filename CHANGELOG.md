@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.5.0] - 2026-10-15
+
+### Added
+
+- ui: shared module frame, Lib settings window and module tabs (
+de7b3d)
+- hotkeys: draw each module's hotkeys in its Lib header (
+3466e6)
+- hotkeys: add Lib-managed module hotkeys with conflict resolution (
+3200de)
+
+### Fixed
+
+- ui: register the adamant-lib menu once across Lib reloads (
+c58b63)
+
+### Documentation
+
+- describe the module frame, module tabs and Lib settings window (
+58a710)
+- add hotkeys capability design (
+8efe4a)
+
 ## [4.4.0] - 2026-10-14
 
 ### Added
