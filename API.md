@@ -148,9 +148,19 @@ Declare before `module.activate()`.
   must not declare it in `module.data.define`.
 - `opts.tooltip?`: string.
 
-### `ui.hotkeys.get(id)` / `ui.hotkeys.status(id)` / `runtime.hotkeys.status(id)`
+### Lib-drawn hotkey UI
 
-`ui.hotkeys.get(id)` returns the hotkey ref `draw.widgets.hotkey(...)` draws.
+Authors only declare requests; Lib draws the controls. Wherever Lib draws a
+module (its modpack window tab and its fallback window), a **Hotkeys** block
+follows the Enabled/Debug row: one row per request with the label, modifier
+and key dropdowns, and the status line. It collapses to a summary line
+(`Hotkeys: Pause hotkey F9`) while every request is active, unbound, or
+disabled, and opens itself on a conflict, reserved, or invalid binding. Edits
+commit through the module like any staged edit. There is no author hotkey
+widget.
+
+### `ui.hotkeys.status(id)` / `runtime.hotkeys.status(id)`
+
 `status(id)` returns `{ state, binding, owner?, reason?, text }` with `state`
 one of `"active"`, `"conflict"`, `"reserved"`, `"unbound"`, `"invalid"`,
 `"disabled"`; `owner = { moduleName, label }` on conflicts and `reason` on
@@ -160,9 +170,10 @@ reserved keys. Unknown ids raise `hotkeys.unknown_request`.
 
 The Hell2Modding overlay key (`gui_toggle` in
 `Hell2Modding-Hell2Modding-Hotkeys.cfg`, ReturnOfModding config folder) and the
-comma-separated Lib config list `ReservedHotkeys` never dispatch. The modpack
-window's Hotkeys page lists every request (conflicts first) and edits the
-reserved list.
+comma-separated Lib config list `ReservedHotkeys` never dispatch. The Hotkeys
+overview lists every request (conflicts first) and edits the reserved list:
+it is the modpack window's Hotkeys tab, and without a coordinator the
+`adamant-lib` menu's **Hotkeys** item opens it in Lib's own window.
 
 ## `module.shared`
 
@@ -407,7 +418,7 @@ and all declaration namespaces.
 raw managed state. Draw callbacks receive `(host, ui)`. `ui.draw` owns
 `imgui`, `widgets`, `nav`, and `control`; `ui.data` owns staged UI storage;
 `ui.actions` stages commit-time intent; `ui.controls` exposes draw control refs;
-`ui.hotkeys` exposes hotkey widget refs and statuses;
+`ui.hotkeys` reports hotkey statuses;
 `ui.status` reads runtime-authored status; `ui.resetAll(...)` resets staged
 module state and queues status reset for commit.
 
@@ -1029,9 +1040,6 @@ Built-ins:
 - `draw.widgets.steppedRange(minTarget, maxTarget, opts?)`
 - `draw.widgets.checkbox(target, opts?)`
 - `draw.widgets.packedCheckboxList(target, opts?)`
-- `draw.widgets.hotkey(ref, opts?)`: takes `ui.hotkeys.get(id)`, not a
-  `StorageField`; draws modifier and key dropdowns plus the status line.
-  `opts`: `label`, `tooltip`, `modifierWidth`, `keyWidth`, `showStatus`.
 
 These are direct immediate-mode helpers. `draw.widgets` is bound to the current
 `imgui` for the render call. Value widgets accept `StorageField` refs:

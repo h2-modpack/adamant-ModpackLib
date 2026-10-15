@@ -5,7 +5,6 @@ local nav = deps.nav
 local logging = deps.logging
 local storage = deps.storage
 local controlsDraw = deps.controlsDraw
-local hotkeyWidget = deps.hotkeyWidget
 
 -- One draw surface shared by every module's `ui.draw`.
 ---@type AdamantModpackLib.DrawContext
@@ -65,11 +64,6 @@ end
 
 function draw.widgets.getPackedChoiceAlias(target, opts)
     return widgets.getPackedChoiceAlias(resolveField(target, "getPackedChoiceAlias"), opts)
-end
-
--- The hotkey widget takes a hotkey ref (`ui.hotkeys.get(id)`), not a StorageField; it validates its own target.
-function draw.widgets.hotkey(ref, opts)
-    return hotkeyWidget(draw.imgui, ref, opts)
 end
 
 function draw.nav.verticalTabs(opts)

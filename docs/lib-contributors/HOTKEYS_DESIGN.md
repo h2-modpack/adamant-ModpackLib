@@ -37,10 +37,9 @@ module.hotkeys.request("TogglePause", {
 - `onPress` runs on the runtime lane `(host, runtime)`. Module-specific gating (for example
   "only during gameplay") stays in the handler.
 
-Draw and status:
+Authors only declare requests; Lib draws every hotkey control (see UI below). Status:
 
 ```lua
-ui.draw.widgets.hotkey(ui.hotkeys.get("TogglePause"))   -- modifier + key dropdowns, status line
 ui.hotkeys.status("TogglePause")
 runtime.hotkeys.status("TogglePause")
 --> { state = "active" | "conflict" | "reserved" | "unbound" | "invalid",
@@ -48,9 +47,9 @@ runtime.hotkeys.status("TogglePause")
 --    owner = { moduleName = "Quick Pause", label = "Pause hotkey" } }  -- conflict only
 ```
 
-The widget draws a modifier dropdown (None, Ctrl, Shift, Alt, Ctrl+Shift, Ctrl+Alt, Shift+Alt)
-and a key dropdown (None, F1-F12), writes the combined binding string, and draws the status line
-under them, for example:
+Lib's internal hotkey picker (`widget.lua`) draws a modifier dropdown (None, Ctrl, Shift, Alt,
+Ctrl+Shift, Ctrl+Alt, Shift+Alt) and a key dropdown (None, F1-F12), writes the combined binding
+string, and draws the status line under them, for example:
 
 - `Ctrl+F5 - active`
 - `F9 is used by Quick Pause (Pause hotkey); this binding is inactive`
@@ -100,18 +99,38 @@ Only active bindings dispatch, so one key never fires two actions.
   removes only this generation's. Recompute ownership after each.
 - `onPress` errors are caught and reported once per request until the binding changes.
 
-## Overview
+## UI
 
-The modpack window gets a **Hotkeys** page:
+Hotkey controls are Lib-owned; there is no author widget or ref (no `draw.widgets.hotkey`, no
+`ui.hotkeys.get`).
 
-- one row per request across every live Lib module: module, action label, the hotkey widget,
-  status;
-- conflicts listed first;
-- reserved keys: the detected Hell2Modding key and the manual list editor.
+**Module header block** (`module_block.lua`). Wherever Lib draws a module, a Hotkeys block
+follows the Enabled/Debug row and precedes the module's own content: the modpack window module
+tab (`modpack/ui/module_tabs.lua`) and the fallback window (`fallback/fallback_ui.lua`). It draws
+one picker row per request in declaration order; modules without requests draw nothing.
 
-Edits from the overview write the owning module's binding through its staged state and commit,
-the same way the window already edits module enabled state. Standalone modules show the widget
-in their own fallback window.
+- Collapsed to a summary line (`Hotkeys: Previous page F7, Next page None`, non-active states
+  suffixed like `(conflict)`) while every request is active, unbound, or disabled.
+- Opens itself when any request is `conflict`, `reserved`, or `invalid`. A disabled module is
+  not an attention state (every request would be `disabled`), so it stays collapsed.
+- The user toggles it; the choice holds until the attention flag changes. Open state is UI
+  memory keyed by owner id. ImGui `CollapsingHeader` + `SetNextItemOpen` drive it; without
+  them the block is always expanded under a plain summary line.
+- Drawn while the module is disabled too, so bindings stay editable.
+
+**Overview** (`overview.lua`): one row per request across every live Lib module, conflicts first,
+plus the reserved keys (detected Hell2Modding key, Detect again, manual list editor). The modpack
+window draws it as its Hotkeys tab. Without a coordinator, the `adamant-lib` menu's Hotkeys item
+toggles Lib's own Hotkeys window (`fallback/hotkeys_window.lua`), which draws the same overview;
+its ImGui callback is registered once per process (`registry.fallback.hotkeysWindowRegistered`)
+and late-reads `renderHotkeysWindow`, which every import overwrites. The window hides while a
+coordinator is registered.
+
+**Edits** from both surfaces go through `row_refs.lua`: a row ref reads the live module's
+committed binding and writes with `writeAndFlush` (stage + commit), the same path the modpack
+window uses for module enabled state, in pack and fallback mode alike. The block summary is
+built by the registry when resolution runs, and the header label is rebuilt only when the
+summary changes, so the draw path does not allocate per frame.
 
 ## Migration
 
@@ -123,7 +142,8 @@ names. Both then require the Lib release that ships this capability.
 
 - Code: `src/core/hotkeys/` (`bindings.lua` grammar, `declarations.lua` contact point and storage
   compile, `resolution.lua` pure ownership, `reserved.lua` detection and the manual list,
-  `00_init.lua` registry/receipt/tick, `widget.lua`), and `src/core/modpack/ui/hotkeys.lua` (page).
+  `00_init.lua` registry/receipt/tick, `widget.lua` picker, `row_refs.lua`, `module_block.lua`,
+  `overview.lua`), and `src/core/fallback/hotkeys_window.lua` (fallback-mode overview window).
 - Change signal: a revision on the `registry.hotkeys` anchor (install commit/rollback/retire, pack
   order) plus a per-frame compare of each request's committed binding, its module's enabled state,
   and the Lib config reserved string. Resolution runs only when one of those changed; status tables

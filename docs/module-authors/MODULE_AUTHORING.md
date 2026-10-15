@@ -146,7 +146,8 @@ Use [capabilities/CONTROLS.md](capabilities/CONTROLS.md) when a repeated
 domain concept needs its own bundled storage, runtime reader, and draw path.
 Use [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md) for key presses:
 `module.hotkeys.request(...)` declares the binding storage itself, so do not
-also declare its alias in `module.data.define`.
+also declare its alias in `module.data.define`. Lib draws the hotkey controls
+in your module's header; your tab draws nothing for them.
 
 ## Capability Guides
 

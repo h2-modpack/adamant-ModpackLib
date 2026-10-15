@@ -7,6 +7,9 @@ which request owns each key, dispatches presses, and **responds** with a status
 your UI can show. Two modules can never fire on the same key: one owns it, the
 others see a conflict that names the owner.
 
+You only declare requests. Lib draws the controls for them in your module's
+header and in the Hotkeys overview; your tab draws nothing for hotkeys.
+
 Design background: [../../lib-contributors/HOTKEYS_DESIGN.md](../../lib-contributors/HOTKEYS_DESIGN.md).
 
 ## Request
@@ -15,7 +18,7 @@ Declare requests before `module.activate()`:
 
 ```lua
 module.hotkeys.request("TogglePause", {
-    label = "Pause hotkey",            -- shown in pickers, statuses, and the Hotkeys page
+    label = "Pause hotkey",            -- shown in the header block, statuses, and the overview
     default = "F9",                    -- binding string, or "" (the default) for unbound
     alias = "Hotkey",                  -- optional storage alias; defaults to "Hotkey_<id>"
     tooltip = "Freeze the game without opening the pause menu.",
@@ -63,29 +66,30 @@ held and Shift and Alt released. Either the left or the right modifier key
 counts. Presses do not repeat while the key is held. Nothing fires while the
 Hell2Modding overlay is open.
 
-## Draw
+## Where users edit bindings
 
-```lua
-module.ui.tab(function(host, ui)
-    ui.draw.widgets.hotkey(ui.hotkeys.get("TogglePause"))
-end)
-```
+Lib draws a **Hotkeys** block in every module's standard header, right after
+the Enabled/Debug row and before your tab content, in both your modpack window
+tab and your standalone fallback window. Modules without requests show nothing.
 
-`draw.widgets.hotkey(ref, opts?)` draws the label, a modifier dropdown (None,
-Ctrl, Shift, Alt, Ctrl+Shift, Ctrl+Alt, Shift+Alt), a key dropdown (None,
-F1-F12), and a status line. It writes the combined binding to the staged
-alias; the module commits it like any other staged edit. It returns `true` when
-it wrote a new binding.
+- One row per request: the label, a modifier dropdown (None, Ctrl, Shift, Alt,
+  Ctrl+Shift, Ctrl+Alt, Shift+Alt), a key dropdown (None, F1-F12), and the
+  status line.
+- Collapsed to one summary line while every request is active, unbound, or
+  disabled, for example `Hotkeys: Pause hotkey F9` or
+  `Hotkeys: Previous page F7, Next page None`; non-active states are named
+  (`(conflict)`, `(disabled)`, ...).
+- Opens itself when a request is in conflict, reserved, or invalid. Users can
+  open or close it; that choice holds until the attention state changes.
+- Shown while the module is disabled too, so bindings stay editable (state
+  `disabled`).
+- An edit writes the binding through the module's staged state and commits it
+  right away, like the Enabled checkbox.
 
-Options:
-
-- `label` (default: the request label; `""` hides it)
-- `tooltip` (default: the request tooltip)
-- `modifierWidth`, `keyWidth`
-- `showStatus = false` to hide the status line
-
-Standalone modules show the widget in their own fallback window; coordinated
-modules show it in their tab and on the modpack window's Hotkeys page.
+The **Hotkeys overview** lists every request across every loaded module,
+conflicts first, with the same controls and the reserved keys. It is the
+modpack window's Hotkeys tab; without a coordinator, open it from the
+`adamant-lib` menu (**Hotkeys**).
 
 ## Status
 
@@ -102,7 +106,7 @@ Returns:
     binding = "Ctrl+F5",
     owner = { moduleName = "Quick Pause", label = "Pause hotkey" }, -- conflict only
     reason = "Hell2Modding overlay",                                -- reserved only
-    text = "Ctrl+F5 - active",                                      -- the widget's status line
+    text = "Ctrl+F5 - active",                                      -- the status line Lib draws
 }
 ```
 
@@ -136,6 +140,6 @@ The status table is replaced only when its state changes. Unknown ids raise
   (Hell2Modding fires whatever modifiers are held); other keys (`VK_INSERT`,
   `1`, ...) are shown but cannot collide with an F-key binding.
 - Lib config `ReservedHotkeys` is a comma-separated list of extra bindings to
-  keep free, edited on the modpack window's Hotkeys page. An entry without
+  keep free, edited in the Hotkeys overview. An entry without
   modifiers (`F2`) reserves the key under every modifier combination; an entry
   with modifiers (`Ctrl+F2`) reserves exactly that combination.

@@ -38,7 +38,6 @@ local installs = anchor.installs
 
 local hotkeys = {}
 
-local REF_KIND = "AdamantHotkeyRef"
 local REQUEST_KEY_SEPARATOR = "\n"
 local MODIFIER_KEY_NAMES = {
     ctrl = { "LeftCtrl", "RightCtrl" },
@@ -62,6 +61,7 @@ local view = {
     entries = {},
     byOwner = {},
     rows = {},
+    blocks = {},
     dispatchList = {},
     modifierCodes = nil,
 }
@@ -198,6 +198,41 @@ local function statusFor(entry, result, ownerEntry)
     return status
 end
 
+-- States that need the user's attention: the module header block opens itself for them.
+local ATTENTION_STATES = {
+    conflict = true,
+    reserved = true,
+    invalid = true,
+}
+
+local function summaryPart(row)
+    local status = row.status
+    local binding = status.binding == bindings.UNBOUND and "None" or status.binding
+    local state = status.state
+    if state == "active" or state == "unbound" then
+        return row.label .. " " .. binding
+    end
+    return row.label .. " " .. binding .. " (" .. state .. ")"
+end
+
+-- One module's header block: its rows in declaration order and a one-line summary. Built only
+-- when resolution runs, so the draw path reads cached text.
+local function buildBlock(rows)
+    local parts = {}
+    local attention = false
+    for index, row in ipairs(rows) do
+        parts[index] = summaryPart(row)
+        if ATTENTION_STATES[row.status.state] then
+            attention = true
+        end
+    end
+    return {
+        rows = rows,
+        summary = "Hotkeys: " .. table.concat(parts, ", "),
+        attention = attention,
+    }
+end
+
 local function buildDispatch(entry)
     local parsed = bindings.parse(entry.binding)
     local keyCode = parsed and resolveKeyCode(parsed.key) or nil
@@ -228,6 +263,7 @@ local function resolveView()
     local dispatchList = {}
     local conflictRows = {}
     local otherRows = {}
+    local ownerRows = {}
     for index, entry in ipairs(entries) do
         local result = results[index]
         local ownerEntry = result.ownerIndex and entries[result.ownerIndex] or nil
@@ -245,6 +281,13 @@ local function resolveView()
             moduleName = moduleNameOf(entry.install),
             status = entry.status,
         }
+        -- Entries keep declaration order within one owner, so owner rows need no sort.
+        local owned = ownerRows[entry.ownerId]
+        if owned == nil then
+            owned = {}
+            ownerRows[entry.ownerId] = owned
+        end
+        owned[#owned + 1] = row
         if result.state == "conflict" then
             conflictRows[#conflictRows + 1] = row
         else
@@ -255,8 +298,14 @@ local function resolveView()
         conflictRows[#conflictRows + 1] = row
     end
 
+    local blocks = {}
+    for ownerId, rows in pairs(ownerRows) do
+        blocks[ownerId] = buildBlock(rows)
+    end
+
     view.dispatchList = dispatchList
     view.rows = conflictRows
+    view.blocks = blocks
     view.modifierCodes = resolveModifierCodes()
 end
 
@@ -431,6 +480,15 @@ function hotkeys.listRows()
     return view.rows
 end
 
+---One module's header block (rows in declaration order, summary line, attention flag), or nil when
+---the owner has no committed install.
+---@param ownerId string
+---@return AdamantModpackLib.HotkeyBlock?
+function hotkeys.getOwnerBlock(ownerId)
+    refresh()
+    return view.blocks[ownerId]
+end
+
 ---Pushed by the modpack layer after it orders a pack's modules. A new or changed order is
 ---load-time ordering, so recorded ownership is dropped and the tie-break decides again.
 ---@param packId string
@@ -484,6 +542,7 @@ function hotkeys.redetectReserved()
     view.detectedRead = false
 end
 
+---Internal widget ref for Lib-drawn hotkey pickers (module header blocks, the overview).
 ---@param field { read: fun(self): any, write: fun(self, value: any): any }
 ---@param ownerId string? Owner whose status the widget shows; nil for a status-less picker.
 ---@param request AdamantModpackLib.HotkeyRequest?
@@ -491,7 +550,6 @@ end
 function hotkeys.createRef(field, ownerId, request)
     local suffix = tostring(ownerId or "picker") .. "-" .. tostring(request and request.id or tostring(field))
     return {
-        _kind = REF_KIND,
         field = field,
         ownerId = ownerId,
         id = request and request.id or nil,
@@ -501,10 +559,6 @@ function hotkeys.createRef(field, ownerId, request)
         keyComboId = "##hotkey-key-" .. suffix,
         pendingPrefix = nil,
     }
-end
-
-function hotkeys.isRef(value)
-    return type(value) == "table" and rawget(value, "_kind") == REF_KIND
 end
 
 ---@param ref AdamantModpackLib.HotkeyRef
@@ -519,10 +573,9 @@ end
 ---Builds a module's `runtime.hotkeys` and `ui.hotkeys` surfaces over its compiled requests.
 ---@param ownerId string
 ---@param requests AdamantModpackLib.HotkeyRequest[]
----@param staged AdamantModpackLib.StagedState
 ---@return table runtimeSurface
 ---@return table uiSurface
-function hotkeys.createSurfaces(ownerId, requests, staged)
+function hotkeys.createSurfaces(ownerId, requests)
     local byId = {}
     for _, request in ipairs(requests) do
         byId[request.id] = request
@@ -542,17 +595,7 @@ function hotkeys.createSurfaces(ownerId, requests, staged)
         end,
     }
 
-    local refs = {}
     local uiSurface = {
-        get = function(id)
-            local request = requireRequest("ui.hotkeys.get", id)
-            local ref = refs[id]
-            if ref == nil then
-                ref = hotkeys.createRef(staged.get(request.alias), ownerId, request)
-                refs[id] = ref
-            end
-            return ref
-        end,
         status = function(id)
             requireRequest("ui.hotkeys.status", id)
             return hotkeys.status(ownerId, id)

@@ -3,9 +3,8 @@ local rom = deps.rom
 local logging = deps.logging
 local uiSession = deps.uiSession
 local setupRunData = deps.setupRunData
-local hotkeys = deps.hotkeys
-local drawHotkeyWidget = deps.drawHotkeyWidget
-local getLiveModule = deps.getLiveModule
+local drawHotkeyBlock = deps.drawHotkeyBlock
+local drawHotkeyOverview = deps.drawHotkeyOverview
 
 local function TextColored(ui, color, text)
     ui.TextColored(color[1], color[2], color[3], color[4], text)
@@ -112,6 +111,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
 
     local drawModuleTab = import("core/modpack/ui/module_tabs.lua", nil, {
         rom = rom,
+        drawHotkeyBlock = drawHotkeyBlock,
         staging = staging,
         runtime = runtime,
         snapshotAccess = snapshotAccess,
@@ -125,16 +125,6 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         staging = staging,
         runtime = runtime,
         libConfig = libConfig,
-    })
-
-    local drawHotkeys = import("core/modpack/ui/hotkeys.lua", nil, {
-        rom = rom,
-        colors = colors,
-        logging = logging,
-        packId = packId,
-        hotkeys = hotkeys,
-        drawHotkeyWidget = drawHotkeyWidget,
-        getLiveModule = getLiveModule,
     })
 
     runtime.reconcilePackDisabledState()
@@ -218,7 +208,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         elseif selectedTab == "Profiles" then
             drawProfiles()
         elseif selectedTab == "Hotkeys" then
-            drawHotkeys()
+            drawHotkeyOverview(ui, colors)
         elseif selectedTab == "Dev" then
             drawDev(snapshot)
         elseif moduleByTabLabel[selectedTab] then

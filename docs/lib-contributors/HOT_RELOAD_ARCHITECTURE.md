@@ -69,6 +69,9 @@ Anchors that exist so a Lib re-import converges on current code:
   changes). The always-draw tick is registered once (`tickRegistered`) and
   late-reads `dispatch`, which every import overwrites; each import rebuilds its
   resolved view from these anchors on first use
+- `registry.fallback.hotkeysWindowRegistered` / `renderHotkeysWindow`: Lib's
+  fallback-mode Hotkeys window callback is registered once and late-reads
+  `renderHotkeysWindow`, which every import overwrites
 - `registry.mutations.ownerSlots`: keyed `"owner:" .. ownerId` holding
   `{ plan = activePlan }`; keep that key and slot shape stable or a re-import
   orphans an applied plan

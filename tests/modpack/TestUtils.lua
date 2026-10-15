@@ -364,7 +364,8 @@ function CreateModpackHarness(opts)
         getLiveModule = getLiveModule,
         packRegistry = harnessPackRegistry,
         hotkeys = opts.hotkeys or LibTestImports["core/hotkeys/00_init.lua"],
-        drawHotkeyWidget = LibTestImports["core/hotkeys/widget.lua"].draw,
+        drawHotkeyBlock = LibTestImports["core/hotkeys/module_block.lua"],
+        drawHotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
     })
 
     return {
@@ -395,9 +396,8 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
     uiSession = uiSession,
     setupRunData = setupRunData,
-    hotkeys = LibTestImports["core/hotkeys/00_init.lua"],
-    drawHotkeyWidget = LibTestImports["core/hotkeys/widget.lua"].draw,
-    getLiveModule = LibModuleRegistry.getLiveModule,
+    drawHotkeyBlock = LibTestImports["core/hotkeys/module_block.lua"],
+    drawHotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
 })
 
 rawset(ModpackTestApi, "createOverlaySurface", function()

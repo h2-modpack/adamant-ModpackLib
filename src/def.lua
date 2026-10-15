@@ -285,10 +285,10 @@ local lib = {}
 ---@field binding string Committed binding string ("" when unbound).
 ---@field owner? { moduleName: string, label: string } Conflict only: the request that owns the key.
 ---@field reason? string Reserved only: what reserves the key, such as "Hell2Modding overlay".
----@field text string Status line the hotkey widget draws.
+---@field text string Status line Lib draws under the hotkey row.
 
 ---@class AdamantModpackLib.HotkeyRequestOpts
----@field label string Shown in pickers, statuses, and the modpack Hotkeys page.
+---@field label string Shown in the module header block, statuses, and the Hotkeys overview.
 ---@field onPress fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext) Runtime lane.
 ---@field default? string Binding string, or "" (the default) for unbound.
 ---@field alias? string Binding storage alias; defaults to "Hotkey_<id>".
@@ -297,16 +297,16 @@ local lib = {}
 ---@class AdamantModpackLib.AuthorHotkeys
 ---@field request fun(id: string, opts: AdamantModpackLib.HotkeyRequestOpts): nil
 
----Opaque hotkey widget ref returned by `ui.hotkeys.get(id)`.
+---Internal: widget ref for a Lib-drawn hotkey row (`hotkeys.createRef`).
 ---@class AdamantModpackLib.HotkeyRef
 
 ---@class AdamantModpackLib.RuntimeHotkeys
 ---@field status fun(id: string): AdamantModpackLib.HotkeyStatus?
 
 ---@class AdamantModpackLib.UiHotkeys
----@field get fun(id: string): AdamantModpackLib.HotkeyRef
 ---@field status fun(id: string): AdamantModpackLib.HotkeyStatus?
 
+---Internal: options for the Lib-drawn hotkey picker (`core/hotkeys/widget.lua`).
 ---@class AdamantModpackLib.HotkeyWidgetOpts
 ---@field label? string Inline label; defaults to the request label, "" hides it.
 ---@field tooltip? string Defaults to the request tooltip.
@@ -314,7 +314,7 @@ local lib = {}
 ---@field keyWidth? number Key dropdown width (default 80).
 ---@field showStatus? boolean Set false to hide the status line.
 
----Internal: one hotkey row on the modpack Hotkeys page (`hotkeys.listRows()`).
+---Internal: one hotkey row for the module header block and the Hotkeys overview (`hotkeys.listRows()`).
 ---@class AdamantModpackLib.HotkeyRow
 ---@field ownerId string
 ---@field id string
@@ -324,6 +324,12 @@ local lib = {}
 ---@field request table
 ---@field moduleName string
 ---@field status AdamantModpackLib.HotkeyStatus
+
+---Internal: one module's header block (`hotkeys.getOwnerBlock(ownerId)`), rebuilt when resolution runs.
+---@class AdamantModpackLib.HotkeyBlock
+---@field rows AdamantModpackLib.HotkeyRow[] Declaration order.
+---@field summary string Collapsed summary line, such as "Hotkeys: Pause hotkey F9".
+---@field attention boolean True when any request is conflict, reserved, or invalid.
 
 ---@class AdamantModpackLib.Host
 ---@field getOwnerId fun(): string
@@ -1077,7 +1083,6 @@ local lib = {}
 ---): boolean
 ---@field checkbox fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.CheckboxOpts): boolean
 ---@field packedCheckboxList fun(target: AdamantModpackLib.WidgetTarget, opts?: AdamantModpackLib.PackedCheckboxListOpts): boolean
----@field hotkey fun(ref: AdamantModpackLib.HotkeyRef, opts?: AdamantModpackLib.HotkeyWidgetOpts): boolean
 
 ---Navigation helpers. Call from `drawTab(...)` or `drawQuickContent(...)`.
 ---@class AdamantModpackLib.DrawNavApi

@@ -31,9 +31,8 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
     uiSession = deps.uiSession,
     setupRunData = deps.setupRunData,
-    hotkeys = hotkeys,
-    drawHotkeyWidget = deps.drawHotkeyWidget,
-    getLiveModule = getLiveModule,
+    drawHotkeyBlock = deps.drawHotkeyBlock,
+    drawHotkeyOverview = deps.drawHotkeyOverview,
 })
 
 local constructors = {

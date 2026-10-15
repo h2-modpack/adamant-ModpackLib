@@ -37,7 +37,7 @@ function moduleContexts.create(inputs)
         source = "state.shared",
     })
 
-    local runtimeHotkeys, uiHotkeys = hotkeys.createSurfaces(ownerId, inputs.hotkeyRequests, state.staged)
+    local runtimeHotkeys, uiHotkeys = hotkeys.createSurfaces(ownerId, inputs.hotkeyRequests)
 
     local lanes = moduleState.createLanes(state, {
         runtimeData = {

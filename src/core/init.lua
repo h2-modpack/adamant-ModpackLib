@@ -132,9 +132,24 @@ local hotkeys = import('core/hotkeys/00_init.lua', nil, {
     hotkeyRegistry = registry.hotkeys,
 })
 local hotkeyWidget = import('core/hotkeys/widget.lua', nil, {
-    logging = logging,
     bindings = hotkeyBindings,
     hotkeys = hotkeys,
+})
+local hotkeyRowRef = import('core/hotkeys/row_refs.lua', nil, {
+    logging = logging,
+    hotkeys = hotkeys,
+    getLiveModule = moduleRegistry.getLiveModule,
+})
+-- Lib-drawn hotkey UI: the block in every module header and the all-modules overview.
+local drawHotkeyBlock = import('core/hotkeys/module_block.lua', nil, {
+    hotkeys = hotkeys,
+    drawWidget = hotkeyWidget.draw,
+    refForRow = hotkeyRowRef,
+})
+local drawHotkeyOverview = import('core/hotkeys/overview.lua', nil, {
+    hotkeys = hotkeys,
+    drawWidget = hotkeyWidget.draw,
+    refForRow = hotkeyRowRef,
 })
 local hotkeyDeclarations = import('core/hotkeys/declarations.lua', nil, {
     logging = logging,
@@ -148,7 +163,6 @@ local draw = import('core/widgets/00_init.lua', nil, {
     isDrawActionRef = moduleState.isDrawActionRef,
     rom = externals.rom,
     controlsDraw = controlsBundle.draw,
-    hotkeyWidget = hotkeyWidget.draw,
 })
 
 local createTheme = import('core/ui/theme.lua', nil, {
@@ -168,6 +182,14 @@ local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
     receipt = receipt,
+    drawHotkeyBlock = drawHotkeyBlock,
+})
+local hotkeysWindow = import('core/fallback/hotkeys_window.lua', nil, {
+    rom = externals.rom,
+    coordination = modpackCoordination,
+    createTheme = createTheme,
+    drawOverview = drawHotkeyOverview,
+    fallbackRegistry = registry.fallback,
 })
 -- Capability installs activation runs for every module, in install order. Commit order comes
 -- from each receipt's phase; an install returns nil when the module declares nothing for it.
@@ -232,7 +254,8 @@ public.modpack = import('core/modpack/init.lua', nil, {
     getLiveModule = moduleRegistry.getLiveModule,
     packRegistry = registry.modpacks,
     hotkeys = hotkeys,
-    drawHotkeyWidget = hotkeyWidget.draw,
+    drawHotkeyBlock = drawHotkeyBlock,
+    drawHotkeyOverview = drawHotkeyOverview,
 })
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
@@ -257,4 +280,5 @@ public.createModule = moduleBundle.public.createModule
 
 return {
     modpackCoordination = modpackCoordination,
+    hotkeysWindow = hotkeysWindow,
 }

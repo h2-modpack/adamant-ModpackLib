@@ -26,10 +26,15 @@ local core = import('core/init.lua', nil, {
     externals = externals,
 })
 
--- Fallback Lib debug toggle - hidden when Lib modpack registers coordinators.
+-- Fallback Lib menu (Hotkeys window, debug toggles) - hidden when Lib modpack registers
+-- coordinators; the modpack window then owns the Hotkeys overview.
 rom.gui.add_to_menu_bar(function()
     if core.modpackCoordination.hasRegistrations() then return end
     if rom.ImGui.BeginMenu("adamant-lib") then
+        if rom.ImGui.MenuItem("Hotkeys") then
+            core.hotkeysWindow.toggle()
+        end
+
         local val, chg = rom.ImGui.Checkbox("Lib Policy Debug", libConfig.DebugMode == true)
         if chg then libConfig.DebugMode = val end
 

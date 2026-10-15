@@ -286,10 +286,6 @@ return {
         severity = "error",
         description = "Widget action options must be draw action refs.",
     },
-    ["widgets.invalid_hotkey_ref"] = {
-        severity = "error",
-        description = "The hotkey widget requires a hotkey ref from ui.hotkeys.get(...).",
-    },
 
     ["hotkeys.invalid_declaration"] = {
         severity = "error",
@@ -310,6 +306,10 @@ return {
     ["hotkeys.on_press_failed"] = {
         severity = "warn",
         description = "A hotkey onPress handler raised; reported once per request until its binding changes.",
+    },
+    ["hotkeys.commit_failed"] = {
+        severity = "warn",
+        description = "A binding edited in a Lib-drawn hotkey row failed to commit through its module.",
     },
     ["hotkeys.dispatch_failed"] = {
         severity = "warn",

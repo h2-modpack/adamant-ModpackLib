@@ -1,11 +1,11 @@
--- `draw.widgets.hotkey(ref, opts?)`: modifier dropdown + key dropdown + status line.
+-- Internal hotkey picker: modifier dropdown + key dropdown + status line. Lib draws it in each
+-- module's header block and on the Hotkeys overview; it is not part of the author draw surface.
 --
 -- The draw path allocates nothing per frame: dropdown labels are constants, combo ids live on the
 -- ref, binding parses are memoized, and status text is cached on the status table.
 
 local deps = ...
 
-local logging = deps.logging
 local bindings = deps.bindings
 local hotkeys = deps.hotkeys
 
@@ -49,10 +49,6 @@ end
 ---@param opts? AdamantModpackLib.HotkeyWidgetOpts
 ---@return boolean changed
 function widget.draw(imgui, ref, opts)
-    if not hotkeys.isRef(ref) then
-        logging.violate("widgets.invalid_hotkey_ref",
-            "draw.widgets.hotkey: expected a hotkey ref from ui.hotkeys.get(...)")
-    end
     opts = opts or EMPTY_OPTS
     local tooltip = opts.tooltip or ref.tooltip
 

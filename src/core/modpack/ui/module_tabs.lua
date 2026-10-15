@@ -1,6 +1,7 @@
 local ctx = ...
 
 local ui = ctx.rom.ImGui
+local drawHotkeyBlock = ctx.drawHotkeyBlock
 local staging = ctx.staging
 local runtime = ctx.runtime
 local snapshotAccess = ctx.snapshotAccess
@@ -28,6 +29,9 @@ local function draw(entry, snapshot)
     if ui.IsItemHovered() and entry.tooltip then
         ui.SetTooltip(entry.tooltip)
     end
+
+    -- Lib-owned hotkey block: shown while disabled too, so bindings stay editable (state "disabled").
+    drawHotkeyBlock(ui, entry.pluginGuid)
 
     if not enabled then return end
 

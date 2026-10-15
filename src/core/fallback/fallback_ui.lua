@@ -11,6 +11,7 @@ local rom = deps.rom
 local modutil = deps.modutil
 local uiSession = deps.uiSession
 local SetupRunData = deps.gameDeps.runData.SetupRunData
+local drawHotkeyBlock = deps.drawHotkeyBlock
 
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
@@ -184,7 +185,8 @@ local function seedWindowSize(runtime, imgui)
     runtime.didSeedWindowSize = true
 end
 
---- Draws the Enabled / Debug Mode / Resync row and, while enabled, the module tab.
+--- Draws the Enabled / Debug Mode / Resync row, the Lib hotkey block, and, while enabled, the
+--- module tab.
 ---@param runtime AdamantModpackLib.FallbackUiRuntime
 local function drawWindowContents(runtime, imgui, meta, moduleId)
     local module = runtime.module
@@ -217,6 +219,9 @@ local function drawWindowContents(runtime, imgui, meta, moduleId)
         module.resync()
         snapshotControls(runtime)
     end
+
+    -- Shown while disabled too, so bindings stay editable; rows commit through writeAndFlush.
+    drawHotkeyBlock(imgui, module.getOwnerId())
 
     if enabled then
         imgui.Spacing()

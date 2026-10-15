@@ -147,6 +147,8 @@ function TestMainBoot.testMainUsesExpectedBootExternals()
     lu.assertEquals(#h.menuCallbacks, 1)
     -- The fallback GUI-close watcher and the shared hotkey tick.
     lu.assertEquals(#h.alwaysDrawCallbacks, 2)
+    -- Lib's fallback Hotkeys window.
+    lu.assertEquals(#h.imguiCallbacks, 1)
     lu.assertEquals(#h.onceLoadedCallbacks, 1)
 end
 
@@ -170,6 +172,9 @@ function TestMainBoot.testMainDebugMenuTogglesLibConfig()
         end,
         EndMenu = function()
             calls.endMenu = calls.endMenu + 1
+        end,
+        MenuItem = function()
+            return false
         end,
     }
 
@@ -203,4 +208,69 @@ function TestMainBoot.testMainDebugMenuHidesWhenCoordinatorIsRegistered()
     h.menuCallbacks[1]()
 
     lu.assertEquals(beginMenuCalls, 0)
+end
+
+function TestMainBoot.testMainMenuOpensHotkeysOverviewWindowWithoutCoordinator()
+    local h = createBootHarness()
+    local calls = {
+        windows = {},
+        colored = {},
+        texts = {},
+    }
+    local clickHotkeys = true
+    local function noop() end
+    h.rom.ImGui = {
+        BeginMenu = function()
+            return true
+        end,
+        EndMenu = noop,
+        MenuItem = function(label)
+            if label == "Hotkeys" and clickHotkeys then
+                clickHotkeys = false
+                return true
+            end
+            return false
+        end,
+        Checkbox = function(_, current)
+            return current, false
+        end,
+        SetNextWindowSize = noop,
+        Begin = function(title)
+            calls.windows[#calls.windows + 1] = title
+            return true, true
+        end,
+        End = noop,
+        PushStyleColor = noop,
+        PopStyleColor = noop,
+        TextColored = function(_, _, _, _, text)
+            calls.colored[#calls.colored + 1] = text
+        end,
+        Text = function(text)
+            calls.texts[#calls.texts + 1] = text
+        end,
+        Spacing = noop,
+        Separator = noop,
+        SameLine = noop,
+        Button = function()
+            return false
+        end,
+        AlignTextToFramePadding = noop,
+        PushItemWidth = noop,
+        PopItemWidth = noop,
+        BeginCombo = function()
+            return false
+        end,
+        IsItemHovered = function()
+            return false
+        end,
+    }
+
+    h.imguiCallbacks[1]()
+    lu.assertEquals(calls.windows, {})
+
+    h.menuCallbacks[1]()
+    h.imguiCallbacks[1]()
+    lu.assertEquals(calls.windows, { "Hotkeys###adamant-lib-hotkeys" })
+    lu.assertEquals(calls.colored[1], "Hotkeys requested by every loaded module. Conflicts are listed first.")
+    lu.assertEquals(calls.texts[1], "No module requests a hotkey.")
 end

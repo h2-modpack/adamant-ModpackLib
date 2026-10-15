@@ -1,17 +1,13 @@
--- Modpack window "Hotkeys" page: every live Lib module's hotkey requests (conflicts first) and the
--- reserved keys. Edits write the owning module's binding through its staged state and commit
--- (`writeAndFlush`), the same way the window edits module enabled state.
+-- Lib-owned Hotkeys overview: every live Lib module's hotkey requests (conflicts first) and the
+-- reserved keys. The modpack window draws it as its Hotkeys tab; without a coordinator the
+-- `adamant-lib` menu opens it in Lib's own Hotkeys window. Row edits write the owning module's
+-- binding through its staged state and commit (see `row_refs.lua`).
 
-local ctx = ...
+local deps = ...
 
-local rom = ctx.rom
-local ui = rom.ImGui
-local colors = ctx.colors
-local logging = ctx.logging
-local packId = ctx.packId
-local hotkeys = ctx.hotkeys
-local drawHotkeyWidget = ctx.drawHotkeyWidget
-local getLiveModule = ctx.getLiveModule
+local hotkeys = deps.hotkeys
+local drawWidget = deps.drawWidget
+local refForRow = deps.refForRow
 
 local ROW_WIDGET_OPTS = { label = "" }
 local PICKER_WIDGET_OPTS = { label = "Reserve", showStatus = false }
@@ -20,42 +16,9 @@ local function TextColored(imgui, color, text)
     imgui.TextColored(color[1], color[2], color[3], color[4], text)
 end
 
--- Row refs and header text are cached by request identity; a module reload installs new request
--- objects, so stale entries fall out of the weak tables.
-local rowRefs = setmetatable({}, { __mode = "k" })
+-- Header text is cached by request identity; a module reload installs new request objects, so
+-- stale entries fall out of the weak table.
 local rowHeaders = setmetatable({}, { __mode = "k" })
-
-local function createRowField(ownerId, alias, label)
-    return {
-        read = function()
-            local liveModule = getLiveModule(ownerId)
-            if liveModule == nil then
-                return ""
-            end
-            return liveModule.read(alias)
-        end,
-        write = function(_, value)
-            local liveModule = getLiveModule(ownerId)
-            if liveModule == nil then
-                return false
-            end
-            local ok, err = liveModule.writeAndFlush(alias, value)
-            if not ok then
-                logging.warn(packId, "%s hotkey '%s' commit failed: %s", tostring(ownerId), tostring(label), tostring(err))
-            end
-            return ok
-        end,
-    }
-end
-
-local function refForRow(row)
-    local ref = rowRefs[row.request]
-    if ref == nil then
-        ref = hotkeys.createRef(createRowField(row.ownerId, row.alias, row.label), row.ownerId, row.request)
-        rowRefs[row.request] = ref
-    end
-    return ref
-end
 
 local function headerForRow(row)
     local header = rowHeaders[row.request]
@@ -99,7 +62,7 @@ local function containsBinding(list, binding)
     return false
 end
 
-local function drawDetected(detected)
+local function drawDetected(ui, detected)
     if detected == nil then
         ui.Text("Hell2Modding overlay key: not detected")
     elseif detected.binding ~= nil then
@@ -113,7 +76,7 @@ local function drawDetected(detected)
     end
 end
 
-local function drawManualList(manual)
+local function drawManualList(ui, manual)
     ui.Text("Reserved for other tools:")
     if #manual == 0 then
         ui.Text("  (none)")
@@ -133,7 +96,7 @@ local function drawManualList(manual)
         end
     end
 
-    drawHotkeyWidget(ui, pickerRef, PICKER_WIDGET_OPTS)
+    drawWidget(ui, pickerRef, PICKER_WIDGET_OPTS)
     ui.SameLine()
     if ui.Button("Add##hotkeys-reserved-add") and pickerValue ~= "" then
         if not containsBinding(manual, pickerValue) then
@@ -148,7 +111,9 @@ local function drawManualList(manual)
     end
 end
 
-local function draw()
+---@param ui table ImGui
+---@param colors { info: number[], text: number[] } Theme colors.
+local function draw(ui, colors)
     TextColored(ui, colors.info, "Hotkeys requested by every loaded module. Conflicts are listed first.")
     ui.Spacing()
 
@@ -159,7 +124,7 @@ local function draw()
     for _, row in ipairs(rows) do
         ui.Separator()
         TextColored(ui, colors.text, headerForRow(row))
-        drawHotkeyWidget(ui, refForRow(row), ROW_WIDGET_OPTS)
+        drawWidget(ui, refForRow(row), ROW_WIDGET_OPTS)
     end
 
     ui.Spacing()
@@ -167,9 +132,9 @@ local function draw()
     TextColored(ui, colors.info, "Reserved keys")
     ui.Spacing()
     local reservedKeys = hotkeys.getReserved()
-    drawDetected(reservedKeys.detected)
+    drawDetected(ui, reservedKeys.detected)
     ui.Spacing()
-    drawManualList(reservedKeys.manual)
+    drawManualList(ui, reservedKeys.manual)
 end
 
 return draw
