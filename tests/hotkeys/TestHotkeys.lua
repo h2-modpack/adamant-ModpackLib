@@ -1241,6 +1241,8 @@ function TestHotkeys:testLibSettingsWindowDrawsOverviewAndRegistersOnceAcrossLib
         nativeConfigRoot = h.nativeConfigRoot,
     })
     lu.assertEquals(#callbacks.imgui, 1)
+    -- The adamant-lib menu is registered once as well.
+    lu.assertEquals(#callbacks.menuBar, 1)
     renderLibWindow(h)
     lu.assertEquals(h.imgui.drawn.windows, {})
     second.core.libWindow.open()

@@ -39,7 +39,7 @@ end
 - Weak implementation side tables and rebuildable caches, like module-state backend/store side tables, should stay local to the service import rather than living under `AdamantModpackLib_Runtime`.
 - Live-module and weak module-record tables are activation anchors under `AdamantModpackLib_Runtime.registry.modules`. `module_registry` is their only surface: `getRecord`/`setRecord` and `getLiveModule`/`setLiveModule`.
 - Hotkey installs, ownership history, pushed pack order, and the shared always-draw tick live under `AdamantModpackLib_Runtime.registry.hotkeys` (`core/hotkeys/00_init.lua`). The tick is registered once and late-reads `dispatch`; the resolved view (status tables, dispatch list, overview rows) is a rebuildable cache local to the import.
-- Lib's settings window callback lives under `AdamantModpackLib_Runtime.registry.ui` (`libWindowRegistered`, `renderLibWindow`); it is registered once and late-reads the renderer.
+- Lib's settings window and `adamant-lib` menu callbacks live under `AdamantModpackLib_Runtime.registry.ui` (`libWindowRegistered`/`renderLibWindow`, `libMenuRegistered`/`drawLibMenu`); each is registered once and late-reads its current function.
 - Fallback UI bridges and GUI-close callbacks are runtime anchors because external callers keep their handles; keep live fallback UI runtimes under `AdamantModpackLib_Runtime.registry.fallback`, and make callbacks late-read that table.
 
 ## Composition Root

@@ -138,4 +138,28 @@ if not uiRegistry.libWindowRegistered
     uiRegistry.libWindowRegistered = true
 end
 
+-- The `adamant-lib` menu, shown with or without packs; its one item opens this window. Registered
+-- once per process like the window, late-reading the current draw function.
+local function drawMenu()
+    local imgui = rom.ImGui
+    if imgui.BeginMenu("adamant-lib") then
+        if imgui.MenuItem("Settings") then
+            libWindow.open()
+        end
+        imgui.EndMenu()
+    end
+end
+
+uiRegistry.drawLibMenu = drawMenu
+if not uiRegistry.libMenuRegistered
+    and type(rom.gui) == "table" and type(rom.gui.add_to_menu_bar) == "function" then
+    rom.gui.add_to_menu_bar(function()
+        local draw = uiRegistry.drawLibMenu
+        if draw ~= nil then
+            draw()
+        end
+    end)
+    uiRegistry.libMenuRegistered = true
+end
+
 return libWindow

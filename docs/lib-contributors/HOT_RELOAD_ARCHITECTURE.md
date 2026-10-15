@@ -73,6 +73,8 @@ Anchors that exist so a Lib re-import converges on current code:
   (`core/ui/lib_window.lua`, opened from the `adamant-lib` menu) registers its
   ImGui callback once and late-reads `renderLibWindow`, which every import
   overwrites
+- `registry.ui.libMenuRegistered` / `drawLibMenu`: the `adamant-lib` menu
+  registers its menu-bar callback once the same way and late-reads `drawLibMenu`
 - `registry.mutations.ownerSlots`: keyed `"owner:" .. ownerId` holding
   `{ plan = activePlan }`; keep that key and slot shape stable or a re-import
   orphans an applied plan

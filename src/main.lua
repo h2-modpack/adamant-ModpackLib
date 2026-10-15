@@ -21,18 +21,10 @@ local externals = {
     modutil = modutil,
 }
 
-local core = import('core/init.lua', nil, {
+import('core/init.lua', nil, {
     config = libConfig,
     externals = externals,
 })
 
--- Lib menu, shown with or without packs. Its one item opens Lib's settings window (Hotkeys for
--- every module across every pack, reserved keys, Lib debug toggles).
-rom.gui.add_to_menu_bar(function()
-    if rom.ImGui.BeginMenu("adamant-lib") then
-        if rom.ImGui.MenuItem("Settings") then
-            core.libWindow.open()
-        end
-        rom.ImGui.EndMenu()
-    end
-end)
+-- The `adamant-lib` menu and Lib's settings window register themselves once per process
+-- (core/ui/lib_window.lua).
