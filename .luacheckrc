@@ -18,6 +18,7 @@ globals = {
     "TestGameCache",
     "TestHashing",
     "TestHooks",
+    "TestHotkeys",
     "TestIntegrations",
     "TestLogging",
     "TestMainBoot",

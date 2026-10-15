@@ -158,7 +158,9 @@ Each discovered coordinated module must expose:
 - `liveModule.getModuleId()`
 - `liveModule.getMeta().name`
 - `liveModule.getStorage()`
-- `liveModule.drawTab()`
+- `liveModule.getUiLayout()`, `liveModule.drawHeader()`,
+  `liveModule.drawTab(index)`, and `liveModule.readTabState(index)` (used by
+  Lib's shared module frame)
 
 `liveModule.drawQuickContent()` is optional.
 
@@ -181,20 +183,36 @@ the prior module mix when re-enabled.
 
 ## Window Model
 
-The modpack UI renders:
+The modpack sidebar lists:
 
-- one sidebar tab per discovered module
 - Quick Setup
+- one entry per discovered module
 - Profiles
-- Dev
+- Settings
 
-Module tabs are simple:
+Module pages draw Lib's shared module frame, the same one the standalone
+fallback window draws:
 
-- the modpack UI renders the enable checkbox
 - the modpack UI snapshots live modules at the start of the UI operation
-- the selected live module's `drawTab()` runs when enabled
-- if staged state is dirty after draw, the snapshot live module commits through
-  `commitIfDirty()`
+- `Enabled` sits above everything; a disabled module draws nothing else
+- while enabled: the module's optional header, its tabs (`Module`, or its
+  `module.ui.tabs` list), then Lib's `Hotkeys & Advanced` tab (`Advanced`
+  without hotkey requests) with the module's hotkey rows, Debug Mode, and
+  Resync State for that module
+- after the header and the active tab draw, the snapshot live module commits
+  once through `commitIfDirty()`
+
+The Settings page holds `Modpack Debug` and a hotkeys projection limited to
+this pack's modules: their hotkey rows, a read-only line for the detected
+Hell2Modding overlay key when one was detected, and **All hotkeys...**. There
+is no pack-wide resync and no reserved-key editor.
+
+Lib's own window (`adamant-lib` menu > **Settings**, shown with or without
+packs) owns the global views: a **Hotkeys** tab with every module across every
+pack and standalone, plus the reserved-key editor, and a **Debug** tab with
+`Lib Policy Debug` and Lib diagnostics. Packs draw no other hotkey UI; their
+part is the module order `createPack(...)` pushes for the hotkey ownership
+tie-break.
 
 ## Quick Setup
 

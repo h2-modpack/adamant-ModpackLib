@@ -20,14 +20,43 @@ local moduleContexts = import('core/module_bootstrap/module_contexts.lua', nil, 
     cache = deps.cache,
     sharedRefs = shared.refs,
     controlRefs = deps.controlRefs,
+    hotkeys = deps.hotkeys,
     uiContext = import('core/module_bootstrap/ui/context.lua', nil, {
         draw = deps.draw,
     }),
 })
 
+local TAB_STATES = {
+    attention = true,
+    muted = true,
+}
+
+---Frame layout read by the shared module frame. Built once per instance; the frame rebuilds its
+---labels only when the layout table changes (a reloaded module).
+---@param tabs AdamantModpackLib.ModuleTabDeclaration[]?
+---@param drawHeader AdamantModpackLib.UiCallback?
+---@return AdamantModpackLib.ModuleUiLayout
+local function createUiLayout(tabs, drawHeader)
+    local layout = {
+        hasHeader = drawHeader ~= nil,
+        tabs = nil,
+    }
+    if tabs ~= nil then
+        layout.tabs = {}
+        for index, tab in ipairs(tabs) do
+            layout.tabs[index] = {
+                id = tab.id,
+                label = tab.label,
+                hasState = tab.state ~= nil,
+            }
+        end
+    end
+    return layout
+end
+
 ---Build one managed module instance from Lib-built inputs. The author contact point is
 ---`lib.createModule(...)` and the declaration facade; this only asserts the prepared-definition
----and drawTab invariants.
+---and drawTab/tabs invariants.
 ---@param opts AdamantModpackLib.ManagedModuleCreateOpts
 ---@return AdamantModpackLib.ManagedModule module
 ---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext } contexts
@@ -36,10 +65,17 @@ function managedModule.create(opts)
     if type(def) ~= "table" or def._preparedDefinition ~= true then
         logging.violate("module.invalid_create_opts", "managedModule.create: prepared definition is required")
     end
-    local drawTab = opts.drawTab
-    if type(drawTab) ~= "function" then
-        logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required")
+    -- Either one `ui.tab` callback or a declaration-validated `ui.tabs` list; both draw through
+    -- the same indexed tab list.
+    local tabs = opts.tabs
+    if tabs == nil then
+        if type(opts.drawTab) ~= "function" then
+            logging.violate("module.invalid_create_opts", "managedModule.create: drawTab is required unless tabs are given")
+        end
+        tabs = { { draw = opts.drawTab } }
     end
+    local drawHeader = opts.drawHeader
+    local uiLayout = createUiLayout(opts.tabs, drawHeader)
     local drawQuickContent = opts.drawQuickContent
     local pluginGuid = opts.pluginGuid
     local state = opts.state
@@ -107,6 +143,7 @@ function managedModule.create(opts)
         emitShared = emitSharedEvent,
         stageShared = stageSharedEvent,
         controlCatalog = opts.controlCatalog,
+        hotkeyRequests = opts.hotkeyRequests,
         host = host,
     })
     local boundMutation = mutation.bind(pluginGuid, opts.mutationBundle, host, runtime)
@@ -162,6 +199,12 @@ function managedModule.create(opts)
             },
             mutation = boundMutation,
             fallbackUiRequested = opts.fallbackUiRequested == true,
+            hotkeys = {
+                requests = opts.hotkeyRequests,
+                host = host,
+                runtime = runtime,
+                readCommitted = persistentState.read,
+            },
         },
         effectReceipts = {},
         activated = false,
@@ -184,13 +227,40 @@ function managedModule.create(opts)
     end
     defineActivated("applyMutation", boundMutation.apply)
     defineActivated("revertMutation", boundMutation.revert)
-    defineActivated("drawTab", function()
-        return uiContext.run(drawTab)
+    -- Module frame surface: the frame draws the header and the active tab through these, then
+    -- commits once per frame through its mode's `commitIfDirty` path.
+    function module.getUiLayout()
+        return uiLayout
+    end
+    defineActivated("drawHeader", function()
+        if drawHeader ~= nil then
+            uiContext.run(drawHeader)
+        end
     end)
-    -- Draw-and-commit reads `module.commitIfDirty` late so the module table stays the method surface.
+    defineActivated("drawTab", function(index)
+        return uiContext.run(tabs[index or 1].draw)
+    end)
+    -- Draws the header and the first tab, then commits: a whole-frame draw for callers outside the
+    -- module frame (tests and tools drive modules this way).
     defineActivated("drawTabAndCommit", function()
-        uiContext.run(drawTab)
+        if drawHeader ~= nil then
+            uiContext.run(drawHeader)
+        end
+        uiContext.run(tabs[1].draw)
         return module.commitIfDirty()
+    end)
+    defineActivated("readTabState", function(index)
+        local stateCallback = tabs[index].state
+        if stateCallback == nil then
+            return nil
+        end
+        local tabState = uiContext.run(stateCallback)
+        if tabState ~= nil and not TAB_STATES[tabState] then
+            logging.violate("module.invalid_tab_state",
+                "%s tab '%s' state must be \"attention\", \"muted\" or nil, got '%s'",
+                tostring(module.getModuleId()), tostring(tabs[index].id), tostring(tabState))
+        end
+        return tabState
     end)
     if type(drawQuickContent) == "function" then
         defineActivated("drawQuickContent", function()

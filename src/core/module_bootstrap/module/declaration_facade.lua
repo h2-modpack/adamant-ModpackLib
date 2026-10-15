@@ -10,6 +10,7 @@ local overlayDeclarations = deps.overlayDeclarations
 local sharedDataDeclarations = deps.sharedDataDeclarations
 local sharedRegistrations = deps.sharedRegistrations
 local controlDeclarations = deps.controlDeclarations
+local hotkeyDeclarations = deps.hotkeyDeclarations
 
 local declarationFacade = {}
 
@@ -25,6 +26,8 @@ local function createDeclarationState()
         onCommit = nil,
         onReload = nil,
         drawTab = nil,
+        tabs = nil,
+        drawHeader = nil,
         drawQuickContent = nil,
         controlDeclarations = controlDeclarations.create(),
         fallbackUi = {},
@@ -35,6 +38,7 @@ local function createDeclarationState()
             patchMutation = nil,
         },
         overlayDeclarations = overlayDeclarations.create(),
+        hotkeys = hotkeyDeclarations.create(),
     }
 end
 

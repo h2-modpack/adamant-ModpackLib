@@ -1,38 +1,58 @@
+-- Module pages: each draws Lib's shared module frame with the pack's staging/snapshot paths for
+-- enable, debug, resync and commit.
+
 local ctx = ...
 
 local ui = ctx.rom.ImGui
+local createModuleFrame = ctx.createModuleFrame
+local moduleRegistry = ctx.moduleRegistry
 local staging = ctx.staging
 local runtime = ctx.runtime
 local snapshotAccess = ctx.snapshotAccess
 
-local function drawEntryBody(entry, snapshot)
-    local liveModule = snapshotAccess.getLiveModule(entry, snapshot)
-    if not liveModule then
-        return
-    end
+-- Snapshot of the frame being drawn; frame callbacks only run inside `draw`.
+local currentSnapshot = nil
+-- One frame per registry entry; a registry refresh builds new entries.
+local frames = setmetatable({}, { __mode = "k" })
 
-    liveModule.drawTab()
-
-    runtime.commitEntryState(entry, snapshot)
+local function createFrame(entry)
+    return createModuleFrame(entry.pluginGuid, {
+        enabledTooltip = entry.tooltip,
+        isEnabled = function()
+            return staging.modules[entry.id] == true
+        end,
+        setEnabled = function(enabled)
+            runtime.toggleEntry(entry, enabled, currentSnapshot)
+        end,
+        getModule = function()
+            return snapshotAccess.getLiveModule(entry, currentSnapshot)
+        end,
+        commit = function()
+            runtime.commitEntryState(entry, currentSnapshot)
+        end,
+        isDebugMode = function()
+            return staging.debug[entry.id] == true
+        end,
+        setDebugMode = function(enabled)
+            if moduleRegistry.snapshot.setDebugEnabled(entry, enabled, currentSnapshot) then
+                staging.debug[entry.id] = enabled
+            end
+        end,
+        resync = function()
+            runtime.resyncEntry(entry, currentSnapshot)
+        end,
+    })
 end
 
 local function draw(entry, snapshot)
-    local enabled = staging.modules[entry.id] or false
-    local val, chg = ui.Checkbox(entry._enableLabel, enabled)
-    if chg then
-        local ok = runtime.toggleEntry(entry, val, snapshot)
-        if ok then
-            enabled = val == true
-        end
+    local frame = frames[entry]
+    if frame == nil then
+        frame = createFrame(entry)
+        frames[entry] = frame
     end
-    if ui.IsItemHovered() and entry.tooltip then
-        ui.SetTooltip(entry.tooltip)
-    end
-
-    if not enabled then return end
-
-    ui.Spacing()
-    drawEntryBody(entry, snapshot)
+    currentSnapshot = snapshot
+    frame.draw(ui)
+    currentSnapshot = nil
 end
 
 return draw

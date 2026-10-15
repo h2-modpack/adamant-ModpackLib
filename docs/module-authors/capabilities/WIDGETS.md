@@ -514,7 +514,10 @@ Navigation helpers live under the draw surface at `draw.nav`.
 Surface:
 - `draw.nav.verticalTabs(opts)`
 
-`verticalTabs(...)` renders a simple immediate-mode vertical tab rail.
+`verticalTabs(...)` renders a simple immediate-mode vertical tab rail. Use it
+for navigation inside a module tab. Top-level horizontal tabs belong to the
+module frame: declare them with `module.ui.tabs(...)` instead of drawing an
+ImGui tab bar (see [../MODULE_AUTHORING.md](../MODULE_AUTHORING.md#module-frame)).
 
 Example:
 

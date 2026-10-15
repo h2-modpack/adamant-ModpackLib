@@ -17,5 +17,6 @@ Recommended order:
 6. [OVERLAYS.md](OVERLAYS.md)
 7. [SHARED.md](SHARED.md)
 8. [CACHE.md](CACHE.md)
+9. [HOTKEYS.md](HOTKEYS.md)
 
 Use [../../../API.md](../../../API.md) when you need the exact public surface.

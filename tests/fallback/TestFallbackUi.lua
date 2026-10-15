@@ -13,8 +13,11 @@ local function makeHost(opts)
         resync = 0,
         reloadFromConfig = 0,
         drawTab = 0,
+        drawHeader = 0,
         commitIfDirty = 0,
+        sequence = {},
     }
+    local uiLayout = opts.uiLayout or { hasHeader = false }
     local enabled = opts.enabled ~= false
     local debugMode = opts.debugMode == true
     local host = {
@@ -75,19 +78,26 @@ local function makeHost(opts)
                 debugMode = opts.reloadDebugMode == true
             end
         end,
-        drawTab = function()
+        getUiLayout = function()
+            return uiLayout
+        end,
+        drawHeader = function()
+            calls.drawHeader = calls.drawHeader + 1
+            calls.sequence[#calls.sequence + 1] = "header"
+        end,
+        readTabState = function(index)
+            return (opts.tabStates or {})[index]
+        end,
+        drawTab = function(index)
             calls.drawTab = calls.drawTab + 1
+            calls.sequence[#calls.sequence + 1] = "tab:" .. tostring(index)
+            if opts.drawTabThrows then
+                error("draw tab boom")
+            end
         end,
         commitIfDirty = function()
             calls.commitIfDirty = calls.commitIfDirty + 1
-            return true, nil, opts.committed == true
-        end,
-        drawTabAndCommit = function()
-            calls.drawTab = calls.drawTab + 1
-            calls.commitIfDirty = calls.commitIfDirty + 1
-            if opts.drawTabAndCommitThrows then
-                error("draw tab boom")
-            end
+            calls.sequence[#calls.sequence + 1] = "commit"
             return true, nil, opts.committed == true
         end,
     }
@@ -113,6 +123,8 @@ local function makeImgui(opts)
         checkboxCurrents = {},
         textDisabled = {},
         buttons = {},
+        tabs = {},
+        order = {},
     }
     local checkboxValues = opts.checkboxValues or {}
     local buttonClicks = opts.buttonClicks or {}
@@ -138,6 +150,7 @@ local function makeImgui(opts)
             calls.stylePopped = calls.stylePopped + (count or 1)
         end,
         Checkbox = function(label, current)
+            calls.order[#calls.order + 1] = "checkbox:" .. label
             calls.checkboxLabels[#calls.checkboxLabels + 1] = label
             calls.checkboxCurrents[#calls.checkboxCurrents + 1] = current
             local nextValue = checkboxValues[label]
@@ -168,6 +181,22 @@ local function makeImgui(opts)
         end,
         TextDisabled = function(label)
             calls.textDisabled[#calls.textDisabled + 1] = label
+        end,
+        BeginTabBar = function(id)
+            calls.order[#calls.order + 1] = "tabbar:" .. id
+            return true
+        end,
+        EndTabBar = function()
+            calls.order[#calls.order + 1] = "endtabbar"
+        end,
+        -- Without `opts.selectedTab` every tab reports selected, so one frame draws both tabs.
+        BeginTabItem = function(label)
+            calls.order[#calls.order + 1] = "tab:" .. label
+            calls.tabs[#calls.tabs + 1] = label
+            return opts.selectedTab == nil or string.find(label, "###" .. opts.selectedTab, 1, true) ~= nil
+        end,
+        EndTabItem = function()
+            calls.order[#calls.order + 1] = "endtab"
         end,
         BeginMenu = function(label)
             calls.beginMenu = calls.beginMenu + 1
@@ -265,7 +294,8 @@ function TestFallbackUi:testDisabledFallbackRuntimeCollapsesModuleBody()
     bridge.addMenuBar()
     bridge.renderWindow()
 
-    lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })
+    lu.assertEquals(calls.checkboxLabels, { "Enabled" })
+    lu.assertEquals(calls.tabs, {})
     lu.assertEquals(host.calls.drawTab, 0)
     lu.assertEquals(host.calls.commitIfDirty, 0)
 end
@@ -568,9 +598,6 @@ function TestFallbackUi:testMenuTogglesWindowAndRenderDrawsControls()
     lu.assertEquals(calls.setNextWindowSize, 1)
     lu.assertEquals(calls.title, "Fallback UI Test###FallbackUiTest")
     lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })
-    lu.assertEquals(calls.sameLine, 2)
-    lu.assertEquals(calls.getCursorPosX, 2)
-    lu.assertEquals(calls.setCursorPosX, { 116, 116 })
     lu.assertEquals(host.calls.resync, 1)
     lu.assertEquals(host.calls.drawTab, 1)
     lu.assertEquals(host.calls.commitIfDirty, 1)
@@ -579,7 +606,7 @@ end
 function TestFallbackUi:testFallbackWindowEndsImguiWindowWhenModuleDrawErrors()
     local host = makeHost({
         modpack = "fallback-pack",
-        drawTabAndCommitThrows = true,
+        drawTabThrows = true,
     })
     self.h.coordinator.register("fallback-pack", nil)
     local imgui, calls = makeImgui({ menuClicked = true })
@@ -714,4 +741,87 @@ function TestFallbackUi:testGuiClosedReleasesSuppressionWithoutClosingWindow()
 
     lu.assertEquals(self.h:countUiSuppressors(), 1)
     lu.assertEquals(host.calls.drawTab, 1)
+end
+
+-- -----------------------------------------------------------------------------
+-- Shared module frame
+-- -----------------------------------------------------------------------------
+
+local OPTIONS_TAB = "Module###module-" .. PLUGIN_GUID
+-- These fallback hosts request no hotkeys, so the Lib tab reads just "Advanced".
+local SETTINGS_TAB = "Advanced###advanced-" .. PLUGIN_GUID
+
+function TestFallbackUi:testFrameDrawsEnabledAboveOptionsAndSettingsTabs()
+    local host = makeHost({ modpack = "fallback-pack" })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({ menuClicked = true, selectedTab = "module" })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    lu.assertEquals(calls.order, {
+        "checkbox:Enabled",
+        "tabbar:##module-frame-" .. PLUGIN_GUID,
+        "tab:" .. OPTIONS_TAB,
+        "endtab",
+        "tab:" .. SETTINGS_TAB,
+        "endtabbar",
+    })
+    -- Options draws and commits the module tab; Settings content is not drawn while unselected.
+    lu.assertEquals(host.calls.drawTab, 1)
+    lu.assertEquals(host.calls.commitIfDirty, 1)
+    lu.assertEquals(calls.buttons, {})
+end
+
+function TestFallbackUi:testSettingsTabDebugAndResyncAffectOnlyThisModule()
+    local host = makeHost({ modpack = "fallback-pack", enabled = true })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({
+        menuClicked = true,
+        selectedTab = "advanced",
+        checkboxValues = {
+            ["Debug Mode"] = true,
+        },
+        buttonClicks = {
+            ["Resync State"] = true,
+        },
+    })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    lu.assertEquals(calls.checkboxLabels, { "Enabled", "Debug Mode" })
+    lu.assertEquals(calls.tabs, { OPTIONS_TAB, SETTINGS_TAB })
+    -- Debug Mode writes through the module's setDebugMode; Resync resyncs this module.
+    lu.assertEquals(host.calls.setDebugMode, { true })
+    lu.assertEquals(host.calls.resync, 1)
+    lu.assertEquals(host.calls.setEnabled, {})
+    lu.assertEquals(host.calls.drawTab, 0)
+end
+
+-- A disabled module is just its switch: no tabs, so no Debug Mode, Resync or hotkey rows.
+function TestFallbackUi:testDisabledModuleDrawsOnlyTheEnabledSwitch()
+    local host = makeHost({ modpack = "fallback-pack", enabled = false })
+    self.h.coordinator.register("fallback-pack", nil)
+    local imgui, calls = makeImgui({
+        menuClicked = true,
+        selectedTab = "advanced",
+        checkboxValues = { ["Debug Mode"] = true },
+        buttonClicks = { ["Resync State"] = true },
+    })
+    self.h.rom.ImGui = imgui
+
+    local runtime = self.h:installFallbackRuntime(host)
+    runtime.addMenuBar()
+    runtime.renderWindow()
+
+    lu.assertEquals(calls.checkboxLabels, { "Enabled" })
+    lu.assertEquals(calls.tabs, {})
+    lu.assertEquals(host.calls.setDebugMode, {})
+    lu.assertEquals(host.calls.resync, 0)
+    lu.assertEquals(host.calls.drawTab, 0)
 end

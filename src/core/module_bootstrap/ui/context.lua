@@ -29,7 +29,7 @@ local function runCallback(callback, ...)
     return table.unpack(results, 2, results.n)
 end
 
----@param opts { lanes: AdamantModpackLib.ModuleStateLanes, shared: table, host: table, controls: table,
+---@param opts { lanes: AdamantModpackLib.ModuleStateLanes, shared: table, host: table, controls: table, hotkeys: table,
 ---    resetAll: fun(opts?: table): boolean, integer }
 function uiContext.create(opts)
     local lanes = opts.lanes
@@ -42,6 +42,7 @@ function uiContext.create(opts)
         actions = lanes.uiActions,
         shared = opts.shared,
         controls = opts.controls,
+        hotkeys = opts.hotkeys,
         status = lanes.uiStatus,
         resetAll = function(resetOpts)
             return opts.resetAll(resetOpts)

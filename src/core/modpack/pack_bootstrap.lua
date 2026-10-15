@@ -1,7 +1,6 @@
 local deps = ...
 local rom = deps.rom
 local logging = deps.logging
-local libConfig = deps.libConfig
 local storage = deps.storage
 local coordination = deps.coordination
 local overlaySurface = deps.overlaySurface
@@ -10,6 +9,7 @@ local profileTools = deps.profileTools
 local constructors = deps.constructors
 local packRegistry = deps.packRegistry
 local uiSession = deps.uiSession
+local hotkeys = deps.hotkeys
 
 local function disposePack(pack)
     local packUi = pack and pack.ui
@@ -107,7 +107,7 @@ local function createPackOrThrow(packId, config, numProfiles, defaultProfiles, o
     local hud = constructors.createHud(packId, packIndex, configHash, theme, config,
         opts.hideHashMarker == true, overlaySurface)
     local ui = constructors.createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
-        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
+        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, overlaySurface)
 
     auditSavedProfiles(packId, config.Profiles, moduleRegistry)
 
@@ -137,6 +137,13 @@ local function createPackOrThrow(packId, config, numProfiles, defaultProfiles, o
     if config.ModEnabled then
         hud.setModMarker(true)
     end
+
+    -- Hotkey tie-break follows pack module order; the modpack pushes it down, hotkeys never read packs.
+    local orderedGuids = {}
+    for index, entry in ipairs(moduleRegistry.tabOrder) do
+        orderedGuids[index] = entry.pluginGuid
+    end
+    hotkeys.setPackOrder(packId, packIndex, orderedGuids)
 
     return pack
 end

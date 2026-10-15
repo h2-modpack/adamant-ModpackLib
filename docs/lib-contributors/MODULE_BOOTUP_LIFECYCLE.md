@@ -75,8 +75,10 @@ coordinator.
 7. Opening the fallback window snapshots runtime controls from the live module:
    `module.isEnabled()` and `module.read("DebugMode")`.
 8. Opening or first drawing the fallback window does not reload config.
-9. The fallback tab calls `module.drawTabAndCommit()` only while the module is
-   enabled.
+9. The fallback window draws the shared module frame (`core/ui/module_frame.lua`).
+   Only while the module is enabled does it call `module.drawHeader()` and
+   `module.drawTab(index)` for the active tab, then commit once through
+   `module.commitIfDirty()`.
 
 Fallback enable/debug toggles stage through the live module lifecycle. If staged
 state drift is detected, lifecycle code resyncs staged state from already
@@ -116,7 +118,9 @@ These paths intentionally re-read config after startup:
   resync.
 - Modpack hash/profile apply: writes staged values, flushes them, then reloads
   module state from config so UI mirrors the applied profile.
-- Modpack runtime `resyncAllState()`: explicit user/runtime resync.
+- Resync State in a module frame's Lib tab: `module.resync()` for that one
+  module (pack mode then re-reads its staged enable/debug flags). It reloads
+  only when the mismatch audit below finds drift.
 - Lib lifecycle mismatch resync: used after an internal staged/committed audit
   detects drift.
 

@@ -64,8 +64,10 @@ Common surfaces:
 - `module.cache.define(...)`
 - `module.controls.defineTemplates(...)`
 - `module.controls.define(...)`
-- `module.ui.tab(...)`
+- `module.ui.tab(...)` or `module.ui.tabs(...)`
+- `module.ui.header(...)`
 - `module.ui.quickContent(...)`
+- `module.hotkeys.request(...)`
 - `module.onCommit(...)`
 - `module.onReload(...)`
 - `module.hooks.*`
@@ -77,6 +79,30 @@ Common surfaces:
 
 Activation publishes the live module for Lib modpack/fallback UI, installs declared
 hooks/overlays/shared events, and syncs initial mutation state.
+
+## Module Frame
+
+Lib hosts every module in one frame, in the modpack window module page and the
+standalone fallback window alike:
+
+```text
+[x] Enabled
+(header, when declared)
+[ Module | Hotkeys & Advanced ]               -- module.ui.tab(fn)
+[ <tab> | <tab> | ... | Hotkeys & Advanced ]  -- module.ui.tabs({...})
+```
+
+- Declare exactly one of `module.ui.tab(fn)` (one tab labelled `Module`) or
+  `module.ui.tabs({ { id, label, draw, state? }, ... })` (several top-level
+  tabs in declaration order). The list is validated when declared.
+- A tab's optional `state(host, ui)` returns `"attention"`, `"muted"`, or nil
+  and colours its label.
+- `module.ui.header(fn)` draws between Enabled and the tab bar.
+- A disabled module draws only Enabled.
+- The last tab is Lib's: **Hotkeys & Advanced** (**Advanced** without hotkey
+  requests) with this module's hotkey rows, Debug Mode, and Resync State.
+- Vertical navigation inside a tab (`draw.nav.verticalTabs`) is fine; a
+  top-level horizontal tab bar should become `module.ui.tabs`.
 
 ## Draw Callbacks
 
@@ -144,6 +170,10 @@ Use [capabilities/MANAGED_STATE.md](capabilities/MANAGED_STATE.md) for details.
 Use [DATA_LANES.md](DATA_LANES.md) for the overall state ownership model.
 Use [capabilities/CONTROLS.md](capabilities/CONTROLS.md) when a repeated
 domain concept needs its own bundled storage, runtime reader, and draw path.
+Use [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md) for key presses:
+`module.hotkeys.request(...)` declares the binding storage itself, so do not
+also declare its alias in `module.data.define`. Lib draws the hotkey controls
+in your module's Hotkeys & Advanced tab; your tabs draw nothing for them.
 
 ## Capability Guides
 
@@ -155,3 +185,4 @@ domain concept needs its own bundled storage, runtime reader, and draw path.
 - [capabilities/OVERLAYS.md](capabilities/OVERLAYS.md)
 - [capabilities/SHARED.md](capabilities/SHARED.md)
 - [capabilities/CACHE.md](capabilities/CACHE.md)
+- [capabilities/HOTKEYS.md](capabilities/HOTKEYS.md)

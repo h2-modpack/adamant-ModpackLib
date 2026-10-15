@@ -1,10 +1,10 @@
 local deps = ...
 local rom = deps.rom
-local libConfig = deps.libConfig
 local storage = deps.storage
 local coordination = deps.coordination
 local overlaySurface = deps.overlaySurface
 local getLiveModule = deps.getLiveModule
+local hotkeys = deps.hotkeys
 local packRegistry = import("core/modpack/registry.lua", nil, {
     modpackRegistry = deps.packRegistry,
 })
@@ -30,6 +30,9 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
     uiSession = deps.uiSession,
     setupRunData = deps.setupRunData,
+    createModuleFrame = deps.createModuleFrame,
+    hotkeyOverview = deps.hotkeyOverview,
+    openLibWindow = deps.openLibWindow,
 })
 
 local constructors = {
@@ -44,7 +47,6 @@ return import("core/modpack/pack_bootstrap.lua", nil, {
     rom = rom,
     uiSession = deps.uiSession,
     logging = logging,
-    libConfig = libConfig,
     storage = storage,
     coordination = coordination,
     overlaySurface = overlaySurface,
@@ -52,4 +54,5 @@ return import("core/modpack/pack_bootstrap.lua", nil, {
     profileTools = profileTools,
     constructors = constructors,
     packRegistry = packRegistry,
+    hotkeys = hotkeys,
 })

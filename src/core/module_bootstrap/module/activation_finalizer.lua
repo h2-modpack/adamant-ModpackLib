@@ -9,6 +9,7 @@ local moduleState = deps.moduleState
 local fallbackUi = deps.fallbackUi
 local controlCompiler = deps.controlCompiler
 local statusDeclarations = deps.statusDeclarations
+local hotkeyDeclarations = deps.hotkeyDeclarations
 
 local activationFinalizer = {}
 
@@ -37,17 +38,18 @@ local function appendList(target, source)
     end
 end
 
-local function mergePublicStorage(storage, statusStorage)
+local function mergePublicStorage(storage, statusStorage, hotkeyStorage)
     local merged = {}
     appendList(merged, storage)
     appendList(merged, statusStorage)
+    appendList(merged, hotkeyStorage)
     if #merged == 0 then
         return nil
     end
     return merged
 end
 
-local function createDefinitionInput(opts, declarations, statusStorage)
+local function createDefinitionInput(opts, declarations, statusStorage, hotkeyStorage)
     return {
         modpack = opts.modpack,
         id = opts.id,
@@ -55,7 +57,7 @@ local function createDefinitionInput(opts, declarations, statusStorage)
         shortName = opts.shortName,
         tooltip = opts.tooltip,
         hash = opts.hash,
-        storage = mergePublicStorage(declarations.storage, statusStorage),
+        storage = mergePublicStorage(declarations.storage, statusStorage, hotkeyStorage),
         cache = declarations.cache,
         actions = declarations.actions,
     }
@@ -72,12 +74,16 @@ end
 ---@return AdamantModpackLib.ManagedModule module
 ---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext } contexts
 function activationFinalizer.activate(opts, declarations)
-    if type(declarations.drawTab) ~= "function" then
-        logging.violate("module.invalid_create_opts", "module.ui.tab must be declared before module.activate")
+    if declarations.drawTab == nil and declarations.tabs == nil then
+        logging.violate("module.invalid_create_opts",
+            "module.ui.tab or module.ui.tabs must be declared before module.activate")
     end
 
     local compiledControls = controlCompiler.compile(declarations.controlDeclarations)
     local statusStorage = statusDeclarations.compileStorage(declarations.status)
+    -- Hotkey bindings are public data roots (authors may keep an existing alias), so they merge
+    -- with the module's own storage rather than Lib-internal storage.
+    local compiledHotkeys = hotkeyDeclarations.compile(declarations.hotkeys, declarations.storage, statusStorage)
     local internalStorage = {}
     local internalActions = {}
     appendList(internalStorage, declarations.internalStorage)
@@ -85,7 +91,7 @@ function activationFinalizer.activate(opts, declarations)
     mergeMaps(internalActions, declarations.internalActions)
 
     local definition = definitionApi.prepareDefinitionWithInternalDeclarations(getStructuralBaseline(opts.pluginGuid),
-        createDefinitionInput(opts, declarations, statusStorage), {
+        createDefinitionInput(opts, declarations, statusStorage, compiledHotkeys.storage), {
             hasQuickContent = type(declarations.drawQuickContent) == "function",
         }, {
             storage = internalStorage,
@@ -108,8 +114,11 @@ function activationFinalizer.activate(opts, declarations)
         onCommit = declarations.onCommit,
         onReload = declarations.onReload,
         drawTab = declarations.drawTab,
+        tabs = declarations.tabs,
+        drawHeader = declarations.drawHeader,
         drawQuickContent = declarations.drawQuickContent,
         controlCatalog = compiledControls.catalog,
+        hotkeyRequests = compiledHotkeys.requests,
     })
     attachFallbackUi(declarations, opts.pluginGuid)
     -- Raises on failure; the facade's `module.activate()` owns the single activate_failed report.

@@ -11,6 +11,7 @@ ModpackLib provides the common plumbing that those projects usually need:
 - profile and hash helpers for saving, loading, and identifying settings
 - mutation helpers for modules that patch run data
 - managed module helpers for coordinated and fallback UI usage
+- Lib-owned module hotkeys with conflict resolution
 - reusable ImGui widgets and navigation helpers
 
 The library is designed around immediate-mode UI. Module authors write normal
@@ -43,6 +44,9 @@ end
 state for hooks, overlays, shared events, cache, mutation runtime, and
 structural reload tracking. Declare runtime hooks on `module.hooks.*` before activation.
 `module.activate()` registers the live module for coordinated discovery and installs requested fallback UI.
+Lib draws each module in one frame (Enabled, optional header, the module's tabs, then Lib's
+Hotkeys & Advanced tab), in the modpack window and the standalone window alike. The `adamant-lib`
+menu's Settings item opens Lib's window with every module's hotkeys and Lib debug options.
 Every module definition must declare a stable `id` and display `name`; `modpack`
 is optional and marks modules that participate in Lib modpack coordination.
 
@@ -106,6 +110,7 @@ Reference and historical notes:
 - `module.actions`
 - `module.cache`
 - `module.controls`
+- `module.hotkeys`
 - `module.ui`
 - `module.onCommit`
 - `module.hooks`

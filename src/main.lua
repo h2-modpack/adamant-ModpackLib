@@ -21,35 +21,10 @@ local externals = {
     modutil = modutil,
 }
 
-local core = import('core/init.lua', nil, {
+import('core/init.lua', nil, {
     config = libConfig,
     externals = externals,
 })
 
--- Fallback Lib debug toggle - hidden when Lib modpack registers coordinators.
-rom.gui.add_to_menu_bar(function()
-    if core.modpackCoordination.hasRegistrations() then return end
-    if rom.ImGui.BeginMenu("adamant-lib") then
-        local val, chg = rom.ImGui.Checkbox("Lib Policy Debug", libConfig.DebugMode == true)
-        if chg then libConfig.DebugMode = val end
-
-        local diagnostics = libConfig.Diagnostics
-        local diagnosticKeys = {}
-        for key, diagnostic in pairs(diagnostics) do
-            if type(diagnostic) == "table" then
-                diagnosticKeys[#diagnosticKeys + 1] = key
-            end
-        end
-        table.sort(diagnosticKeys)
-
-        for _, key in ipairs(diagnosticKeys) do
-            local diagnostic = diagnostics[key]
-            local diagVal, diagChg = rom.ImGui.Checkbox(
-                diagnostic.label,
-                diagnostic.enabled == true
-            )
-            if diagChg then diagnostic.enabled = diagVal end
-        end
-        rom.ImGui.EndMenu()
-    end
-end)
+-- The `adamant-lib` menu and Lib's settings window register themselves once per process
+-- (core/ui/lib_window.lua).

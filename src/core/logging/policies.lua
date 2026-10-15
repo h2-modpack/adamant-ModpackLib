@@ -98,7 +98,11 @@ return {
 
     ["module.invalid_create_opts"] = {
         severity = "error",
-        description = "Module creation requires a prepared definition, pluginGuid, state handles, drawTab, and callbacks.",
+        description = "Module creation requires a prepared definition, pluginGuid, state handles, drawTab or tabs, and callbacks.",
+    },
+    ["module.invalid_tab_state"] = {
+        severity = "error",
+        description = "A module tab's state callback must return \"attention\", \"muted\", or nil.",
     },
     ["managed_module.invalid_activate_opts"] = {
         severity = "error",
@@ -285,6 +289,35 @@ return {
     ["widgets.invalid_action"] = {
         severity = "error",
         description = "Widget action options must be draw action refs.",
+    },
+
+    ["hotkeys.invalid_declaration"] = {
+        severity = "error",
+        description = "Hotkey requests require a stable id and valid label, default, alias, tooltip, and onPress fields.",
+    },
+    ["hotkeys.duplicate_request"] = {
+        severity = "error",
+        description = "Hotkey request ids and storage aliases must be unique within a module.",
+    },
+    ["hotkeys.alias_collision"] = {
+        severity = "error",
+        description = "A hotkey binding alias is Lib-declared storage and cannot also be declared by the module.",
+    },
+    ["hotkeys.unknown_request"] = {
+        severity = "error",
+        description = "Hotkey surfaces only accept ids the module requested with module.hotkeys.request.",
+    },
+    ["hotkeys.on_press_failed"] = {
+        severity = "warn",
+        description = "A hotkey onPress handler raised; reported once per request until its binding changes.",
+    },
+    ["hotkeys.commit_failed"] = {
+        severity = "warn",
+        description = "A binding edited in a Lib-drawn hotkey row failed to commit through its module.",
+    },
+    ["hotkeys.dispatch_failed"] = {
+        severity = "warn",
+        description = "The shared hotkey tick raised; reported once per Lib import.",
     },
     ["staged_state.unknown_alias"] = {
         severity = "error",

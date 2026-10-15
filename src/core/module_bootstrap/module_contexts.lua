@@ -4,6 +4,7 @@ local moduleState = deps.moduleState
 local cache = deps.cache
 local sharedRefs = deps.sharedRefs
 local controlRefs = deps.controlRefs
+local hotkeys = deps.hotkeys
 local uiContextModule = deps.uiContext
 
 local moduleContexts = {}
@@ -36,6 +37,8 @@ function moduleContexts.create(inputs)
         source = "state.shared",
     })
 
+    local runtimeHotkeys, uiHotkeys = hotkeys.createSurfaces(ownerId, inputs.hotkeyRequests)
+
     local lanes = moduleState.createLanes(state, {
         runtimeData = {
             cache = runtimeCache,
@@ -53,12 +56,14 @@ function moduleContexts.create(inputs)
         cache = runtimeCache,
         shared = runtimeShared,
         controls = runtimeControls,
+        hotkeys = runtimeHotkeys,
     }
     local uiContext = uiContextModule.create({
         lanes = lanes,
         shared = uiShared,
         host = inputs.host,
         controls = controlRefs.createUi(state.staged, inputs.controlCatalog),
+        hotkeys = uiHotkeys,
         resetAll = state.txn.queueResetAll,
     })
     return runtime, uiContext

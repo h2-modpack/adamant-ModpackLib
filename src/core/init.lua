@@ -29,6 +29,7 @@ local identifiers = import('core/helpers/identifiers.lua')
 local requireMethodSelf = import('core/helpers/method_self.lua', nil, {
     logging = logging,
 })
+local hotkeyBindings = import('core/hotkeys/bindings.lua')
 
 local storage = import('core/storage/00_init.lua', nil, {
     logging = logging,
@@ -122,6 +123,63 @@ local mutation = import('core/mutations/00_init.lua', nil, {
     receipt = receipt,
 })
 
+local hotkeys = import('core/hotkeys/00_init.lua', nil, {
+    logging = logging,
+    receipt = receipt,
+    rom = externals.rom,
+    libConfig = deps.config,
+    bindings = hotkeyBindings,
+    hotkeyRegistry = registry.hotkeys,
+})
+local statusColors = import('core/ui/status_colors.lua')
+local hotkeyWidget = import('core/hotkeys/widget.lua', nil, {
+    bindings = hotkeyBindings,
+    hotkeys = hotkeys,
+    statusColors = statusColors,
+})
+local hotkeyRowRef = import('core/hotkeys/row_refs.lua', nil, {
+    logging = logging,
+    hotkeys = hotkeys,
+    getLiveModule = moduleRegistry.getLiveModule,
+})
+local createTheme = import('core/ui/theme.lua', nil, {
+    rom = externals.rom,
+})
+
+-- Lib-drawn hotkey UI: the overview pieces (Lib settings window, pack Settings pages) and the
+-- hotkey section of every module's Hotkeys & Advanced tab.
+local hotkeyOverview = import('core/hotkeys/overview.lua', nil, {
+    hotkeys = hotkeys,
+    drawWidget = hotkeyWidget.draw,
+    refForRow = hotkeyRowRef,
+})
+local libWindow = import('core/ui/lib_window.lua', nil, {
+    rom = externals.rom,
+    createTheme = createTheme,
+    drawHotkeys = hotkeyOverview.drawAll,
+    libConfig = deps.config,
+    uiRegistry = registry.ui,
+})
+local drawHotkeyBlock = import('core/hotkeys/module_block.lua', nil, {
+    hotkeys = hotkeys,
+    drawWidget = hotkeyWidget.draw,
+    refForRow = hotkeyRowRef,
+    openLibWindow = libWindow.openHotkeys,
+})
+-- One module frame (Enabled, header, module tabs, Hotkeys & Advanced) shared by pack module pages
+-- and fallback windows.
+local createModuleFrame = import('core/ui/module_frame.lua', nil, {
+    hotkeys = hotkeys,
+    drawHotkeyBlock = drawHotkeyBlock,
+    statusColors = statusColors,
+    imguiCol = import('core/widgets/imgui_helpers.lua').ImGuiCol,
+})
+local hotkeyDeclarations = import('core/hotkeys/declarations.lua', nil, {
+    logging = logging,
+    identifiers = identifiers,
+    bindings = hotkeyBindings,
+})
+
 local draw = import('core/widgets/00_init.lua', nil, {
     logging = logging,
     storage = storage,
@@ -130,9 +188,6 @@ local draw = import('core/widgets/00_init.lua', nil, {
     controlsDraw = controlsBundle.draw,
 })
 
-local createTheme = import('core/ui/theme.lua', nil, {
-    rom = externals.rom,
-})
 local uiSession = import('core/ui/session.lua')
 
 local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
@@ -147,6 +202,7 @@ local fallbackUi = import('core/fallback/fallback_ui.lua', nil, {
     createSystem = createSystem,
     fallbackRegistry = registry.fallback,
     receipt = receipt,
+    createModuleFrame = createModuleFrame,
 })
 -- Capability installs activation runs for every module, in install order. Commit order comes
 -- from each receipt's phase; an install returns nil when the module declares nothing for it.
@@ -168,6 +224,9 @@ local moduleCapabilities = {
     end,
     function(_, _, inputs)
         return inputs.mutation.sync()
+    end,
+    function(ownerId, _, inputs)
+        return hotkeys.install(ownerId, inputs.hotkeys)
     end,
     function(ownerId, owner, inputs)
         if not inputs.fallbackUiRequested then
@@ -193,6 +252,7 @@ local managedModule = import('core/module_bootstrap/managed_module.lua', nil, {
     mutation = mutation,
     draw = draw,
     controlRefs = controlsBundle.refs,
+    hotkeys = hotkeys,
 })
 
 public.modpack = import('core/modpack/init.lua', nil, {
@@ -200,15 +260,19 @@ public.modpack = import('core/modpack/init.lua', nil, {
     createTheme = createTheme,
     uiSession = uiSession,
     setupRunData = gameDeps.runData.SetupRunData,
-    libConfig = deps.config,
     storage = storage,
     coordination = modpackCoordination,
     overlaySurface = overlaysBundle.modpack,
     getLiveModule = moduleRegistry.getLiveModule,
     packRegistry = registry.modpacks,
+    hotkeys = hotkeys,
+    createModuleFrame = createModuleFrame,
+    hotkeyOverview = hotkeyOverview,
+    openLibWindow = libWindow.openHotkeys,
 })
 local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     logging = logging,
+    identifiers = identifiers,
     managedModule = managedModule,
     definition = definition,
     moduleRegistry = moduleRegistry,
@@ -224,9 +288,10 @@ local moduleBundle = import('core/module_bootstrap/module.lua', nil, {
     controlDeclarations = controlsBundle.declarations,
     controlCompiler = controlsBundle.compiler,
     statusDeclarations = statusDeclarations,
+    hotkeyDeclarations = hotkeyDeclarations,
 })
 public.createModule = moduleBundle.public.createModule
 
 return {
-    modpackCoordination = modpackCoordination,
+    libWindow = libWindow,
 }
