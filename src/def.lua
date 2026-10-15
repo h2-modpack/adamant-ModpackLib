@@ -285,10 +285,11 @@ local lib = {}
 ---@field binding string Committed binding string ("" when unbound).
 ---@field owner? { moduleName: string, label: string } Conflict only: the request that owns the key.
 ---@field reason? string Reserved only: what reserves the key, such as "Hell2Modding overlay".
----@field text string Status line Lib draws under the hotkey row.
+---@field text string Short status Lib draws on the hotkey row, e.g. "Active" or "In use by Quick Pause".
+---@field detail string? Full explanation shown in the status tooltip; nil when `text` says it all.
 
 ---@class AdamantModpackLib.HotkeyRequestOpts
----@field label string Shown in the module header block, statuses, and the Hotkeys overview.
+---@field label string Shown in the module Hotkeys & Advanced tab, statuses, and the Hotkeys overview.
 ---@field onPress fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext) Runtime lane.
 ---@field default? string Binding string, or "" (the default) for unbound.
 ---@field alias? string Binding storage alias; defaults to "Hotkey_<id>".
@@ -312,9 +313,9 @@ local lib = {}
 ---@field tooltip? string Defaults to the request tooltip.
 ---@field modifierWidth? number Modifier dropdown width (default 110).
 ---@field keyWidth? number Key dropdown width (default 80).
----@field showStatus? boolean Set false to hide the status line.
+---@field showStatus? boolean Set false to hide the inline status.
 
----Internal: one hotkey row for the module header block and the Hotkeys overview (`hotkeys.listRows()`).
+---Internal: one hotkey row for the module Hotkeys & Advanced tab and the Hotkeys overview (`hotkeys.listRows()`).
 ---@class AdamantModpackLib.HotkeyRow
 ---@field ownerId string
 ---@field id string
@@ -325,10 +326,9 @@ local lib = {}
 ---@field moduleName string
 ---@field status AdamantModpackLib.HotkeyStatus
 
----Internal: one module's header block (`hotkeys.getOwnerBlock(ownerId)`), rebuilt when resolution runs.
+---Internal: one module's hotkey block (`hotkeys.getOwnerBlock(ownerId)`), rebuilt when resolution runs.
 ---@class AdamantModpackLib.HotkeyBlock
 ---@field rows AdamantModpackLib.HotkeyRow[] Declaration order.
----@field summary string Collapsed summary line, such as "Hotkeys: Pause hotkey F9".
 ---@field attention boolean True when any request is conflict, reserved, or invalid.
 
 ---@class AdamantModpackLib.Host
@@ -359,6 +359,31 @@ local lib = {}
 ---@field resetAll fun(opts?: AdamantModpackLib.ResetOpts): boolean Queue a full module reset for the current draw commit.
 
 ---@alias AdamantModpackLib.UiCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): nil
+---@alias AdamantModpackLib.TabState "attention"|"muted"
+---@alias AdamantModpackLib.TabStateCallback fun(host: AdamantModpackLib.Host, ui: AdamantModpackLib.UiContext): AdamantModpackLib.TabState?
+
+---One top-level module tab declared with `module.ui.tabs(...)`.
+---@class AdamantModpackLib.ModuleTabDeclaration
+---@field id string Stable identifier, unique within the module; keys the tab's ImGui id.
+---@field label string Non-empty tab label.
+---@field draw AdamantModpackLib.UiCallback Draws the tab's content while it is the active tab.
+---@field state? AdamantModpackLib.TabStateCallback Colours the label: "attention" (warning) or "muted".
+
+---@class AdamantModpackLib.AuthorUi
+---@field tab fun(callback: AdamantModpackLib.UiCallback) One content tab labelled "Module". Exclusive with `tabs`.
+---@field tabs fun(tabs: AdamantModpackLib.ModuleTabDeclaration[]) Several top-level tabs, in order. Exclusive with `tab`.
+---@field header fun(callback: AdamantModpackLib.UiCallback) Drawn below Enabled and above the tabs while enabled.
+---@field quickContent fun(callback: AdamantModpackLib.UiCallback)
+
+---Internal: the module frame's view of a managed module's tabs (`module.getUiLayout()`).
+---@class AdamantModpackLib.ModuleUiLayout
+---@field hasHeader boolean
+---@field tabs AdamantModpackLib.ModuleUiTabInfo[]? nil for a single `ui.tab` module.
+
+---@class AdamantModpackLib.ModuleUiTabInfo
+---@field id string
+---@field label string
+---@field hasState boolean
 ---@alias AdamantModpackLib.CommitCallback fun(
 ---    host: AdamantModpackLib.Host,
 ---    runtime: AdamantModpackLib.RuntimeContext,
@@ -399,7 +424,7 @@ local lib = {}
 ---@field cache { define: fun(cache: AdamantModpackLib.CacheDeclarationMap): nil }
 ---@field controls AdamantModpackLib.AuthorControls
 ---@field hotkeys AdamantModpackLib.AuthorHotkeys
----@field ui { tab: fun(callback: AdamantModpackLib.UiCallback), quickContent: fun(callback: AdamantModpackLib.UiCallback) }
+---@field ui AdamantModpackLib.AuthorUi
 ---@field onActivate fun(callback: fun(host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext): nil): nil
 ---@field onCommit fun(callback: AdamantModpackLib.CommitCallback): nil
 ---@field onReload fun(callback: AdamantModpackLib.ReloadCallback): nil
@@ -584,7 +609,9 @@ local lib = {}
 ---@field definition AdamantModpackLib.PreparedDefinition
 ---@field pluginGuid string
 ---@field state AdamantModpackLib.ModuleState
----@field drawTab AdamantModpackLib.UiCallback
+---@field drawTab? AdamantModpackLib.UiCallback Single `ui.tab` content; required unless `tabs` is given.
+---@field tabs? AdamantModpackLib.ModuleTabDeclaration[] Declaration-validated `ui.tabs` list.
+---@field drawHeader? AdamantModpackLib.UiCallback
 ---@field drawQuickContent? AdamantModpackLib.UiCallback
 ---@field mutationBundle table
 ---@field hookDeclarations table
@@ -687,7 +714,10 @@ local lib = {}
 ---@field applyMutation fun(): boolean, string?
 ---@field revertMutation fun(): boolean, string?
 ---@field activate fun(): boolean, string?
----@field drawTab fun()
+---@field getUiLayout fun(): AdamantModpackLib.ModuleUiLayout
+---@field drawHeader fun() Runs the header callback, when declared.
+---@field drawTab fun(index?: integer) Runs one module tab's draw (default the first).
+---@field readTabState fun(index: integer): AdamantModpackLib.TabState?
 ---@field drawQuickContent? fun()
 
 ---@class AdamantModpackLib.ModuleMeta

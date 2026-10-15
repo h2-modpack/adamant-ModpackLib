@@ -27,13 +27,17 @@ local function createImgui()
         texts = {},
         colored = {},
         combos = {},
-        headers = {},
+        tabs = {},
+        tabFlags = {},
+        separators = 0,
+        buttons = {},
         windows = {},
         checkboxes = {},
     }
     local clicks = {}
     local openCombo = nil
-    local nextItemOpen = nil
+    -- nil: every tab reports selected; otherwise only labels in the set do.
+    local selectedTabs = nil
     local function noop() end
 
     local imgui = {
@@ -54,11 +58,12 @@ local function createImgui()
         end,
         SameLine = noop,
         Spacing = noop,
-        Separator = noop,
+        Separator = function()
+            drawn.separators = drawn.separators + 1
+        end,
         IsItemHovered = function()
             return false
         end,
-        SetTooltip = noop,
         PushItemWidth = noop,
         PopItemWidth = noop,
         BeginCombo = function(id, preview)
@@ -80,6 +85,7 @@ local function createImgui()
             openCombo = nil
         end,
         Button = function(label)
+            drawn.buttons[#drawn.buttons + 1] = label
             if clicks[label] == true then
                 clicks[label] = nil
                 return true
@@ -93,24 +99,28 @@ local function createImgui()
             end
             return false
         end,
-        -- ImGui semantics: SetNextItemOpen sets the header state, a click toggles it.
-        SetNextItemOpen = function(open)
-            nextItemOpen = open
+        BeginTabBar = function()
+            return true
         end,
-        CollapsingHeader = function(label)
-            drawn.headers[#drawn.headers + 1] = label
-            local open = nextItemOpen == true
-            nextItemOpen = nil
-            if clicks[label] == true then
-                clicks[label] = nil
-                open = not open
+        EndTabBar = noop,
+        BeginTabItem = function(label, flags)
+            drawn.tabs[#drawn.tabs + 1] = label
+            if flags ~= nil then
+                drawn.tabFlags[label] = flags
             end
-            return open
+            return selectedTabs == nil or selectedTabs[label] == true
         end,
+        EndTabItem = noop,
         Checkbox = function(label, current)
             drawn.checkboxes[#drawn.checkboxes + 1] = label
+            if clicks[label] ~= nil then
+                local value = clicks[label]
+                clicks[label] = nil
+                return value, true
+            end
             return current, false
         end,
+        SetTooltip = noop,
         Begin = function(title)
             drawn.windows[#drawn.windows + 1] = title
             return true, true
@@ -135,13 +145,29 @@ local function createImgui()
     function controller.clickButton(label)
         clicks[label] = true
     end
-    controller.clickHeader = controller.clickButton
     controller.clickMenuItem = controller.clickButton
+    function controller.clickCheckbox(label, value)
+        clicks[label] = value
+    end
+    ---@param labels string[]? Tabs that report selected; nil selects every tab.
+    function controller.selectTabs(labels)
+        if labels == nil then
+            selectedTabs = nil
+            return
+        end
+        selectedTabs = {}
+        for _, label in ipairs(labels) do
+            selectedTabs[label] = true
+        end
+    end
     function controller.resetDrawn()
         drawn.texts = {}
         drawn.colored = {}
         drawn.combos = {}
-        drawn.headers = {}
+        drawn.tabs = {}
+        drawn.tabFlags = {}
+        drawn.separators = 0
+        drawn.buttons = {}
         drawn.windows = {}
         drawn.checkboxes = {}
     end
@@ -339,8 +365,10 @@ function TestHotkeys:testExistingOwnerKeepsKeyWhenAnotherModuleTakesIt()
     lu.assertEquals(conflict.state, "conflict")
     lu.assertEquals(conflict.binding, "F9")
     lu.assertEquals(conflict.owner, { moduleName = "B Mod", label = "Go B" })
-    lu.assertEquals(conflict.text, "F9 is used by B Mod (Go B); this binding is inactive")
-    lu.assertEquals(status(h, "b-mod", "Go").text, "F9 - active")
+    lu.assertEquals(conflict.text, "In use by B Mod")
+    lu.assertEquals(conflict.detail, "F9 is used by B Mod (Go B); this binding is inactive until one of them changes.")
+    lu.assertEquals(status(h, "b-mod", "Go").text, "Active")
+    lu.assertNil(status(h, "b-mod", "Go").detail)
 
     press(h, "F9")
     lu.assertEquals(first.count, 1)
@@ -404,7 +432,7 @@ function TestHotkeys:testDisabledModuleDropsCandidacyAndOwnerHandsOver()
 
     live(h, "a-mod").setEnabled(false)
     lu.assertEquals(status(h, "a-mod", "Go").state, "disabled")
-    lu.assertEquals(status(h, "a-mod", "Go").text, "F9 - inactive while the module is disabled")
+    lu.assertEquals(status(h, "a-mod", "Go").text, "Module disabled")
     lu.assertEquals(status(h, "b-mod", "Go").state, "active")
     press(h, "F9")
     lu.assertEquals(owner.count, 0)
@@ -428,9 +456,9 @@ function TestHotkeys:testReservedInvalidAndUnboundStates()
 
     local reservedStatus = status(h, "a-mod", "Reserved")
     lu.assertEquals(reservedStatus.state, "reserved")
-    lu.assertEquals(reservedStatus.text, "Ctrl+F4 is reserved (reserved in Lib config)")
+    lu.assertEquals(reservedStatus.text, "Reserved (Lib settings)")
     lu.assertEquals(status(h, "a-mod", "Unbound").state, "unbound")
-    lu.assertEquals(status(h, "a-mod", "Unbound").text, "Not bound")
+    lu.assertEquals(status(h, "a-mod", "Unbound").text, "Not set")
     lu.assertEquals(status(h, "a-mod", "Invalid").state, "invalid")
     lu.assertEquals(h.hotkeys.getReserved().manual, { "Ctrl+F4", "F13" })
 
@@ -454,7 +482,8 @@ function TestHotkeys:testDetectedHell2ModdingKeyIsReserved()
 
     local reservedStatus = status(h, "a-mod", "Go")
     lu.assertEquals(reservedStatus.state, "reserved")
-    lu.assertEquals(reservedStatus.text, "F3 is reserved (Hell2Modding overlay)")
+    lu.assertEquals(reservedStatus.text, "Reserved (Hell2Modding overlay)")
+    lu.assertEquals(reservedStatus.detail, "F3 is reserved (Hell2Modding overlay), so this binding never fires.")
     lu.assertEquals(h.hotkeys.getReserved().detected, { raw = "VK_F3", binding = "F3" })
 
     os.remove(h.nativeConfigRoot .. "/Hell2Modding-Hell2Modding-Hotkeys.cfg")
@@ -836,12 +865,18 @@ function TestHotkeys:testStatusTablesAreStableUntilTheirSignatureChanges()
 end
 
 -- -----------------------------------------------------------------------------
--- Module header block
+-- Module frame: Settings tab hotkeys
 -- -----------------------------------------------------------------------------
 
-local function headerLabel(ownerId, summary)
-    return summary .. "###hotkeys-block-" .. ownerId
+local function optionsTab(ownerId)
+    return "Module###module-" .. ownerId
 end
+
+local function settingsTab(ownerId, attention)
+    return (attention and "Hotkeys & Advanced (!)" or "Hotkeys & Advanced") .. "###advanced-" .. ownerId
+end
+
+local LIB_WINDOW_TITLE = "adamant-lib###adamant-lib"
 
 -- Opens a standalone module's fallback window from its menu item and draws one frame.
 local function openFallbackWindow(h, bridge)
@@ -854,108 +889,146 @@ local function drawFallbackWindow(h, bridge)
     bridge.renderWindow()
 end
 
-function TestHotkeys:testFallbackHeaderBlockCollapsesToSummaryAndCommitsEdits()
+local function renderLibWindow(h)
+    h.imgui.resetDrawn()
+    h.callbacks.imgui[1]()
+end
+
+function TestHotkeys:testFallbackSettingsTabShowsExpandedHotkeyRowsAndCommitsEdits()
     local h = createHarness()
-    local drawOrder = {}
     local _, _, _, bridge = createModule(h, {
         guid = "pause-mod",
         name = "Quick Pause",
         fallbackWindow = true,
         requests = { request("TogglePause", "Pause hotkey", "F9", function() end, { alias = "Hotkey" }) },
         drawTab = function(_, ui)
-            drawOrder[#drawOrder + 1] = #h.imgui.drawn.headers
             ui.draw.imgui.Text("module content")
         end,
     })
-    local summary = headerLabel("pause-mod", "Hotkeys: Pause hotkey F9")
     openFallbackWindow(h, bridge)
 
-    -- Healthy: one collapsed summary line after the Enabled/Debug row, before module content.
+    -- Enabled above the tabs; Options holds module content; Settings holds Debug, Resync and the
+    -- hotkey rows, always expanded with their status line.
     drawFallbackWindow(h, bridge)
     lu.assertEquals(h.imgui.drawn.checkboxes, { "Enabled", "Debug Mode" })
-    lu.assertEquals(h.imgui.drawn.headers, { summary })
-    lu.assertEquals(h.imgui.drawn.combos, {})
-    lu.assertEquals(drawOrder, { 1 })
-    lu.assertEquals(h.imgui.drawn.texts, { "module content" })
-
-    -- Expanding shows the row; editing commits through the module.
-    h.imgui.clickHeader(summary)
-    drawFallbackWindow(h, bridge)
+    lu.assertEquals(h.imgui.drawn.tabs, { optionsTab("pause-mod"), settingsTab("pause-mod") })
+    lu.assertEquals(h.imgui.drawn.texts, { "module content", "Hotkeys", "Pause hotkey" })
     lu.assertEquals(h.imgui.comboPreview("##hotkey-key-pause-mod-TogglePause"), "F9")
-    lu.assertEquals(h.imgui.drawn.colored, { "F9 - active" })
+    lu.assertEquals(h.imgui.drawn.colored, { "Active" })
+    lu.assertEquals(h.imgui.drawn.buttons, { "Resync State", "All hotkeys...##hotkeys-overview-pause-mod" })
+
     h.imgui.clickCombo("##hotkey-modifier-pause-mod-TogglePause", "Ctrl")
     drawFallbackWindow(h, bridge)
     lu.assertEquals(live(h, "pause-mod").read("Hotkey"), "Ctrl+F9")
     lu.assertEquals(h:readNativeConfig("pause-mod"):match("Hotkey = ([^\n]*)"), "\"Ctrl+F9\"")
-
-    -- The open state is remembered; the summary follows the new binding.
     drawFallbackWindow(h, bridge)
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("pause-mod", "Hotkeys: Pause hotkey Ctrl+F9") })
-    lu.assertEquals(h.imgui.drawn.colored, { "Ctrl+F9 - active" })
+    lu.assertEquals(h.imgui.drawn.colored, { "Active" })
+
+    -- "All hotkeys..." opens Lib's settings window.
+    h.imgui.selectTabs({ "Hotkeys" })
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, {})
+    h.imgui.selectTabs(nil)
+    h.imgui.clickButton("All hotkeys...##hotkeys-overview-pause-mod")
+    drawFallbackWindow(h, bridge)
+    h.imgui.selectTabs({ "Hotkeys" })
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, { LIB_WINDOW_TITLE })
 end
 
-function TestHotkeys:testHeaderBlockSummaryListsEveryRequestAndCachesText()
+-- A disabled module shows only its switch; its hotkeys stay editable in Lib's Hotkeys window.
+function TestHotkeys:testDisabledModuleShowsOnlySwitchAndEditsThroughLibWindow()
     local h = createHarness()
-    createModule(h, {
-        guid = "split-mod",
-        requests = {
-            request("Prev", "Previous page", "F7", function() end),
-            request("Next", "Next page", "", function() end),
-        },
+    local contentDrawn = 0
+    local _, _, _, bridge = createModule(h, {
+        guid = "pause-mod",
+        fallbackWindow = true,
+        requests = { request("Go", "Go", "F9", function() end) },
+        drawTab = function()
+            contentDrawn = contentDrawn + 1
+        end,
     })
-    local drawBlock = h.imports["core/hotkeys/module_block.lua"]
+    openFallbackWindow(h, bridge)
+    h.imgui.clickCheckbox("Enabled", false)
+    drawFallbackWindow(h, bridge)
+    lu.assertFalse(live(h, "pause-mod").isEnabled())
+    lu.assertEquals(contentDrawn, 0)
 
-    drawBlock(h.rom.ImGui, "split-mod")
-    local first = h.imgui.drawn.headers[1]
-    lu.assertEquals(first, headerLabel("split-mod", "Hotkeys: Previous page F7, Next page None"))
-    h.imgui.resetDrawn()
-    drawBlock(h.rom.ImGui, "split-mod")
-    lu.assertEquals(h.imgui.drawn.headers[1], first)
-    lu.assertIs(h.hotkeys.getOwnerBlock("split-mod"), h.hotkeys.getOwnerBlock("split-mod"))
+    drawFallbackWindow(h, bridge)
+    lu.assertEquals(h.imgui.drawn.checkboxes, { "Enabled" })
+    lu.assertEquals(h.imgui.drawn.tabs, {})
 
-    -- Modules without requests draw nothing.
-    createModule(h, { guid = "plain-mod" })
-    h.imgui.resetDrawn()
-    lu.assertFalse(drawBlock(h.rom.ImGui, "plain-mod"))
-    lu.assertEquals(h.imgui.drawn.headers, {})
+    h.imgui.selectTabs({ "Hotkeys" })
+    h.core.libWindow.open()
+    renderLibWindow(h)
+    local sawDisabled = false
+    for _, text in ipairs(h.imgui.drawn.colored) do
+        sawDisabled = sawDisabled or text == "Module disabled"
+    end
+    lu.assertTrue(sawDisabled)
+    h.imgui.clickCombo("##hotkey-key-pause-mod-Go", "F4")
+    renderLibWindow(h)
+    lu.assertEquals(live(h, "pause-mod").read("Hotkey_Go"), "F4")
+    lu.assertEquals(contentDrawn, 0)
 end
 
-function TestHotkeys:testHeaderBlockExpandsOnAttentionAndKeepsManualToggleUntilItChanges()
+function TestHotkeys:testSettingsTabLabelMarksAttentionStatesOnly()
     local h = createHarness({ config = { DebugMode = false, ReservedHotkeys = "" } })
     createModule(h, { guid = "a-mod", name = "A Mod", requests = { request("Go", "Go A", "F9", function() end) } })
-    local drawBlock = h.imports["core/hotkeys/module_block.lua"]
-    local function draw()
+    local frame = h.imports["core/ui/module_frame.lua"]("a-mod", {
+        isEnabled = function()
+            return live(h, "a-mod").isEnabled()
+        end,
+        setEnabled = function() end,
+        getModule = function()
+            return live(h, "a-mod")
+        end,
+        commit = function() end,
+        isDebugMode = function()
+            return false
+        end,
+        setDebugMode = function() end,
+        resync = function() end,
+    })
+    local function settingsLabel()
         h.imgui.resetDrawn()
-        drawBlock(h.rom.ImGui, "a-mod")
+        frame.draw(h.rom.ImGui)
+        return h.imgui.drawn.tabs[2]
     end
 
-    draw()
-    lu.assertEquals(#h.imgui.drawn.combos, 0)
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod"))
 
-    -- Reserving the key needs attention: the block opens itself.
+    -- Reserved, invalid and conflict need attention.
     h.config.ReservedHotkeys = "F9"
-    draw()
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("a-mod", "Hotkeys: Go A F9 (reserved)") })
-    lu.assertEquals(#h.imgui.drawn.combos, 2)
-    lu.assertEquals(h.imgui.drawn.colored, { "F9 is reserved (reserved in Lib config)" })
-
-    -- A manual collapse holds while the attention state is unchanged.
-    h.imgui.clickHeader(h.imgui.drawn.headers[1])
-    draw()
-    draw()
-    lu.assertEquals(#h.imgui.drawn.combos, 0)
-
-    -- Back to healthy: collapsed again; the disabled state alone does not open it.
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod", true))
     h.config.ReservedHotkeys = ""
-    draw()
-    lu.assertEquals(#h.imgui.drawn.combos, 0)
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod"))
+
+    live(h, "a-mod").writeAndFlush("Hotkey_Go", "Nope")
+    lu.assertEquals(status(h, "a-mod", "Go").state, "invalid")
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod", true))
+    live(h, "a-mod").writeAndFlush("Hotkey_Go", "F9")
+
+    createModule(h, { guid = "b-mod", name = "B Mod", requests = { request("Go", "Go B", "F9", function() end) } })
+    h.hotkeys.setPackOrder("test-pack", 1, { "b-mod", "a-mod" })
+    lu.assertEquals(status(h, "a-mod", "Go").state, "conflict")
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod", true))
+
+    -- Unbound and disabled do not.
+    live(h, "a-mod").writeAndFlush("Hotkey_Go", "")
+    lu.assertEquals(settingsLabel(), settingsTab("a-mod"))
+    live(h, "a-mod").writeAndFlush("Hotkey_Go", "F9")
     live(h, "a-mod").setEnabled(false)
-    draw()
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("a-mod", "Hotkeys: Go A F9 (disabled)") })
-    lu.assertEquals(#h.imgui.drawn.combos, 0)
+    lu.assertEquals(status(h, "a-mod", "Go").state, "disabled")
+    -- A disabled module draws no tabs at all.
+    lu.assertNil(settingsLabel())
+
+    -- Modules without requests draw no hotkey section and never mark the tab.
+    createModule(h, { guid = "plain-mod" })
+    lu.assertFalse(h.imports["core/hotkeys/module_block.lua"](h.rom.ImGui, "plain-mod"))
 end
 
-function TestHotkeys:testPackModuleTabDrawsHeaderBlockAfterEnabledRowAndCommitsEdits()
+function TestHotkeys:testPackModuleFrameDrawsSettingsTabAndCommitsEdits()
     local h = createHarness()
     local contentDrawn = 0
     createModule(h, {
@@ -966,20 +1039,36 @@ function TestHotkeys:testPackModuleTabDrawsHeaderBlockAfterEnabledRowAndCommitsE
         end,
     })
     createModule(h, { guid = "rival-mod", requests = { request("Go", "Rival", "F9", function() end) } })
-    -- Pack order puts rival-mod first, so pack-mod's request conflicts and its block opens.
+    -- Pack order puts rival-mod first, so pack-mod's request conflicts.
     h.hotkeys.setPackOrder("test-pack", 1, { "rival-mod", "pack-mod" })
     lu.assertEquals(status(h, "pack-mod", "Go").state, "conflict")
 
-    local entry = { id = "PackMod", pluginGuid = "pack-mod", _enableLabel = "Enabled##PackMod" }
-    local staging = { modules = { PackMod = true } }
-    local commits = 0
+    local entry = { id = "PackMod", pluginGuid = "pack-mod", tooltip = "" }
+    local staging = { modules = { PackMod = true }, debug = { PackMod = false } }
+    local calls = { commits = 0, toggles = {}, resyncs = 0 }
     local drawModuleTab = h.import("core/modpack/ui/module_tabs.lua", nil, {
         rom = h.rom,
-        drawHotkeyBlock = h.imports["core/hotkeys/module_block.lua"],
+        createModuleFrame = h.imports["core/ui/module_frame.lua"],
+        moduleRegistry = {
+            snapshot = {
+                setDebugEnabled = function(_, value)
+                    live(h, "pack-mod").setDebugMode(value)
+                    return true
+                end,
+            },
+        },
         staging = staging,
         runtime = {
+            toggleEntry = function(_, enabled)
+                calls.toggles[#calls.toggles + 1] = enabled
+                staging.modules.PackMod = enabled
+                return true
+            end,
             commitEntryState = function()
-                commits = commits + 1
+                calls.commits = calls.commits + 1
+            end,
+            resyncEntry = function()
+                calls.resyncs = calls.resyncs + 1
             end,
         },
         snapshotAccess = {
@@ -988,26 +1077,40 @@ function TestHotkeys:testPackModuleTabDrawsHeaderBlockAfterEnabledRowAndCommitsE
             end,
         },
     })
+    local function draw()
+        h.imgui.resetDrawn()
+        drawModuleTab(entry, {})
+    end
 
-    drawModuleTab(entry, {})
-    lu.assertEquals(h.imgui.drawn.checkboxes, { "Enabled##PackMod" })
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("pack-mod", "Hotkeys: Go F9 (conflict)") })
-    lu.assertEquals(h.imgui.drawn.colored, { "F9 is used by rival-mod (Rival); this binding is inactive" })
+    draw()
+    lu.assertEquals(h.imgui.drawn.checkboxes, { "Enabled", "Debug Mode" })
+    lu.assertEquals(h.imgui.drawn.tabs, { optionsTab("pack-mod"), settingsTab("pack-mod", true) })
+    lu.assertEquals(h.imgui.drawn.colored, { "In use by rival-mod" })
     lu.assertEquals(contentDrawn, 1)
-    lu.assertEquals(commits, 1)
+    lu.assertEquals(calls.commits, 1)
 
     h.imgui.clickCombo("##hotkey-key-pack-mod-Go", "F4")
-    drawModuleTab(entry, {})
+    draw()
     lu.assertEquals(live(h, "pack-mod").read("Hotkey_Go"), "F4")
-    lu.assertEquals(status(h, "pack-mod", "Go").state, "active")
+    draw()
+    lu.assertEquals(h.imgui.drawn.tabs[2], settingsTab("pack-mod"))
 
-    -- A disabled module keeps its block (state disabled) but hides its own content.
-    staging.modules.PackMod = false
+    -- Debug Mode and Resync act on this module.
+    h.imgui.clickCheckbox("Debug Mode", true)
+    h.imgui.clickButton("Resync State")
+    draw()
+    lu.assertTrue(live(h, "pack-mod").read("DebugMode"))
+    lu.assertTrue(staging.debug.PackMod)
+    lu.assertEquals(calls.resyncs, 1)
+
+    -- Disabled: just the Enabled switch, no tabs.
+    h.imgui.clickCheckbox("Enabled", false)
     live(h, "pack-mod").setEnabled(false)
-    h.imgui.resetDrawn()
-    drawModuleTab(entry, {})
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("pack-mod", "Hotkeys: Go F4 (disabled)") })
-    lu.assertEquals(contentDrawn, 2)
+    draw()
+    lu.assertEquals(calls.toggles, { false })
+    lu.assertEquals(contentDrawn, 4)
+    lu.assertEquals(h.imgui.drawn.checkboxes, { "Enabled" })
+    lu.assertEquals(h.imgui.drawn.tabs, {})
 end
 
 function TestHotkeys:testStandaloneModulesSharingAKeyShowConflictInTheirOwnWindows()
@@ -1025,13 +1128,13 @@ function TestHotkeys:testStandaloneModulesSharingAKeyShowConflictInTheirOwnWindo
     openFallbackWindow(h, bridgeA)
     openFallbackWindow(h, bridgeB)
 
-    -- The owner's window: collapsed, active. The other window: opened on the conflict.
+    -- The owner's window: active. The other window: Settings marked, conflict status shown.
     drawFallbackWindow(h, bridgeA)
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("a-mod", "Hotkeys: Go A F9") })
-    lu.assertEquals(h.imgui.drawn.colored, {})
+    lu.assertEquals(h.imgui.drawn.tabs[2], settingsTab("a-mod"))
+    lu.assertEquals(h.imgui.drawn.colored, { "Active" })
     drawFallbackWindow(h, bridgeB)
-    lu.assertEquals(h.imgui.drawn.headers, { headerLabel("b-mod", "Hotkeys: Go B F9 (conflict)") })
-    lu.assertEquals(h.imgui.drawn.colored, { "F9 is used by A Mod (Go A); this binding is inactive" })
+    lu.assertEquals(h.imgui.drawn.tabs[2], settingsTab("b-mod", true))
+    lu.assertEquals(h.imgui.drawn.colored, { "In use by A Mod" })
 
     press(h, "F9")
     lu.assertEquals(a.count, 1)
@@ -1046,15 +1149,15 @@ function TestHotkeys:testStandaloneModulesSharingAKeyShowConflictInTheirOwnWindo
 end
 
 -- -----------------------------------------------------------------------------
--- Overview page
+-- Overview (Lib settings window Hotkeys tab)
 -- -----------------------------------------------------------------------------
 
 local OVERVIEW_COLORS = { info = { 1, 1, 1, 1 }, text = { 1, 1, 1, 1 } }
 
 local function createOverview(h)
-    local drawOverview = h.imports["core/hotkeys/overview.lua"]
+    local overview = h.imports["core/hotkeys/overview.lua"]
     return function()
-        drawOverview(h.rom.ImGui, OVERVIEW_COLORS)
+        overview.drawAll(h.rom.ImGui, OVERVIEW_COLORS)
     end
 end
 
@@ -1112,23 +1215,21 @@ function TestHotkeys:testOverviewEditsManualReservedList()
     lu.assertEquals(h.config.ReservedHotkeys, "Shift+F2")
 end
 
-function TestHotkeys:testFallbackHotkeysWindowDrawsOverviewAndRegistersOnceAcrossLibReimport()
+function TestHotkeys:testLibSettingsWindowDrawsOverviewAndRegistersOnceAcrossLibReimport()
     local runtimeRoot = {}
     local callbacks = fakeEngine.createCallbacks()
     local h = createHarness({ runtime = runtimeRoot, callbacks = callbacks })
     createModule(h, { guid = "a-mod", name = "A Mod", requests = { request("Go", "Go A", "F9", function() end) } })
     lu.assertEquals(#callbacks.imgui, 1)
-    local function render()
-        h.imgui.resetDrawn()
-        callbacks.imgui[1]()
-    end
+    h.imgui.selectTabs({ "Hotkeys" })
 
-    render()
+    renderLibWindow(h)
     lu.assertEquals(h.imgui.drawn.windows, {})
 
-    h.core.hotkeysWindow.toggle()
-    render()
-    lu.assertEquals(h.imgui.drawn.windows, { "Hotkeys###adamant-lib-hotkeys" })
+    h.core.libWindow.open()
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, { LIB_WINDOW_TITLE })
+    lu.assertEquals(h.imgui.drawn.tabs, { "Hotkeys", "Debug" })
     lu.assertEquals(h.imgui.drawn.colored[1], "Hotkeys requested by every loaded module. Conflicts are listed first.")
     lu.assertEquals(h.imgui.comboPreview("##hotkey-key-a-mod-Go"), "F9")
 
@@ -1140,16 +1241,78 @@ function TestHotkeys:testFallbackHotkeysWindowDrawsOverviewAndRegistersOnceAcros
         nativeConfigRoot = h.nativeConfigRoot,
     })
     lu.assertEquals(#callbacks.imgui, 1)
-    render()
+    renderLibWindow(h)
     lu.assertEquals(h.imgui.drawn.windows, {})
-    second.core.hotkeysWindow.toggle()
-    render()
-    lu.assertEquals(h.imgui.drawn.windows, { "Hotkeys###adamant-lib-hotkeys" })
+    second.core.libWindow.open()
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, { LIB_WINDOW_TITLE })
 
-    -- A registered coordinator owns the overview; the Lib window stays hidden.
+    -- The window is Lib's, not a pack's: it stays available with a coordinator registered.
     second.coordinator.register("some-pack", "Some Pack", { ModEnabled = true })
-    render()
-    lu.assertEquals(h.imgui.drawn.windows, {})
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, { LIB_WINDOW_TITLE })
+end
+
+-- -----------------------------------------------------------------------------
+-- Pack Settings page
+-- -----------------------------------------------------------------------------
+
+function TestHotkeys:testPackSettingsShowsModpackDebugAndOnlyThisPacksHotkeys()
+    local h = createHarness()
+    createModule(h, { guid = "pack-mod", name = "Pack Mod", requests = { request("Go", "Go", "F9", function() end) } })
+    createModule(h, { guid = "rival-mod", name = "Rival Mod", requests = { request("Go", "Rival", "F9", function() end) } })
+    h.hotkeys.setPackOrder("test-pack", 1, { "rival-mod", "pack-mod" })
+    local packConfig = { DebugMode = false }
+    local drawSettings = h.import("core/modpack/ui/settings.lua", nil, {
+        rom = h.rom,
+        config = packConfig,
+        colors = OVERVIEW_COLORS,
+        moduleRegistry = { modules = { { pluginGuid = "pack-mod" } } },
+        hotkeyOverview = h.imports["core/hotkeys/overview.lua"],
+        openLibWindow = h.core.libWindow.open,
+    })
+    local function draw()
+        h.imgui.resetDrawn()
+        drawSettings()
+    end
+
+    h.imgui.clickCheckbox("Modpack Debug", true)
+    draw()
+    lu.assertEquals(h.imgui.drawn.checkboxes, { "Modpack Debug" })
+    lu.assertTrue(packConfig.DebugMode)
+    -- Only this pack's row; the conflict names the other pack's owner. No reserved-key editor and,
+    -- with nothing detected, no Hell2Modding line.
+    lu.assertEquals(h.imgui.drawn.colored, {
+        "Hotkeys",
+        "Pack Mod - Go",
+        "In use by Rival Mod",
+    })
+    lu.assertNil(h.imgui.comboPreview("##hotkey-key-rival-mod-Go"))
+    lu.assertEquals(h.imgui.drawn.texts, {})
+    lu.assertEquals(h.imgui.drawn.buttons, { "All hotkeys...##pack-settings" })
+
+    -- Rows edit through the owning module.
+    h.imgui.clickCombo("##hotkey-key-pack-mod-Go", "F4")
+    draw()
+    lu.assertEquals(live(h, "pack-mod").read("Hotkey_Go"), "F4")
+
+    -- A detected Hell2Modding key shows as a read-only line.
+    local cfg = h.nativeConfigRoot .. "/Hell2Modding-Hell2Modding-Hotkeys.cfg"
+    local file = assert(io.open(cfg, "w"))
+    file:write("gui_toggle = 'VK_F3'\n")
+    file:close()
+    h.hotkeys.redetectReserved()
+    draw()
+    os.remove(cfg)
+    lu.assertEquals(h.imgui.drawn.texts, { "Hell2Modding overlay key: F3 (reserved)" })
+    lu.assertEquals(h.imgui.drawn.buttons, { "All hotkeys...##pack-settings" })
+
+    -- "All hotkeys..." opens Lib's settings window.
+    h.imgui.clickButton("All hotkeys...##pack-settings")
+    draw()
+    h.imgui.selectTabs({ "Hotkeys" })
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.windows, { LIB_WINDOW_TITLE })
 end
 
 function TestHotkeys:testBareReservedKeyCoversEveryModifierCombination()
@@ -1163,4 +1326,52 @@ function TestHotkeys:testBareReservedKeyCoversEveryModifierCombination()
     lu.assertEquals(map["Ctrl+F3"], reserved.MANUAL_REASON)
     lu.assertNil(map["F3"])
     lu.assertNil(map["Shift+F3"])
+end
+
+function TestHotkeys:testAllHotkeysOpensLibWindowOnItsHotkeysTab()
+    local h = createHarness()
+    createModule(h, { guid = "a-mod", name = "A Mod", requests = { request("Go", "Go A", "F9", function() end) } })
+    h.rom.ImGuiTabItemFlags = { SetSelected = 2 }
+    h.imgui.selectTabs({ "Hotkeys" })
+
+    h.core.libWindow.open()
+    renderLibWindow(h)
+    lu.assertNil(h.imgui.drawn.tabFlags["Hotkeys"])
+
+    h.core.libWindow.openHotkeys()
+    renderLibWindow(h)
+    lu.assertEquals(h.imgui.drawn.tabFlags["Hotkeys"], 2)
+    -- Selected once; later frames leave the user's tab choice alone.
+    renderLibWindow(h)
+    lu.assertNil(h.imgui.drawn.tabFlags["Hotkeys"])
+end
+
+function TestHotkeys:testOverviewSeparatesModulesNotRowsOfOneModule()
+    local h = createHarness()
+    createModule(h, { guid = "a-mod", name = "A Mod", requests = {
+        request("One", "One", "F5", function() end),
+        request("Two", "Two", "F6", function() end),
+    } })
+    createModule(h, { guid = "b-mod", name = "B Mod", requests = { request("Go", "Go", "F7", function() end) } })
+    h.imgui.selectTabs({ "Hotkeys" })
+    h.core.libWindow.open()
+    renderLibWindow(h)
+    -- One separator per module group, plus the one before the reserved keys section.
+    lu.assertEquals(h.imgui.drawn.separators, 3)
+end
+
+function TestHotkeys:testOverviewListsDisabledModulesLast()
+    local h = createHarness()
+    createModule(h, { guid = "off-mod", name = "Off Mod", requests = { request("Go", "Off", "F5", function() end) } })
+    createModule(h, { guid = "on-mod", name = "On Mod", requests = { request("Go", "On", "F6", function() end) } })
+    createModule(h, { guid = "rival-a", name = "Rival A", requests = { request("Go", "A", "F7", function() end) } })
+    createModule(h, { guid = "rival-b", name = "Rival B", requests = { request("Go", "B", "F7", function() end) } })
+    h.hotkeys.setPackOrder("test-pack", 1, { "off-mod", "on-mod", "rival-a", "rival-b" })
+    live(h, "off-mod").setEnabled(false)
+
+    local states = {}
+    for _, row in ipairs(h.hotkeys.listRows()) do
+        states[#states + 1] = row.ownerId .. ":" .. row.status.state
+    end
+    lu.assertEquals(states, { "rival-b:conflict", "on-mod:active", "rival-a:active", "off-mod:disabled" })
 end

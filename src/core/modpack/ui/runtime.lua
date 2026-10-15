@@ -387,15 +387,15 @@ local function createUIRuntime()
         end
     end
 
-    function Runtime.resyncAllState()
-        local snapshot = snapshotAccess.capture()
-        for _, entry in ipairs(moduleRegistry.modules) do
-            local liveModule = snapshotAccess.getLiveModule(entry, snapshot)
-            if liveModule then
-                liveModule.resync()
-            end
+    -- Resyncs one module's staged state, then re-reads its staged enable/debug flags.
+    function Runtime.resyncEntry(entry, snapshot)
+        local liveModule = snapshotAccess.getLiveModule(entry, snapshot)
+        if not liveModule then
+            return
         end
-        snapshotToStaging()
+        liveModule.resync()
+        staging.modules[entry.id] = moduleRegistry.snapshot.isEntryEnabled(entry, snapshot)
+        staging.debug[entry.id] = moduleRegistry.snapshot.isDebugEnabled(entry, snapshot)
     end
 
     return Runtime

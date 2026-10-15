@@ -229,7 +229,10 @@ function InstallWindowImGuiStub(overrides)
         InputText = function(_, value) return value, false end,
         GetClipboardText = function() return nil end,
         SetClipboardText = noop,
-        CollapsingHeader = function() return false end,
+        BeginTabBar = function() return true end,
+        EndTabBar = noop,
+        BeginTabItem = function() return true end,
+        EndTabItem = noop,
         Indent = noop,
         Unindent = noop,
         PushID = noop,
@@ -341,7 +344,6 @@ end
 function CreateModpackHarness(opts)
     opts = opts or {}
     local harnessRom = opts.rom or rom
-    local harnessLibConfig = opts.libConfig or LibConfig
     local harnessOverlaySurface = opts.overlaySurface or ModpackTestApi.createOverlaySurface()
     local getLiveModule = opts.getLiveModule or LibModuleRegistry.getLiveModule
     local harnessPackRegistry = opts.packRegistry or {}
@@ -357,20 +359,19 @@ function CreateModpackHarness(opts)
         setupRunData = function()
             return harnessRom.game.SetupRunData()
         end,
-        libConfig = harnessLibConfig,
         storage = LibStorage,
         coordination = harnessCoordination,
         overlaySurface = harnessOverlaySurface,
         getLiveModule = getLiveModule,
         packRegistry = harnessPackRegistry,
         hotkeys = opts.hotkeys or LibTestImports["core/hotkeys/00_init.lua"],
-        drawHotkeyBlock = LibTestImports["core/hotkeys/module_block.lua"],
-        drawHotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
+        createModuleFrame = LibTestImports["core/ui/module_frame.lua"],
+        hotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
+        openLibWindow = LibTestImports["core/ui/lib_window.lua"].open,
     })
 
     return {
         rom = harnessRom,
-        libConfig = harnessLibConfig,
         overlaySurface = harnessOverlaySurface,
         modpack = modpackCore,
         coordination = harnessCoordination,
@@ -396,8 +397,9 @@ local createUI = import("core/modpack/ui/window.lua", nil, {
     logging = logging,
     uiSession = uiSession,
     setupRunData = setupRunData,
-    drawHotkeyBlock = LibTestImports["core/hotkeys/module_block.lua"],
-    drawHotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
+    createModuleFrame = LibTestImports["core/ui/module_frame.lua"],
+    hotkeyOverview = LibTestImports["core/hotkeys/overview.lua"],
+    openLibWindow = LibTestImports["core/ui/lib_window.lua"].open,
 })
 
 rawset(ModpackTestApi, "createOverlaySurface", function()
@@ -420,10 +422,9 @@ rawset(ModpackTestApi, "createOverlaySurface", function()
 end)
 
 local function createTestUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles,
-                            defaultProfiles, drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
+                            defaultProfiles, drawPackQuickContent, auditSavedProfiles, overlaySurface)
     return createUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles, defaultProfiles,
-        drawPackQuickContent, auditSavedProfiles, libConfig or LibConfig,
-        overlaySurface or ModpackTestApi.createOverlaySurface())
+        drawPackQuickContent, auditSavedProfiles, overlaySurface or ModpackTestApi.createOverlaySurface())
 end
 
 local function createTestHud(packId, packIndex, configHash, theme, config, hideHashMarker, overlaySurface)
@@ -667,6 +668,7 @@ function MockModuleRegistry.create(moduleDefs)
     function moduleRegistry.snapshot.setDebugEnabled(entry, value, snapshot)
         local liveModule = moduleRegistry.snapshot.getLiveModule(entry, snapshot)
         liveModule.setDebugMode(value)
+        return true
     end
 
     return moduleRegistry

@@ -16,6 +16,7 @@ buckets.fallback = buckets.fallback or {}
 buckets.coordinators = buckets.coordinators or {}
 buckets.modpacks = buckets.modpacks or {}
 buckets.hotkeys = buckets.hotkeys or {}
+buckets.ui = buckets.ui or {}
 
 return {
     modules = buckets.modules,
@@ -27,4 +28,5 @@ return {
     coordinators = buckets.coordinators,
     modpacks = buckets.modpacks,
     hotkeys = buckets.hotkeys,
+    ui = buckets.ui,
 }

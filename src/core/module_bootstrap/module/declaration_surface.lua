@@ -1,6 +1,7 @@
 local deps = ...
 
 local logging = deps.logging
+local identifiers = deps.identifiers
 local hookDeclarations = deps.hookDeclarations
 local hookContext = deps.hookContext
 local overlayAuthoring = deps.overlayAuthoring
@@ -67,6 +68,67 @@ local function validatePublicDataNode(context, node)
     for index, rowNode in ipairs(type(node.row) == "table" and node.row or {}) do
         validatePublicDataNode(context .. " row storage #" .. tostring(index), rowNode)
     end
+end
+
+local TAB_FIELDS = {
+    id = true,
+    label = true,
+    draw = true,
+    state = true,
+}
+
+---Validates `module.ui.tabs(...)` and returns a Lib-owned copy in declaration order.
+---@param tabs any
+---@return AdamantModpackLib.ModuleTabDeclaration[]
+local function validateTabs(tabs)
+    if type(tabs) ~= "table" or #tabs == 0 then
+        logging.violate("module.invalid_create_opts", "module.ui.tabs requires a non-empty list of tabs")
+    end
+    local count = #tabs
+    for key in pairs(tabs) do
+        if type(key) ~= "number" or key % 1 ~= 0 or key < 1 or key > count then
+            logging.violate("module.invalid_create_opts", "module.ui.tabs: unexpected key '%s'; tabs must be a list",
+                tostring(key))
+        end
+    end
+
+    local copies = {}
+    local seenIds = {}
+    for index, tab in ipairs(tabs) do
+        local context = "module.ui.tabs #" .. tostring(index)
+        if type(tab) ~= "table" then
+            logging.violate("module.invalid_create_opts", "%s must be a table", context)
+        end
+        for field in pairs(tab) do
+            if not TAB_FIELDS[field] then
+                logging.violate("module.invalid_create_opts", "%s: unknown field '%s'", context, tostring(field))
+            end
+        end
+        if not identifiers.isStable(tab.id) then
+            logging.violate("module.invalid_create_opts", "%s id '%s' %s", context, tostring(tab.id),
+                identifiers.STABLE_DESCRIPTION)
+        end
+        if seenIds[tab.id] then
+            logging.violate("module.invalid_create_opts", "%s: duplicate tab id '%s'", context, tab.id)
+        end
+        seenIds[tab.id] = true
+        if type(tab.label) ~= "string" or tab.label == "" then
+            logging.violate("module.invalid_create_opts", "%s label must be a non-empty string", context)
+        end
+        if type(tab.draw) ~= "function" then
+            logging.violate("module.invalid_create_opts", "%s draw must be a function", context)
+        end
+        if tab.state ~= nil and type(tab.state) ~= "function" then
+            logging.violate("module.invalid_create_opts", "%s state must be a function", context)
+        end
+        copies[index] = {
+            id = tab.id,
+            label = tab.label,
+            draw = tab.draw,
+            state = tab.state,
+        }
+    end
+    return copies
 end
 
 local function validatePublicDataStorage(storage)
@@ -137,9 +199,27 @@ function declarationSurface.attach(module, declarations, lifecycle)
         end,
     }
 
+    -- `tab` and `tabs` are alternatives: one content tab, or several top-level tabs in the frame.
     module.ui = {
         tab = function(callback)
+            lifecycle.requireOpen("module.ui.tab")
+            if declarations.tabs ~= nil then
+                logging.violate("module.invalid_create_opts", "module.ui.tab cannot be combined with module.ui.tabs")
+            end
             setFunctionOnce("drawTab", callback, "module.ui.tab")
+        end,
+        tabs = function(tabs)
+            lifecycle.requireOpen("module.ui.tabs")
+            if declarations.drawTab ~= nil then
+                logging.violate("module.invalid_create_opts", "module.ui.tabs cannot be combined with module.ui.tab")
+            end
+            if declarations.tabs ~= nil then
+                logging.violate("module.invalid_create_opts", "module.ui.tabs already declared")
+            end
+            setOnce("tabs", validateTabs(tabs), "module.ui.tabs")
+        end,
+        header = function(callback)
+            setFunctionOnce("drawHeader", callback, "module.ui.header")
         end,
         quickContent = function(callback)
             setFunctionOnce("drawQuickContent", callback, "module.ui.quickContent")

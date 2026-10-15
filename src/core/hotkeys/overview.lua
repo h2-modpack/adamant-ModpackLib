@@ -1,7 +1,11 @@
--- Lib-owned Hotkeys overview: every live Lib module's hotkey requests (conflicts first) and the
--- reserved keys. The modpack window draws it as its Hotkeys tab; without a coordinator the
--- `adamant-lib` menu opens it in Lib's own Hotkeys window. Row edits write the owning module's
--- binding through its staged state and commit (see `row_refs.lua`).
+-- Lib-owned Hotkeys overview pieces.
+-- - `drawAll`: every live Lib module's hotkey requests (conflicts first) and the reserved keys,
+--   with the manual reserved-key editor. Drawn as the Hotkeys tab of Lib's settings window.
+-- - `drawForOwners`: the same rows filtered to a set of owner ids (a pack's Settings page).
+-- - `drawDetectedKey`: a read-only line for the detected Hell2Modding key, only when one was
+--   detected.
+-- Row edits write the owning module's binding through its staged state and commit (see
+-- `row_refs.lua`).
 
 local deps = ...
 
@@ -62,13 +66,27 @@ local function containsBinding(list, binding)
     return false
 end
 
+-- Detected-key text is cached by detection result identity; a re-detect installs a new table.
+local detectedTexts = setmetatable({}, { __mode = "k" })
+
+local function detectedText(detected)
+    local text = detectedTexts[detected]
+    if text == nil then
+        if detected.binding ~= nil then
+            text = "Hell2Modding overlay key: " .. detected.binding .. " (reserved)"
+        else
+            text = "Hell2Modding overlay key: " .. detected.raw .. " (not an F-key; nothing to reserve)"
+        end
+        detectedTexts[detected] = text
+    end
+    return text
+end
+
 local function drawDetected(ui, detected)
     if detected == nil then
         ui.Text("Hell2Modding overlay key: not detected")
-    elseif detected.binding ~= nil then
-        ui.Text("Hell2Modding overlay key: " .. detected.binding .. " (reserved)")
     else
-        ui.Text("Hell2Modding overlay key: " .. detected.raw .. " (not an F-key; nothing to reserve)")
+        ui.Text(detectedText(detected))
     end
     ui.SameLine()
     if ui.Button("Detect again##hotkeys-detect") then
@@ -111,9 +129,20 @@ local function drawManualList(ui, manual)
     end
 end
 
+-- Separates modules, not rows: consecutive rows of one module share a group. Returns the row's
+-- owner for the next call.
+local function drawRow(ui, colors, row, previousOwnerId)
+    if row.ownerId ~= previousOwnerId then
+        ui.Separator()
+    end
+    TextColored(ui, colors.text, headerForRow(row))
+    drawWidget(ui, refForRow(row), ROW_WIDGET_OPTS)
+    return row.ownerId
+end
+
 ---@param ui table ImGui
 ---@param colors { info: number[], text: number[] } Theme colors.
-local function draw(ui, colors)
+local function drawAll(ui, colors)
     TextColored(ui, colors.info, "Hotkeys requested by every loaded module. Conflicts are listed first.")
     ui.Spacing()
 
@@ -121,10 +150,9 @@ local function draw(ui, colors)
     if #rows == 0 then
         ui.Text("No module requests a hotkey.")
     end
+    local previousOwnerId = nil
     for _, row in ipairs(rows) do
-        ui.Separator()
-        TextColored(ui, colors.text, headerForRow(row))
-        drawWidget(ui, refForRow(row), ROW_WIDGET_OPTS)
+        previousOwnerId = drawRow(ui, colors, row, previousOwnerId)
     end
 
     ui.Spacing()
@@ -137,4 +165,33 @@ local function draw(ui, colors)
     drawManualList(ui, reservedKeys.manual)
 end
 
-return draw
+---Rows owned by `ownerIds`, in the overview's order (conflicts first). A conflict with a module
+---outside the set names that owner through the row's status line.
+---@param ui table ImGui
+---@param colors { info: number[], text: number[] } Theme colors.
+---@param ownerIds table<string, boolean>
+local function drawForOwners(ui, colors, ownerIds)
+    local previousOwnerId = nil
+    for _, row in ipairs(hotkeys.listRows()) do
+        if ownerIds[row.ownerId] then
+            previousOwnerId = drawRow(ui, colors, row, previousOwnerId)
+        end
+    end
+    if previousOwnerId == nil then
+        ui.Text("No module requests a hotkey.")
+    end
+end
+
+---@param ui table ImGui
+local function drawDetectedKey(ui)
+    local detected = hotkeys.getReserved().detected
+    if detected ~= nil then
+        ui.Text(detectedText(detected))
+    end
+end
+
+return {
+    drawAll = drawAll,
+    drawForOwners = drawForOwners,
+    drawDetectedKey = drawDetectedKey,
+}

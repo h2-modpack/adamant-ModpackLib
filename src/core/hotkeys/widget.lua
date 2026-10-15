@@ -1,5 +1,5 @@
--- Internal hotkey picker: modifier dropdown + key dropdown + status line. Lib draws it in each
--- module's header block and on the Hotkeys overview; it is not part of the author draw surface.
+-- Internal hotkey picker: modifier dropdown + key dropdown + short status on the same row. Lib draws it in each
+-- module's Hotkeys & Advanced tab and on the Hotkeys overview; it is not part of the author draw surface.
 --
 -- The draw path allocates nothing per frame: dropdown labels are constants, combo ids live on the
 -- ref, binding parses are memoized, and status text is cached on the status table.
@@ -8,6 +8,7 @@ local deps = ...
 
 local bindings = deps.bindings
 local hotkeys = deps.hotkeys
+local statusColors = deps.statusColors
 
 local widget = {}
 
@@ -19,12 +20,12 @@ local NONE_LABEL = "None"
 local INVALID_LABEL = "Invalid"
 
 local STATUS_COLORS = {
-    active = { 0.30, 0.85, 0.55, 1.0 },
-    conflict = { 0.90, 0.75, 0.20, 1.0 },
-    reserved = { 0.90, 0.75, 0.20, 1.0 },
-    invalid = { 0.90, 0.35, 0.50, 1.0 },
-    unbound = { 0.60, 0.60, 0.65, 1.0 },
-    disabled = { 0.60, 0.60, 0.65, 1.0 },
+    active = statusColors.success,
+    conflict = statusColors.attention,
+    reserved = statusColors.attention,
+    invalid = statusColors.error,
+    unbound = statusColors.muted,
+    disabled = statusColors.muted,
 }
 
 local MODIFIER_LABEL_BY_PREFIX = {
@@ -124,7 +125,10 @@ function widget.draw(imgui, ref, opts)
         local status = hotkeys.refStatus(ref)
         if status ~= nil then
             local color = STATUS_COLORS[status.state]
+            imgui.SameLine()
+            imgui.AlignTextToFramePadding()
             imgui.TextColored(color[1], color[2], color[3], color[4], status.text)
+            showTooltip(imgui, status.detail)
         end
     end
 

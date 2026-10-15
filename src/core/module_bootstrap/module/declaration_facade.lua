@@ -26,6 +26,8 @@ local function createDeclarationState()
         onCommit = nil,
         onReload = nil,
         drawTab = nil,
+        tabs = nil,
+        drawHeader = nil,
         drawQuickContent = nil,
         controlDeclarations = controlDeclarations.create(),
         fallbackUi = {},

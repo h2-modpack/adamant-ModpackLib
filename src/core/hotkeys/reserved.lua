@@ -10,7 +10,7 @@ local reserved = {}
 
 reserved.HELL2MODDING_CONFIG_FILE = "Hell2Modding-Hell2Modding-Hotkeys.cfg"
 reserved.HELL2MODDING_REASON = "Hell2Modding overlay"
-reserved.MANUAL_REASON = "reserved in Lib config"
+reserved.MANUAL_REASON = "Lib settings"
 
 local function trim(text)
     return (string.gsub(text, "^%s*(.-)%s*$", "%1"))

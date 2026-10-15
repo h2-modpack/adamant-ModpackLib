@@ -26,34 +26,12 @@ local core = import('core/init.lua', nil, {
     externals = externals,
 })
 
--- Fallback Lib menu (Hotkeys window, debug toggles) - hidden when Lib modpack registers
--- coordinators; the modpack window then owns the Hotkeys overview.
+-- Lib menu, shown with or without packs. Its one item opens Lib's settings window (Hotkeys for
+-- every module across every pack, reserved keys, Lib debug toggles).
 rom.gui.add_to_menu_bar(function()
-    if core.modpackCoordination.hasRegistrations() then return end
     if rom.ImGui.BeginMenu("adamant-lib") then
-        if rom.ImGui.MenuItem("Hotkeys") then
-            core.hotkeysWindow.toggle()
-        end
-
-        local val, chg = rom.ImGui.Checkbox("Lib Policy Debug", libConfig.DebugMode == true)
-        if chg then libConfig.DebugMode = val end
-
-        local diagnostics = libConfig.Diagnostics
-        local diagnosticKeys = {}
-        for key, diagnostic in pairs(diagnostics) do
-            if type(diagnostic) == "table" then
-                diagnosticKeys[#diagnosticKeys + 1] = key
-            end
-        end
-        table.sort(diagnosticKeys)
-
-        for _, key in ipairs(diagnosticKeys) do
-            local diagnostic = diagnostics[key]
-            local diagVal, diagChg = rom.ImGui.Checkbox(
-                diagnostic.label,
-                diagnostic.enabled == true
-            )
-            if diagChg then diagnostic.enabled = diagVal end
+        if rom.ImGui.MenuItem("Settings") then
+            core.libWindow.open()
         end
         rom.ImGui.EndMenu()
     end

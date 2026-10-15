@@ -1,4 +1,4 @@
--- Widget refs for Lib-drawn hotkey rows (module header blocks and the overview).
+-- Widget refs for Lib-drawn hotkey rows (module Hotkeys & Advanced tabs and the overview).
 --
 -- A row ref reads the owning live module's committed binding and writes through its staged state
 -- and commit (`writeAndFlush`), the same path the modpack window uses for module enabled state.

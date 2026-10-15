@@ -326,7 +326,7 @@ function TestUiWindow:testGuiCloseReleasesOverlaySuppression()
         Profiles = {},
     }, "test-pack", "Test Window", 1, {
         { Name = "", Hash = "", Tooltip = "" },
-    }, nil, nil, nil, {
+    }, nil, nil, {
         order = {
             system = 0,
             modpack = 100,
@@ -417,20 +417,8 @@ function TestUiWindow:testDisablingRunDataModuleFlushesSetupRunDataWhenMenuClose
     lu.assertEquals(setupRunDataCalls, 1)
 end
 
-function TestUiWindow:testHotkeysPageSitsBetweenProfilesAndDev()
-    local selectables = {}
-    local drawnTexts = {}
-    local restoreImGui = InstallWindowImGuiStub({
-        Selectable = function(label)
-            selectables[#selectables + 1] = label
-            return label == "Hotkeys"
-        end,
-        Text = function(text)
-            drawnTexts[#drawnTexts + 1] = text
-        end,
-    })
-
-    local moduleRegistry = {
+local function emptyModuleRegistry()
+    return {
         modules = {},
         modulesWithQuickContent = {},
         tabOrder = {},
@@ -445,28 +433,166 @@ function TestUiWindow:testHotkeysPageSitsBetweenProfilesAndDev()
             end,
         },
     }
-    local builtUi = ModpackTestApi.createUI(moduleRegistry, CreateModpackHudStub(), ModpackTestApi.createTheme(), {
+end
+
+local function defaultPackConfig()
+    return {
         ModEnabled = true,
         DebugMode = false,
         Profiles = {
             { Name = "", Hash = "", Tooltip = "" },
         },
-    }, "test-pack", "Test Window", 1, {
-        { Name = "", Hash = "", Tooltip = "" },
+    }
+end
+
+-- Sidebar: Quick Setup, modules, Profiles, Settings. Settings holds Modpack Debug and this pack's
+-- hotkeys; Lib's settings window owns Lib debug, diagnostics and the reserved-key editor.
+function TestUiWindow:testPackSidebarHasSettingsPageAndNoDevPage()
+    local selectables = {}
+    local checkboxes = {}
+    local buttons = {}
+    local colored = {}
+    local texts = {}
+    local config = defaultPackConfig()
+    local restoreImGui = InstallWindowImGuiStub({
+        Selectable = function(label)
+            selectables[#selectables + 1] = label
+            return label == "Settings"
+        end,
+        Checkbox = function(label, current)
+            checkboxes[#checkboxes + 1] = label
+            if label == "Modpack Debug" then
+                return true, true
+            end
+            return current, false
+        end,
+        Button = function(label)
+            buttons[#buttons + 1] = label
+            return false
+        end,
+        TextColored = function(_, _, _, _, text)
+            colored[#colored + 1] = text
+        end,
+        Text = function(text)
+            texts[#texts + 1] = text
+        end,
     })
+
+    local builtUi = ModpackTestApi.createUI(emptyModuleRegistry(), CreateModpackHudStub(),
+        ModpackTestApi.createTheme(), config, "test-pack", "Test Window", 1, {
+            { Name = "", Hash = "", Tooltip = "" },
+        })
 
     builtUi.addMenuBar()
     builtUi.renderWindow()
+    checkboxes, buttons, colored, texts = {}, {}, {}, {}
     builtUi.renderWindow()
     restoreImGui()
 
-    lu.assertEquals({ selectables[1], selectables[2], selectables[3], selectables[4] },
-        { "Quick Setup", "Profiles", "Hotkeys", "Dev" })
-    local sawReservedSection = false
-    for _, text in ipairs(drawnTexts) do
-        if string.find(text, "Hell2Modding overlay key", 1, true) then
-            sawReservedSection = true
-        end
+    lu.assertEquals({ selectables[1], selectables[2], selectables[3] }, { "Quick Setup", "Profiles", "Settings" })
+    lu.assertEquals(#selectables, 6)
+    lu.assertEquals(checkboxes, { "Enable Mod", "Modpack Debug" })
+    lu.assertTrue(config.DebugMode)
+    lu.assertEquals(buttons, { "All hotkeys...##pack-settings" })
+    lu.assertEquals(colored, { "Hotkeys" })
+    for _, text in ipairs(texts) do
+        lu.assertNil(string.find(text, "Hell2Modding overlay key", 1, true))
     end
-    lu.assertTrue(sawReservedSection)
+end
+
+function TestUiWindow:testPackModulePageDrawsSharedModuleFrame()
+    local order = {}
+    local clicks = {}
+    local restoreImGui = InstallWindowImGuiStub({
+        Selectable = function(label)
+            return label == "Alpha"
+        end,
+        Checkbox = function(label, current)
+            order[#order + 1] = "checkbox:" .. label
+            if clicks[label] ~= nil then
+                local value = clicks[label]
+                clicks[label] = nil
+                return value, true
+            end
+            return current, false
+        end,
+        Button = function(label)
+            order[#order + 1] = "button:" .. label
+            if clicks[label] then
+                clicks[label] = nil
+                return true
+            end
+            return false
+        end,
+        BeginTabBar = function(id)
+            order[#order + 1] = "tabbar:" .. id
+            return true
+        end,
+        BeginTabItem = function(label)
+            order[#order + 1] = "tab:" .. label
+            return true
+        end,
+    })
+
+    local drawCalls = 0
+    local moduleRegistry = MockModuleRegistry.create({
+        {
+            pluginGuid = "Alpha",
+            id = "Alpha",
+            name = "Alpha",
+            enabled = true,
+            storage = {},
+            DrawTab = function()
+                drawCalls = drawCalls + 1
+            end,
+        },
+    })
+    local liveModule = LibModuleRegistry.getLiveModule("Alpha")
+    local resyncs = 0
+    local resync = liveModule.resync
+    liveModule.resync = function()
+        resyncs = resyncs + 1
+        return resync()
+    end
+
+    local builtUi = ModpackTestApi.createUI(moduleRegistry, CreateModpackHudStub(), ModpackTestApi.createTheme(),
+        defaultPackConfig(), "test-pack", "Test Window", 1, {
+            { Name = "", Hash = "", Tooltip = "" },
+        })
+    builtUi.addMenuBar()
+    order = {}
+    builtUi.renderWindow()
+
+    lu.assertEquals(order, {
+        "checkbox:Enable Mod",
+        "checkbox:Enabled",
+        "tabbar:##module-frame-Alpha",
+        "tab:Module###module-Alpha",
+        "tab:Advanced###advanced-Alpha",
+        "checkbox:Debug Mode",
+        "button:Resync State",
+    })
+    lu.assertEquals(drawCalls, 1)
+
+    -- Settings: Debug Mode writes the module's flag, Resync resyncs this module only.
+    clicks["Debug Mode"] = true
+    clicks["Resync State"] = true
+    builtUi.renderWindow()
+    lu.assertTrue(liveModule.read("DebugMode"))
+    lu.assertEquals(resyncs, 1)
+
+    -- Disabled: just the Enabled switch, no tabs.
+    clicks["Enabled"] = false
+    builtUi.renderWindow()
+    lu.assertFalse(liveModule.isEnabled())
+    lu.assertEquals(drawCalls, 2)
+    order = {}
+    builtUi.renderWindow()
+    restoreImGui()
+
+    lu.assertEquals(drawCalls, 2)
+    lu.assertEquals(order[#order], "checkbox:Enabled")
+    for _, call in ipairs(order) do
+        lu.assertNil(string.find(call, "tabbar:", 1, true))
+    end
 end

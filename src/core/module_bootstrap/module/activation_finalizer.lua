@@ -74,8 +74,9 @@ end
 ---@return AdamantModpackLib.ManagedModule module
 ---@return { host: AdamantModpackLib.Host, runtime: AdamantModpackLib.RuntimeContext } contexts
 function activationFinalizer.activate(opts, declarations)
-    if type(declarations.drawTab) ~= "function" then
-        logging.violate("module.invalid_create_opts", "module.ui.tab must be declared before module.activate")
+    if declarations.drawTab == nil and declarations.tabs == nil then
+        logging.violate("module.invalid_create_opts",
+            "module.ui.tab or module.ui.tabs must be declared before module.activate")
     end
 
     local compiledControls = controlCompiler.compile(declarations.controlDeclarations)
@@ -113,6 +114,8 @@ function activationFinalizer.activate(opts, declarations)
         onCommit = declarations.onCommit,
         onReload = declarations.onReload,
         drawTab = declarations.drawTab,
+        tabs = declarations.tabs,
+        drawHeader = declarations.drawHeader,
         drawQuickContent = declarations.drawQuickContent,
         controlCatalog = compiledControls.catalog,
         hotkeyRequests = compiledHotkeys.requests,

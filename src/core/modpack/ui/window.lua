@@ -3,15 +3,16 @@ local rom = deps.rom
 local logging = deps.logging
 local uiSession = deps.uiSession
 local setupRunData = deps.setupRunData
-local drawHotkeyBlock = deps.drawHotkeyBlock
-local drawHotkeyOverview = deps.drawHotkeyOverview
+local createModuleFrame = deps.createModuleFrame
+local hotkeyOverview = deps.hotkeyOverview
+local openLibWindow = deps.openLibWindow
 
 local function TextColored(ui, color, text)
     ui.TextColored(color[1], color[2], color[3], color[4], text)
 end
 
 local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle, numProfiles,
-                        defaultProfiles, drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
+                        defaultProfiles, drawPackQuickContent, auditSavedProfiles, overlaySurface)
     local ui = rom.ImGui
     local DEFAULT_WINDOW_WIDTH = 1280
     local DEFAULT_WINDOW_HEIGHT = 840
@@ -111,20 +112,20 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
 
     local drawModuleTab = import("core/modpack/ui/module_tabs.lua", nil, {
         rom = rom,
-        drawHotkeyBlock = drawHotkeyBlock,
+        createModuleFrame = createModuleFrame,
+        moduleRegistry = moduleRegistry,
         staging = staging,
         runtime = runtime,
         snapshotAccess = snapshotAccess,
     })
 
-    local drawDev = import("core/modpack/ui/dev.lua", nil, {
+    local drawSettings = import("core/modpack/ui/settings.lua", nil, {
         rom = rom,
         config = config,
         colors = colors,
         moduleRegistry = moduleRegistry,
-        staging = staging,
-        runtime = runtime,
-        libConfig = libConfig,
+        hotkeyOverview = hotkeyOverview,
+        openLibWindow = openLibWindow,
     })
 
     runtime.reconcilePackDisabledState()
@@ -158,8 +159,7 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
         end
 
         table.insert(cachedTabList, "Profiles")
-        table.insert(cachedTabList, "Hotkeys")
-        table.insert(cachedTabList, "Dev")
+        table.insert(cachedTabList, "Settings")
         return cachedTabList
     end
 
@@ -207,10 +207,8 @@ local function createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
             drawQuickSetup(cachedQuickList, snapshot)
         elseif selectedTab == "Profiles" then
             drawProfiles()
-        elseif selectedTab == "Hotkeys" then
-            drawHotkeyOverview(ui, colors)
-        elseif selectedTab == "Dev" then
-            drawDev(snapshot)
+        elseif selectedTab == "Settings" then
+            drawSettings()
         elseif moduleByTabLabel[selectedTab] then
             drawModuleTab(moduleByTabLabel[selectedTab], snapshot)
         end

@@ -84,9 +84,6 @@ local function createModuleRegistry(packId, config, getLiveModuleForPlugin)
             tooltip = meta.tooltip or "",
             hash = meta.hash,
             storage = found.storage,
-            _enableLabel = "Enable " .. tostring(meta.name or moduleId or found.pluginGuid),
-            _debugLabel = tostring(meta.name or moduleId or found.pluginGuid)
-                .. "##" .. tostring(moduleId or found.pluginGuid),
         }
     end
 

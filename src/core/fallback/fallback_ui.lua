@@ -11,11 +11,10 @@ local rom = deps.rom
 local modutil = deps.modutil
 local uiSession = deps.uiSession
 local SetupRunData = deps.gameDeps.runData.SetupRunData
-local drawHotkeyBlock = deps.drawHotkeyBlock
+local createModuleFrame = deps.createModuleFrame
 
 local DEFAULT_WINDOW_WIDTH = 960
 local DEFAULT_WINDOW_HEIGHT = 720
-local RUNTIME_CONTROL_GAP = 16
 
 -- Hot-reload-stable fallback UI runtime. Bridges and GUI callbacks late-read
 -- this table so replacement managed modules can swap behavior without new handles.
@@ -114,17 +113,13 @@ local function isCoordinated(packId)
     return packId and coordination.isRegistered(packId) or false
 end
 
-local function sameLineWithGap(imgui, gap)
-    imgui.SameLine()
-    imgui.SetCursorPosX(imgui.GetCursorPosX() + gap)
-end
-
 ---@class AdamantModpackLib.FallbackUiRuntime
 ---@field module AdamantModpackLib.ManagedModule
 ---@field session AdamantModpackLib.UiSession
 ---@field showWindow boolean
 ---@field didSeedWindowSize boolean
 ---@field controls { initialized: boolean, enabled: boolean, debug: boolean } Window checkbox state.
+---@field frame AdamantModpackLib.ModuleFrame Shared module frame (Enabled, header, module tabs, Hotkeys & Advanced).
 ---@field renderWindow fun()
 ---@field addMenuBar fun()
 ---@field handleGuiClosed fun()
@@ -185,60 +180,62 @@ local function seedWindowSize(runtime, imgui)
     runtime.didSeedWindowSize = true
 end
 
---- Draws the Enabled / Debug Mode / Resync row, the Lib hotkey block, and, while enabled, the
---- module tab.
+local function moduleLabel(module)
+    local meta = module.getMeta() or {}
+    return tostring(meta.name or module.getModuleId() or "module")
+end
+
+--- Fallback paths behind the shared module frame: enable through `module.setEnabled`, the frame's
+--- one commit per draw through `commitIfDirty`, Debug Mode and Resync on the module itself.
 ---@param runtime AdamantModpackLib.FallbackUiRuntime
-local function drawWindowContents(runtime, imgui, meta, moduleId)
+---@return AdamantModpackLib.ModuleFrameOps
+local function createFrameOps(runtime)
     local module = runtime.module
     local controls = runtime.controls
-    local enabled = controls.enabled
-    local enabledValue, enabledChanged = imgui.Checkbox("Enabled", enabled)
-    if enabledChanged then
-        local transitionOk, transitionErr = module.setEnabled(enabledValue)
-        if transitionOk then
-            controls.enabled = enabledValue == true
-            enabled = controls.enabled
-            markRunDataDirty(runtime)
-        else
-            logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
-                tostring(meta.name or moduleId or "module"),
-                enabledValue and "enable" or "disable",
-                tostring(transitionErr))
-        end
-    end
-
-    sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
-    local debugValue, debugChanged = imgui.Checkbox("Debug Mode", controls.debug)
-    if debugChanged then
-        module.setDebugMode(debugValue)
-        controls.debug = debugValue == true
-    end
-
-    sameLineWithGap(imgui, RUNTIME_CONTROL_GAP)
-    if imgui.Button("Resync State") then
-        module.resync()
-        snapshotControls(runtime)
-    end
-
-    -- Shown while disabled too, so bindings stay editable; rows commit through writeAndFlush.
-    drawHotkeyBlock(imgui, module.getOwnerId())
-
-    if enabled then
-        imgui.Spacing()
-        imgui.Separator()
-        imgui.Spacing()
-        local commitOk, commitErr, committed = module.drawTabAndCommit()
-        if commitOk and committed and module.isEnabled() then
-            markRunDataDirty(runtime)
-        elseif commitOk == false then
-            logging.violate(
-                "managed_module.staged_state_commit_failed",
-                "%s staged state commit failed; restored previous config where possible: %s",
-                tostring(meta.name or moduleId or "module"),
-                tostring(commitErr)
-            )
-        end
-    end
+    return {
+        isEnabled = function()
+            return controls.enabled
+        end,
+        setEnabled = function(enabled)
+            local transitionOk, transitionErr = module.setEnabled(enabled)
+            if transitionOk then
+                controls.enabled = enabled == true
+                markRunDataDirty(runtime)
+            else
+                logging.violate("managed_module.enable_transition_failed", "%s %s failed: %s",
+                    moduleLabel(module),
+                    enabled and "enable" or "disable",
+                    tostring(transitionErr))
+            end
+        end,
+        getModule = function()
+            return module
+        end,
+        commit = function()
+            local commitOk, commitErr, committed = module.commitIfDirty()
+            if commitOk and committed and module.isEnabled() then
+                markRunDataDirty(runtime)
+            elseif commitOk == false then
+                logging.violate(
+                    "managed_module.staged_state_commit_failed",
+                    "%s staged state commit failed; restored previous config where possible: %s",
+                    moduleLabel(module),
+                    tostring(commitErr)
+                )
+            end
+        end,
+        isDebugMode = function()
+            return controls.debug
+        end,
+        setDebugMode = function(enabled)
+            module.setDebugMode(enabled)
+            controls.debug = enabled == true
+        end,
+        resync = function()
+            module.resync()
+            snapshotControls(runtime)
+        end,
+    }
 end
 
 ---@param runtime AdamantModpackLib.FallbackUiRuntime
@@ -269,7 +266,7 @@ local function renderWindow(runtime)
         openState, shouldDraw = imgui.Begin(title, runtime.showWindow)
         beganWindow = true
         if shouldDraw then
-            drawWindowContents(runtime, imgui, meta, moduleId)
+            runtime.frame.draw(imgui)
         end
     end, debug.traceback)
 
@@ -315,6 +312,7 @@ local function createRuntime(module)
             debug = false,
         },
     }
+    runtime.frame = createModuleFrame(module.getOwnerId(), createFrameOps(runtime))
     -- Zero-argument entry points: hot-reload-stable bridges call these by name.
     function runtime.renderWindow()
         return renderWindow(runtime)

@@ -1,7 +1,6 @@
 local deps = ...
 local rom = deps.rom
 local logging = deps.logging
-local libConfig = deps.libConfig
 local storage = deps.storage
 local coordination = deps.coordination
 local overlaySurface = deps.overlaySurface
@@ -108,7 +107,7 @@ local function createPackOrThrow(packId, config, numProfiles, defaultProfiles, o
     local hud = constructors.createHud(packId, packIndex, configHash, theme, config,
         opts.hideHashMarker == true, overlaySurface)
     local ui = constructors.createUI(moduleRegistry, hud, theme, config, packId, windowTitle,
-        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, libConfig, overlaySurface)
+        numProfiles, defaultProfiles, opts.drawPackQuickContent, auditSavedProfiles, overlaySurface)
 
     auditSavedProfiles(packId, config.Profiles, moduleRegistry)
 

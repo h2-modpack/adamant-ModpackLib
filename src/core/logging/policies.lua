@@ -98,7 +98,11 @@ return {
 
     ["module.invalid_create_opts"] = {
         severity = "error",
-        description = "Module creation requires a prepared definition, pluginGuid, state handles, drawTab, and callbacks.",
+        description = "Module creation requires a prepared definition, pluginGuid, state handles, drawTab or tabs, and callbacks.",
+    },
+    ["module.invalid_tab_state"] = {
+        severity = "error",
+        description = "A module tab's state callback must return \"attention\", \"muted\", or nil.",
     },
     ["managed_module.invalid_activate_opts"] = {
         severity = "error",

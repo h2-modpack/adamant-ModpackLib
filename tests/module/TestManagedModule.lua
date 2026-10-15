@@ -140,6 +140,10 @@ function TestManagedModule:testFallbackUiWarnsWhenStagedStateCommitFails()
         SetCursorPosX = noop,
         Separator = noop,
         Spacing = noop,
+        BeginTabBar = function() return true end,
+        EndTabBar = noop,
+        BeginTabItem = function(label) return label:find("###module-", 1, true) ~= nil end,
+        EndTabItem = noop,
     }
 
     createActivatedManagedModule(self.h, pluginGuid, {
@@ -691,7 +695,7 @@ function TestManagedModule:testDeclaredActionsExecuteDuringCommit()
     lu.assertTrue(observedConfigChange)
 end
 
-function TestManagedModule:testDrawTabAndCommitRunsFullDrawLifecycle()
+function TestManagedModule:testDrawTabThenCommitRunsFullDrawLifecycle()
     local observedConfigChange = nil
     local definition = self.h.moduleDefinition.prepareDefinition({}, {
         id = "DrawLifecycle",
@@ -717,7 +721,8 @@ function TestManagedModule:testDrawTabAndCommitRunsFullDrawLifecycle()
     })
 
     local host = self.h.moduleRegistry.getLiveModule("test-draw-lifecycle")
-    local ok, err, committed = host.drawTabAndCommit()
+    host.drawTab()
+    local ok, err, committed = host.commitIfDirty()
 
     lu.assertTrue(ok, tostring(err))
     lu.assertNil(err)

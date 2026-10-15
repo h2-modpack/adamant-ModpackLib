@@ -1,53 +1,20 @@
--- Lib-owned "Hotkeys" block in every module's standard header, drawn right after the
--- Enabled/Debug row by the modpack module tab and the fallback window. Modules without hotkey
--- requests draw nothing.
+-- Lib-owned Hotkeys section of a module's Hotkeys & Advanced tab (see `core/ui/module_frame.lua`): every
+-- request's row, always expanded with its status line, then "All hotkeys..." opening Lib's
+-- settings window. Modules without hotkey requests draw nothing.
 --
--- The block collapses to its summary line while every request is active, unbound or disabled, and
--- opens itself when a request needs attention (conflict, reserved, invalid). The user can toggle
--- it; that choice holds until the attention state changes. Open state is UI memory only.
---
--- The draw path allocates nothing per frame: the summary is built by the registry when resolution
--- runs, and the header label is rebuilt only when the summary string changes.
+-- The draw path allocates nothing per frame: rows come from the registry's cached block and the
+-- button label is built once per owner.
 
 local deps = ...
 
 local drawWidget = deps.drawWidget
 local hotkeys = deps.hotkeys
 local refForRow = deps.refForRow
+-- Opens Lib's settings window, whose Hotkeys tab lists every module's hotkeys across every pack.
+local openLibWindow = deps.openLibWindow
 
-local HEADER_ID_PREFIX = "###hotkeys-block-"
-
----@type table<string, { attention: boolean?, open: boolean, summary: string?, label: string? }>
-local memory = {}
-
-local function memoryFor(ownerId, block)
-    local entry = memory[ownerId]
-    if entry == nil then
-        entry = { attention = nil, open = false, summary = nil, label = nil }
-        memory[ownerId] = entry
-    end
-    if entry.attention ~= block.attention then
-        entry.attention = block.attention
-        entry.open = block.attention
-    end
-    if entry.summary ~= block.summary then
-        entry.summary = block.summary
-        entry.label = block.summary .. HEADER_ID_PREFIX .. ownerId
-    end
-    return entry
-end
-
--- CollapsingHeader with SetNextItemOpen lets Lib drive the open state; without them (older
--- bindings) the block is always expanded under a plain summary line.
-local function drawHeader(imgui, entry)
-    if imgui.CollapsingHeader == nil or imgui.SetNextItemOpen == nil then
-        imgui.Text(entry.summary)
-        return true
-    end
-    imgui.SetNextItemOpen(entry.open)
-    entry.open = imgui.CollapsingHeader(entry.label) == true
-    return entry.open
-end
+---@type table<string, string>
+local overviewLabels = {}
 
 ---@param imgui table
 ---@param ownerId string
@@ -58,15 +25,21 @@ return function(imgui, ownerId)
         return false
     end
     imgui.Spacing()
-    local entry = memoryFor(ownerId, block)
-    if not drawHeader(imgui, entry) then
-        return false
-    end
+    imgui.Separator()
+    imgui.Text("Hotkeys")
     local changed = false
     for _, row in ipairs(block.rows) do
         if drawWidget(imgui, refForRow(row)) then
             changed = true
         end
+    end
+    local overviewLabel = overviewLabels[ownerId]
+    if overviewLabel == nil then
+        overviewLabel = "All hotkeys...##hotkeys-overview-" .. ownerId
+        overviewLabels[ownerId] = overviewLabel
+    end
+    if imgui.Button(overviewLabel) then
+        openLibWindow()
     end
     return changed
 end

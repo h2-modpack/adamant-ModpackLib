@@ -156,22 +156,38 @@ local function moduleNameOf(install)
     return tostring(meta and meta.name or install.host.getModuleId() or install.ownerId)
 end
 
+-- Short status shown on the picker row next to the dropdowns, which already show the binding.
 local function describeStatus(status)
     local state = status.state
-    local binding = status.binding
     if state == "active" then
-        return binding .. " - active"
+        return "Active"
     elseif state == "conflict" then
-        return string.format("%s is used by %s (%s); this binding is inactive",
+        return "In use by " .. status.owner.moduleName
+    elseif state == "reserved" then
+        return string.format("Reserved (%s)", status.reason)
+    elseif state == "invalid" then
+        return "Invalid"
+    elseif state == "disabled" then
+        return "Module disabled"
+    end
+    return "Not set"
+end
+
+-- Full explanation for the status tooltip; nil when the short text says it all.
+local function describeDetail(status)
+    local state = status.state
+    local binding = status.binding
+    if state == "conflict" then
+        return string.format("%s is used by %s (%s); this binding is inactive until one of them changes.",
             binding, status.owner.moduleName, status.owner.label)
     elseif state == "reserved" then
-        return string.format("%s is reserved (%s)", binding, status.reason)
+        return string.format("%s is reserved (%s), so this binding never fires.", binding, status.reason)
     elseif state == "invalid" then
-        return string.format("'%s' is not a valid hotkey", binding)
+        return string.format("'%s' is not a valid hotkey; pick a key to replace it.", binding)
     elseif state == "disabled" then
-        return binding .. " - inactive while the module is disabled"
+        return "This binding is inactive while the module is disabled."
     end
-    return "Not bound"
+    return nil
 end
 
 -- Status tables are replaced only when their signature changes, so callers can cache by identity
@@ -195,40 +211,28 @@ local function statusFor(entry, result, ownerEntry)
         reason = result.reservedBy,
     }
     status.text = describeStatus(status)
+    status.detail = describeDetail(status)
     return status
 end
 
--- States that need the user's attention: the module header block opens itself for them.
+-- States that need the user's attention: the module's Hotkeys & Advanced tab label is marked for them.
 local ATTENTION_STATES = {
     conflict = true,
     reserved = true,
     invalid = true,
 }
 
-local function summaryPart(row)
-    local status = row.status
-    local binding = status.binding == bindings.UNBOUND and "None" or status.binding
-    local state = status.state
-    if state == "active" or state == "unbound" then
-        return row.label .. " " .. binding
-    end
-    return row.label .. " " .. binding .. " (" .. state .. ")"
-end
-
--- One module's header block: its rows in declaration order and a one-line summary. Built only
--- when resolution runs, so the draw path reads cached text.
+-- One module's hotkey block: its rows in declaration order and the attention flag. Built only
+-- when resolution runs, so the draw path reads cached values.
 local function buildBlock(rows)
-    local parts = {}
     local attention = false
-    for index, row in ipairs(rows) do
-        parts[index] = summaryPart(row)
+    for _, row in ipairs(rows) do
         if ATTENTION_STATES[row.status.state] then
             attention = true
         end
     end
     return {
         rows = rows,
-        summary = "Hotkeys: " .. table.concat(parts, ", "),
         attention = attention,
     }
 end
@@ -263,6 +267,7 @@ local function resolveView()
     local dispatchList = {}
     local conflictRows = {}
     local otherRows = {}
+    local disabledRows = {}
     local ownerRows = {}
     for index, entry in ipairs(entries) do
         local result = results[index]
@@ -288,13 +293,19 @@ local function resolveView()
             ownerRows[entry.ownerId] = owned
         end
         owned[#owned + 1] = row
+        -- Overview order: conflicts first, then the rest, then disabled modules' rows last.
         if result.state == "conflict" then
             conflictRows[#conflictRows + 1] = row
+        elseif result.state == "disabled" then
+            disabledRows[#disabledRows + 1] = row
         else
             otherRows[#otherRows + 1] = row
         end
     end
     for _, row in ipairs(otherRows) do
+        conflictRows[#conflictRows + 1] = row
+    end
+    for _, row in ipairs(disabledRows) do
         conflictRows[#conflictRows + 1] = row
     end
 
@@ -480,7 +491,7 @@ function hotkeys.listRows()
     return view.rows
 end
 
----One module's header block (rows in declaration order, summary line, attention flag), or nil when
+---One module's hotkey block (rows in declaration order, attention flag), or nil when
 ---the owner has no committed install.
 ---@param ownerId string
 ---@return AdamantModpackLib.HotkeyBlock?
@@ -522,13 +533,15 @@ function hotkeys.setPackOrder(packId, packIndex, pluginGuids)
     bumpRevision()
 end
 
+-- Reused across calls so draw paths read the reserved keys without allocating.
+local reservedView = { detected = nil, manual = nil }
+
 ---@return { detected: AdamantModpackLib.HotkeyDetectedReserve?, manual: string[] }
 function hotkeys.getReserved()
     refresh()
-    return {
-        detected = view.detected,
-        manual = view.manualList,
-    }
+    reservedView.detected = view.detected
+    reservedView.manual = view.manualList
+    return reservedView
 end
 
 ---Replaces the manual reserved list in Lib config; the next refresh picks it up.
@@ -542,7 +555,7 @@ function hotkeys.redetectReserved()
     view.detectedRead = false
 end
 
----Internal widget ref for Lib-drawn hotkey pickers (module header blocks, the overview).
+---Internal widget ref for Lib-drawn hotkey pickers (module Hotkeys & Advanced tabs, the overview).
 ---@param field { read: fun(self): any, write: fun(self, value: any): any }
 ---@param ownerId string? Owner whose status the widget shows; nil for a status-less picker.
 ---@param request AdamantModpackLib.HotkeyRequest?
