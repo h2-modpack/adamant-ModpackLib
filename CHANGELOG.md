@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [4.5.1] - 2026-11-04
+
+### Fixed
+
+- manifest: declare the ENVY shim, ModUtil, Chalk and ReLoad dependencies (8101617)
+
 ## [4.5.0] - 2026-10-15
 
 ### Added
